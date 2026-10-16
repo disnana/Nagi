@@ -175,12 +175,12 @@ where
                 };
                 // Remove client prelogin material before constructing any callback
                 // Request or awaiting body; only digests remain in LoginInput.
-                parts.headers.remove(names::COOKIE);
-                parts.headers.remove("x-csrf-token");
+                let mut headers = RequestHeaders::from(std::mem::take(&mut parts.headers));
+                headers.sanitize();
                 let mut request = Request {
                     method: std::mem::take(&mut parts.method),
                     uri: std::mem::take(&mut parts.uri),
-                    headers: std::mem::take(&mut parts.headers),
+                    headers,
                     body: Bytes::new(),
                 };
                 if !matches!(is_json_content_type(&request), Ok(true)) {

@@ -72,6 +72,37 @@ pub(crate) enum StartupError {
     Allocation,
     Internal,
 }
+
+// Shared startup descriptor: the HTTP adapter uses the same checked layout and
+// work model as the owner, rather than copying its private formulas.
+pub(crate) struct RuleLayout {
+    pub(crate) subject_slots: usize,
+    pub(crate) additional_bytes: usize,
+    pub(crate) work: u64,
+}
+impl Rule {
+    pub(crate) fn checked_layout(self) -> Result<RuleLayout, StartupError> {
+        if self.burst == 0 || self.refill_ns == 0 || self.idle_ns == 0 {
+            return Err(StartupError::Invalid);
+        }
+        let (subject_slots, additional_bytes, work) = match self.subject_slots {
+            Slots::NoSubject => (0, 0, 48 + CLEANUP_WORK),
+            Slots::Subject(n) => {
+                let (_, total, height) = layout(n).ok_or(StartupError::Invalid)?;
+                let bytes = array_bytes::<Option<Entry>>(n)
+                    .and_then(|bytes| bytes.checked_add(array_bytes::<Branch>(n - 1)?))
+                    .and_then(|bytes| bytes.checked_add(array_bytes::<Summary>(total)?))
+                    .ok_or(StartupError::Invalid)?;
+                (n, bytes, work_bound(height).ok_or(StartupError::Invalid)?)
+            }
+        };
+        Ok(RuleLayout {
+            subject_slots,
+            additional_bytes,
+            work,
+        })
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum RateDecision {
     Charged,
@@ -248,6 +279,12 @@ impl Subjects {
     }
 }
 impl RateOwner {
+    pub(crate) fn minimum_fixed_bytes(rules: usize) -> Result<usize, StartupError> {
+        size_of::<Self>()
+            .checked_add(size_of::<AtomicU64>())
+            .and_then(|n| n.checked_add(array_bytes::<RuleState>(rules)?))
+            .ok_or(StartupError::Invalid)
+    }
     pub(crate) fn checked_rate(rules: &[Rule], limits: Limits) -> Result<Self, StartupError> {
         Self::checked_with(rules, limits, |_| {})
     }
@@ -261,29 +298,19 @@ impl RateOwner {
             return Err(StartupError::Invalid);
         }
         let mut count = rules.len();
-        let mut bytes = size_of::<Self>()
-            .checked_add(size_of::<AtomicU64>())
-            .ok_or(StartupError::Invalid)?;
-        bytes = bytes
-            .checked_add(array_bytes::<RuleState>(rules.len()).ok_or(StartupError::Invalid)?)
-            .ok_or(StartupError::Invalid)?;
+        let mut bytes = Self::minimum_fixed_bytes(rules.len())?;
         let mut max_work = 48u64
             .checked_add(CLEANUP_WORK)
             .ok_or(StartupError::Invalid)?;
         for r in rules {
-            if r.burst == 0 || r.refill_ns == 0 || r.idle_ns == 0 {
-                return Err(StartupError::Invalid);
-            }
-            if let Slots::Subject(n) = r.subject_slots {
-                count = count.checked_add(n).ok_or(StartupError::Invalid)?;
-                let (_, total, h) = layout(n).ok_or(StartupError::Invalid)?;
-                bytes = bytes
-                    .checked_add(array_bytes::<Option<Entry>>(n).ok_or(StartupError::Invalid)?)
-                    .and_then(|v| v.checked_add(array_bytes::<Branch>(n - 1)?))
-                    .and_then(|v| v.checked_add(array_bytes::<Summary>(total)?))
-                    .ok_or(StartupError::Invalid)?;
-                max_work = max_work.max(work_bound(h).ok_or(StartupError::Invalid)?);
-            }
+            let descriptor = r.checked_layout()?;
+            count = count
+                .checked_add(descriptor.subject_slots)
+                .ok_or(StartupError::Invalid)?;
+            bytes = bytes
+                .checked_add(descriptor.additional_bytes)
+                .ok_or(StartupError::Invalid)?;
+            max_work = max_work.max(descriptor.work);
         }
         if count > limits.count || bytes > limits.bytes || limits.work < max_work {
             return Err(StartupError::Invalid);
@@ -349,6 +376,12 @@ impl RateOwner {
             index,
         })
     }
+    pub(crate) fn retained_bytes(&self) -> usize {
+        self.retained_bytes
+    }
+    pub(crate) fn work_bound(&self) -> u64 {
+        self.work_bound
+    }
     pub(crate) fn charge(&self, rule: RuleId, key: FixedKey) -> RateDecision {
         self.charge_with_clock(rule, key, || {
             Instant::now()
@@ -396,7 +429,12 @@ impl RateOwner {
         }
     }
     #[cfg(test)]
-    fn charge_at_with_test_clock(&self, rule: RuleId, key: FixedKey, now: u64) -> RateDecision {
+    pub(crate) fn charge_at_with_test_clock(
+        &self,
+        rule: RuleId,
+        key: FixedKey,
+        now: u64,
+    ) -> RateDecision {
         self.charge_with_clock(rule, key, || Some(now))
     }
 }

@@ -1,9 +1,14 @@
 """Small source-only checkpoint guards, never native ownership evidence."""
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 import re
 import unittest
+
+_SPEC = importlib.util.spec_from_file_location("request_projection", Path(__file__).resolve().parents[1]/"ci/sf07_request_projection.py")
+projection = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(projection)
 
 ROOT = Path(os.environ.get("SF07_SOURCE_ROOT", Path(__file__).resolve().parents[2]))
 
@@ -13,6 +18,11 @@ def canonical_bytes(data):
     if b"\r" in data:
         raise ValueError("lone carriage return")
     return data
+
+
+def original_bytes(path, data):
+    data = canonical_bytes(data)
+    return projection.inverse_quota(data.decode()).encode() if path == "runtime/src/security_sf07_private/quota.rs" else data
 
 
 def source(path):
@@ -64,7 +74,7 @@ class BridgeBoundaryTests(unittest.TestCase):
             "runtime/src/http_server/response_budget_tests.rs":"c9337486bac6d16c405c577447de1e36160cb898573afba271c5b38d7cf77bad",
         }
         for path, digest in expected.items():
-            self.assertEqual(hashlib.sha256(canonical_bytes((ROOT/path).read_bytes())).hexdigest(), digest)
+            self.assertEqual(hashlib.sha256(original_bytes(path, (ROOT/path).read_bytes())).hexdigest(), digest)
         producer = source("runtime/src/http_server/response_budget.rs")
         self.assertIn("use crate::security_sf07_private::quota;", producer)
         self.assertNotIn('#[path = "../security_sf07_private/quota.rs"]', producer)
@@ -79,8 +89,8 @@ class BridgeBoundaryTests(unittest.TestCase):
         for path, digest in expected.items():
             lf = canonical_bytes((ROOT/path).read_bytes())
             for data in (lf, lf.replace(b"\n", b"\r\n")):
-                self.assertEqual(hashlib.sha256(canonical_bytes(data)).hexdigest(), digest)
-                self.assertNotEqual(hashlib.sha256(canonical_bytes(data + b" ")).hexdigest(), digest)
+                self.assertEqual(hashlib.sha256(original_bytes(path, data)).hexdigest(), digest)
+                self.assertNotEqual(hashlib.sha256(original_bytes(path, data + b" ")).hexdigest(), digest)
             with self.assertRaises(ValueError):
                 canonical_bytes(lf + b"\r")
 

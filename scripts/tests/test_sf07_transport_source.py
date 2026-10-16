@@ -6,6 +6,10 @@ from pathlib import Path
 import re
 import unittest
 
+_SPEC = importlib.util.spec_from_file_location("request_projection", Path(__file__).resolve().parents[1]/"ci/sf07_request_projection.py")
+projection = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(projection)
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -32,10 +36,10 @@ class TransportSourceTests(unittest.TestCase):
         http = (ROOT/"runtime/src/http_server.rs").read_bytes().replace(b"\r\n", b"\n")
         self.assertNotIn(b"\r", http)
         self.assertEqual(http.count(b"#[cfg(test)]\nmod response_send;"), 1)
-        # Exact digest of the published ce9 base after removing ONLY this cfg module.
-        projected = http.replace(b"\n#[cfg(test)]\nmod response_send;", b"")
-        self.assertEqual(hashlib.sha256(projected).hexdigest(),
-                         "efcea096cc65f65ee9cab5799aadd2089861d24ee301783a0e64231304cccdc8")
+        # U1 reverses only explicit header ownership changes, preserving all
+        # original order/diagnostic tokens against exact9b7 base32b3ac6.
+        self.assertEqual(projection.digest(projection.inverse_http(http.decode())),
+                         projection.BASE_TOKENS['http'])
         digest = hashlib.sha256(http).hexdigest()
         self.assertEqual(text(".github/workflows/ci.yml").count(digest), 2)
         self.assertEqual(text("scripts/ci/session_private_deadline_diagnostic.py").count(digest), 1)
@@ -51,9 +55,11 @@ class TransportSourceTests(unittest.TestCase):
 
     def test_cached_map_and_prior_claim_share_one_header_owner_without_clone(self):
         send = text("runtime/src/http_server/response_send.rs")
-        headers = send.split("struct ReceivedHeaders", 1)[1].split("impl ReceivedHeaders", 1)[0]
+        owner = text("runtime/src/http_server/request_headers.rs")
+        headers = owner.split("struct ReceivedHeaders", 1)[1].split("impl ReceivedHeaders", 1)[0]
         self.assertLess(headers.index("map: HeaderMap"), headers.index("_prior: Option<Arc<Reservation>>"))
-        self.assertIn("_prior: prior", send)
+        self.assertIn("_prior: prior", owner)
+        self.assertIn("ReceivedHeaders::new(parts.headers, prior)", send)
         self.assertIn("Arc::clone(&self.headers)", send)
         self.assertNotRegex(send, r"(?:headers|map)\.clone\(")
         state = send.split("struct SendState", 1)[1].split("struct SendLedger", 1)[0]

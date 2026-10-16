@@ -49,6 +49,21 @@ EXPECTED = {
         'http_server::response_send::tests::abort_before_actual_join_and_handler_panic_release_only_on_native_destruction',
         'http_server::response_send::tests::unpolled_and_ready_native_io_drop_before_cache_guard_and_connection_permit',
     ),
+    'request': ('http_server::request_headers::tests::snapshots_share_actual_map_and_never_retain_original_body', 'http_server::request_headers::tests::sanitized_views_hide_every_credential_accessor_debug_and_child_snapshot', 'http_server::request_headers::tests::ordinary_lookup_keeps_duplicate_case_utf8_and_invalid_name_contracts', 'http_server::request_headers::tests::header_only_last_shared_owner_retains_prior_response_reservation', 'http_server::request_headers::tests::unpolled_future_and_unwind_release_only_their_last_request_owner', 'http_server::request_headers::tests::cancelled_pending_request_keeps_charge_until_actual_task_join', 'http_server::request_headers::tests::fixture_mutation_cannot_copy_shared_map_or_mutate_charged_native_owner', 'http_server::request_headers::tests::actual_native_parts_extensions_live_through_handler_and_drop_after_join'),
+    'rate-startup': (
+        'security_sf07_private::startup_rate::tests::all_five_capacity_values_are_explicit_positive_and_representable',
+        'security_sf07_private::startup_rate::tests::policy_time_burst_and_duplicate_subject_fail_before_allocation',
+        'security_sf07_private::startup_rate::tests::aggregate_rules_domains_and_slots_each_have_their_own_limit',
+        'security_sf07_private::startup_rate::tests::subject_support_is_checked_at_startup_not_silently_skipped',
+        'security_sf07_private::startup_rate::tests::metadata_byte_refusal_occurs_before_any_vec_or_owner_allocation',
+        'security_sf07_private::startup_rate::tests::request_work_covers_route_plus_subject_not_only_the_largest_charge',
+        'security_sf07_private::startup_rate::tests::route_limited_and_subject_capacity_are_distinct_without_cross_route_sharing',
+        'security_sf07_private::startup_rate::tests::existing_branded_rule_ids_reject_other_owner_without_a_second_brand_system',
+        'security_sf07_private::startup_rate::tests::closing_uses_the_existing_owner_for_both_charge_stages',
+        'security_sf07_private::startup_rate::tests::empty_catalog_creates_no_rate_owner_and_no_implicit_rule',
+        'security_sf07_private::startup_rate::tests::caller_catalog_storage_is_charged_and_overflow_refused',
+        'security_sf07_private::startup_rate::tests::finite_8192_subject_slots_are_not_rejected_by_a_hidden_4096_cap',
+    ),
 }
 
 

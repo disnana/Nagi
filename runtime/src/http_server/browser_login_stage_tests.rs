@@ -235,7 +235,7 @@ fn request() -> Request {
     Request {
         method: Method::POST,
         uri: "/login".parse().unwrap(),
-        headers,
+        headers: headers.into(),
         body: Bytes::from_static(b"{}"),
     }
 }

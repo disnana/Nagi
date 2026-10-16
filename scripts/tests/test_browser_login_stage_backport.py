@@ -4,6 +4,11 @@ from pathlib import Path
 import re
 import sys
 import unittest
+import importlib.util
+_PROJECTION = Path(__file__).resolve().parents[1] / "ci/sf07_request_projection.py"
+_SPEC = importlib.util.spec_from_file_location("request_projection", _PROJECTION)
+projection = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(projection)
 ROOT = Path(__file__).resolve().parents[2]
 
 EXPECTED = ('http_server::browser_login::stage_tests::live_claimed_200_runs_verifier_and_handler_and_returns_200', 'http_server::browser_login::stage_tests::consumed_prepare_err_1000_returns_401_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_pending_200_returns_504_and_drops_once', 'http_server::browser_login::stage_tests::consumed_prepare_non_yielding_200_late_ready_returns_504', 'http_server::browser_login::stage_tests::committed_issue_live_200_delivers_auth_cookie_once', 'http_server::browser_login::stage_tests::committed_issue_handler_err_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_pending_200_returns_504_and_drops_once')
@@ -36,7 +41,7 @@ def rewrite(source, before, after):
 
 def inverse_dispatch(source):
     """Undo only the parent's ownership repair; retain EVERY child diag token."""
-    source = norm(source)
+    source = norm(projection.inverse_browser(source))
     source = rewrite(source, '''#[cfg_attr(test, allow(clippy::large_enum_variant,
         reason = "Test-only continuation must not allocate the stock borrowed wire input."))]''', '')
     source = rewrite(source, """enum Input<'a, B> { Wire {
@@ -63,7 +68,7 @@ def inverse_dispatch(source):
 
 def inverse_stage(source):
     """Undo the new fault witness and borrowed-owner test adapter only."""
-    source = norm(source)
+    source = norm(projection.inverse_stage(source))
     source = rewrite(source, 'fault_entered: AtomicUsize,', '')
     for mode, value, operation in (
         ('PrepareErr', 1, 'return Err(auth::invalid_credential());'),
@@ -120,7 +125,7 @@ B1_STEP = """      - name: Check owned BrowserLogin business stage and cancellat
 """
 
 CHILD_TOKENS = {'dispatch': 'e15ba0fc1b4f45cabc893904d0028d51d2cda49edb8d83e236f3efc5d78e263f', 'stage': '61dbb99d727253ac4050226806d00e6e6807a2e1cfee93cdcd75c6a756c358cc', 'public': '95e8a9f83c93c7bb03ddff48d0d01ef104985b3e5cf5621c4d5369fbef5a2378'}
-CHILD_BYTES = {'.github/workflows/ci.yml': 'd6a2753c59ad16e9ab03af39abd09b7e4b30403f52429da4766a7d4c345ae202', 'runtime/src/http_server.rs': 'e6969a04326ed5fc4b3795f64a2909ffb5bbfae16f679589b93a819922084485', 'runtime/src/auth/prelogin/browser.rs': '2428b3e1cdc49dbd922c9b9ce026192972ded7bfa04ae6b82f704d0cc1301f74', 'runtime/src/auth/prelogin/http_bridge.rs': 'd64e052c191e0b8c3853feb07cf5b1e04f0c1d57da2c399099cd7dfc5a031d55', 'scripts/ci/session_private_deadline_diagnostic.py': '1d0dd3c92e07c374de80d4f968c101141eb6290ba2b935bf9c06dcb85ac60913', 'scripts/ci/browser_login_stage_coverage.py': '19ef03623734ac9bbb505b02cab555fa8fd96a09fbc23dcda6f06f691b6ac33a'}
+CHILD_BYTES = {'.github/workflows/ci.yml': 'd6a2753c59ad16e9ab03af39abd09b7e4b30403f52429da4766a7d4c345ae202', 'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6', 'runtime/src/auth/prelogin/browser.rs': '2428b3e1cdc49dbd922c9b9ce026192972ded7bfa04ae6b82f704d0cc1301f74', 'runtime/src/auth/prelogin/http_bridge.rs': 'd64e052c191e0b8c3853feb07cf5b1e04f0c1d57da2c399099cd7dfc5a031d55', 'scripts/ci/session_private_deadline_diagnostic.py': '1d0dd3c92e07c374de80d4f968c101141eb6290ba2b935bf9c06dcb85ac60913', 'scripts/ci/browser_login_stage_coverage.py': '19ef03623734ac9bbb505b02cab555fa8fd96a09fbc23dcda6f06f691b6ac33a'}
 
 def native_summary(raw):
     if len(raw)>65536: return "invalid"
@@ -189,10 +194,13 @@ class BackportSourceTests(unittest.TestCase):
     def test_workflow_is_only_two_required_native_steps_and_frozen_sources_remain(self):
         workflow = read('.github/workflows/ci.yml')
         self.assertEqual(workflow.count(B1_STEP), 2)
-        self.assertEqual(hashlib.sha256(workflow.replace(B1_STEP, '').encode()).hexdigest(), CHILD_BYTES['.github/workflows/ci.yml'])
+        self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).replace(B1_STEP, '').encode()).hexdigest(), CHILD_BYTES['.github/workflows/ci.yml'])
         for path, expected in CHILD_BYTES.items():
             if path != '.github/workflows/ci.yml':
-                self.assertEqual(hashlib.sha256(read(path).encode()).hexdigest(), expected, path)
+                value = read(path)
+                if path == 'scripts/ci/session_private_deadline_diagnostic.py':
+                    value = projection.inverse_collector(value)
+                self.assertEqual(hashlib.sha256(value.encode()).hexdigest(), expected, path)
         http_sha = CHILD_BYTES['runtime/src/http_server.rs']
         self.assertEqual(workflow.count("'runtime/src/http_server.rs': '" + http_sha + "'"), 2)
         self.assertEqual(read('scripts/ci/session_private_deadline_diagnostic.py').count('expected_digest = "' + http_sha + '"'), 1)

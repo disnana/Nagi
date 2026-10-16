@@ -90,10 +90,14 @@ jobs:
           set -euo pipefail
           python -B scripts/tests/test_sf07_wire_source.py
           python -B scripts/tests/test_sf07_transport_source.py
+          python -B scripts/tests/test_sf07_request_source.py
+          python -B scripts/tests/test_sf07_rate_source.py
           python -B scripts/tests/test_sf07_checkpoint_summary.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
           cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
+          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -548,8 +552,8 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': 'e6969a04326ed5fc4b3795f64a2909ffb5bbfae16f679589b93a819922084485',
-              'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
+              'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6',
+              'runtime/src/http_server/tests.rs': '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
@@ -613,10 +617,14 @@ jobs:
           set -euo pipefail
           python -B scripts/tests/test_sf07_wire_source.py
           python -B scripts/tests/test_sf07_transport_source.py
+          python -B scripts/tests/test_sf07_request_source.py
+          python -B scripts/tests/test_sf07_rate_source.py
           python -B scripts/tests/test_sf07_checkpoint_summary.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
           cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
+          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -988,8 +996,8 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': 'e6969a04326ed5fc4b3795f64a2909ffb5bbfae16f679589b93a819922084485',
-              'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
+              'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6',
+              'runtime/src/http_server/tests.rs': '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',

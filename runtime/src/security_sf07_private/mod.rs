@@ -1,13 +1,19 @@
-//! Test-only private SF07 core; no public API or HTTP attachment.
+//! Private SF07 quota ownership; other core/fixture modules remain test-only.
+#[cfg(test)]
 mod indexed;
+#[cfg(test)]
 mod legacy_rate;
 pub(crate) mod quota;
+#[cfg(test)]
+mod startup_rate;
 
+#[cfg(test)]
 fn allocations_in<T>(f: impl FnOnce() -> T) -> (T, u64) {
     let (value, counts) = crate::metrics::measure(f);
     (value, counts.allocations)
 }
 
+#[cfg(test)]
 fn calibrate_allocation_meter() {
     // The runtime's existing allocator counts only the calling thread.
     // Exercise simultaneous zero and positive controls without serializing tests.

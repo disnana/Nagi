@@ -418,7 +418,7 @@ async fn dropping_unpolled_prepared_handler_cannot_reactivate_proof() {
     let request = Request {
         method: Method::GET,
         uri: "/secure".parse().unwrap(),
-        headers,
+        headers: headers.into(),
         body: Bytes::new(),
     };
     let RouteKind::Ordinary(prepare) = &app.routes["/secure"][0].kind else {
@@ -430,7 +430,7 @@ async fn dropping_unpolled_prepared_handler_cannot_reactivate_proof() {
     let request = Request {
         method: Method::GET,
         uri: "/secure".parse().unwrap(),
-        headers: HeaderMap::new(),
+        headers: HeaderMap::new().into(),
         body: Bytes::new(),
     };
     let future = prepared(request, Arc::clone(&app.state));

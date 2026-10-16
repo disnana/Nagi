@@ -206,6 +206,17 @@ async fn keep_alive_cache_moves_to_same_shared_request_owner_past_native_shutdow
     .await;
     assert_eq!(response(&mut client, false).await.0, 503);
     let view = view_rx.await.unwrap();
+    // The public runtime Request uses this SAME actual-Hyper header owner.
+    let runtime = super::super::Request {
+        method: Method::GET,
+        uri: "/later".parse().unwrap(),
+        headers: super::super::RequestHeaders::from_received(Arc::clone(&view)),
+        body: super::super::Bytes::new(),
+    };
+    let snapshot = runtime.security_snapshot();
+    assert!(runtime.headers.same_owner(&snapshot.headers));
+    assert!(snapshot.body().is_empty());
+    drop(runtime);
     let clone = Arc::clone(&view);
     assert!(Arc::ptr_eq(&view, &clone));
     assert!(view.capacity() >= 16);
@@ -220,6 +231,12 @@ async fn keep_alive_cache_moves_to_same_shared_request_owner_past_native_shutdow
     capacity(&ordinary);
     assert_eq!(clone.value("x-read"), Some(b"value".as_slice()));
     drop(clone);
+    capacity(&ordinary);
+    assert_eq!(
+        super::super::header_text(&snapshot, "x-read").unwrap(),
+        Some("value")
+    );
+    drop(snapshot);
     assert!(ordinary.text("released").is_ok());
 }
 

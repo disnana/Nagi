@@ -1,10 +1,11 @@
 //! Private actual-Hyper lifetime checkpoint, not a public runtime attachment.
 //! Backend encoded buffers/RSS and inbound parser allocation are separate budgets.
 //! A response claim follows Hyper's cached map into the next request owner.
+pub(super) use super::request_headers::ReceivedHeaders;
 use super::response_budget::{wire::*, Diagnostic, Producer};
 use super::{ClosingIo, Sending, TimedIo};
 use crate::security_sf07_private::quota::Reservation;
-use axum::http::{HeaderMap, Method, StatusCode, Uri};
+use axum::http::{Method, StatusCode, Uri};
 use hyper::{body::Incoming, server::conn::http1, service::service_fn};
 use hyper_util::rt::{TokioIo, TokioTimer};
 use std::{
@@ -85,28 +86,12 @@ impl SendLedger {
         Ok(ReceivedRequest {
             method: parts.method,
             uri: parts.uri,
-            headers: Arc::new(ReceivedHeaders {
-                map: parts.headers,
-                _prior: prior,
-            }),
+            headers: ReceivedHeaders::new(parts.headers, prior),
             _body: body,
         })
     }
 }
 
-pub(super) struct ReceivedHeaders {
-    // Map names/values/container drop before the original response claim.
-    map: HeaderMap,
-    _prior: Option<Arc<Reservation>>,
-}
-impl ReceivedHeaders {
-    fn value(&self, name: &str) -> Option<&[u8]> {
-        self.map.get(name).map(|value| value.as_bytes())
-    }
-    fn capacity(&self) -> usize {
-        self.map.capacity()
-    }
-}
 struct ReceivedRequest {
     method: Method,
     uri: Uri,
