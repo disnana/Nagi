@@ -19,7 +19,7 @@ fn allocations_in<T>(f: impl FnOnce() -> T) -> (T, u64) {
 }
 
 #[cfg(test)]
-fn calibrate_allocation_meter() {
+pub(crate) fn calibrate_allocation_meter() {
     // The runtime's existing allocator counts only the calling thread.
     // Exercise simultaneous zero and positive controls without serializing tests.
     let barrier = std::sync::Barrier::new(2);

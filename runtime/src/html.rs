@@ -65,6 +65,8 @@ pub struct HtmlDocument {
 impl HtmlDocument {
     // Only the checked standard response factory may consume the owned bytes.
     // This bridge does not expose a public raw-HTML reconstruction path.
+    // U2's only consumer is test-private; promote both together at U4 cutover.
+    #[cfg(test)]
     pub(crate) fn encoded_for_response(&self) -> &str {
         &self._encoded
     }

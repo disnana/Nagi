@@ -25,6 +25,13 @@ impl<T> OwnedStateLock<T> {
     pub(crate) fn lock(&self) -> LockResult<RwLockWriteGuard<'_, T>> {
         self.inner.write()
     }
+
+    // Preserve the existing transition-lock fixture's nonblocking writer
+    // oracle and standard WouldBlock/Poisoned mapping. No reader is exposed.
+    #[cfg(test)]
+    pub(crate) fn try_lock(&self) -> std::sync::TryLockResult<RwLockWriteGuard<'_, T>> {
+        self.inner.try_write()
+    }
 }
 
 #[cfg(test)]

@@ -330,6 +330,9 @@ impl PreparedResponse {
     ) -> Result<usize, Diagnostic> {
         self.plan.reserve_cookie(max_bytes)
     }
+    // U2 test-private seam, not yet attached to real Session delivery. U4 must
+    // remove this item allowance and exercise the real one-use issuer path.
+    #[allow(dead_code)]
     pub(in crate::http_server) fn take_session_cookie(
         mut self,
         owner: &crate::auth::LeaseOwner,
@@ -620,6 +623,9 @@ pub(in crate::http_server) struct FrameworkTicket {
     kind: FrameworkBody,
     cookie: Option<usize>,
 }
+// U2 test-private typed issuer errors. Remove with the take_* item allowances
+// at U4 attachment, after real issuer/failure-path native coverage is required.
+#[allow(dead_code)]
 pub(in crate::http_server) enum FrameworkError {
     Budget(Diagnostic),
     Csrf(crate::auth::csrf::Failure),
@@ -692,6 +698,9 @@ impl FrameworkTicket {
         self.prepared.produced.body.data = BodyData::Framework(body);
         Ok(self.prepared)
     }
+    // U4 must remove this test-private allowance and cover real issuer take,
+    // failure classification, one-use delivery, and the final Bytes owner.
+    #[allow(dead_code)]
     pub(in crate::http_server) fn take_csrf(
         self,
         store: &crate::auth::csrf::Inner,
@@ -711,6 +720,8 @@ impl FrameworkTicket {
             .map_err(FrameworkError::Csrf)?;
         self.adopt(body).map_err(FrameworkError::Budget)
     }
+    // Same U4 removal/real-issuer gate as take_csrf; no public cutover yet.
+    #[allow(dead_code)]
     pub(in crate::http_server) fn take_prelogin(
         self,
         pool: &crate::auth::prelogin::Pool,

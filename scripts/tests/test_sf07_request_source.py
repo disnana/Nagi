@@ -53,6 +53,11 @@ class RequestSourceTests(unittest.TestCase):
         self.assertIn('mod security_sf07_private;', lib)
         self.assertNotIn('#[cfg(test)]\nmod security_sf07_private;', lib)
         modules = read('runtime/src/security_sf07_private/mod.rs')
+        calibration = '#[cfg(test)]\npub(crate) fn calibrate_allocation_meter()'
+        self.assertEqual(modules.count(calibration), 1)
+        modules = modules.replace(calibration, '#[cfg(test)]\nfn calibrate_allocation_meter()', 1)
+        self.assertEqual(hashlib.sha256(modules.encode()).hexdigest(),
+                         '585dc4c6335c70bfae2293a28c682d89fc868a191bb7ae908118a8c4d801af6a')
         for name in ('indexed', 'legacy_rate'):
             self.assertIn('#[cfg(test)]\nmod ' + name + ';', modules)
         for name in ('allocations_in', 'calibrate_allocation_meter'):

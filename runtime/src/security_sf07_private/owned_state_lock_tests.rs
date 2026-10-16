@@ -29,6 +29,10 @@ fn cold_first_lock_unlock_and_drop_have_no_owned_heap() {
         });
         let mut state = owner.lock().unwrap();
         state.value = 7;
+        assert!(matches!(
+            owner.try_lock(),
+            Err(std::sync::TryLockError::WouldBlock)
+        ));
         drop(state);
         assert_eq!(drops.load(Ordering::SeqCst), 0);
         drop(owner);
@@ -121,6 +125,12 @@ fn writer_poison_recovers_for_disposal_and_stays_sticky_until_drop() {
     state.value = 8;
     drop(state);
     assert!(owner.lock().is_err());
+    match owner.try_lock() {
+        Err(std::sync::TryLockError::Poisoned(poisoned)) => {
+            assert_eq!(poisoned.into_inner().value, 8);
+        }
+        _ => panic!("nonblocking writer must preserve poison for disposal"),
+    }
     assert_eq!(drops.load(Ordering::SeqCst), 0);
     drop(owner);
     assert_eq!(drops.load(Ordering::SeqCst), 1);

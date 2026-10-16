@@ -64,6 +64,9 @@ pub(in crate::auth) mod observation {
         drops: Arc<AtomicUsize>,
     }
     pub(in crate::auth) fn register(body: &hyper::body::Bytes) -> Probe {
+        // Test instrumentation keeps the MSRV 1.88 atomic API. Remove this
+        // statement allowance when the supported baseline has its replacement.
+        #[allow(deprecated)]
         let id = NEXT
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
                 value.checked_add(1)

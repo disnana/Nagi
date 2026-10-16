@@ -195,6 +195,44 @@ fn auth_304_and_html_encoding_are_invariants_before_conversion() {
         PreparedResponse::new(&p, r, m).err(),
         Some(Diagnostic::Fault)
     );
+
+    // A real typed document is already encoded once; the producer must copy
+    // those exact bytes and refuse a smaller body budget before allocation.
+    let policy = crate::html::policy("https://example.invalid").unwrap();
+    let fragment = crate::html::text(&policy, "<&").unwrap();
+    let document = crate::html::document(&policy, "t<&", fragment).unwrap();
+    let expected = b"<!doctype html><html><head><meta charset=\"utf-8\"><title>t&lt;&amp;</title></head><body>&lt;&amp;</body></html>";
+    let (refused, meter) = crate::metrics::measure(|| p.html(&document));
+    assert_eq!(refused.err(), Some(Diagnostic::BodyLimit));
+    assert_eq!(meter.allocations, 0);
+    assert_eq!(meter.allocated_bytes, 0);
+    assert!(p.empty().is_ok());
+    let mut exact_limits = limits();
+    exact_limits.body_bytes = expected.len();
+    let exact = Producer::checked_attached(exact_limits, 1, 256).unwrap();
+    let mut html_meta = meta(StatusCode::OK, false, PolicySource::Public);
+    html_meta.kind = BodyKind::Html;
+    let wire = PreparedResponse::new(&exact, exact.html(&document).unwrap(), html_meta)
+        .unwrap()
+        .finish()
+        .unwrap();
+    let (headers, body) = wire.into_parts();
+    assert_eq!(body.as_ref(), expected);
+    assert_eq!(
+        headers.value("content-type"),
+        Some(b"text/html; charset=utf-8".as_slice())
+    );
+    assert_eq!(
+        headers.value("content-security-policy"),
+        Some(CONTENT_SECURITY_POLICY.as_bytes())
+    );
+    assert_eq!(headers.value("content-encoding"), None);
+    let last = hyper::body::Frame::data(body.clone());
+    drop(body);
+    drop(headers);
+    held(&exact);
+    drop(last);
+    assert!(exact.empty().is_ok());
 }
 
 #[test]
@@ -316,6 +354,10 @@ fn original_auth_refusal_deletion_and_cancellation_survive_fallback() {
             .intent(reason)
             .context(PolicySource::Session, false, VarySet::GUARDED)
             .consumed_deletion(HeaderValue::from_static("session=; Max-Age=0"))
+            .unwrap()
+            .cors(HeaderValue::from_static("https://example.invalid"), true)
+            .unwrap()
+            .allow(HeaderValue::from_static("GET, HEAD"))
             .unwrap();
         let (status, wire) = f.terminal(intent).into_response().unwrap();
         assert_eq!(status, reason.code());
@@ -331,6 +373,19 @@ fn original_auth_refusal_deletion_and_cancellation_survive_fallback() {
             } else {
                 None
             }
+        );
+        assert_eq!(
+            h.value("access-control-allow-origin"),
+            Some(b"https://example.invalid".as_slice())
+        );
+        assert_eq!(
+            h.value("access-control-allow-credentials"),
+            Some(b"true".as_slice())
+        );
+        assert_eq!(h.value("allow"), Some(b"GET, HEAD".as_slice()));
+        assert_eq!(
+            h.value("vary"),
+            Some(b"Authorization, Cookie, Origin, X-CSRF-Token".as_slice())
         );
     }
     let intent = f
@@ -369,11 +424,31 @@ fn fixed_body_preserves_original_bytes_pointer_until_last_frame_owner() {
     let drops = Arc::new(AtomicUsize::new(0));
     let body = secret(&drops);
     let pointer = body.as_ptr();
-    let ticket = FrameworkTicket::reserve(&p, FrameworkBody::Csrf, None).unwrap();
+    let ticket = FrameworkTicket::reserve(&p, FrameworkBody::Csrf, None)
+        .unwrap()
+        .cors(
+            Some(HeaderValue::from_static("https://example.invalid")),
+            true,
+        )
+        .unwrap()
+        .dependencies(VarySet::GUARDED)
+        .unwrap();
     let prepared = ticket.adopt(body).unwrap();
     let (headers, body) = prepared.finish().unwrap().into_parts();
     assert_eq!(body.as_ptr(), pointer);
     assert_eq!(headers.value("content-length"), Some(b"60".as_slice()));
+    assert_eq!(
+        headers.value("access-control-allow-origin"),
+        Some(b"https://example.invalid".as_slice())
+    );
+    assert_eq!(
+        headers.value("access-control-allow-credentials"),
+        Some(b"true".as_slice())
+    );
+    assert_eq!(
+        headers.value("vary"),
+        Some(b"Authorization, Cookie, Origin, X-CSRF-Token".as_slice())
+    );
     let last = hyper::body::Frame::data(body.clone());
     drop(body);
     drop(headers);
@@ -389,9 +464,8 @@ fn reserve_before_fake_take_failure_never_reissues_and_fallback_is_independent()
     let p = producer();
     let take = AtomicUsize::new(0);
     let live = p.empty().unwrap();
-    let result = FrameworkTicket::reserve(&p, FrameworkBody::Csrf, None).map(|ticket| {
+    let result = FrameworkTicket::reserve(&p, FrameworkBody::Csrf, None).inspect(|_| {
         take.fetch_add(1, Ordering::SeqCst);
-        ticket
     });
     assert_eq!(result.err(), Some(Diagnostic::Capacity));
     assert_eq!(take.load(Ordering::SeqCst), 0);
