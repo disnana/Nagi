@@ -38,6 +38,10 @@ function fake(name, mode, fault) {
               if (mode === 'accepted') return { status: () => 200 };
               if (mode === 'network') throw new Error('net::ERR_CONNECTION_REFUSED PRIVATE_SENTINEL');
               if (fault && fault.reason === reason) {
+                if (fault.kind === 'protocol-wrapper') throw new Error(
+                  'page.goto: Protocol error (browsingContext.navigate): ' + (fault.token ?? token) + ' at ' + url);
+                if (fault.kind === 'raw-error') throw new Error(fault.message);
+                if (fault.kind === 'raw-non-error') throw { message: fault.message };
                 if (fault.kind === 'bad-signature') throw new Error('page.goto: SEC_ERROR_BAD_SIGNATURE at ' + url);
                 if (fault.kind === 'hostname') throw new Error('page.goto: ' + messages[name][1] + ' at ' + url);
                 if (fault.kind === 'other-tls') throw new Error('page.goto: SEC_ERROR_UNTRUSTED_ISSUER at ' + url);
@@ -106,7 +110,9 @@ function clock() {
 }
 function issuer(form, url) {
   const token = 'SEC_ERROR_UNKNOWN_ISSUER';
-  return new Error(form === 'bare' ? token : form === 'prefix' ? 'page.goto: ' + token : 'page.goto: ' + token + ' at ' + url);
+  return new Error(form === 'bare' ? token : form === 'prefix' ? 'page.goto: ' + token :
+    form === 'protocol' ? 'page.goto: Protocol error (browsingContext.navigate): ' + token + ' at ' + url :
+      'page.goto: ' + token + ' at ' + url);
 }
 function worker(step, closePage = () => {}) {
   const trace = { calls: [], pageClosed: 0, contextClosed: 0, browserClosed: 0 };
@@ -121,7 +127,7 @@ function worker(step, closePage = () => {}) {
 }
 
 test('Firefox initial CA readiness accepts only fixed issuer forms and never repeats a response', async () => {
-  for (const form of ['bare', 'prefix', 'at-url']) {
+  for (const form of ['bare', 'prefix', 'at-url', 'protocol']) {
     const time = clock(); let attempts = 0;
     const type = fake('firefox', undefined, { positiveStep: url => {
       if (url === ready.app + '/' && ++attempts <= 2) throw issuer(form, url);
@@ -229,7 +235,7 @@ test('only Firefox first positive uses readiness; other SANs and engines remain 
 
 test('business readiness uses its actual worker Browser and fresh strict context, never closes Browser', async () => {
   const time = clock(); let attempts = 0;
-  const owned = worker(url => { if (++attempts === 1) throw issuer('bare', url); return { status: () => 200 }; });
+  const owned = worker(url => { if (++attempts === 1) throw issuer('protocol', url); return { status: () => 200 }; });
   await firefoxWorkerReadiness(owned.browser, ready.app, time.timing);
   assert.equal(attempts, 2);
   assert.deepEqual(owned.trace.options, { ignoreHTTPSErrors: false, serviceWorkers: 'block' });
@@ -341,6 +347,19 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
   assert.ok(expectedEvents.some(event => event.stage === 'engine_wrong_ca'));
   assert.equal(expectedEvents.some(event => event.stage.startsWith('engine_wrong_ca_')), false);
 
+  const wrappedExpectedEvents = [];
+  const wrappedExpected = fake('firefox', undefined, { reason: 'ca', kind: 'protocol-wrapper',
+    token: 'SEC_ERROR_UNKNOWN_ISSUER' });
+  const wrappedResult = await probeEngine('firefox', wrappedExpected, settings(provisioned, ready, negative),
+    (stage, engine) => wrappedExpectedEvents.push({ stage, engine }));
+  assert.equal(wrappedResult.wrong_ca_refused, true);
+  assert.equal(wrappedExpectedEvents.some(event => event.stage.startsWith('engine_wrong_ca_')), false);
+  assert.equal(wrappedExpected.trace.contextClosed && wrappedExpected.trace.closed, true);
+
+  const wrappedHost = fake('firefox', undefined, { reason: 'host', kind: 'protocol-wrapper',
+    token: 'SSL_ERROR_BAD_CERT_DOMAIN' });
+  assert.equal((await probeEngine('firefox', wrappedHost, settings(provisioned, ready, negative))).wrong_host_refused, true);
+
   const cases = [
     { mode: 'accepted', stage: 'engine_wrong_ca_response_received' },
     { fault: 'bad-signature', stage: 'engine_wrong_ca_bad_signature' },
@@ -350,9 +369,35 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
     { fault: 'other-tls', stage: 'engine_wrong_ca_other_tls' },
     { fault: 'unknown', stage: 'engine_wrong_ca_unknown' },
     { fault: 'extra-code-text', stage: 'engine_wrong_ca_unknown' },
+    { fault: 'protocol-wrapper', token: 'SEC_ERROR_BAD_SIGNATURE', stage: 'engine_wrong_ca_bad_signature' },
+    { fault: 'protocol-wrapper', token: 'SSL_ERROR_BAD_CERT_DOMAIN', stage: 'engine_wrong_ca_hostname' },
+    { fault: 'protocol-wrapper', token: 'SEC_ERROR_UNTRUSTED_ISSUER', stage: 'engine_wrong_ca_other_tls' },
+    { fault: 'protocol-wrapper', token: 'SEC_ERROR_CA_CERT_INVALID', stage: 'engine_wrong_ca_other_tls' },
+    { fault: 'raw-error', message: 'page.goto: Protocol error (Page.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/',
+      stage: 'engine_wrong_ca_unknown' },
+    { fault: 'raw-error', message: 'page.goto: Protocol error (browsingContext.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/extra',
+      stage: 'engine_wrong_ca_unknown' },
+    { fault: 'raw-error', message: 'page.goto: Protocol error (browsingContext.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/ trailing',
+      stage: 'engine_wrong_ca_unknown' },
+    { fault: 'raw-error', message: 'page.goto: Error: Protocol error (browsingContext.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/',
+      stage: 'engine_wrong_ca_unknown' },
+    { fault: 'raw-error', message: 'page.goto: Protocol error (browsingContext.navigate): SEC_ERROR_PRIVATE_SENTINEL at ' + negative.caOrigin + '/',
+      stage: 'engine_wrong_ca_unknown' },
+    { fault: 'raw-error', message: 'page.goto: Protocol error (browsingContext.navigate): SEC_ERROR_UNKNOWN_ISSUER SEC_ERROR_BAD_SIGNATURE at ' + negative.caOrigin + '/',
+      stage: 'engine_wrong_ca_unknown' },
+    { fault: 'raw-error', message: 'page.goto: Protocol error (browsingContext.navigate):\nSEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/',
+      stage: 'engine_wrong_ca_unknown' },
+    { fault: 'raw-error', message: 'page.goto: Protocol error (browsingContext.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/ token=PRIVATE_SENTINEL',
+      stage: 'engine_wrong_ca_unknown' },
+    { fault: 'raw-error', message: 'page.goto: Protocol error (browsingContext.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/ ' + 'x'.repeat(8192),
+      stage: 'engine_wrong_ca_unknown' },
+    { fault: 'raw-non-error', message: 'page.goto: Protocol error (browsingContext.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/',
+      stage: 'engine_wrong_ca_unknown' },
   ];
   for (const item of cases) {
-    const type = fake('firefox', item.mode, item.fault ? { reason: 'ca', kind: item.fault } : undefined);
+    const type = fake('firefox', item.mode, item.fault ? {
+      reason: 'ca', kind: item.fault, token: item.token, message: item.message,
+    } : undefined);
     const events = [];
     await assert.rejects(probeEngine('firefox', type, settings(provisioned, ready, negative),
       (stage, engine) => events.push({ stage, engine })),
@@ -361,6 +406,17 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
     assert.equal(type.trace.pageClosed >= 1, true);
     assert.equal(type.trace.contextClosed && type.trace.closed, true);
     assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|secret|unit-secret|SEC_ERROR|SSL_ERROR/);
+  }
+
+  for (const name of ['chromium', 'webkit']) {
+    const type = fake(name, undefined, { reason: 'ca', kind: 'raw-error',
+      message: 'page.goto: Protocol error (browsingContext.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/' });
+    const events = [];
+    await assert.rejects(probeEngine(name, type, settings(provisioned, ready, negative),
+      (stage, engine) => events.push({ stage, engine })),
+    /^Error: SF08 browser trust preflight refused$/);
+    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_unknown', engine: name });
+    assert.doesNotMatch(JSON.stringify(events), /SEC_ERROR|SSL_ERROR|PRIVATE_SENTINEL/);
   }
 });
 

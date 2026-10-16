@@ -12,22 +12,29 @@ const TLS_ERROR = {
   firefox: { ca: 'SEC_ERROR_UNKNOWN_ISSUER', host: 'SSL_ERROR_BAD_CERT_DOMAIN' },
   webkit: { ca: 'Unacceptable TLS certificate', host: 'Unacceptable TLS certificate' },
 };
-// Frozen candidate vocabulary only; real pinned-engine error text remains unverified.
+const FIREFOX_PROTOCOL_TLS_TOKENS = Object.freeze([
+  'SEC_ERROR_UNKNOWN_ISSUER', 'SSL_ERROR_BAD_CERT_DOMAIN', 'SEC_ERROR_BAD_SIGNATURE',
+  'SEC_ERROR_UNTRUSTED_ISSUER', 'SEC_ERROR_CA_CERT_INVALID',
+]);
+// Fixed NSS tokens only; the wrapper shape comes from pinned Playwright source.
 const REFUSED = 'SF08 browser trust preflight refused';
 
 function refuse() { throw new Error(REFUSED); }
 
-function exactTLSFailureToken(error, token, probeURL) {
+function exactTLSFailureToken(error, token, probeURL, engineName) {
   if (!(error instanceof Error) || typeof error.message !== 'string' || error.message.length > 8192) return false;
   const newline = error.message.indexOf('\n');
   const firstLine = newline < 0 ? error.message : error.message.slice(0, newline);
-  return firstLine === token ||
+  const existingForm = firstLine === token ||
     firstLine === 'page.goto: ' + token ||
     firstLine === 'page.goto: ' + token + ' at ' + probeURL;
+  const firefoxProtocolForm = engineName === 'firefox' && FIREFOX_PROTOCOL_TLS_TOKENS.includes(token) &&
+    firstLine === 'page.goto: Protocol error (browsingContext.navigate): ' + token + ' at ' + probeURL;
+  return existingForm || firefoxProtocolForm;
 }
 
 function expectedTLSFailure(error, name, reason, probeURL) {
-  return exactTLSFailureToken(error, TLS_ERROR[name][reason], probeURL);
+  return exactTLSFailureToken(error, TLS_ERROR[name][reason], probeURL, name);
 }
 
 // Failure-only facts; expectedTLSFailure remains the sole acceptance oracle.
@@ -38,12 +45,12 @@ function wrongCAFailureOutcome(error, name, probeURL) {
     if (error.name === 'TimeoutError') return 'timeout';
     const matches = [];
     if (name === 'firefox') {
-      if (exactTLSFailureToken(error, 'SEC_ERROR_BAD_SIGNATURE', probeURL)) matches.push('bad_signature');
-      if (exactTLSFailureToken(error, TLS_ERROR.firefox.host, probeURL)) matches.push('hostname');
+      if (exactTLSFailureToken(error, 'SEC_ERROR_BAD_SIGNATURE', probeURL, name)) matches.push('bad_signature');
+      if (exactTLSFailureToken(error, TLS_ERROR.firefox.host, probeURL, name)) matches.push('hostname');
       for (const token of ['SEC_ERROR_UNTRUSTED_ISSUER', 'SEC_ERROR_CA_CERT_INVALID']) {
-        if (exactTLSFailureToken(error, token, probeURL)) matches.push('other_tls');
+        if (exactTLSFailureToken(error, token, probeURL, name)) matches.push('other_tls');
       }
-    } else if (name === 'chromium' && exactTLSFailureToken(error, TLS_ERROR.chromium.host, probeURL)) {
+    } else if (name === 'chromium' && exactTLSFailureToken(error, TLS_ERROR.chromium.host, probeURL, name)) {
       matches.push('hostname');
     }
     return matches.length === 1 ? matches[0] : 'unknown';
