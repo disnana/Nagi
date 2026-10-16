@@ -460,6 +460,8 @@ async fn checkpoint_accepts_before_and_refuses_at_or_after_original_token_expiry
     for delta in [-1i64, 0, 1] {
         let mut f = Fixture::new(2, 176).await;
         let (o, b, digest, expiry) = f.issue().await;
+        let probe = Arc::new(same_queue_probe::Probe::new(expiry));
+        f.inner.checkpoint_probe = Some(Arc::clone(&probe));
         let values = if delta < 0 {
             vec![
                 expiry - 500,
@@ -474,6 +476,22 @@ async fn checkpoint_accepts_before_and_refuses_at_or_after_original_token_expiry
         };
         f.inner.context.set_test_clock_sequence(values);
         let result = f.inner.checkpoint(&o.lease.lease, &b, digest).await;
+        if let Err(error) = &result {
+            let observed = probe.failure();
+            eprintln!(
+                "csrf_expiry_boundary_diag delta={} phase={:?} refusal={:?} matched={:?} original_expiry_same={:?} sample_last_expired={:?} lease_last_valid={:?} actual_expired={:?} kind={:?} outcome={:?}",
+                delta,
+                observed.phase,
+                observed.refusal,
+                observed.matched,
+                observed.original_expiry,
+                observed.sample_expired,
+                observed.lease_valid,
+                observed.actual_expired,
+                kind(error),
+                outcome(error),
+            );
+        }
         if delta < 0 {
             assert!(result.is_ok());
             assert!(f.count().await == 1);
