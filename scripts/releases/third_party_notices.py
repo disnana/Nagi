@@ -33,6 +33,7 @@ ROOT_ROLES = {
 }
 SPDX_LICENSE_IDS = frozenset({
     "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "BSL-1.0", "CC0-1.0",
+    "CDLA-Permissive-2.0",
     "ISC", "LGPL-2.1-or-later", "MIT", "MIT-0", "Unicode-3.0",
     "Unlicense", "Zlib",
 })
