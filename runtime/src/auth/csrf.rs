@@ -18,6 +18,11 @@ mod same_queue_probe;
 #[cfg(test)]
 use same_queue_probe::Phase as CheckpointPhase;
 
+#[path = "csrf/fixed_body.rs"]
+pub(super) mod fixed_body;
+#[cfg(test)]
+pub(crate) const FIXED_TOKEN_BODY_BYTES: usize = fixed_body::BODY_BYTES;
+
 const ROW_BYTES: i64 = 88;
 const META: &str = "CREATE TABLE __nagi_csrf_meta(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL,incarnation BLOB NOT NULL CHECK(length(incarnation)=32),session_incarnation BLOB NOT NULL CHECK(length(session_incarnation)=32),max_stored INTEGER NOT NULL,max_payload_bytes INTEGER NOT NULL,cleanup_batch INTEGER NOT NULL,ttl_ms INTEGER NOT NULL,collision_attempts INTEGER NOT NULL,origin TEXT NOT NULL,last_wall INTEGER NOT NULL CHECK(last_wall>=0)) STRICT";
 const ROWS: &str = "CREATE TABLE __nagi_csrf_tokens(digest BLOB PRIMARY KEY CHECK(length(digest)=32),session_incarnation BLOB NOT NULL CHECK(length(session_incarnation)=32),lineage INTEGER NOT NULL CHECK(lineage>0),generation INTEGER NOT NULL CHECK(generation>=0),expiry_ms INTEGER NOT NULL CHECK(expiry_ms>0)) STRICT, WITHOUT ROWID";
@@ -181,6 +186,8 @@ pub(crate) struct Inner {
     insert_enqueues: std::sync::atomic::AtomicUsize,
     #[cfg(test)]
     checkpoint_probe: Option<Arc<same_queue_probe::Probe>>,
+    #[cfg(test)]
+    checkpoint_comparison_now: Option<Instant>,
 }
 #[cfg(test)]
 struct ReserveWait {
@@ -408,6 +415,8 @@ pub async fn open(
             insert_enqueues: std::sync::atomic::AtomicUsize::new(0),
             #[cfg(test)]
             checkpoint_probe: None,
+            #[cfg(test)]
+            checkpoint_comparison_now: None,
         }),
     })
 }
@@ -615,6 +624,19 @@ impl Inner {
             0,
         )
         .map_err(Failure::session)
+    }
+    fn checkpoint_now(&self) -> Instant {
+        #[cfg(test)]
+        if let Some(now) = self.checkpoint_comparison_now {
+            return now;
+        }
+        Instant::now()
+    }
+    // The same predicate runs in production and scripted boundary tests. Only
+    // this token comparison's clock can be scripted; authority/lease guards,
+    // transaction work, restore and cancellation retain their real checks.
+    fn checkpoint_token_expired(&self, wall: i64, expiry: i64, deadline: Instant) -> bool {
+        wall >= expiry || self.checkpoint_now() >= deadline
     }
     async fn check(&self, tx: &sqlite::Tx, wall: &mut Option<i64>) -> Result<(), Failure> {
         let c = self
@@ -1081,7 +1103,7 @@ impl Inner {
             authority?;
             #[cfg(test)]
             self.checkpoint_phase(CheckpointPhase::FinalExpiry);
-            if c.ceil_ms >= expiry || Instant::now() >= deadline {
+            if self.checkpoint_token_expired(c.ceil_ms, expiry, deadline) {
                 #[cfg(all(test, nagi_auth_stage_diag))]
                 trace.record(
                     Stage::Gate,
@@ -1155,10 +1177,7 @@ impl Inner {
             c.phase = Phase::Terminal;
             (token, expiry, deadline, c.wall)
         };
-        let body = format!("{{\"csrf_token\":\"{token}\"}}");
-        if body.len() != 60 {
-            return Err(Failure::internal());
-        }
+        let body = fixed_body::FixedTokenBody::new(&token).ok_or_else(Failure::internal)?;
         let c = self.clock(&mut wall)?;
         b.check_clock(&c, &owner.lease.lease)
             .map_err(Failure::session)?;
@@ -1166,7 +1185,7 @@ impl Inner {
         if c.ceil_ms >= expiry || Instant::now() >= deadline {
             return Err(Failure::denied());
         }
-        Ok(hyper::body::Bytes::from(body))
+        Ok(body.into_bytes())
     }
 }
 fn project(c: &session::PreloginClock, expiry: i64) -> Result<Instant, Failure> {

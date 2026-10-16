@@ -52,12 +52,12 @@ class SummaryTests(unittest.TestCase):
             self.assertEqual(summary.classify(raw, "wire"), "compile_failed")
 
     def test_native_failure_is_classified_without_acceptance(self):
-        raw = fixture("wire").replace(b"ok. 22 passed; 0 failed", b"FAILED. 21 passed; 1 failed")
+        raw = fixture("wire").replace(b"ok. 38 passed; 0 failed", b"FAILED. 37 passed; 1 failed")
         self.assertEqual(summary.classify(raw, "wire"), "test_failed")
 
     def test_zero_wrong_count_ignored_or_missing_rows_are_invalid(self):
         raw = fixture("wire")
-        bad = (raw.replace(b"22 passed", b"0 passed"),
+        bad = (raw.replace(b"38 passed", b"0 passed"),
                raw.replace(b"0 ignored", b"1 ignored"),
                b"\n".join(raw.split(b"\n")[2:]))
         for mutated in bad:
@@ -117,9 +117,38 @@ class SummaryTests(unittest.TestCase):
         wire = native("runtime/src/http_server/response_budget_tests.rs", "http_server::response_budget::tests::")
         wire |= native("runtime/src/http_server/response_wire_tests.rs", "http_server::response_budget::wire::tests::")
         quota = native("runtime/src/security_sf07_private/quota.rs", "security_sf07_private::quota::tests::")
+        wire |= native("runtime/src/http_server/response_finalize_tests.rs", "http_server::response_budget::finalize::tests::")
         self.assertEqual(set(summary.EXPECTED["wire"]), wire)
         self.assertEqual(set(summary.EXPECTED["quota"]), quota)
-        self.assertEqual((len(wire), len(quota)), (22, 9))
+        self.assertEqual((len(wire), len(quota)), (38, 9))
+
+    def test_previous_59_names_and_new_20_are_exact_and_required(self):
+        import hashlib
+        import json
+        old = {k: list(summary.EXPECTED[k]) for k in ("wire", "quota", "transport", "request", "rate-startup")}
+        old["wire"] = old["wire"][:22]
+        old["transport"] = old["transport"][:8]
+        self.assertEqual(hashlib.sha256(json.dumps(old, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), '91fc28d8e6cff5efe7f56b95eae0b838766c1835eee0f5fbb0d34f3a65a71552')
+        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 83)
+        paths = {
+            "catalog-retained": ("runtime/src/security_sf07_private/quota_retention_tests.rs", "security_sf07_private::quota::retained_catalog_tests::"),
+            "transport": ("runtime/src/http_server/response_send_tests.rs", "http_server::response_send::tests::"),
+            "fixed-owner": ("runtime/src/auth/csrf/fixed_body.rs", "auth::csrf::fixed_body::tests::"),
+            "csrf-issuer": ("runtime/src/auth/csrf/fixed_wire_owner_tests.rs", "auth::csrf::tests::fixed_wire_owner_tests::"),
+            "prelogin-issuer": ("runtime/src/auth/prelogin/fixed_wire_owner_tests.rs", "auth::prelogin::tests::fixed_wire_owner_tests::"),
+        }
+        for mode, (path, prefix) in paths.items():
+            names = re.findall(r"#\[(?:tokio::)?test(?:\([^\]]*\))?\]\s*(?:async\s+)?fn ([a-zA-Z0-9_]+)\(", (ROOT/path).read_text())
+            self.assertEqual(set(summary.EXPECTED[mode]), {prefix + name for name in names})
+        for mode in ("fixed-owner", "csrf-issuer", "prelogin-issuer", "catalog-retained"):
+            for raw in (fixture(mode), fixture(mode).replace(b"\n", b"\r\n")):
+                self.assertEqual(summary.classify(raw, mode), "passed")
+                self.assertNotEqual(summary.classify(raw.replace(b"0 ignored", b"1 ignored"), mode), "passed")
+                first = summary.EXPECTED[mode][0].encode()
+                self.assertNotEqual(summary.classify(raw.replace(first, b"foreign::test"), mode), "passed")
+        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+        for mode in ("fixed-owner", "csrf-issuer", "prelogin-issuer", "catalog-retained"):
+            self.assertEqual(ci.count("| python -B scripts/ci/sf07_checkpoint_summary.py " + mode), 2)
 
     def test_both_required_ci_steps_register_source_parser_and_all_native_tests(self):
         text = (ROOT/".github/workflows/ci.yml").read_text()

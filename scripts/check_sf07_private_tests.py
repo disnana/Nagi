@@ -9,8 +9,11 @@ EXPECTED = ['security_sf07_private::indexed::tests::all_eighty_patricia_position
 # U3 startup adapter adds twelve exact tests; inherited55 stay unchanged.
 EXPECTED += ['security_sf07_private::startup_rate::tests::aggregate_rules_domains_and_slots_each_have_their_own_limit', 'security_sf07_private::startup_rate::tests::all_five_capacity_values_are_explicit_positive_and_representable', 'security_sf07_private::startup_rate::tests::caller_catalog_storage_is_charged_and_overflow_refused', 'security_sf07_private::startup_rate::tests::closing_uses_the_existing_owner_for_both_charge_stages', 'security_sf07_private::startup_rate::tests::empty_catalog_creates_no_rate_owner_and_no_implicit_rule', 'security_sf07_private::startup_rate::tests::existing_branded_rule_ids_reject_other_owner_without_a_second_brand_system', 'security_sf07_private::startup_rate::tests::finite_8192_subject_slots_are_not_rejected_by_a_hidden_4096_cap', 'security_sf07_private::startup_rate::tests::metadata_byte_refusal_occurs_before_any_vec_or_owner_allocation', 'security_sf07_private::startup_rate::tests::policy_time_burst_and_duplicate_subject_fail_before_allocation', 'security_sf07_private::startup_rate::tests::request_work_covers_route_plus_subject_not_only_the_largest_charge', 'security_sf07_private::startup_rate::tests::route_limited_and_subject_capacity_are_distinct_without_cross_route_sharing', 'security_sf07_private::startup_rate::tests::subject_support_is_checked_at_startup_not_silently_skipped']
 
+# U2 retained-catalog accounting adds three exact cases; prior67 stay unchanged.
+EXPECTED += ['security_sf07_private::quota::retained_catalog_tests::actual_resource_vector_excess_capacity_refused_before_publish', 'security_sf07_private::quota::retained_catalog_tests::receipt_covers_same_quota_mutex_and_actual_vector_capacity', 'security_sf07_private::quota::retained_catalog_tests::short_catalog_budget_refused_before_existing_constructor_allocates']
+
 text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
 summaries = re.findall(r"test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
-assert summaries == [("67", "0", "0")], "expected exactly 67 passing private SF07 tests"
+assert summaries == [("70", "0", "0")], "expected exactly 70 passing private SF07 tests"
 observed = re.findall(r"^test (security_sf07_private::\S+) \.\.\. ok$", text, re.M)
 assert collections.Counter(observed) == collections.Counter(EXPECTED), "SF07 inventory mismatch"

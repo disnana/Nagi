@@ -27,6 +27,22 @@ EXPECTED = {
         'http_server::response_budget::wire::tests::fallback_preserves_statuses_and_positive_retry_without_ordinary_serializer',
         'http_server::response_budget::wire::tests::fallback_startup_requires_connection_count_and_complete_minimum_bytes',
         'http_server::response_budget::wire::tests::wire_native_owners_are_send_sync_without_clone_or_raw_map_extraction',
+        'http_server::response_budget::finalize::tests::rejected_user_append_copies_nothing_and_keeps_prior_entries',
+        'http_server::response_budget::finalize::tests::foreign_owner_refused_before_plan_allocation_and_original_refunded',
+        'http_server::response_budget::finalize::tests::ordinary_s_plus_q_exact_boundary_does_not_require_l_times_q',
+        'http_server::response_budget::finalize::tests::head_and_bodyless_statuses_preserve_header_claim_and_security',
+        'http_server::response_budget::finalize::tests::auth_304_and_html_encoding_are_invariants_before_conversion',
+        'http_server::response_budget::finalize::tests::finite_vary_union_cors_allow_and_preflight_are_planned_once',
+        'http_server::response_budget::finalize::tests::complete_plan_refuses_before_native_conversion_and_preserves_peak_credit',
+        'http_server::response_budget::finalize::tests::fallback_sf_plus_c_qf_and_f_ge_c_are_independent_exact_boundaries',
+        'http_server::response_budget::finalize::tests::every_terminal_reason_keeps_status_and_retry_zero_closes_without_allocation',
+        'http_server::response_budget::finalize::tests::original_auth_refusal_deletion_and_cancellation_survive_fallback',
+        'http_server::response_budget::finalize::tests::fixed_body_preserves_original_bytes_pointer_until_last_frame_owner',
+        'http_server::response_budget::finalize::tests::reserve_before_fake_take_failure_never_reissues_and_fallback_is_independent',
+        'http_server::response_budget::finalize::tests::prelogin_owned_cookie_moves_once_without_secret_copy',
+        'http_server::response_budget::finalize::tests::private_finalizer_and_framework_ticket_keep_send_sync_layout',
+        'http_server::response_budget::finalize::tests::hidden_vec_capacity_and_empty_work_are_checked_before_copy_or_headers',
+        'http_server::response_budget::finalize::tests::fallback_sf_includes_actual_quota_receipt_and_refuses_one_byte_over_budget',
     ),
     'quota': (
         'security_sf07_private::quota::tests::q01_two_resource_partial_full_is_atomic',
@@ -48,6 +64,7 @@ EXPECTED = {
         'http_server::response_send::tests::parse_failure_does_not_release_pending_claim_at_ready',
         'http_server::response_send::tests::abort_before_actual_join_and_handler_panic_release_only_on_native_destruction',
         'http_server::response_send::tests::unpolled_and_ready_native_io_drop_before_cache_guard_and_connection_permit',
+        'http_server::response_send::tests::prepared_managed_head_and_empty_use_existing_native_drop_chain',
     ),
     'request': ('http_server::request_headers::tests::snapshots_share_actual_map_and_never_retain_original_body', 'http_server::request_headers::tests::sanitized_views_hide_every_credential_accessor_debug_and_child_snapshot', 'http_server::request_headers::tests::ordinary_lookup_keeps_duplicate_case_utf8_and_invalid_name_contracts', 'http_server::request_headers::tests::header_only_last_shared_owner_retains_prior_response_reservation', 'http_server::request_headers::tests::unpolled_future_and_unwind_release_only_their_last_request_owner', 'http_server::request_headers::tests::cancelled_pending_request_keeps_charge_until_actual_task_join', 'http_server::request_headers::tests::fixture_mutation_cannot_copy_shared_map_or_mutate_charged_native_owner', 'http_server::request_headers::tests::actual_native_parts_extensions_live_through_handler_and_drop_after_join'),
     'rate-startup': (
@@ -63,6 +80,21 @@ EXPECTED = {
         'security_sf07_private::startup_rate::tests::empty_catalog_creates_no_rate_owner_and_no_implicit_rule',
         'security_sf07_private::startup_rate::tests::caller_catalog_storage_is_charged_and_overflow_refused',
         'security_sf07_private::startup_rate::tests::finite_8192_subject_slots_are_not_rejected_by_a_hidden_4096_cap',
+    ),
+    'fixed-owner': (
+        'auth::csrf::fixed_body::tests::exact_protocol_owner_validates_before_copy_without_hidden_capacity',
+        'auth::csrf::fixed_body::tests::scoped_parallel_probes_do_not_confuse_abandoned_registration_or_other_owner',
+    ),
+    'csrf-issuer': (
+        'auth::csrf::tests::fixed_wire_owner_tests::actual_csrf_wire_fixed_owner_outlives_issuer_until_last_bytes_clone',
+    ),
+    'prelogin-issuer': (
+        'auth::prelogin::tests::fixed_wire_owner_tests::actual_prelogin_wire_fixed_owner_outlives_issuer_until_last_bytes_clone',
+    ),
+    'catalog-retained': (
+        'security_sf07_private::quota::retained_catalog_tests::receipt_covers_same_quota_mutex_and_actual_vector_capacity',
+        'security_sf07_private::quota::retained_catalog_tests::short_catalog_budget_refused_before_existing_constructor_allocates',
+        'security_sf07_private::quota::retained_catalog_tests::actual_resource_vector_excess_capacity_refused_before_publish',
     ),
 }
 

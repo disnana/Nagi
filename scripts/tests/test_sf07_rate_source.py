@@ -30,7 +30,7 @@ class RateSourceTests(unittest.TestCase):
         additions = [n for n in tree.body if isinstance(n, ast.AugAssign)
                      and isinstance(n.target, ast.Name) and n.target.id == 'EXPECTED']
         self.assertEqual(len(original), 1)
-        self.assertEqual(len(additions), 1)
+        self.assertEqual(len(additions), 2)
         old = ast.literal_eval(original[0].value)
         new = ast.literal_eval(additions[0].value)
         self.assertEqual(len(old), 55)
@@ -38,13 +38,16 @@ class RateSourceTests(unittest.TestCase):
                          'a9494c0c4080e9bf75d4c631f23e873fd37380ada1dffdf908f87c571a9df985')
         self.assertIsInstance(additions[0].op, ast.Add)
         self.assertEqual(new, sorted(summary.EXPECTED['rate-startup']))
-        self.assertEqual(len(set(old + new)), 67)
+        self.assertIsInstance(additions[1].op, ast.Add)
+        retained = ast.literal_eval(additions[1].value)
+        self.assertEqual(retained, sorted(summary.EXPECTED['catalog-retained']))
+        self.assertEqual(len(set(old + new + retained)), 70)
         # Run the actual broad checker: registration must not merely agree in
         # two source lists while its fixed count still rejects the new suite.
         code = compile(tree, 'check_sf07_private_tests.py', 'exec')
         from unittest.mock import patch
-        text = ''.join('test ' + n + ' ... ok\n' for n in old + new)
-        text += 'test result: ok. 67 passed; 0 failed; 0 ignored;\n'
+        text = ''.join('test ' + n + ' ... ok\n' for n in old + new + retained)
+        text += 'test result: ok. 70 passed; 0 failed; 0 ignored;\n'
         with patch.object(Path, 'read_text', return_value=text), patch.object(sys, 'argv', ['checker', 'fixture']):
             exec(code, {'__name__': '__main__'})
 

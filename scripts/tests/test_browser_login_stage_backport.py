@@ -200,10 +200,25 @@ class BackportSourceTests(unittest.TestCase):
                 value = read(path)
                 if path == 'scripts/ci/session_private_deadline_diagnostic.py':
                     value = projection.inverse_collector(value)
+                if path == 'runtime/src/auth/prelogin/http_bridge.rs':
+                    value = projection.inverse_prelogin_wire(value)
                 self.assertEqual(hashlib.sha256(value.encode()).hexdigest(), expected, path)
         http_sha = CHILD_BYTES['runtime/src/http_server.rs']
         self.assertEqual(workflow.count("'runtime/src/http_server.rs': '" + http_sha + "'"), 2)
         self.assertEqual(read('scripts/ci/session_private_deadline_diagnostic.py').count('expected_digest = "' + http_sha + '"'), 1)
+
+    def test_fixed_owner_inverse_cannot_hide_changed_live_gate_or_cookie(self):
+        path = 'runtime/src/auth/prelogin/http_bridge.rs'
+        source = read(path)
+        expected = CHILD_BYTES[path]
+        self.assertEqual(hashlib.sha256(projection.inverse_prelogin_wire(source).encode()).hexdigest(), expected)
+        for before, after in (('cookie.set_sensitive(true)', 'cookie.set_sensitive(false)'),
+                              ('let clock = self.context.sample()', 'let clock = self.context.changed_sample()')):
+            self.assertIn(before, source)
+            changed = source.replace(before, after, 1)
+            self.assertNotEqual(hashlib.sha256(projection.inverse_prelogin_wire(changed).encode()).hexdigest(), expected)
+        with self.assertRaises(ValueError):
+            projection.inverse_prelogin_wire(source.replace('FixedTokenBody::new', 'UncheckedBody::new', 1))
 
     def test_decision_observer_fault_and_cors_mutations_cannot_hide_in_inverse(self):
         paths = {

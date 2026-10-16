@@ -98,6 +98,10 @@ jobs:
           cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
           cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request
           cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::retained_catalog_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py catalog-retained
+          cargo test --locked -p nagi-runtime --lib auth::csrf::fixed_body::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py fixed-owner
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py csrf-issuer
+          cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py prelogin-issuer
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -256,7 +260,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":14, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -625,6 +629,10 @@ jobs:
           cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
           cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request
           cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::retained_catalog_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py catalog-retained
+          cargo test --locked -p nagi-runtime --lib auth::csrf::fixed_body::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py fixed-owner
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py csrf-issuer
+          cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py prelogin-issuer
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -794,7 +802,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":14, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")

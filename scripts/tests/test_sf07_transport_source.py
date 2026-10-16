@@ -21,8 +21,12 @@ class TransportSourceTests(unittest.TestCase):
     def test_native_inventory_is_explicit_and_registered_in_both_required_steps(self):
         tests = text("runtime/src/http_server/response_send_tests.rs")
         names = re.findall(r"#\[tokio::test\]\s*async fn ([a-zA-Z0-9_]+)\(", tests)
-        self.assertEqual(len(names), 8)
-        self.assertEqual(len(set(names)), 8)
+        self.assertEqual(len(names), 9)
+        self.assertEqual(len(set(names)), 9)
+        # U2 appends one managed-response oracle; all eight original bodies
+        # remain byte-identical after universal newline normalization.
+        self.assertEqual(hashlib.sha256(tests[:19665].encode()).hexdigest(),
+                         "0b35d16393447d1c77bf23399bed29a3e9bf0bdd40f8f1816be0bd392a807587")
         spec = importlib.util.spec_from_file_location("transport_summary", ROOT/"scripts/ci/sf07_checkpoint_summary.py")
         summary = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(summary)

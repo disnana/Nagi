@@ -68,9 +68,22 @@ SOURCE_LINE = '          python -B scripts/tests/test_sf07_request_source.py\n'
 NATIVE_LINE = '          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request\n'
 RATE_SOURCE_LINE = '          python -B scripts/tests/test_sf07_rate_source.py\n'
 RATE_NATIVE_LINE = '          cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup\n'
+U2_NATIVE_LINES = (
+    '          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::retained_catalog_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py catalog-retained\n',
+    '          cargo test --locked -p nagi-runtime --lib auth::csrf::fixed_body::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py fixed-owner\n',
+    '          cargo test --locked -p nagi-runtime --lib auth::csrf::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py csrf-issuer\n',
+    '          cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py prelogin-issuer\n',
+)
 
 
 def inverse_workflow(source):
+    for line in U2_NATIVE_LINES:
+        if source.count(line) != 2:
+            raise ValueError('U2 workflow registration mismatch')
+        source = source.replace(line, '')
+    if source.count('"sf03-b1-csrf-core.log":15') != 2:
+        raise ValueError('U2 concrete issuer inventory mismatch')
+    source = source.replace('"sf03-b1-csrf-core.log":15', '"sf03-b1-csrf-core.log":14')
     if source.count(SOURCE_LINE) != 2 or source.count(NATIVE_LINE) != 2:
         raise ValueError('U1 workflow registration mismatch')
     if source.count(RATE_SOURCE_LINE) != 2 or source.count(RATE_NATIVE_LINE) != 2:
@@ -78,6 +91,32 @@ def inverse_workflow(source):
     if source.count(TESTS_AFTER) != 2:
         raise ValueError('U1 native fixture binding mismatch')
     return source.replace(SOURCE_LINE, '').replace(NATIVE_LINE, '').replace(RATE_SOURCE_LINE, '').replace(RATE_NATIVE_LINE, '').replace(HTTP_AFTER, HTTP_BEFORE).replace(TESTS_AFTER, TESTS_BEFORE)
+
+
+def inverse_prelogin_wire(source):
+    """Undo only U2's fixed original body owner for inherited source guards."""
+    new = '''        let body = super::super::csrf::fixed_body::FixedTokenBody::new(&pair.token)
+            .ok_or_else(Failure::wire_internal)?;
+        // Finite cookie/body construction is not forcibly preemptible. Recheck
+'''
+    old = '''        #[derive(serde::Serialize)]
+        struct Json<'a> {
+            csrf_token: &'a str,
+        }
+        let body = serde_json::to_vec(&Json {
+            csrf_token: &pair.token,
+        })
+        .map_err(|_| Failure::wire_internal())?;
+        if body.len() != 60 {
+            return Err(Failure::wire_internal());
+        }
+        // Finite library serialization is not forcibly preemptible. Recheck
+'''
+    converted = '            body: body.into_bytes(),\n'
+    prior = '            body: hyper::body::Bytes::from(body),\n'
+    if source.count(new) != 1 or source.count(converted) != 1:
+        raise ValueError('U2 prelogin original-owner inverse mismatch')
+    return source.replace(new, old).replace(converted, prior)
 
 
 def inverse_collector(source):
@@ -109,6 +148,19 @@ QUOTA_CFG_ADDITIONS = (
 
 
 def inverse_quota(source):
+    # U2 extends the existing owner with a retained-catalog receipt. Remove
+    # only that independently reviewed exact block, never arbitrary new code.
+    start = '// SF07_U2_RETAINED_CATALOG_BEGIN'
+    end = '// SF07_U2_RETAINED_CATALOG_END\n\n'
+    if start in source or '// SF07_U2_RETAINED_CATALOG_END' in source:
+        if source.count(start) != 1 or source.count(end) != 1:
+            raise ValueError('U2 quota extension marker mismatch')
+        left = source.index(start)
+        right = source.index(end) + len(end)
+        block = source[left:right]
+        if hashlib.sha256(block.encode()).hexdigest() != '33a82908cee4b72230b2d5ac1c5b966ba010f673e33562c4092d2b49cc0d39a3':
+            raise ValueError('U2 quota extension digest mismatch')
+        source = source[:left] + source[right:]
     for before, after in QUOTA_CFG_ADDITIONS:
         if source.count(after) != 1:
             raise ValueError('U1 quota cfg inverse mismatch')

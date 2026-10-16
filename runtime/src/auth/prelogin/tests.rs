@@ -504,3 +504,6 @@ mod expiry_review_tests;
 #[cfg(nagi_browser_login_diag)]
 #[path = "observer_tests.rs"]
 mod observer_tests;
+
+#[path = "fixed_wire_owner_tests.rs"]
+mod fixed_wire_owner_tests;

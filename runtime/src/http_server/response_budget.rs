@@ -6,6 +6,8 @@ use serde::Serialize;
 use std::{io, mem::size_of, sync::Arc};
 
 use crate::security_sf07_private::quota;
+#[path = "response_finalize.rs"]
+pub(super) mod finalize;
 #[path = "response_wire.rs"]
 pub(super) mod wire;
 use quota::{
@@ -57,6 +59,7 @@ struct CheckedLimits {
     writes: usize,
     charge: usize,
     wire: Option<wire::WireLayout>,
+    metadata: usize,
 }
 pub(super) struct Producer {
     limits: CheckedLimits,
@@ -67,6 +70,17 @@ pub(super) struct Producer {
     allocation_attempts: std::sync::atomic::AtomicUsize,
 }
 
+fn startup_diagnostic(error: StartupError) -> Diagnostic {
+    match error {
+        StartupError::Invalid => Diagnostic::InvalidLimits,
+        StartupError::Allocation => Diagnostic::Allocation,
+    }
+}
+fn product(a: usize, b: usize) -> Result<usize, Diagnostic> {
+    a.checked_mul(b)
+        .filter(|n| *n <= isize::MAX as usize)
+        .ok_or(Diagnostic::InvalidLimits)
+}
 fn sum(a: usize, b: usize) -> Result<usize, Diagnostic> {
     a.checked_add(b)
         .filter(|n| *n <= isize::MAX as usize)
@@ -75,13 +89,38 @@ fn sum(a: usize, b: usize) -> Result<usize, Diagnostic> {
 impl Producer {
     #[cfg(test)]
     pub(super) fn checked(limits: Limits) -> Result<Self, Diagnostic> {
-        Self::checked_with(limits, false, false)
+        Self::checked_with(limits, false, false, 0, 1)
     }
+    #[cfg(test)]
     pub(super) fn checked_wire(limits: Limits) -> Result<Self, Diagnostic> {
-        Self::checked_with(limits, true, false)
+        Self::checked_with(limits, true, false, 0, 1)
     }
-    fn checked_with(limits: Limits, native: bool, empty_user: bool) -> Result<Self, Diagnostic> {
+    // Explicit production-shaped bridge planning. The ordinary count and bytes
+    // are independent ceilings: no L * Q startup requirement is introduced.
+    pub(super) fn checked_attached(
+        limits: Limits,
+        connections: usize,
+        external_catalog_bytes: usize,
+    ) -> Result<Self, Diagnostic> {
+        if !finalize::ordinary_minimum_fits(&limits)? {
+            return Err(Diagnostic::InvalidLimits);
+        }
+        let metadata = wire::bridge_metadata(
+            connections,
+            external_catalog_bytes,
+            limits.managed_header_bytes,
+        )?;
+        Self::checked_with(limits, true, false, metadata, 1)
+    }
+    fn checked_with(
+        limits: Limits,
+        native: bool,
+        empty_user: bool,
+        bridge: usize,
+        guaranteed_responses: usize,
+    ) -> Result<Self, Diagnostic> {
         let values = [
+            guaranteed_responses,
             limits.body_bytes,
             limits.managed_header_bytes,
             limits.managed_header_count,
@@ -119,20 +158,40 @@ impl Producer {
             + 2 * size_of::<usize>();
         let charge = sum(sum(payload, header_metadata)?, fixed)?;
         let charge = sum(charge, wire.map_or(0, |layout| layout.peak_bytes))?;
-        if charge > limits.retained_bytes {
+        // This producer owns its Quota allocation. External catalog credit
+        // excludes this receipt, which is deducted once for ordinary/fallback.
+        let fixed_metadata = sum(bridge, sum(size_of::<Self>(), 2 * size_of::<usize>())?)?;
+        let planned_catalog = Quota::retained_catalog_minimum(2).map_err(startup_diagnostic)?;
+        let planned_metadata = sum(fixed_metadata, planned_catalog)?;
+        let guaranteed = product(charge, guaranteed_responses)?;
+        if sum(planned_metadata, guaranteed)? > limits.retained_bytes {
             return Err(Diagnostic::InvalidLimits);
         }
-        let quota = Quota::checked_catalog(
+        let available = limits
+            .retained_bytes
+            .checked_sub(planned_metadata)
+            .ok_or(Diagnostic::InvalidLimits)?;
+        let catalog_limit = limits
+            .retained_bytes
+            .checked_sub(sum(fixed_metadata, guaranteed)?)
+            .ok_or(Diagnostic::InvalidLimits)?;
+        let (quota, receipt) = Quota::checked_catalog_retained(
             &[
                 ResourceLimit::new(limits.live_responses),
-                ResourceLimit::new(limits.retained_bytes),
+                ResourceLimit::new(available),
             ],
             2,
+            catalog_limit,
         )
-        .map_err(|error| match error {
-            StartupError::Invalid => Diagnostic::InvalidLimits,
-            StartupError::Allocation => Diagnostic::Allocation,
-        })?;
+        .map_err(startup_diagnostic)?;
+        let metadata = sum(fixed_metadata, receipt.bytes())?;
+        // The same capacity bound backs both the minted byte resource and Sf.
+        if receipt.bytes() != planned_catalog
+            || sum(metadata, guaranteed)? > limits.retained_bytes
+            || limits.retained_bytes.checked_sub(metadata) != Some(available)
+        {
+            return Err(Diagnostic::Fault);
+        }
         let slots = quota.resource_id(0).ok_or(Diagnostic::Fault)?;
         let bytes = quota.resource_id(1).ok_or(Diagnostic::Fault)?;
         Ok(Self {
@@ -143,6 +202,7 @@ impl Producer {
                 writes: limits.serialization_writes,
                 charge,
                 wire,
+                metadata,
             },
             quota,
             slots,
@@ -177,13 +237,26 @@ impl Producer {
         Ok(())
     }
     fn finish(&self, data: Vec<u8>, charge: Arc<Reservation>) -> Result<Produced, Diagnostic> {
-        let body = ChargedBody { data, charge };
+        if data.len() > self.limits.body_bytes {
+            return Err(Diagnostic::BodyLimit);
+        }
+        if data.capacity() > self.limits.body_bytes {
+            return Err(Diagnostic::Allocation);
+        }
+        let body = ChargedBody {
+            data: BodyData::Ordinary(data),
+            charge,
+        };
         let mut headers = Vec::new();
         self.allocate(&mut headers, self.limits.header_count)?;
+        if headers.capacity() > self.limits.header_count {
+            return Err(Diagnostic::Allocation);
+        }
         Ok(Produced {
             headers: ChargedHeaders {
                 entries: headers,
                 used_bytes: 0,
+                used_capacity: 0,
                 cap_bytes: self.limits.header_bytes,
                 cap_count: self.limits.header_count,
                 charge: Arc::clone(&body.charge),
@@ -192,6 +265,21 @@ impl Producer {
             wire: self.limits.wire,
             owner: Arc::clone(&self.quota),
         })
+    }
+    pub(super) fn metadata_bytes(&self) -> usize {
+        self.limits.metadata
+    }
+    pub(super) fn response_charge(&self) -> usize {
+        self.limits.charge
+    }
+    pub(super) fn empty(&self) -> Result<Produced, Diagnostic> {
+        self.copy_input(&[])
+    }
+    pub(super) fn html(
+        &self,
+        document: &crate::html::HtmlDocument,
+    ) -> Result<Produced, Diagnostic> {
+        self.copy_input(document.encoded_for_response().as_bytes())
     }
     pub(super) fn owns(&self, value: &Produced) -> bool {
         Arc::ptr_eq(&self.quota, &value.owner)
@@ -206,6 +294,9 @@ impl Producer {
         let charge = self.reserve()?;
         let mut data = Vec::new();
         self.allocate(&mut data, input.len())?;
+        if data.capacity() > self.limits.body_bytes {
+            return Err(Diagnostic::Allocation);
+        }
         data.extend_from_slice(input);
         self.finish(data, charge)
     }
@@ -268,6 +359,9 @@ impl io::Write for FiniteWriter<'_> {
         if let Err(error) = self.producer.allocate(&mut self.data, input.len()) {
             return Err(self.fail(error));
         }
+        if self.data.capacity() > self.producer.limits.body_bytes {
+            return Err(self.fail(Diagnostic::Allocation));
+        }
         self.data.extend_from_slice(input);
         Ok(input.len())
     }
@@ -281,13 +375,25 @@ impl io::Write for FiniteWriter<'_> {
 
 // Payload fields precede the final Arc claim, so payload disposal precedes quota
 // release. No raw Vec extraction that could shed the charge is provided.
+enum BodyData {
+    Ordinary(Vec<u8>),
+    Framework(Bytes),
+}
+impl AsRef<[u8]> for BodyData {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Self::Ordinary(data) => data,
+            Self::Framework(bytes) => bytes.as_ref(),
+        }
+    }
+}
 pub(super) struct ChargedBody {
-    data: Vec<u8>,
+    data: BodyData,
     charge: Arc<Reservation>,
 }
 impl AsRef<[u8]> for ChargedBody {
     fn as_ref(&self) -> &[u8] {
-        &self.data
+        self.data.as_ref()
     }
 }
 pub(super) struct OwnedHeader {
@@ -297,12 +403,13 @@ pub(super) struct OwnedHeader {
 pub(super) struct ChargedHeaders {
     entries: Vec<OwnedHeader>,
     used_bytes: usize,
+    used_capacity: usize,
     cap_bytes: usize,
     cap_count: usize,
     charge: Arc<Reservation>,
 }
 impl ChargedHeaders {
-    pub(super) fn append(&mut self, name: &[u8], value: &[u8]) -> Result<(), Diagnostic> {
+    pub(super) fn preflight(&self, name: &[u8], value: &[u8]) -> Result<usize, Diagnostic> {
         let count = self
             .entries
             .len()
@@ -320,6 +427,10 @@ impl ChargedHeaders {
         if count > self.cap_count || bytes > self.cap_bytes {
             return Err(Diagnostic::HeaderLimit);
         }
+        Ok(bytes)
+    }
+    pub(super) fn append(&mut self, name: &[u8], value: &[u8]) -> Result<(), Diagnostic> {
+        let bytes = self.preflight(name, value)?;
         // Grammar/reserved-name checks remain the HTTP append_header/finalizer's
         // responsibility. This private storage never authorizes managed headers.
         let mut owned_name = Vec::new();
@@ -330,6 +441,13 @@ impl ChargedHeaders {
         owned_value
             .try_reserve_exact(value.len())
             .map_err(|_| Diagnostic::Allocation)?;
+        let retained = sum(
+            self.used_capacity,
+            sum(sum(owned_name.capacity(), owned_value.capacity())?, 4)?,
+        )?;
+        if retained > self.cap_bytes {
+            return Err(Diagnostic::HeaderLimit);
+        }
         owned_name.extend_from_slice(name);
         owned_value.extend_from_slice(value);
         self.entries.push(OwnedHeader {
@@ -337,6 +455,7 @@ impl ChargedHeaders {
             value: owned_value,
         });
         self.used_bytes = bytes;
+        self.used_capacity = retained;
         Ok(())
     }
 }

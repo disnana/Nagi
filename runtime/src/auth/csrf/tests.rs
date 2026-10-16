@@ -121,6 +121,41 @@ impl Fixture {
         drop(c);
         (o, b, digest, expiry)
     }
+    // Establish the real binding and both persisted clock premises before
+    // fixing UTC. Setting UTC before lookup would itself create rollback.
+    async fn issue_at_tracked_wall(&mut self) -> (TokenOwner, CsrfBinding, [u8; 32], i64) {
+        let o = TokenOwner::new(owner());
+        let b = self.binding(&o.lease.lease).await;
+        let tx = sqlite::begin(&self.pool, sqlite::BeginMode::Immediate)
+            .await
+            .expect("expiry fixture premise: begin");
+        let mut wall = None;
+        self.inner
+            .check(&tx, &mut wall)
+            .await
+            .expect("expiry fixture premise: existing Session and CSRF clocks");
+        sqlite::rollback(tx)
+            .await
+            .expect("expiry fixture premise: rollback");
+        let wall = wall.expect("expiry fixture premise: tracked UTC");
+        self.inner.context.set_test_clock_sequence(vec![wall; 16]);
+        self.inner
+            .issue(&o, &b)
+            .await
+            .expect("expiry fixture premise: original one-second issue");
+        let c = o.cell.lock().unwrap();
+        let token = c.token.as_ref().unwrap();
+        let mut headers = hyper::HeaderMap::new();
+        headers.insert(
+            "x-csrf-token",
+            hyper::header::HeaderValue::from_str(token).unwrap(),
+        );
+        let digest = token_digest(&headers).unwrap();
+        let expiry = c.expiry.unwrap();
+        assert_eq!(expiry, wall.checked_add(1000).unwrap());
+        drop(c);
+        (o, b, digest, expiry)
+    }
     async fn count(&self) -> i64 {
         let tx = sqlite::begin(&self.pool, sqlite::BeginMode::Immediate)
             .await
@@ -465,35 +500,97 @@ async fn expired_token_reclaims_byte_capacity_without_relaxing_live_token_cap() 
 
 #[tokio::test]
 async fn checkpoint_accepts_before_and_refuses_at_or_after_original_token_expiry() {
-    for delta in [-1i64, 0, 1] {
+    // Final comparison after a real commit/restore. Deliberately project from
+    // a past monotonic sample: using real now instead of the paired comparison
+    // makes the positive oracle fail, independent of machine speed.
+    for (delta, mono_delta) in [(-1i64, -1i64), (0, -1), (1, -1), (-500, 0), (-500, 1)] {
         let mut f = Fixture::new(2, 176).await;
-        let (o, b, digest, expiry) = f.issue().await;
-        let values = if delta < 0 {
-            vec![
-                expiry - 500,
-                expiry - 500,
-                expiry - 500,
-                expiry - 500,
-                expiry - 500,
-                expiry - 1,
-            ]
+        let (o, b, digest, expiry) = f.issue_at_tracked_wall().await;
+        let probe = Arc::new(same_queue_probe::Probe::new(expiry));
+        f.inner.checkpoint_probe = Some(Arc::clone(&probe));
+        let sampled = Instant::now().checked_sub(Duration::from_secs(1)).unwrap();
+        let deadline = sampled + Duration::from_millis(500);
+        let comparison = if mono_delta < 0 {
+            deadline.checked_sub(Duration::from_nanos(1)).unwrap()
         } else {
-            vec![expiry + delta; 16]
+            deadline + Duration::from_nanos(mono_delta as u64)
         };
-        f.inner.context.set_test_clock_sequence(values);
+        assert_eq!(comparison.cmp(&deadline), mono_delta.cmp(&0));
+        let post = sampled + Duration::from_nanos(1);
+        let restore = sampled + Duration::from_nanos(2);
+        let final_sample = sampled + Duration::from_nanos(3);
+        assert!(sampled < post && post < restore && restore < final_sample);
+        assert!(final_sample < deadline);
+        assert!(
+            deadline < Instant::now(),
+            "paired-clock calibration premise"
+        );
+        f.inner.checkpoint_comparison_now = Some(comparison);
+        // Later samples advance by nanoseconds so reprojecting D after the
+        // real commit/restore cannot silently reproduce the original D.
+        let values = vec![
+            (sampled, expiry - 500),
+            (sampled, expiry - 500),
+            (sampled, expiry - 500),
+            (post, expiry - 500),
+            (restore, expiry - 500),
+            (final_sample, expiry + delta),
+        ];
+        let consumed = f.inner.context.set_test_paired_clock_sequence(values);
         let result = f.inner.checkpoint(&o.lease.lease, &b, digest).await;
-        if delta < 0 {
+        assert_eq!(consumed.load(Ordering::SeqCst), 6);
+        if let Err(error) = &result {
+            let observed = probe.failure();
+            eprintln!(
+                "csrf_expiry_boundary_diag delta={} phase={:?} refusal={:?} matched={:?} original_expiry_same={:?} sample_last_expired={:?} lease_last_valid={:?} actual_expired={:?} kind={:?} outcome={:?}",
+                delta,
+                observed.phase,
+                observed.refusal,
+                observed.matched,
+                observed.original_expiry,
+                observed.sample_expired,
+                observed.lease_valid,
+                observed.actual_expired,
+                kind(error),
+                outcome(error),
+            );
+        }
+        if delta == -1 && mono_delta == -1 {
             assert!(
                 result.is_ok(),
                 "csrf_checkpoint_boundary phase=PositiveCheckpoint kind={:?} outcome={:?}",
                 result.as_ref().err().map(kind),
                 result.as_ref().err().map(outcome),
             );
-            assert!(f.count().await == 1);
         } else {
-            assert!(result.is_err_and(|e| kind(&e) == FailureKind::Denied));
-            assert!(f.count().await == 0);
+            assert!(result
+                .is_err_and(|e| kind(&e) == FailureKind::Denied
+                    && outcome(&e) == sqlite::Outcome::Committed));
         }
+        let observed = probe.failure();
+        assert!(observed.matched == Some(true));
+        assert!(observed.original_expiry == Some(true));
+        assert!(observed.lease_valid == Some(true));
+        assert!(matches!(
+            observed.phase,
+            same_queue_probe::Phase::Done | same_queue_probe::Phase::FinalExpiry
+        ));
+        assert!(f.count().await == 1);
+        f.assert_original_token_row(digest, expiry).await;
+        drop(o);
+        f.stop().await;
+    }
+    // Keep the original early-expiry cleanup path: refusal precedes a token
+    // match and expired rows are removed, unlike the post-commit matrix above.
+    for delta in [0i64, 1] {
+        let mut f = Fixture::new(2, 176).await;
+        let (o, b, digest, expiry) = f.issue_at_tracked_wall().await;
+        f.inner
+            .context
+            .set_test_clock_sequence(vec![expiry + delta; 16]);
+        let result = f.inner.checkpoint(&o.lease.lease, &b, digest).await;
+        assert!(result.is_err_and(|e| kind(&e) == FailureKind::Denied));
+        assert!(f.count().await == 0);
         drop(o);
         f.stop().await;
     }
@@ -786,3 +883,6 @@ async fn nondecreasing_clock_refusal_preserves_live_row_and_never_delivers() {
     drop(o);
     f.stop().await;
 }
+
+#[path = "fixed_wire_owner_tests.rs"]
+mod fixed_wire_owner_tests;

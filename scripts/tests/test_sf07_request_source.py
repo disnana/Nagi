@@ -107,8 +107,16 @@ class RequestSourceTests(unittest.TestCase):
         summary = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(summary)
         self.assertEqual(set(summary.EXPECTED['request']), {'http_server::request_headers::tests::' + n for n in names})
-        self.assertEqual(tuple(len(summary.EXPECTED[n]) for n in ('wire', 'quota', 'transport')), (22, 9, 8))
-        self.assertEqual(len(re.findall(r'#\[tokio::test\]\s*async fn', read('runtime/src/http_server/response_send_tests.rs'))), 8)
+        self.assertEqual(tuple(len(summary.EXPECTED[n]) for n in ('wire', 'quota', 'transport')), (38, 9, 9))
+        self.assertEqual(len(re.findall(r'#\[tokio::test\]\s*async fn', read('runtime/src/http_server/response_send_tests.rs'))), 9)
+        import json
+        inherited = {k: list(summary.EXPECTED[k]) for k in ('wire', 'quota', 'transport', 'request', 'rate-startup')}
+        inherited['wire'] = inherited['wire'][:22]
+        inherited['transport'] = inherited['transport'][:8]
+        self.assertEqual(hashlib.sha256(json.dumps(inherited, sort_keys=True, separators=(',', ':')).encode()).hexdigest(),
+                         '91fc28d8e6cff5efe7f56b95eae0b838766c1835eee0f5fbb0d34f3a65a71552')
+        self.assertEqual(hashlib.sha256(read('runtime/src/http_server/response_send_tests.rs')[:19665].encode()).hexdigest(),
+                         '0b35d16393447d1c77bf23399bed29a3e9bf0bdd40f8f1816be0bd392a807587')
         for token in ('same_owner', 'BodyOwner', 'header_text', 'header_only_last_shared_owner',
                       'catch_unwind', 'task.abort()', 'is_cancelled()', 'ExtensionProbe',
                       'dispatch(', 'Connection: close', 'mode == 1', 'mode == 2'):
@@ -145,6 +153,19 @@ class RequestSourceTests(unittest.TestCase):
             except ValueError:
                 continue
             self.assertNotEqual(actual, projection.BASE_TOKENS[name])
+
+    def test_u2_workflow_inverse_is_exact_and_keeps_unrelated_changes_visible(self):
+        workflow = read('.github/workflows/ci.yml')
+        self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(), BASE_WORKFLOW_SHA)
+        for line in projection.U2_NATIVE_LINES:
+            for changed in (workflow.replace(line, '', 1), workflow.replace(line, line + line, 1)):
+                with self.assertRaises(ValueError):
+                    projection.inverse_workflow(changed)
+        with self.assertRaises(ValueError):
+            projection.inverse_workflow(workflow.replace('"sf03-b1-csrf-core.log":15', '"sf03-b1-csrf-core.log":16', 1))
+        self.assertIn('set -euo pipefail', workflow)
+        changed = workflow.replace('set -euo pipefail', 'set -eu pipefail', 1)
+        self.assertNotEqual(hashlib.sha256(projection.inverse_workflow(changed).encode()).hexdigest(), BASE_WORKFLOW_SHA)
 
     def test_request_native_mode_fakes_are_exact_bounded_and_failure_closed(self):
         spec = importlib.util.spec_from_file_location('request_summary', ROOT/'scripts/ci/sf07_checkpoint_summary.py')

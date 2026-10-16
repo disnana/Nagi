@@ -94,6 +94,24 @@ class BridgeBoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 canonical_bytes(lf + b"\r")
 
+    def test_catalog_extension_inverse_requires_the_exact_audited_block(self):
+        text = source("runtime/src/security_sf07_private/quota.rs")
+        start = "// SF07_U2_RETAINED_CATALOG_BEGIN"
+        end = "// SF07_U2_RETAINED_CATALOG_END\n\n"
+        self.assertEqual(text.count(start), 1)
+        self.assertEqual(text.count(end), 1)
+        block = text[text.index(start):text.index(end) + len(end)]
+        expected = "a7031c5a4ad071d719f6efc41dd8889d9582169602197a337c94a54cbc4f6861"
+        self.assertEqual(hashlib.sha256(projection.inverse_quota(text).encode()).hexdigest(), expected)
+        without = text.replace(block, "", 1)
+        self.assertEqual(hashlib.sha256(projection.inverse_quota(without).encode()).hexdigest(), expected)
+        for invalid in (text.replace(start, start + " altered", 1),
+                        text.replace(end, end.rstrip(), 1),
+                        text.replace(block, block + block, 1),
+                        text.replace(block, block.replace("retained_catalog_minimum", "changed", 1), 1)):
+            with self.assertRaises(ValueError):
+                projection.inverse_quota(invalid)
+
     def test_all_twelve_native_oracles_registered_with_existing_nineteen(self):
         tests = source("runtime/src/http_server/response_wire_tests.rs")
         self.assertEqual(tests.count("#[test]"), 12)

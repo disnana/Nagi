@@ -567,3 +567,77 @@ async fn unpolled_and_ready_native_io_drop_before_cache_guard_and_connection_per
         assert!(ordinary.text("released").is_ok());
     }
 }
+
+#[tokio::test]
+async fn prepared_managed_head_and_empty_use_existing_native_drop_chain() {
+    use crate::http_server::response_budget::finalize::{
+        CompletionOrigin, PreparedResponse, ResponseMeta, VarySet,
+    };
+    use crate::http_server::{BodyKind, PolicySource};
+    for head in [false, true] {
+        let ordinary = producer(1);
+        let made = Arc::clone(&ordinary);
+        let pool = Arc::new(Semaphore::new(1));
+        let (mut client, server) = sockets().await;
+        let (mut driver, ledger) = connection(
+            server,
+            Arc::clone(&ordinary),
+            fallback(),
+            permit(&pool).await,
+            move |_request| {
+                let produced = made.text(if head { "body" } else { "" }).unwrap();
+                let mut prepared = PreparedResponse::new(
+                    &made,
+                    produced,
+                    ResponseMeta {
+                        status: StatusCode::OK,
+                        kind: BodyKind::Text,
+                        head,
+                        source: PolicySource::Public,
+                        origin: CompletionOrigin::HandlerOk,
+                    },
+                )
+                .unwrap();
+                prepared.vary(VarySet::AUTH);
+                prepared.allow(b"GET, HEAD").unwrap();
+                prepared
+                    .cors(
+                        Some(axum::http::HeaderValue::from_static(
+                            "https://example.invalid",
+                        )),
+                        true,
+                    )
+                    .unwrap();
+                let status = prepared.status();
+                let wire = prepared.finish().unwrap();
+                async move { Ok((status, wire)) }
+            },
+        );
+        let task = tokio::spawn(async move {
+            let result = (&mut driver).await;
+            (driver, result)
+        });
+        request(
+            &mut client,
+            if head {
+                b"HEAD / HTTP/1.1\r\nHost: localhost\r\n\r\n"
+            } else {
+                b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n"
+            },
+        )
+        .await;
+        let (status, body) = response(&mut client, head).await;
+        assert_eq!(status, 200);
+        assert!(body.is_empty());
+        capacity(&ordinary);
+        client.shutdown().await.unwrap();
+        let (driver, result) = tokio::time::timeout(LIMIT, task).await.unwrap().unwrap();
+        assert!(result.is_ok());
+        capacity(&ordinary);
+        assert_eq!(pool.available_permits(), 0);
+        drop(driver);
+        assert!(ledger.state.lock().unwrap().closed);
+        assert_eq!(pool.available_permits(), 1);
+        assert!(ordinary.empty().is_ok());
+    }
+}

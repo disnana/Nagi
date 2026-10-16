@@ -7,10 +7,10 @@ use axum::http::{HeaderMap, HeaderName, HeaderValue};
 #[derive(Clone, Copy)]
 pub(super) struct WireLayout {
     pub(super) peak_bytes: usize,
-    count: usize,
+    pub(super) count: usize,
     max_capacity: usize,
-    managed_bytes: usize,
-    managed_count: usize,
+    pub(super) managed_bytes: usize,
+    pub(super) managed_count: usize,
 }
 fn product(a: usize, b: usize) -> Result<usize, Diagnostic> {
     a.checked_mul(b)
@@ -61,6 +61,12 @@ impl WireLayout {
             size_of::<ChargedWire>(),
             size_of::<ChargedNativeHeaders>(),
             size_of::<WireLayout>(),
+            size_of::<super::finalize::PreparedResponse>(),
+            size_of::<super::finalize::ManagedPlan>(),
+            product(
+                limits.managed_header_count,
+                size_of::<super::finalize::ManagedEntry>(),
+            )?,
             size_of::<HeaderMap>(),
             size_of::<super::super::response_send::SendLedger>(),
             size_of::<super::super::response_send::ReceivedHeaders>(),
@@ -80,7 +86,7 @@ impl WireLayout {
 }
 
 // These are framework-owned names, never an API for user reserved headers.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::http_server) enum ManagedHeader {
     ContentType,
     ContentLength,
@@ -96,9 +102,11 @@ pub(in crate::http_server) enum ManagedHeader {
     AllowHeaders,
     MaxAge,
     RetryAfter,
+    Connection,
+    Allow,
 }
 impl ManagedHeader {
-    fn name(self) -> &'static str {
+    pub(in crate::http_server) fn name(self) -> &'static str {
         match self {
             Self::ContentType => "content-type",
             Self::ContentLength => "content-length",
@@ -114,6 +122,8 @@ impl ManagedHeader {
             Self::AllowHeaders => "access-control-allow-headers",
             Self::MaxAge => "access-control-max-age",
             Self::RetryAfter => "retry-after",
+            Self::Connection => "connection",
+            Self::Allow => "allow",
         }
     }
 }
@@ -140,6 +150,31 @@ impl ChargedNativeHeaders {
             return Err(Diagnostic::HeaderLimit);
         }
         let value = HeaderValue::from_bytes(value).map_err(|_| Diagnostic::HeaderLimit)?;
+        self.append_owned_checked(name, value, count, bytes)
+    }
+    pub(in crate::http_server) fn append_owned(
+        &mut self,
+        name: ManagedHeader,
+        value: HeaderValue,
+    ) -> Result<(), Diagnostic> {
+        let name = name.name();
+        let count = sum(self.managed_count, 1)?;
+        let bytes = sum(
+            self.managed_bytes,
+            sum(sum(name.len(), value.as_bytes().len())?, 4)?,
+        )?;
+        if count > self.layout.managed_count || bytes > self.layout.managed_bytes {
+            return Err(Diagnostic::HeaderLimit);
+        }
+        self.append_owned_checked(name, value, count, bytes)
+    }
+    fn append_owned_checked(
+        &mut self,
+        name: &'static str,
+        value: HeaderValue,
+        count: usize,
+        bytes: usize,
+    ) -> Result<(), Diagnostic> {
         self.map
             .try_append(HeaderName::from_static(name), value)
             .map_err(|_| Diagnostic::HeaderLimit)?;
@@ -258,8 +293,40 @@ pub(in crate::http_server) enum FallbackStatus {
     BodyTimeout,
     BodyTooLarge,
     Deadline,
+    BadRequest,
+    NotFound,
+    MethodNotAllowed,
+    NotImplemented,
+    UriTooLong,
+    UnsupportedMediaType,
+    MisdirectedRequest,
+    HeaderFieldsTooLarge,
+    VersionNotSupported,
 }
 impl FallbackStatus {
+    pub(in crate::http_server) fn all() -> [Self; 17] {
+        [
+            Self::Limited {
+                retry_seconds: u64::MAX,
+            },
+            Self::Capacity,
+            Self::Internal,
+            Self::Unauthorized,
+            Self::Forbidden,
+            Self::BodyTimeout,
+            Self::BodyTooLarge,
+            Self::Deadline,
+            Self::BadRequest,
+            Self::NotFound,
+            Self::MethodNotAllowed,
+            Self::NotImplemented,
+            Self::UriTooLong,
+            Self::UnsupportedMediaType,
+            Self::MisdirectedRequest,
+            Self::HeaderFieldsTooLarge,
+            Self::VersionNotSupported,
+        ]
+    }
     pub(in crate::http_server) fn code(self) -> u16 {
         match self {
             Self::Limited { .. } => 429,
@@ -270,9 +337,18 @@ impl FallbackStatus {
             Self::BodyTimeout => 408,
             Self::BodyTooLarge => 413,
             Self::Deadline => 504,
+            Self::BadRequest => 400,
+            Self::NotFound => 404,
+            Self::MethodNotAllowed => 405,
+            Self::NotImplemented => 501,
+            Self::UriTooLong => 414,
+            Self::UnsupportedMediaType => 415,
+            Self::MisdirectedRequest => 421,
+            Self::HeaderFieldsTooLarge => 431,
+            Self::VersionNotSupported => 505,
         }
     }
-    fn body(self) -> &'static [u8] {
+    pub(in crate::http_server) fn body(self) -> &'static [u8] {
         match self {
             Self::Limited { .. } => b"too many requests",
             Self::Capacity => b"service unavailable",
@@ -282,6 +358,15 @@ impl FallbackStatus {
             Self::BodyTimeout => b"request timeout",
             Self::BodyTooLarge => b"content too large",
             Self::Deadline => b"gateway timeout",
+            Self::BadRequest => b"Bad Request",
+            Self::NotFound => b"Not Found",
+            Self::MethodNotAllowed => b"Method Not Allowed",
+            Self::NotImplemented => b"Not Implemented",
+            Self::UriTooLong => b"URI Too Long",
+            Self::UnsupportedMediaType => b"Unsupported Media Type",
+            Self::MisdirectedRequest => b"Misdirected Request",
+            Self::HeaderFieldsTooLarge => b"Request Header Fields Too Large",
+            Self::VersionNotSupported => b"HTTP Version Not Supported",
         }
     }
 }
@@ -291,7 +376,7 @@ pub(in crate::http_server) struct FallbackOutcome {
     response: Option<(u16, ChargedWire)>,
 }
 impl FallbackOutcome {
-    fn close() -> Self {
+    pub(in crate::http_server) fn close() -> Self {
         Self { response: None }
     }
     pub(in crate::http_server) fn is_close(&self) -> bool {
@@ -302,10 +387,17 @@ impl FallbackOutcome {
     }
 }
 impl FallbackLedger {
+    #[cfg(test)]
     pub(in crate::http_server) fn allocation_attempts(&self) -> usize {
         self.producer
             .allocation_attempts
             .load(std::sync::atomic::Ordering::Relaxed)
+    }
+    pub(in crate::http_server) fn accounting(&self) -> (usize, usize) {
+        (
+            self.producer.metadata_bytes(),
+            self.producer.response_charge(),
+        )
     }
     pub(in crate::http_server) fn owns_wire(&self, wire: &ChargedWire) -> bool {
         wire.is_owned_by(&self.producer)
@@ -316,16 +408,25 @@ impl FallbackLedger {
     ) -> Result<Self, Diagnostic> {
         if accepted_connections == 0
             || limits.responses < accepted_connections
-            || limits.managed_header_count < 3
-            || limits.managed_header_bytes < 101
+            || !super::finalize::fallback_minimum_fits(
+                limits.managed_header_count,
+                limits.managed_header_bytes,
+            )
         {
             return Err(Diagnostic::InvalidLimits);
         }
-        // Closed bodies max19B, no user headers, no serializer or user mapper.
+        // Derive the closed maximum from actual terminal representations;
+        // no prototype body length becomes a public support ceiling.
+        let body_bytes = FallbackStatus::all()
+            .iter()
+            .map(|status| status.body().len())
+            .max()
+            .ok_or(Diagnostic::InvalidLimits)?;
+        // No user headers, serializer, or mapper is invoked by this ledger.
         // This creates a distinct Quota catalog, not another ordinary claim.
         let producer = Producer::checked_with(
             Limits {
-                body_bytes: 19,
+                body_bytes,
                 user_header_bytes: 0,
                 user_header_count: 0,
                 managed_header_bytes: limits.managed_header_bytes,
@@ -336,39 +437,58 @@ impl FallbackLedger {
             },
             true,
             true,
+            sum(
+                size_of::<Self>(),
+                product(
+                    accepted_connections,
+                    sum(
+                        size_of::<super::finalize::TerminalIntent>(),
+                        limits.managed_header_bytes,
+                    )?,
+                )?,
+            )?,
+            accepted_connections,
         )?;
-        if product(producer.limits.charge, accepted_connections)? > limits.retained_bytes {
+        if sum(
+            producer.limits.metadata,
+            product(producer.limits.charge, accepted_connections)?,
+        )? > limits.retained_bytes
+        {
             return Err(Diagnostic::InvalidLimits);
         }
         Ok(Self { producer })
     }
+    pub(in crate::http_server) fn intent(
+        &self,
+        status: FallbackStatus,
+    ) -> super::finalize::TerminalIntent {
+        super::finalize::TerminalIntent::profiled(
+            status,
+            self.producer
+                .limits
+                .wire
+                .expect("checked fallback wire profile"),
+        )
+    }
     pub(in crate::http_server) fn produce(&self, status: FallbackStatus) -> FallbackOutcome {
-        let retry = match status {
-            FallbackStatus::Limited { retry_seconds: 0 } => return FallbackOutcome::close(),
-            FallbackStatus::Limited { retry_seconds } => Some(retry_seconds),
-            _ => None,
-        };
+        self.terminal(super::finalize::TerminalIntent::plain(status))
+    }
+    pub(in crate::http_server) fn terminal(
+        &self,
+        intent: super::finalize::TerminalIntent,
+    ) -> FallbackOutcome {
+        // Reserve before any fallback allocation; consume one immutable intent
+        // exactly once. No ordinary factory, serializer, or mapper retry exists.
+        if !intent.valid() {
+            return FallbackOutcome::close();
+        }
+        let status = intent.status();
         let result = self
             .producer
             .copy_input(status.body())
-            .and_then(Produced::into_wire)
-            .and_then(|mut wire| {
-                wire.headers_mut()
-                    .append_managed(ManagedHeader::CacheControl, b"no-store")?;
-                wire.headers_mut()
-                    .append_managed(ManagedHeader::ContentType, b"text/plain; charset=utf-8")?;
-                if let Some(mut value) = retry {
-                    let mut digits = [0u8; 20];
-                    let mut start = digits.len();
-                    while value != 0 {
-                        start -= 1;
-                        digits[start] = b'0' + (value % 10) as u8;
-                        value /= 10;
-                    }
-                    wire.headers_mut()
-                        .append_managed(ManagedHeader::RetryAfter, &digits[start..])?;
-                }
-                Ok(wire)
+            .and_then(|produced| {
+                super::finalize::PreparedResponse::terminal(&self.producer, produced, intent)?
+                    .finish()
             });
         match result {
             Ok(wire) => FallbackOutcome {
@@ -382,3 +502,26 @@ impl FallbackLedger {
 #[cfg(test)]
 #[path = "response_wire_tests.rs"]
 mod tests;
+
+pub(super) fn bridge_metadata(
+    connections: usize,
+    external_catalog_bytes: usize,
+    managed_bytes: usize,
+) -> Result<usize, Diagnostic> {
+    if connections == 0 {
+        return Err(Diagnostic::InvalidLimits);
+    }
+    let fixed = [
+        size_of::<super::super::response_send::SendLedger>(),
+        size_of::<super::super::response_send::SendState>(),
+        size_of::<super::super::response_send::ReceivedHeaders>(),
+        size_of::<super::finalize::TerminalIntent>(),
+        product(4, size_of::<usize>())?,
+    ]
+    .into_iter()
+    .try_fold(0, sum)?;
+    sum(
+        external_catalog_bytes,
+        product(connections, sum(fixed, managed_bytes)?)?,
+    )
+}
