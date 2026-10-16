@@ -103,12 +103,16 @@ function readInput(file) {
 export const FAILURE_STAGES = ['none','settings','native_wrong_ca','guard','native_positive','native_wrong_host',
   'engine_launch','engine_positive','engine_positive_ca','engine_positive_host','engine_positive_timeout',
   'engine_positive_response','engine_positive_tls_unknown','engine_positive_unknown',
-  'engine_wrong_ca','engine_wrong_host','engine_close',
+  'engine_wrong_ca','engine_wrong_ca_response_received','engine_wrong_ca_bad_signature',
+  'engine_wrong_ca_hostname','engine_wrong_ca_timeout','engine_wrong_ca_no_response',
+  'engine_wrong_ca_other_tls','engine_wrong_ca_unknown','engine_wrong_host','engine_close',
   'business_config','business','receipt','input'];
 export const FAILURE_ENGINES = ['none','chromium','firefox','webkit'];
 export function checkedFailure(stage, engine) {
   if (!FAILURE_STAGES.includes(stage) || !FAILURE_ENGINES.includes(engine) ||
-      (stage.startsWith('engine_') !== (engine !== 'none'))) throw new Error('SF08 checkpoint refused');
+      (stage.startsWith('engine_') !== (engine !== 'none')) ||
+      (['engine_wrong_ca_bad_signature','engine_wrong_ca_other_tls'].includes(stage) && engine !== 'firefox') ||
+      (stage === 'engine_wrong_ca_hostname' && engine === 'webkit')) throw new Error('SF08 checkpoint refused');
   return { schema_version: 1, stage, engine };
 }
 export function failureCheckpoint(work, stage, engine) {

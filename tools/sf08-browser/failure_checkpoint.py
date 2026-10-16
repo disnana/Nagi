@@ -4,7 +4,9 @@ PHASES = {'binding','scope','capacity','ready','tls','negative','provision','bro
 STAGES = {'none','settings','native_wrong_ca','guard','native_positive','native_wrong_host',
           'engine_launch','engine_positive','engine_positive_ca','engine_positive_host','engine_positive_timeout',
           'engine_positive_response','engine_positive_tls_unknown','engine_positive_unknown',
-          'engine_wrong_ca','engine_wrong_host','engine_close',
+          'engine_wrong_ca','engine_wrong_ca_response_received','engine_wrong_ca_bad_signature',
+          'engine_wrong_ca_hostname','engine_wrong_ca_timeout','engine_wrong_ca_no_response',
+          'engine_wrong_ca_other_tls','engine_wrong_ca_unknown','engine_wrong_host','engine_close',
           'business_config','business','receipt','input'}
 ENGINES = {'none','chromium','firefox','webkit'}
 
@@ -15,6 +17,9 @@ def validate(value, *, outer=False):
             or value['schema_version'] != 1 or type(value['stage']) is not str or value['stage'] not in STAGES
             or type(value['engine']) is not str or value['engine'] not in ENGINES
             or (value['stage'].startswith('engine_') != (value['engine'] != 'none'))
+            or (value['stage'] in {'engine_wrong_ca_bad_signature','engine_wrong_ca_other_tls'}
+                and value['engine'] != 'firefox')
+            or (value['stage'] == 'engine_wrong_ca_hostname' and value['engine'] == 'webkit')
             or (outer and (type(value['phase']) is not str or value['phase'] not in PHASES))):
         raise ValueError('invalid failure checkpoint')
     return {key:value[key] for key in keys}

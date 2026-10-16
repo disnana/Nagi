@@ -38,6 +38,17 @@ function fake(name, mode, fault) {
               if (mode === 'accepted') return { status: () => 200 };
               if (mode === 'network') throw new Error('net::ERR_CONNECTION_REFUSED PRIVATE_SENTINEL');
               if (fault && fault.reason === reason) {
+                if (fault.kind === 'bad-signature') throw new Error('page.goto: SEC_ERROR_BAD_SIGNATURE at ' + url);
+                if (fault.kind === 'hostname') throw new Error('page.goto: ' + messages[name][1] + ' at ' + url);
+                if (fault.kind === 'other-tls') throw new Error('page.goto: SEC_ERROR_UNTRUSTED_ISSUER at ' + url);
+                if (fault.kind === 'timeout') {
+                  const error = new Error('PRIVATE_SENTINEL https://private.invalid/secret?token=unit-secret');
+                  error.name = 'TimeoutError';
+                  throw error;
+                }
+                if (fault.kind === 'no-response') return null;
+                if (fault.kind === 'unknown') throw new Error('PRIVATE_SENTINEL https://private.invalid/secret?token=unit-secret');
+                if (fault.kind === 'extra-code-text') throw new Error('page.goto: SEC_ERROR_BAD_SIGNATURE trailing annotation');
                 if (fault.kind === 'url-marker') throw new Error('page.goto: net::ERR_CONNECTION_REFUSED at ' + url);
                 if (fault.kind === 'calllog-marker') throw new Error('Navigation failed\nCall log:\n  - navigating to ' + url + ' with marker ' + token);
                 if (fault.kind === 'extra-text') throw new Error(token + ' trailing annotation');
@@ -303,6 +314,53 @@ test('all fixed TLS error grammars remain accepted by fake engines', async () =>
       assert.equal(result.engine, name);
       assert.equal(type.trace.closed && type.trace.contextClosed, true);
     }
+  }
+});
+
+test('wrong-CA failure output uses finite codes and preserves only the original exact rejection as pass', async () => {
+  const stages = ['engine_wrong_ca_response_received', 'engine_wrong_ca_bad_signature',
+    'engine_wrong_ca_hostname', 'engine_wrong_ca_timeout', 'engine_wrong_ca_no_response',
+    'engine_wrong_ca_other_tls', 'engine_wrong_ca_unknown'];
+  for (const stage of stages) {
+    assert.ok(FAILURE_STAGES.includes(stage), stage);
+    assert.deepEqual(checkedFailure(stage, 'firefox'), { schema_version: 1, stage, engine: 'firefox' });
+  }
+  assert.throws(() => checkedFailure('engine_wrong_ca_PRIVATE_SECRET', 'firefox'),
+    /^Error: SF08 checkpoint refused$/);
+  for (const [stage, engine] of [
+    ['engine_wrong_ca_bad_signature', 'chromium'],
+    ['engine_wrong_ca_other_tls', 'webkit'],
+    ['engine_wrong_ca_hostname', 'webkit'],
+  ]) assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+
+  const expectedEvents = [];
+  const expected = fake('firefox');
+  const result = await probeEngine('firefox', expected, settings(provisioned, ready, negative),
+    (stage, engine) => expectedEvents.push({ stage, engine }));
+  assert.equal(result.wrong_ca_refused, true);
+  assert.ok(expectedEvents.some(event => event.stage === 'engine_wrong_ca'));
+  assert.equal(expectedEvents.some(event => event.stage.startsWith('engine_wrong_ca_')), false);
+
+  const cases = [
+    { mode: 'accepted', stage: 'engine_wrong_ca_response_received' },
+    { fault: 'bad-signature', stage: 'engine_wrong_ca_bad_signature' },
+    { fault: 'hostname', stage: 'engine_wrong_ca_hostname' },
+    { fault: 'timeout', stage: 'engine_wrong_ca_timeout' },
+    { fault: 'no-response', stage: 'engine_wrong_ca_no_response' },
+    { fault: 'other-tls', stage: 'engine_wrong_ca_other_tls' },
+    { fault: 'unknown', stage: 'engine_wrong_ca_unknown' },
+    { fault: 'extra-code-text', stage: 'engine_wrong_ca_unknown' },
+  ];
+  for (const item of cases) {
+    const type = fake('firefox', item.mode, item.fault ? { reason: 'ca', kind: item.fault } : undefined);
+    const events = [];
+    await assert.rejects(probeEngine('firefox', type, settings(provisioned, ready, negative),
+      (stage, engine) => events.push({ stage, engine })),
+    /^Error: SF08 browser trust preflight refused$/);
+    assert.deepEqual(events[events.length - 1], { stage: item.stage, engine: 'firefox' });
+    assert.equal(type.trace.pageClosed >= 1, true);
+    assert.equal(type.trace.contextClosed && type.trace.closed, true);
+    assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|secret|unit-secret|SEC_ERROR|SSL_ERROR/);
   }
 });
 

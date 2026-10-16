@@ -17,14 +17,51 @@ const REFUSED = 'SF08 browser trust preflight refused';
 
 function refuse() { throw new Error(REFUSED); }
 
-function expectedTLSFailure(error, name, reason, probeURL) {
+function exactTLSFailureToken(error, token, probeURL) {
   if (!(error instanceof Error) || typeof error.message !== 'string' || error.message.length > 8192) return false;
   const newline = error.message.indexOf('\n');
   const firstLine = newline < 0 ? error.message : error.message.slice(0, newline);
-  const token = TLS_ERROR[name][reason];
   return firstLine === token ||
     firstLine === 'page.goto: ' + token ||
     firstLine === 'page.goto: ' + token + ' at ' + probeURL;
+}
+
+function expectedTLSFailure(error, name, reason, probeURL) {
+  return exactTLSFailureToken(error, TLS_ERROR[name][reason], probeURL);
+}
+
+// Failure-only facts; expectedTLSFailure remains the sole acceptance oracle.
+function wrongCAFailureOutcome(error, name, probeURL) {
+  try {
+    if (!(error instanceof Error)) return 'unknown';
+    if (expectedTLSFailure(error, name, 'ca', probeURL)) return 'expected_rejection';
+    if (error.name === 'TimeoutError') return 'timeout';
+    const matches = [];
+    if (name === 'firefox') {
+      if (exactTLSFailureToken(error, 'SEC_ERROR_BAD_SIGNATURE', probeURL)) matches.push('bad_signature');
+      if (exactTLSFailureToken(error, TLS_ERROR.firefox.host, probeURL)) matches.push('hostname');
+      for (const token of ['SEC_ERROR_UNTRUSTED_ISSUER', 'SEC_ERROR_CA_CERT_INVALID']) {
+        if (exactTLSFailureToken(error, token, probeURL)) matches.push('other_tls');
+      }
+    } else if (name === 'chromium' && exactTLSFailureToken(error, TLS_ERROR.chromium.host, probeURL)) {
+      matches.push('hostname');
+    }
+    return matches.length === 1 ? matches[0] : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function wrongCAFailureStage(outcome) {
+  switch (outcome) {
+    case 'response_received': return 'engine_wrong_ca_response_received';
+    case 'bad_signature': return 'engine_wrong_ca_bad_signature';
+    case 'hostname': return 'engine_wrong_ca_hostname';
+    case 'timeout': return 'engine_wrong_ca_timeout';
+    case 'no_response': return 'engine_wrong_ca_no_response';
+    case 'other_tls': return 'engine_wrong_ca_other_tls';
+    default: return 'engine_wrong_ca_unknown';
+  }
 }
 
 function positiveFailureStage(error, name, probeURL) {
@@ -184,14 +221,25 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
         checkpoint(reason === 'ca' ? 'engine_wrong_ca' : 'engine_wrong_host', name);
         const page = await context.newPage();
         let rejected = false;
+        let failureOutcome = 'unknown';
         const probeURL = config.negative[reason] + '/';
         try {
-          await page.goto(probeURL, { waitUntil: 'load', timeout: 10000 });
+          const response = await page.goto(probeURL, { waitUntil: 'load', timeout: 10000 });
+          if (reason === 'ca') failureOutcome = response === null || response === undefined
+            ? 'no_response' : 'response_received';
         } catch (error) {
           // Classify only a bounded exact first line; never emit raw browser text.
-          rejected = expectedTLSFailure(error, name, reason, probeURL);
+          if (reason === 'ca') {
+            failureOutcome = wrongCAFailureOutcome(error, name, probeURL);
+            rejected = failureOutcome === 'expected_rejection';
+          } else {
+            rejected = expectedTLSFailure(error, name, reason, probeURL);
+          }
         } finally { await page.close(); }
-        if (!rejected) refuse();
+        if (!rejected) {
+          if (reason === 'ca') checkpoint(wrongCAFailureStage(failureOutcome), name);
+          refuse();
+        }
       }
     } finally { await context.close(); }
     failed = false;

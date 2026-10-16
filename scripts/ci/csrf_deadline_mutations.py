@@ -18,6 +18,7 @@ import tempfile
 import time
 
 BASE = "http_server::csrf_http::deadline_tests::"
+AUTH_BASE = "auth::csrf::tests::"
 CASES = (
     "guarded_preparation_pending_uses_actual_session_deadline",
     "guarded_preparation_expiry_precedes_late_grant_denial_and_panic",
@@ -34,6 +35,23 @@ CASES = (
     "unrepresentable_body_deadline_remains_rejected",
 ))
 REQUIRED = frozenset(BASE + name for name in CASES)
+AUTH_CASES = (
+    "same_queue_reopen_reuses_data_context_without_refreshing_token_expiry",
+    "reopened_context_preserves_original_token_expiry_and_rejects_after_deadline",
+    "bytes_limit_is_independent_and_expired_cleanup_spends_one_batch",
+    "expired_token_reclaims_byte_capacity_without_relaxing_live_token_cap",
+    "checkpoint_accepts_before_and_refuses_at_or_after_original_token_expiry",
+    "owner_only_seal_is_destructive_foreign_and_replay_are_refused",
+    "unpolled_and_dropped_pending_issue_do_not_deliver_and_native_is_joined",
+    "actual_unknown_and_committed_cleanup_never_make_ready",
+    "actual_reserve_wait_rechecks_live_gate_before_any_business_enqueue",
+    "partial_schema_and_wrong_actual_source_are_refused_without_adoption",
+    "aggregate_declared_budgets_are_checked_in_both_open_orders",
+    "cancelled_after_actual_business_commit_retires_material_and_preserves_row",
+    "issuance_caps_original_absolute_and_checkpoint_keeps_original_idle_boundary",
+    "nondecreasing_clock_refusal_preserves_live_row_and_never_delivers",
+)
+AUTH_REQUIRED = frozenset(AUTH_BASE + name for name in AUTH_CASES)
 ROW = re.compile(r"^test ([A-Za-z_][A-Za-z0-9_:]*) \.\.\. (ok|FAILED|ignored)$", re.M)
 RUNNING = re.compile(r"^running ([0-9]+) tests?$", re.M)
 SUMMARY = re.compile(
@@ -78,7 +96,63 @@ MUTANTS = (
      ".reset(tokio::time::Instant::from_std(deadline));",
      ".reset(tokio::time::Instant::from_std(deadline.max(until)));",
      CASES[0], "pending_actual_timer_wake_watchdog"),
+    ("csrf_compatible_checkpoint_always_denied", "runtime/src/auth/csrf.rs",
+     """            if !bool::from(matched) || fresh.ceil_ms>=expiry {
+                #[cfg(all(test, nagi_auth_stage_diag))]""",
+     """            if true {
+                #[cfg(all(test, nagi_auth_stage_diag))]""",
+     AUTH_BASE + AUTH_CASES[0],
+     "same_queue_fixture phase=PositiveCheckpoint kind=Some(Denied) outcome=Some(RolledBack)"),
+    ("csrf_reopen_refreshes_stored_expiry", "runtime/src/auth/csrf.rs",
+     """            if m.options!=options || m.origin!=origin { return Err(Failure::unavailable()); }
+            m.incarnation.try_into().map_err(|_|Failure::unavailable())""",
+     """            if m.options!=options || m.origin!=origin { return Err(Failure::unavailable()); }
+            let refreshed_expiry = c.floor_ms.checked_add(options.ttl_ms)
+                .and_then(|expiry| expiry.checked_add(1))
+                .ok_or_else(Failure::unavailable)?;
+            let p = sqlite::bind_i64(sqlite::parameters(), refreshed_expiry);
+            sqlite::exec(
+                &tx,
+                sqlite::literal("UPDATE __nagi_csrf_tokens SET expiry_ms=max(expiry_ms+1,?)"),
+                p,
+            )
+                .await
+                .map_err(Failure::database)?;
+            m.incarnation.try_into().map_err(|_|Failure::unavailable())""",
+     AUTH_BASE + AUTH_CASES[1], "same_queue_fixture phase=OriginalRowUnchanged"),
+    ("csrf_checkpoint_renews_expired_row", "runtime/src/auth/csrf.rs",
+     """            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Cleanup);
+            self.maintenance(&tx,c.ceil_ms,true).await?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::ReadTokens);""",
+     """            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::Cleanup);
+            let refreshed_expiry = c.ceil_ms.checked_add(self.options.ttl_ms)
+                .ok_or_else(Failure::unavailable)?;
+            let p = sqlite::bind_i64(sqlite::parameters(), refreshed_expiry);
+            let p = sqlite::bind_bytes(p, digest.to_vec());
+            let p = sqlite::bind_i64(p, c.ceil_ms);
+            sqlite::exec(
+                &tx,
+                sqlite::literal("UPDATE __nagi_csrf_tokens SET expiry_ms=? WHERE digest=? AND expiry_ms<=?"),
+                p,
+            ).await.map_err(Failure::database)?;
+            self.maintenance(&tx,c.ceil_ms,true).await?;
+            #[cfg(test)]
+            self.checkpoint_phase(CheckpointPhase::ReadTokens);""",
+     AUTH_BASE + AUTH_CASES[1], "same_queue_fixture phase=ExpiredCheckpointDeniedRolledBack"),
+    ("csrf_delivery_refreshes_original_deadline", "runtime/src/auth/csrf.rs",
+     "            let deadline = c.deadline.ok_or_else(Failure::internal)?;",
+     """            let deadline = Instant::now()
+                .checked_add(Duration::from_millis(self.options.ttl_ms as u64))
+                .ok_or_else(Failure::unavailable)?;""",
+     AUTH_BASE + AUTH_CASES[0], "same_queue_fixture phase=OriginalDeliveryDeadlineDenied"),
 )
+
+
+def test_name(case: str) -> str:
+    return case if case.startswith(AUTH_BASE) else BASE + case
 
 
 def inventory(raw: str, exit_code: int, required: frozenset[str]) -> bool:
@@ -91,7 +165,7 @@ def inventory(raw: str, exit_code: int, required: frozenset[str]) -> bool:
 
 def semantic_red(raw: str, exit_code: int, case: str, marker: str) -> bool:
     text = raw.replace("\r\n", "\n")
-    name = BASE + case
+    name = test_name(case)
     headers = re.findall(r"^---- ([A-Za-z_][A-Za-z0-9_:]*) stdout ----$", text, re.M)
     section = text.split("---- " + name + " stdout ----\n", 1)
     stdout = re.split(r"(?m)^failures:\n|^test result:", section[1], maxsplit=1)[0] if len(section) == 2 else ""
@@ -323,7 +397,7 @@ def build(root: pathlib.Path, env: dict[str, str], control=None):
 
 def run_checkout(root: pathlib.Path, env: dict[str, str], control=None) -> dict:
     evidence = {"schema": "nagi-csrf-deadline-mutations-v1", "status": "failed",
-                "stock": "unavailable", "mutants": {}}
+                "stock": "unavailable", "auth_fixture": "unavailable", "mutants": {}}
     binary, stage = build(root, env, control)
     if binary is None:
         evidence["stock"] = stage
@@ -333,6 +407,12 @@ def run_checkout(root: pathlib.Path, env: dict[str, str], control=None) -> dict:
         evidence["stock"] = "native_timeout" if timed_out else "native_inventory_failed"
         return evidence
     evidence["stock"] = "compiled_native_green"
+    code, raw, timed_out = command([str(binary), AUTH_BASE], root, env, 90, control)
+    if timed_out or not inventory(raw, code, AUTH_REQUIRED):
+        evidence["auth_fixture"] = "native_timeout" if timed_out else "native_inventory_failed"
+        evidence["stock"] = "auth_fixture_" + evidence["auth_fixture"]
+        return evidence
+    evidence["auth_fixture"] = "compiled_native_green"
     for label, path, old, new, case, marker in MUTANTS:
         source = root / path
         original = source.read_bytes()
@@ -347,7 +427,7 @@ def run_checkout(root: pathlib.Path, env: dict[str, str], control=None) -> dict:
             binary, result["build"] = build(root, env, control)
             if binary is None:
                 continue
-            code, raw, timed_out = command([str(binary), "--exact", BASE + case], root, env, 30, control)
+            code, raw, timed_out = command([str(binary), "--exact", test_name(case)], root, env, 30, control)
             result["native_exit"] = code
             result["native"] = "process_timeout" if timed_out else "completed"
             result["semantic_red"] = not timed_out and semantic_red(raw, code, case, marker)
@@ -395,7 +475,7 @@ def execute(repo, output, control):
     env = dict(os.environ)
     env["CARGO_TARGET_DIR"] = str(repo / "target")
     evidence = {"schema": "nagi-csrf-deadline-mutations-v1", "status": "failed",
-                "stock": "checkout_failed", "mutants": {}}
+                "stock": "checkout_failed", "auth_fixture": "unavailable", "mutants": {}}
     # Unknown is the default before launch, throughout publication and cleanup.
     # Only a completed command and a clear cancellation record authorize cleanup.
     if not enable_subreaper():

@@ -38,6 +38,13 @@ BROWSER_CASES = frozenset({
     "json_value_nodes_and_container_depth_accept_exact_bounds",
 })
 SUITES = {"session": SESSION_CASES, "browser": BROWSER_CASES}
+DELIVERY_MODULE = "auth::session::http_bridge::delivery_tests::"
+DELIVERY_CASES = {
+    "applied": DELIVERY_MODULE + "applied_real_issue_commit_has_exactly_one_wire_cookie",
+    "not_modified": DELIVERY_MODULE + "applied_304_and_private_cache_conflict_are_fixed_no_cookie_500",
+    "head": DELIVERY_MODULE + "head_applied_response_transfers_cookie_once_without_body",
+    "expiry": DELIVERY_MODULE + "expiry_after_real_commit_retires_applied_material_without_cookie",
+}
 
 IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
 ROW = re.compile(rf"^test ({IDENT}) \.\.\. (ok|FAILED|ignored)$")
@@ -49,6 +56,8 @@ SUMMARY = re.compile(
     re.M,
 )
 STDOUT_HEADER = re.compile(rf"---- ({IDENT}) stdout ----\Z")
+DELIVERY_ROW = re.compile(rf"^test ({re.escape(DELIVERY_MODULE)}{IDENT}) \.\.\. (ok|FAILED|ignored)$")
+DELIVERY_STDOUT_HEADER = re.compile(rf"---- ({re.escape(DELIVERY_MODULE)}{IDENT}) stdout ----\Z")
 DEC = r"(?:0|[1-9][0-9]{0,4})"
 STATUS = r"(?:[1-5][0-9]{2})"
 BOOL = r"(?:true|false)"
@@ -242,6 +251,30 @@ def parse_session_marker(line: str) -> dict | None:
             not (values["exit_remaining_ms"] <= values["phase_remaining_ms"] <=
                  values["entry_remaining_ms"] <= values["budget_ms"]) or
             (values["exit"] in (1, 2) and values["exit_remaining_ms"] != 0)):
+        return None
+    return {"status": 504, **values}
+
+
+def parse_delivery_marker(line: str) -> dict | None:
+    match = SESSION_MARKER.fullmatch(line)
+    if match is None:
+        return None
+    keys = (
+        "phase", "event", "db", "exit", "polls", "begins", "commands", "commits",
+        "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms",
+    )
+    values = dict(zip(keys, map(int, match.groups())))
+    # This wrapper records Business polls, not the enclosing timer's branch.
+    # Entry/Unpolled is the only accepted state before its first actual poll.
+    unpolled = (values["phase"] == 0 and values["event"] == 0 and
+                all(values[k] == 0 for k in ("db", "polls", "begins", "commands", "commits")))
+    polled = values["phase"] == 6 and values["event"] in (1, 2) and values["polls"] > 0
+    if (not (polled or unpolled) or values["db"] > 14 or
+            values["exit"] != 0 or max(values[k] for k in ("polls", "begins", "commands", "commits")) > 1023 or
+            max(values[k] for k in ("budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms")) > 60000 or
+            values["commits"] > values["begins"] or
+            not (values["exit_remaining_ms"] <= values["phase_remaining_ms"] <=
+                 values["entry_remaining_ms"] <= values["budget_ms"])):
         return None
     return {"status": 504, **values}
 
@@ -484,8 +517,10 @@ def _read_bounded(path: pathlib.Path) -> tuple[bytes | None, str]:
     return raw, "valid"
 
 
-def _suite_structure(name: str, raw: bytes | None, input_status: str, exit_code: int) -> tuple[dict, str | None]:
-    expected = SUITES[name]
+def _suite_structure(name: str, raw: bytes | None, input_status: str, exit_code: int, *,
+                     expected=None, row_pattern=ROW, stdout_pattern=STDOUT_HEADER) -> tuple[dict, str | None]:
+    if expected is None:
+        expected = SUITES[name]
     record = {
         "cargo_exit": exit_code if isinstance(exit_code, int) and 0 <= exit_code <= 255 else None,
         "input_status": input_status,
@@ -516,12 +551,12 @@ def _suite_structure(name: str, raw: bytes | None, input_status: str, exit_code:
     rows = []
     malformed_test_row = False
     for line in text.splitlines():
-        match = ROW.fullmatch(line)
+        match = row_pattern.fullmatch(line)
         if match:
             rows.append(match.groups())
         elif line.startswith("test ") and " ... " in line:
             malformed_test_row = True
-    stdout_names = [m.group(1) for line in text.splitlines() if (m := STDOUT_HEADER.fullmatch(line))]
+    stdout_names = [m.group(1) for line in text.splitlines() if (m := stdout_pattern.fullmatch(line))]
     if len(running) != 1:
         record["inventory_status"] = (
             "no_test_execution" if not running and not rows and not summaries and record["cargo_exit"] != 0
@@ -605,12 +640,12 @@ def _auth_facts(text: str, exit_code: int, cases: dict[str, str]) -> tuple[list[
     return facts, invalid
 
 
-def _test_output_blocks(text: str) -> tuple[dict[str, str], bool]:
+def _test_output_blocks(text: str, header_pattern=STDOUT_HEADER) -> tuple[dict[str, str], bool]:
     blocks: dict[str, list[str]] = {}
     current: str | None = None
     invalid = False
     for line in text.splitlines():
-        header = STDOUT_HEADER.fullmatch(line)
+        header = header_pattern.fullmatch(line)
         if header:
             current = header.group(1)
             if current in blocks:
@@ -626,7 +661,7 @@ def _test_output_blocks(text: str) -> tuple[dict[str, str], bool]:
 
 
 def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[str],
-                  cases: dict[str, str]) -> tuple[dict, int, bool]:
+                  cases: dict[str, str], *, stdout_pattern=STDOUT_HEADER) -> tuple[dict, int, bool]:
     facts = {
         "session_deadline": [], "bootstrap": [], "pair": [], "json_bound": [],
         "bootstrap_deadline": [], "browser_phase": [], "assertion": [],
@@ -634,7 +669,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
         "public": [], "http_test_io": [],
     }
     invalid = False
-    blocks, bad_blocks = _test_output_blocks(text)
+    blocks, bad_blocks = _test_output_blocks(text, stdout_pattern)
     invalid |= bad_blocks
     for block_name in blocks:
         if block_name not in cases or block_name not in failed_cases:
@@ -679,10 +714,13 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                     invalid = True
                     continue
             elif prefix == SESSION_PREFIX:
-                if suite_name != "session":
+                if suite_name == "delivery":
+                    parsed = parse_delivery_marker(line)
+                elif suite_name == "session":
+                    parsed = parse_session_marker(line)
+                else:
                     invalid = True
                     continue
-                parsed = parse_session_marker(line)
                 key = ("session_deadline", test_name)
                 if parsed is not None:
                     parsed["test"] = test_name
@@ -857,6 +895,44 @@ def diagnose(session_raw: bytes | None, session_input_status: str, session_exit:
     return record, 0 if record["status"] == "passed" else 1
 
 
+def diagnose_delivery(raw: bytes | None, input_status: str, cargo_exit: int,
+                      case: str) -> tuple[dict, int]:
+    test = DELIVERY_CASES.get(case)
+    if test is None:
+        return {"schema": "nagi-session-delivery-native-diagnostic-v1",
+                "status": "diagnostic_invalid"}, 1
+    summary, text = _suite_structure(
+        "delivery", raw, input_status, cargo_exit, expected=frozenset({test}),
+        row_pattern=DELIVERY_ROW, stdout_pattern=DELIVERY_STDOUT_HEADER,
+    )
+    facts, count, invalid = _marker_facts(
+        "delivery", text or "", cargo_exit, set(summary["failed_cases"]), {test: test},
+        stdout_pattern=DELIVERY_STDOUT_HEADER,
+    )
+    # A differently named or malformed stdout header must not inherit a prior
+    # allowlisted block and bind its markers to the wrong native test.
+    if text is not None:
+        invalid |= any(
+            line.startswith("---- ") and line.endswith(" stdout ----") and
+            (DELIVERY_STDOUT_HEADER.fullmatch(line) is None or
+             DELIVERY_STDOUT_HEADER.fullmatch(line).group(1) != test)
+            for line in text.splitlines()
+        )
+    summary.update(facts)
+    summary["diagnostic_status"] = "invalid" if invalid else "valid"
+    inventory = summary["inventory_status"]
+    status = ("diagnostic_invalid" if invalid or inventory not in {"passed", "failed", "no_test_execution"}
+              or (inventory == "failed" and cargo_exit != 101)
+              else "passed" if inventory == "passed"
+              else "tests_failed" if inventory == "failed"
+              else "tests_not_run_or_incomplete")
+    return {
+        "schema": "nagi-session-delivery-native-diagnostic-v1", "status": status,
+        "source_inventory": {"delivery_tests": 1}, "marker_count": count,
+        "case": case, "suites": {"delivery": summary},
+    }, 0 if status == "passed" else 1
+
+
 def _write_output(path: pathlib.Path, record: dict) -> bool:
     encoded = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii")
     if len(encoded) > OUTPUT_LIMIT:
@@ -875,6 +951,22 @@ def _write_output(path: pathlib.Path, record: dict) -> bool:
 
 
 def main(argv: list[str]) -> int:
+    if len(argv) == 6 and argv[1] == "--delivery":
+        case = argv[2]
+        if case not in DELIVERY_CASES:
+            return 2
+        try:
+            cargo_exit = int(argv[4])
+        except ValueError:
+            return 2
+        raw, input_status = _read_bounded(pathlib.Path(argv[3]))
+        record, status = diagnose_delivery(raw, input_status, cargo_exit, case)
+        if not _write_output(pathlib.Path(argv[5]), record):
+            return 1
+        if record["status"] == "tests_failed":
+            for fact in record["suites"]["delivery"]["session_deadline"]:
+                print("session_delivery_native=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
+        return status
     if len(argv) != 5:
         return 2
     root = pathlib.Path(argv[1])
