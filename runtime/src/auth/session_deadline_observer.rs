@@ -36,6 +36,18 @@ pub(crate) enum Exit {
     Gate,
     Wire,
 }
+// Token504 terminal branch only. This is distinct from the last polled phase.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub(crate) enum TokenTerminal {
+    Unclassified,
+    Constrain,
+    LateCompletion,
+    LiveGate,
+    TakeWire,
+    Timer,
+    InnerRefusal,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub(crate) enum Db {
@@ -63,6 +75,7 @@ struct Record {
     event: Event,
     db: Db,
     exit: Exit,
+    token_terminal: TokenTerminal,
     polls: u16,
     begins: u16,
     commands: u16,
@@ -98,6 +111,7 @@ impl Observer {
                 event: Event::Unpolled,
                 db: Db::None,
                 exit: Exit::Unclassified,
+                token_terminal: TokenTerminal::Unclassified,
                 polls: 0,
                 begins: 0,
                 commands: 0,
@@ -152,6 +166,11 @@ impl Observer {
             eprintln!("{closed}");
         }
     }
+    pub(crate) fn emit_token(&self, status: u16) {
+        if let Some(closed) = self.closed(status) {
+            eprintln!("{}", TokenClosed(closed));
+        }
+    }
     pub(crate) fn emit_bootstrap(&self, status: u16) {
         if let Some(closed) = self.closed(status) {
             let selected_end_kind = u8::from(closed.record.until < self.0.security_until);
@@ -191,6 +210,9 @@ pub(crate) fn select_until(until: Instant) {
 pub(crate) fn exit(exit: Exit) {
     let _ = ACTIVE.try_with(|o| o.update(|r| r.exit = exit));
 }
+pub(crate) fn token_terminal(terminal: TokenTerminal) {
+    let _ = ACTIVE.try_with(|o| o.update(|r| r.token_terminal = terminal));
+}
 pub(crate) async fn observe<F: Future>(stage: Phase, future: F) -> F::Output {
     phase(stage);
     let mut future = std::pin::pin!(future);
@@ -219,6 +241,16 @@ impl fmt::Display for Closed {
         let r = self.record;
         write!(f,"session_deadline_diag status=504 phase={} event={} db={} exit={} polls={} begins={} commands={} commits={} budget_ms={} entry_remaining_ms={} phase_remaining_ms={} exit_remaining_ms={}",
             r.phase as u8,r.event as u8,r.db as u8,r.exit as u8,r.polls,r.begins,r.commands,r.commits,r.budget_ms,r.entry_remaining_ms,r.phase_remaining_ms,self.exit_remaining_ms)
+    }
+}
+// Reuses the existing request-owned phase/event/native snapshot. No new
+// polling, SQL hook, clock sample or authority decision is introduced.
+struct TokenClosed(Closed);
+impl fmt::Display for TokenClosed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let r = self.0.record;
+        write!(f,"csrf_token_deadline_diag status=504 phase={} event={} db={} exit={} polls={} begins={} commands={} commits={} budget_ms={} entry_remaining_ms={} phase_remaining_ms={} exit_remaining_ms={} terminal={}",
+            r.phase as u8,r.event as u8,r.db as u8,r.exit as u8,r.polls,r.begins,r.commands,r.commits,r.budget_ms,r.entry_remaining_ms,r.phase_remaining_ms,self.0.exit_remaining_ms,r.token_terminal as u8)
     }
 }
 struct BootstrapClosed {
@@ -316,6 +348,41 @@ mod tests {
             (record.begins, record.commands, record.commits),
             (1023, 1023, 1023)
         );
+    }
+    #[tokio::test]
+    async fn token_terminal_is_request_owned_closed_and_504_only() {
+        let admitted = Instant::now();
+        let first = Observer::new(admitted, admitted + Duration::from_secs(10));
+        let second = Observer::new(admitted, admitted + Duration::from_secs(10));
+        first
+            .scope(async {
+                phase(Phase::Issue);
+                exit(Exit::Timer);
+                token_terminal(TokenTerminal::Timer);
+            })
+            .await;
+        assert_eq!(
+            first.0.record.lock().unwrap().token_terminal,
+            TokenTerminal::Timer
+        );
+        assert_eq!(
+            second.0.record.lock().unwrap().token_terminal,
+            TokenTerminal::Unclassified
+        );
+        assert!(first.closed(200).is_none());
+        assert!(first.closed(403).is_none());
+        assert!(first.closed(500).is_none());
+        let output = TokenClosed(first.closed(504).unwrap()).to_string();
+        assert!(output.starts_with("csrf_token_deadline_diag status=504 phase=2 "));
+        assert!(output.ends_with(" terminal=5"));
+        assert!(output.len() < 512);
+        assert!(output
+            .strip_prefix("csrf_token_deadline_diag ")
+            .unwrap()
+            .split(' ')
+            .all(|field| field.split_once('=').is_some_and(
+                |(_, value)| !value.is_empty() && value.bytes().all(|b| b.is_ascii_digit())
+            )));
     }
     #[tokio::test]
     async fn request_scope_isolated_and_native_owner_survives_scope() {

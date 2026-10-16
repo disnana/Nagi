@@ -25,6 +25,19 @@ jobs:
           import shutil
           assert shutil.disk_usage('/').free >= 12 * 1024**3, 'SF08 runner capacity refused'
           PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check browser probe and closed-diagnostic controls
+        working-directory: tools/sf08-browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test_preflight.mjs test_browser_stage.mjs
+          python -B -m unittest test_integration test_r2_regressions
       - name: Actual three-engine TLS and business suite
         shell: bash
         run: |

@@ -142,7 +142,7 @@ function worker(step, closePage = () => {}) {
 }
 
 test('Firefox initial CA readiness accepts only fixed issuer forms and never repeats a response', async () => {
-  for (const form of ['bare', 'prefix', 'at-url', 'protocol']) {
+  for (const form of ['bare', 'prefix', 'at-url']) {
     const time = clock(); let attempts = 0;
     const type = fake('firefox', undefined, { positiveStep: url => {
       if (url === ready.app + '/' && ++attempts <= 2) throw issuer(form, url);
@@ -157,6 +157,19 @@ test('Firefox initial CA readiness accepts only fixed issuer forms and never rep
     assert.equal(type.trace.pageClosed, 5);
     assert.equal(type.trace.contextClosed && type.trace.closed, true);
   }
+  const time = clock(); const events = []; let attempts = 0;
+  const unsupported = fake('firefox', undefined, { positiveStep: url => {
+    if (url === ready.app + '/' && ++attempts === 1) throw issuer('protocol', url);
+    return { status: () => 200 };
+  } });
+  await assert.rejects(probeEngine('firefox', unsupported, settings(provisioned, ready, negative),
+    (stage, engine) => events.push({ stage, engine }), time.timing),
+  /^Error: SF08 browser trust preflight refused$/);
+  assert.equal(attempts, 1);
+  assert.equal(time.delays.length, 0);
+  assert.deepEqual(events.at(-1), { stage: 'engine_positive_unknown', engine: 'firefox' });
+  assert.equal(unsupported.trace.pageClosed, 1);
+  assert.equal(unsupported.trace.contextClosed && unsupported.trace.closed, true);
 });
 
 test('Firefox unknown issuer forever fails after at most 20 attempts within original 10s', async () => {
@@ -250,7 +263,7 @@ test('only Firefox first positive uses readiness; other SANs and engines remain 
 
 test('business readiness uses its actual worker Browser and fresh strict context, never closes Browser', async () => {
   const time = clock(); let attempts = 0;
-  const owned = worker(url => { if (++attempts === 1) throw issuer('protocol', url); return { status: () => 200 }; });
+  const owned = worker(url => { if (++attempts === 1) throw issuer('at-url', url); return { status: () => 200 }; });
   await firefoxWorkerReadiness(owned.browser, ready.app, time.timing);
   assert.equal(attempts, 2);
   assert.deepEqual(owned.trace.options, { ignoreHTTPSErrors: false, serviceWorkers: 'block' });
@@ -375,15 +388,21 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
   const wrappedExpectedEvents = [];
   const wrappedExpected = fake('firefox', undefined, { reason: 'ca', kind: 'protocol-wrapper',
     token: 'SEC_ERROR_UNKNOWN_ISSUER' });
-  const wrappedResult = await probeEngine('firefox', wrappedExpected, settings(provisioned, ready, negative),
-    (stage, engine) => wrappedExpectedEvents.push({ stage, engine }));
-  assert.equal(wrappedResult.wrong_ca_refused, true);
-  assert.equal(wrappedExpectedEvents.some(event => event.stage.startsWith('engine_wrong_ca_')), false);
+  await assert.rejects(probeEngine('firefox', wrappedExpected, settings(provisioned, ready, negative),
+    (stage, engine) => wrappedExpectedEvents.push({ stage, engine })),
+  /^Error: SF08 browser trust preflight refused$/);
+  assert.deepEqual(wrappedExpectedEvents.at(-1),
+    { stage: 'engine_wrong_ca_diag_unknown_issuer_present', engine: 'firefox' });
   assert.equal(wrappedExpected.trace.contextClosed && wrappedExpected.trace.closed, true);
 
+  const wrappedHostEvents = [];
   const wrappedHost = fake('firefox', undefined, { reason: 'host', kind: 'protocol-wrapper',
     token: 'SSL_ERROR_BAD_CERT_DOMAIN' });
-  assert.equal((await probeEngine('firefox', wrappedHost, settings(provisioned, ready, negative))).wrong_host_refused, true);
+  await assert.rejects(probeEngine('firefox', wrappedHost, settings(provisioned, ready, negative),
+    (stage, engine) => wrappedHostEvents.push({ stage, engine })),
+  /^Error: SF08 browser trust preflight refused$/);
+  assert.deepEqual(wrappedHostEvents.at(-1), { stage: 'engine_wrong_host', engine: 'firefox' });
+  assert.equal(wrappedHost.trace.contextClosed && wrappedHost.trace.closed, true);
 
   const cases = [
     { mode: 'accepted', stage: 'engine_wrong_ca_response_received' },
@@ -394,10 +413,10 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
     { fault: 'other-tls', stage: 'engine_wrong_ca_other_tls' },
     { fault: 'unknown', stage: 'engine_wrong_ca_diag_no_fixed_code' },
     { fault: 'extra-code-text', stage: 'engine_wrong_ca_diag_bad_signature_present' },
-    { fault: 'protocol-wrapper', token: 'SEC_ERROR_BAD_SIGNATURE', stage: 'engine_wrong_ca_bad_signature' },
-    { fault: 'protocol-wrapper', token: 'SSL_ERROR_BAD_CERT_DOMAIN', stage: 'engine_wrong_ca_hostname' },
-    { fault: 'protocol-wrapper', token: 'SEC_ERROR_UNTRUSTED_ISSUER', stage: 'engine_wrong_ca_other_tls' },
-    { fault: 'protocol-wrapper', token: 'SEC_ERROR_CA_CERT_INVALID', stage: 'engine_wrong_ca_other_tls' },
+    { fault: 'protocol-wrapper', token: 'SEC_ERROR_BAD_SIGNATURE', stage: 'engine_wrong_ca_diag_bad_signature_present' },
+    { fault: 'protocol-wrapper', token: 'SSL_ERROR_BAD_CERT_DOMAIN', stage: 'engine_wrong_ca_diag_hostname_present' },
+    { fault: 'protocol-wrapper', token: 'SEC_ERROR_UNTRUSTED_ISSUER', stage: 'engine_wrong_ca_diag_other_tls_present' },
+    { fault: 'protocol-wrapper', token: 'SEC_ERROR_CA_CERT_INVALID', stage: 'engine_wrong_ca_diag_other_tls_present' },
     { fault: 'raw-error', message: 'page.goto: Protocol error (Page.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/',
       stage: 'engine_wrong_ca_diag_unknown_issuer_present' },
     { fault: 'raw-error', message: 'page.goto: Protocol error (browsingContext.navigate): SEC_ERROR_UNKNOWN_ISSUER at ' + negative.caOrigin + '/extra',
@@ -446,7 +465,17 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
 });
 
 test('closed Firefox wrong-CA diagnostics classify bounded code presence and shape only as failure', async () => {
+  const helperMappedOtherTokens = [
+    'SEC_ERROR_EXPIRED_CERTIFICATE', 'SEC_ERROR_REVOKED_CERTIFICATE', 'SEC_ERROR_UNTRUSTED_CERT',
+    'SEC_ERROR_INADEQUATE_KEY_USAGE', 'SEC_ERROR_CERT_SIGNATURE_ALGORITHM_DISABLED', 'SEC_ERROR_UNKNOWN',
+    'SSL_ERROR_NO_CERTIFICATE', 'SSL_ERROR_BAD_CERTIFICATE', 'SSL_ERROR_UNSUPPORTED_CERTIFICATE_TYPE',
+    'SSL_ERROR_UNSUPPORTED_VERSION', 'SSL_ERROR_UNKNOWN',
+  ];
   const cases = [
+    ...helperMappedOtherTokens.map(token => ({ message: 'bounded diagnostic: ' + token,
+      stage: 'engine_wrong_ca_diag_other_tls_present' })),
+    { message: 'NS_ERROR_NET_TIMEOUT', stage: 'engine_wrong_ca_diag_no_fixed_code' },
+    { message: 'SEC_ERROR_UNKNOWN_ISSUER_EXTENSION', stage: 'engine_wrong_ca_diag_no_fixed_code' },
     { message: 'wrapped:\r\nSEC_ERROR_BAD_SIGNATURE at https://wrong.invalid/path?key=PRIVATE_SENTINEL',
       stage: 'engine_wrong_ca_diag_bad_signature_present' },
     { message: 'wrapper\nSEC_ERROR_UNKNOWN_ISSUER at ' + negative.hostOrigin + '/',

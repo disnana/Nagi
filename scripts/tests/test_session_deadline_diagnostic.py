@@ -908,5 +908,88 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
         self.assertEqual(record["status"], "tests_failed")
         self.assertEqual(record["suites"]["browser"]["assertion"], [])
 
+
+class TokenFirstSliceTests(unittest.TestCase):
+    CASE = 'guarded_rotation_and_logout_invalidate_old_generation_tokens'
+    MARKER = (
+        'csrf_token_deadline_diag status=504 phase=2 event=1 db=4 exit=1 '
+        'polls=2 begins=1 commands=0 commits=0 budget_ms=1000 '
+        'entry_remaining_ms=999 phase_remaining_ms=998 exit_remaining_ms=0 terminal=5'
+    )
+
+    def test_token_stage_terminal_survive_failed_case_sanitization(self):
+        raw = cargo_log(diag.SESSION_CASES, failed={self.CASE}, markers={self.CASE: [self.MARKER]})
+        record, code = parse_both(session_raw=raw, session_exit=101)
+        self.assertEqual((record['status'], code), ('tests_failed', 1))
+        facts = record['suites']['session'].get('token_deadline', [])
+        self.assertEqual(len(facts), 1)
+        self.assertEqual((facts[0]['test'], facts[0]['phase'], facts[0]['event'], facts[0]['terminal']),
+                         (self.CASE, 2, 1, 5))
+        self.assertNotIn('PRIVATE_SENTINEL', json.dumps(record))
+
+    def test_terminal_mapping_and_exact_bounded_grammar(self):
+        parse = getattr(diag, 'parse_token_marker', lambda _: None)
+        # Same existing stage/event/native grammar, plus one closed terminal enum.
+        for terminal, exit_code in ((1, 0), (2, 2), (3, 3), (4, 4), (5, 1), (6, 0)):
+            marker = self.MARKER.replace('exit=1 ', f'exit={exit_code} ').replace('terminal=5', f'terminal={terminal}')
+            with self.subTest(terminal=terminal):
+                fact = parse(marker)
+                self.assertIsNotNone(fact)
+                self.assertEqual(fact['terminal'], terminal)
+        for bad in (self.MARKER + ' raw=PRIVATE_SENTINEL', self.MARKER + '\n',
+                    self.MARKER.replace('terminal=5', 'terminal=0'),
+                    self.MARKER.replace('terminal=5', 'terminal=7'),
+                    self.MARKER.replace('terminal=5', 'terminal=05'),
+                    self.MARKER.replace('terminal=5', 'terminal=999999999999'),
+                    self.MARKER.replace('exit=1 ', 'exit=4 '),
+                    self.MARKER.replace('phase=2', 'phase=9'),
+                    self.MARKER.replace('begins=1', 'begins=1024'),
+                    self.MARKER.replace('budget_ms=1000', 'budget_ms=60001'),
+                    self.MARKER.replace('exit_remaining_ms=0', 'exit_remaining_ms=1')):
+            with self.subTest(bad=bad[:70]):
+                self.assertIsNone(parse(bad))
+
+    def test_malformed_unbound_wrong_suite_and_duplicates_refuse(self):
+        valid = cargo_log(diag.SESSION_CASES, failed={self.CASE}, markers={self.CASE: [self.MARKER]})
+        bad_payloads = (
+            valid.replace(self.MARKER.encode(), (self.MARKER + ' secret=PRIVATE_SENTINEL').encode()),
+            valid.replace(self.MARKER.encode(), (self.MARKER + '\n' + self.MARKER).encode()),
+            valid + (self.MARKER + '\n').encode(),
+            cargo_log(diag.SESSION_CASES) + (self.MARKER + '\n').encode(),
+        )
+        for raw in bad_payloads:
+            record, code = parse_both(session_raw=raw, session_exit=101)
+            self.assertEqual((record['status'], code), ('diagnostic_invalid', 1))
+            self.assertNotIn('PRIVATE_SENTINEL', json.dumps(record))
+        browser = sorted(diag.BROWSER_CASES)[0]
+        record, code = parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={browser}, markers={browser: [self.MARKER]}), browser_exit=101)
+        self.assertEqual((record['status'], code), ('diagnostic_invalid', 1))
+
+    def test_cli_prints_only_valid_failed_closed_token_facts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            (root / 'session-deadline-session.raw').write_bytes(cargo_log(diag.SESSION_CASES, failed={self.CASE}, markers={self.CASE: [self.MARKER]}))
+            (root / 'session-deadline-browser.raw').write_bytes(cargo_log(diag.BROWSER_CASES))
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = diag.main(['diag', str(root), '101', '0', str(root / 'record.json')])
+            self.assertEqual(code, 1)
+            line = output.getvalue()
+            self.assertTrue(line.startswith('csrf_token_deadline='))
+            self.assertEqual(len(line.splitlines()), 1)
+            self.assertLess(len(line.encode('ascii')), 512)
+            self.assertNotIn('PRIVATE_SENTINEL', line)
+            fact = json.loads(line.split('=', 1)[1])
+            self.assertEqual((fact['test'], fact['terminal']), (self.CASE, 5))
+            for raw, exit_code in ((cargo_log(diag.SESSION_CASES), 0),
+                                   (cargo_log(diag.SESSION_CASES, failed={self.CASE}, markers={self.CASE: [self.MARKER + ' raw=PRIVATE_SENTINEL']}), 101)):
+                (root / 'session-deadline-session.raw').write_bytes(raw)
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    result = diag.main(['diag', str(root), str(exit_code), '0', str(root / 'record.json')])
+                self.assertEqual(result, 0 if exit_code == 0 else 1)
+                self.assertEqual(output.getvalue(), '')
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

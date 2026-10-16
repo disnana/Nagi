@@ -63,6 +63,7 @@ STATUS = r"(?:[1-5][0-9]{2})"
 BOOL = r"(?:true|false)"
 BROWSER_PHASE_PREFIX = "browser_login_phase_diag"
 SESSION_PREFIX = "session_deadline_diag"
+TOKEN_PREFIX = "csrf_token_deadline_diag"
 BOOTSTRAP_DEADLINE_PREFIX = "prelogin_bootstrap_deadline_diag"
 BOOTSTRAP_PREFIX = "browser_login_bootstrap_diag"
 PAIR_PREFIX = "browser_login_stock_cause"
@@ -146,6 +147,10 @@ SESSION_MARKER = re.compile(
     r"budget_ms=(0|[1-9][0-9]{0,4}) entry_remaining_ms=(0|[1-9][0-9]{0,4}) "
     r"phase_remaining_ms=(0|[1-9][0-9]{0,4}) exit_remaining_ms=(0|[1-9][0-9]{0,4})\Z"
 )
+TOKEN_MARKER = re.compile(
+    SESSION_MARKER.pattern.replace(SESSION_PREFIX, TOKEN_PREFIX).removesuffix(r"\Z")
+    + r" terminal=(0|[1-9][0-9]?)\Z"
+)
 BOOTSTRAP_DEADLINE_MARKER = re.compile(
     SESSION_MARKER.pattern.replace(SESSION_PREFIX, BOOTSTRAP_DEADLINE_PREFIX).removesuffix(r"\Z")
     + r" security_budget_ms=(0|[1-9][0-9]{0,4}) selected_end_kind=([01])\Z"
@@ -187,6 +192,7 @@ KNOWN_MARKER_PREFIXES = (
     ASSERTION_PREFIX,
     BROWSER_PHASE_PREFIX,
     SESSION_PREFIX,
+    TOKEN_PREFIX,
     BOOTSTRAP_DEADLINE_PREFIX,
     BOOTSTRAP_PREFIX,
     PAIR_PREFIX,
@@ -253,6 +259,19 @@ def parse_session_marker(line: str) -> dict | None:
             (values["exit"] in (1, 2) and values["exit_remaining_ms"] != 0)):
         return None
     return {"status": 504, **values}
+
+
+def parse_token_marker(line: str) -> dict | None:
+    match = TOKEN_MARKER.fullmatch(line)
+    if match is None:
+        return None
+    terminal = int(match.groups()[-1])
+    original = line.rsplit(" terminal=", 1)[0].replace(TOKEN_PREFIX, SESSION_PREFIX, 1)
+    values = parse_session_marker(original)
+    expected_exit = {1: 0, 2: 2, 3: 3, 4: 4, 5: 1, 6: 0}
+    if values is None or terminal not in expected_exit or values["exit"] != expected_exit[terminal]:
+        return None
+    return {**values, "terminal": terminal}
 
 
 def parse_delivery_marker(line: str) -> dict | None:
@@ -665,6 +684,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
     facts = {
         "session_deadline": [], "bootstrap": [], "pair": [], "json_bound": [],
         "bootstrap_deadline": [], "browser_phase": [], "assertion": [],
+        "token_deadline": [],
         "claim_initial": [], "claim_retry": [], "claim_replay_proof": [],
         "public": [], "http_test_io": [],
     }
@@ -713,6 +733,12 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                                               for item in facts["browser_phase"]):
                     invalid = True
                     continue
+            elif prefix == TOKEN_PREFIX:
+                if suite_name != "session":
+                    invalid = True
+                    continue
+                parsed = parse_token_marker(line)
+                key = ("token_deadline", test_name)
             elif prefix == SESSION_PREFIX:
                 if suite_name == "delivery":
                     parsed = parse_delivery_marker(line)
@@ -807,11 +833,11 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                 # Stalled-response markers belong to another fixed suite, not these APIs.
                 invalid = True
                 continue
-            if parsed is None or key is None or (key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase") and key in seen_case_kinds):
+            if parsed is None or key is None or (key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline") and key in seen_case_kinds):
                 invalid = True
                 continue
             parsed["test"] = test_name
-            if key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase"):
+            if key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline"):
                 seen_case_kinds.add(key)
             facts[key[0]].append(parsed)
 
@@ -982,6 +1008,8 @@ def main(argv: list[str]) -> int:
     # Reconstruct only parsed numeric facts + source-whitelisted test identity.
     # Never cat raw stdout/stderr or print an invalid sanitizer record.
     if record["status"] == "tests_failed":
+        for fact in record["suites"]["session"]["token_deadline"]:
+            print("csrf_token_deadline=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
         for fact in record["suites"]["browser"]["browser_phase"]:
             print("browser_login_phase=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
         for fact in record["suites"]["browser"]["assertion"]:

@@ -17,6 +17,7 @@ import browser_budget as bb
 import failure_checkpoint as fc
 
 core = c.load('unit_protocol', c.HERE/'protocol.py')
+certificate_fixture = c.load('unit_certificate_fixture', c.HERE/'context'/'fixture.py')
 loaded = core.components({n:{'path':str(c.HERE/'context'/f'{n}.py')} for n in
     ('owned_json','owned_processes','report_reader','report_validator')})
 OwnedRoot = loaded['owned_json'].OwnedRoot
@@ -66,6 +67,80 @@ class Owner:
 
 def put(path,value):
     path.write_text(json.dumps(value)); path.chmod(0o600)
+
+
+class CertificateRoleFixtureTests(unittest.TestCase):
+    SUBJECTS = {
+        'positive': '/CN=Nagi owned ephemeral SF08 positive CA',
+        'wrong-ca': '/CN=Nagi owned ephemeral SF08 wrong-ca CA',
+    }
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='unit-cert-',dir=os.environ.get('SF08_UNIT_ROOT','/tmp'))
+        self.directory = Path(self.temp.name)
+        self.addCleanup(self.temp.cleanup)
+
+    def run_certificates(self, role):
+        calls = []
+        server = NS(set_alpn_protocols=Mock(), load_cert_chain=Mock())
+        def capture(argv, **kwargs):
+            calls.append((list(argv), dict(kwargs)))
+        with patch.object(certificate_fixture.subprocess, 'run', side_effect=capture), \
+             patch.object(certificate_fixture.ssl, 'SSLContext', return_value=server) as make_context:
+            context = certificate_fixture.certificates(self.directory, role)
+        make_context.assert_called_once_with(certificate_fixture.ssl.PROTOCOL_TLS_SERVER)
+        return calls, server, context
+
+    def test_positive_and_wrong_ca_roles_change_only_fixed_ca_subject(self):
+        positive, positive_server, positive_context = self.run_certificates('positive')
+        wrong, wrong_server, wrong_context = self.run_certificates('wrong-ca')
+        self.assertEqual(len(positive), 3)
+        self.assertEqual(len(wrong), 3)
+        self.assertEqual(positive[0][0][positive[0][0].index('-subj') + 1], self.SUBJECTS['positive'])
+        self.assertEqual(wrong[0][0][wrong[0][0].index('-subj') + 1], self.SUBJECTS['wrong-ca'])
+
+        def normalized(calls):
+            result = []
+            for argv, kwargs in calls:
+                if argv[1:3] == ['req', '-x509']:
+                    argv = list(argv)
+                    argv[argv.index('-subj') + 1] = '<closed-ca-role>'
+                result.append((argv, kwargs))
+            return result
+
+        self.assertNotEqual(self.SUBJECTS['positive'], self.SUBJECTS['wrong-ca'])
+        self.assertEqual(normalized(positive), normalized(wrong))
+        self.assertIs(positive_context, positive_server)
+        self.assertIs(wrong_context, wrong_server)
+        self.assertEqual(positive_server.minimum_version, certificate_fixture.ssl.TLSVersion.TLSv1_2)
+        self.assertEqual(wrong_server.minimum_version, certificate_fixture.ssl.TLSVersion.TLSv1_2)
+        positive_server.set_alpn_protocols.assert_called_once_with(['http/1.1'])
+        wrong_server.set_alpn_protocols.assert_called_once_with(['http/1.1'])
+        positive_server.load_cert_chain.assert_called_once_with(self.directory/'leaf.pem', self.directory/'leaf.key')
+        wrong_server.load_cert_chain.assert_called_once_with(self.directory/'leaf.pem', self.directory/'leaf.key')
+        self.assertEqual((self.directory/'leaf.ext').read_text(),
+            'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\n'
+            'extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost,DNS:app.example.invalid,IP:127.0.0.1\n')
+
+    def test_unknown_role_is_rejected_before_umask_or_openssl(self):
+        with patch.object(certificate_fixture.os, 'umask') as umask, \
+             patch.object(certificate_fixture.subprocess, 'run') as run:
+            for role in ('Positive', 'positive ', 'wrong-ca-extra', None, 7):
+                with self.subTest(role_type=type(role).__name__), self.assertRaisesRegex(ValueError, 'invalid certificate role'):
+                    certificate_fixture.certificates(self.directory, role)
+            with self.assertRaises(TypeError):
+                certificate_fixture.certificates(self.directory)
+            umask.assert_not_called()
+            run.assert_not_called()
+        self.assertEqual(list(self.directory.iterdir()), [])
+
+    def test_supervisor_selects_positive_certificate_role(self):
+        owned = self.directory/'owned'
+        owned.mkdir()
+        with patch.object(certificate_fixture.tempfile, 'mkdtemp', return_value=str(owned)), \
+             patch.object(certificate_fixture, 'certificates', return_value=object()) as certificates:
+            certificate_fixture.Supervisor('/unit/runtime', self.directory)
+        certificates.assert_called_once_with(owned, 'positive')
 
 
 class IntegrationTests(unittest.TestCase):
@@ -214,10 +289,16 @@ class IntegrationTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self,*_): closed.append(True)
             def handle_request(self): raise AssertionError('EOF must stop before serving')
-        helper = NS(certificates=lambda path: (path/'ca.pem').write_bytes(b'unit-public-ca'),
+        certificate_roles=[]
+        def fake_certificates(path, role):
+            certificate_roles.append(role)
+            (path/'ca.pem').write_bytes(b'unit-public-ca')
+            return object()
+        helper = NS(certificates=fake_certificates,
                     atomic_json=lambda path,value: put(path,value))
         with patch.object(ne,'load_fixture',return_value=helper),patch.object(ne,'Server',return_value=FakeServer()):
             ne.run(self.work,'/unit/fixture.py',read_fd)
+        self.assertEqual(certificate_roles,['wrong-ca'])
         self.assertEqual(closed,[True])
         with self.assertRaises(OSError): os.fstat(read_fd)
         meta=json.loads((self.work/'negative.json').read_text())

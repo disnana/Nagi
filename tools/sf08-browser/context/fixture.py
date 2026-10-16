@@ -39,7 +39,14 @@ def atomic_json(path, value):
             os.unlink(temporary)
 
 
-def certificates(directory):
+def certificates(directory, role):
+    if type(role) is not str or role not in ('positive', 'wrong-ca'):
+        raise ValueError("invalid certificate role")
+    ca_subject = (
+        "/CN=Nagi owned ephemeral SF08 positive CA"
+        if role == 'positive'
+        else "/CN=Nagi owned ephemeral SF08 wrong-ca CA"
+    )
     # umask protects runtime-created private key files; none are repository artifacts.
     previous = os.umask(0o077)
     try:
@@ -49,7 +56,7 @@ def certificates(directory):
                            stderr=subprocess.DEVNULL, timeout=10)
         openssl("req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
                 "-nodes", "-keyout", "ca.key", "-out", "ca.pem", "-days", "2",
-                "-subj", "/CN=Nagi owned ephemeral SF08 CA", "-addext", "basicConstraints=critical,CA:TRUE",
+                "-subj", ca_subject, "-addext", "basicConstraints=critical,CA:TRUE",
                 "-addext", "keyUsage=critical,keyCertSign,cRLSign")
         openssl("req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256",
                 "-nodes", "-keyout", "leaf.key", "-out", "leaf.csr", "-subj", "/CN=localhost")
@@ -240,7 +247,7 @@ class Supervisor:
     def __init__(self, executable, work, runtime_factory=Runtime):
         self.executable, self.work, self.runtime_factory = executable, work, runtime_factory
         self.owned = Path(tempfile.mkdtemp(prefix="owned-", dir=work))
-        self.ssl_context = certificates(self.owned)
+        self.ssl_context = certificates(self.owned, 'positive')
         self.runtime = None
         self.servers, self.tasks, self.control_tasks = [], set(), set()
         self.request_lock, self.control_lock = asyncio.Lock(), asyncio.Lock()

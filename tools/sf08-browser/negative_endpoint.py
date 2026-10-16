@@ -61,7 +61,7 @@ def run(work, fixture, stop_fd):
     owned = work / 'negative'
     owned.mkdir(mode=0o700)  # Existing path refuses; never resets or reuses keys.
     module = load_fixture(fixture)
-    context = module.certificates(owned)
+    context = module.certificates(owned, 'wrong-ca')
     with Server(('127.0.0.1', 0), Handler) as server:
         server.context, server.timeout = context, .1
         port = server.server_address[1]

@@ -12,29 +12,36 @@ const TLS_ERROR = {
   firefox: { ca: 'SEC_ERROR_UNKNOWN_ISSUER', host: 'SSL_ERROR_BAD_CERT_DOMAIN' },
   webkit: { ca: 'Unacceptable TLS certificate', host: 'Unacceptable TLS certificate' },
 };
-const FIREFOX_PROTOCOL_TLS_TOKENS = Object.freeze([
+// Diagnostic-only labels from pinned Playwright Firefox NSS/SSL mapping.
+// SEC_ERROR_BAD_SIGNATURE is retained as a legacy diagnostic label; the pinned
+// Helper.js explicit switch does not emit it. None of these labels authorizes a refusal.
+const FIREFOX_NSS_SSL_DIAGNOSTIC_TOKENS = Object.freeze([
   'SEC_ERROR_UNKNOWN_ISSUER', 'SSL_ERROR_BAD_CERT_DOMAIN', 'SEC_ERROR_BAD_SIGNATURE',
   'SEC_ERROR_UNTRUSTED_ISSUER', 'SEC_ERROR_CA_CERT_INVALID',
+  'SEC_ERROR_EXPIRED_CERTIFICATE', 'SEC_ERROR_REVOKED_CERTIFICATE',
+  'SEC_ERROR_UNTRUSTED_CERT', 'SEC_ERROR_INADEQUATE_KEY_USAGE',
+  'SEC_ERROR_CERT_SIGNATURE_ALGORITHM_DISABLED', 'SEC_ERROR_UNKNOWN',
+  'SSL_ERROR_NO_CERTIFICATE', 'SSL_ERROR_BAD_CERTIFICATE',
+  'SSL_ERROR_UNSUPPORTED_CERTIFICATE_TYPE', 'SSL_ERROR_UNSUPPORTED_VERSION',
+  'SSL_ERROR_UNKNOWN',
 ]);
-// Fixed NSS tokens only; the wrapper shape comes from pinned Playwright source.
+// This closed NSS/SSL list is diagnostic-only; matching never changes the refusal oracle.
 const REFUSED = 'SF08 browser trust preflight refused';
 
 function refuse() { throw new Error(REFUSED); }
 
-function exactTLSFailureToken(error, token, probeURL, engineName) {
+function exactTLSFailureToken(error, token, probeURL) {
   if (!(error instanceof Error) || typeof error.message !== 'string' || error.message.length > 8192) return false;
   const newline = error.message.indexOf('\n');
   const firstLine = newline < 0 ? error.message : error.message.slice(0, newline);
   const existingForm = firstLine === token ||
     firstLine === 'page.goto: ' + token ||
     firstLine === 'page.goto: ' + token + ' at ' + probeURL;
-  const firefoxProtocolForm = engineName === 'firefox' && FIREFOX_PROTOCOL_TLS_TOKENS.includes(token) &&
-    firstLine === 'page.goto: Protocol error (browsingContext.navigate): ' + token + ' at ' + probeURL;
-  return existingForm || firefoxProtocolForm;
+  return existingForm;
 }
 
 function expectedTLSFailure(error, name, reason, probeURL) {
-  return exactTLSFailureToken(error, TLS_ERROR[name][reason], probeURL, name);
+  return exactTLSFailureToken(error, TLS_ERROR[name][reason], probeURL);
 }
 
 // Failure-only facts; expectedTLSFailure remains the sole acceptance oracle.
@@ -45,12 +52,12 @@ function wrongCAFailureOutcome(error, name, probeURL) {
     if (error.name === 'TimeoutError') return 'timeout';
     const matches = [];
     if (name === 'firefox') {
-      if (exactTLSFailureToken(error, 'SEC_ERROR_BAD_SIGNATURE', probeURL, name)) matches.push('bad_signature');
-      if (exactTLSFailureToken(error, TLS_ERROR.firefox.host, probeURL, name)) matches.push('hostname');
+      if (exactTLSFailureToken(error, 'SEC_ERROR_BAD_SIGNATURE', probeURL)) matches.push('bad_signature');
+      if (exactTLSFailureToken(error, TLS_ERROR.firefox.host, probeURL)) matches.push('hostname');
       for (const token of ['SEC_ERROR_UNTRUSTED_ISSUER', 'SEC_ERROR_CA_CERT_INVALID']) {
-        if (exactTLSFailureToken(error, token, probeURL, name)) matches.push('other_tls');
+        if (exactTLSFailureToken(error, token, probeURL)) matches.push('other_tls');
       }
-    } else if (name === 'chromium' && exactTLSFailureToken(error, TLS_ERROR.chromium.host, probeURL, name)) {
+    } else if (name === 'chromium' && exactTLSFailureToken(error, TLS_ERROR.chromium.host, probeURL)) {
       matches.push('hostname');
     }
     return matches.length === 1 ? matches[0] : 'unknown';
@@ -74,7 +81,7 @@ function firefoxWrongCADiagnosticOutcome(error) {
     if (!hasOwnMessage || typeof message !== 'string') return 'shape_non_string';
     if (message.length > 8192) return 'shape_oversize';
     const present = [];
-    for (const token of FIREFOX_PROTOCOL_TLS_TOKENS) {
+    for (const token of FIREFOX_NSS_SSL_DIAGNOSTIC_TOKENS) {
       let offset = 0;
       while (offset < message.length) {
         const index = message.indexOf(token, offset);
