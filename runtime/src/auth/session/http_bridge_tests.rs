@@ -174,7 +174,7 @@ async fn bearer_body_rejection_is_no_store() {
     server.stop().await;
 }
 
-use super::super::{self as session, secrets, Store};
+use crate::auth::session::{self, secrets, Store};
 use crate::{
     auth::{AuthScope, Grant, LeaseOwner},
     sqlite,

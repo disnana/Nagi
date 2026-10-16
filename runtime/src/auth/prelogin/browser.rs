@@ -86,6 +86,29 @@ impl Failure {
     }
 }
 impl Pool {
+    // Closed test-only setup: real bootstrap material remains inside PreLogin.
+    // The returned owner/context are a one-shot pair from actual claim_http.
+    #[cfg(test)]
+    pub(crate) async fn claim_stage_for_test(&self) -> Result<(HttpOwner, ClaimContext), Failure> {
+        let bootstrap = HttpOwner::new(
+            LeaseOwner::new(Instant::now() + Duration::from_secs(10))
+                .map_err(Failure::authority)?,
+        );
+        self.bootstrap(&bootstrap, None).await?;
+        let input = {
+            let cell = bootstrap.cell.lock().map_err(|_| Failure::unavailable())?;
+            let pair = cell.pair.as_ref().ok_or_else(Failure::unavailable)?;
+            LoginInput {
+                input: ClaimInput::parse(&pair.handle, &pair.token)?,
+            }
+        };
+        let owner = HttpOwner::new(
+            LeaseOwner::new(Instant::now() + Duration::from_secs(10))
+                .map_err(Failure::authority)?,
+        );
+        let context = self.claim_http(&owner, input).await?;
+        Ok((owner, context))
+    }
     pub(crate) fn login_input(&self, headers: &HeaderMap) -> Result<LoginInput, Failure> {
         // Inspect all Cookie pairs and ambiguous fields before classifying a
         // missing/bad credential. No Cookie is an identity fallback.

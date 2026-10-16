@@ -85,6 +85,49 @@ fn unrelated_or_wrong_family_answer_is_not_silently_filtered() {
 fn startup_rejects_local_shortcuts_literals_and_noncanonical_input() {
     let endpoint = "127.0.0.1:53".parse().unwrap();
     assert!(ResolverStartup::checked("api.example.test", endpoint).is_ok());
+    let maximum = format!(
+        "{}.{}.{}.{}",
+        "a".repeat(63),
+        "b".repeat(63),
+        "c".repeat(63),
+        "d".repeat(61)
+    );
+    assert_eq!(maximum.len(), 253);
+    for host in [
+        "api",
+        "a-b.example.test",
+        "xn--bcher-kva.example",
+        maximum.as_str(),
+    ] {
+        let startup = ResolverStartup::checked(host, endpoint).unwrap();
+        assert_eq!(startup.name.to_ascii(), format!("{host}."));
+        assert!(matches!(url::Host::parse(host), Ok(url::Host::Domain(name)) if name == host));
+        assert!(matches!(rustls::pki_types::ServerName::try_from(host),
+            Ok(rustls::pki_types::ServerName::DnsName(name)) if name.as_ref() == host));
+    }
+    let oversized_label = format!("{}.example", "a".repeat(64));
+    let oversized_name = format!("{maximum}a");
+    for host in [
+        "-api.example.test",
+        "api-.example.test",
+        "api..example.test",
+        ".example.test",
+        "2130706433",
+        "127.1",
+        "0x7f000001",
+        "0177.0.0.1",
+        "123",
+        oversized_label.as_str(),
+        oversized_name.as_str(),
+    ] {
+        assert!(
+            matches!(
+                ResolverStartup::checked(host, endpoint),
+                Err(DnsFailure::Configuration)
+            ),
+            "sf06_canonical_startup_reject"
+        );
+    }
     for host in [
         "localhost",
         "foo.localhost",

@@ -510,6 +510,41 @@ async fn protected_registered_operation_preserves_actual_request_grant_target_an
 #[tokio::test]
 async fn startup_refuses_duplicate_operation_wrong_credential_binding_and_invalid_limits_before_native_work(
 ) {
+    // Exercise the production constructor, without the test-network exception.
+    // Constructor acceptance is not production DNS/socket/TLS acceptance.
+    for host in [
+        "-api.example.test",
+        "api-.example.test",
+        "api..example.test",
+        "127.1",
+        "2130706433",
+        "0x7f000001",
+    ] {
+        let failure = ServiceSpec::checked(ServiceConfig {
+            key: ServiceKey::checked(1, 2, 3, 4).unwrap(),
+            canonical_dns_name: host.to_owned(),
+            port: 443,
+            resolver_endpoint: "127.0.0.1:53".parse().unwrap(),
+            roots: rustls::RootCertStore::empty(),
+            max_candidates: 8,
+        })
+        .err()
+        .expect("sf06_public_canonical_startup_reject");
+        assert_eq!(client::kind(&failure), client::FailureKind::InvalidInput);
+        assert_eq!(
+            client::outcome(&failure),
+            client::Outcome::RequestNotStarted
+        );
+    }
+    assert!(ServiceSpec::checked(ServiceConfig {
+        key: ServiceKey::checked(1, 2, 3, 4).unwrap(),
+        canonical_dns_name: "api.example.test".to_owned(),
+        port: 443,
+        resolver_endpoint: "127.0.0.1:53".parse().unwrap(),
+        roots: rustls::RootCertStore::empty(),
+        max_candidates: 8,
+    })
+    .is_ok());
     let mut first = Fixture::new(true).await;
     let second = Fixture::new(false).await;
     let wrong = ProtectedSpec::<()>::checked(

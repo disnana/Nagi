@@ -281,6 +281,12 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
+      - name: Check owned BrowserLogin business stage and cancellation witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_browser_login_stage_backport.py
+          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash
         run: |
@@ -391,6 +397,48 @@ jobs:
           name: compiler-failures-linux
           path: build/compiler-failures/
           if-no-files-found: ignore
+
+  rust-1-88:
+    name: SF02 runtime Ed25519 profile on Rust 1.88.0 (Linux x86_64)
+    timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.full_checks == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_TARGET_DIR: target/sf02-rust-1.88.0-linux-x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm the pinned Linux x86_64 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = "Linux"
+          test "$(uname -m)" = "x86_64"
+          rustc +1.88.0 -vV
+          cargo +1.88.0 --version
+      - name: Measure the focused SF02 Ed25519 runtime profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo +1.88.0 test --locked -p nagi-runtime --lib auth::ed25519:: 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-core.log"
+          cargo +1.88.0 test --locked -p nagi-runtime --test ed25519_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-public.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf02-ed25519-core.log": 14, "sf02-ed25519-public.log": 1}.items():
+              text = (root / name).read_text(encoding="utf-8")
+              test_lines = re.findall(r"(?m)^test [^\n]+ \.\.\. (ok|FAILED)$", text)
+              if len(test_lines) != count or any(status != "ok" for status in test_lines):
+                  raise AssertionError(f"{name}: expected exactly {count} successful test lines; got {len(test_lines)}")
+              summaries = re.findall(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
+              if summaries != [("ok", str(count), "0", "0")]:
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored; got {summaries}")
+          PY
 
   release-plan:
     runs-on: ubuntu-latest
@@ -1010,6 +1058,12 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
+      - name: Check owned BrowserLogin business stage and cancellation witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_browser_login_stage_backport.py
+          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
       - name: Check B1 Session CSRF runtime and public socket contracts
         shell: bash
         run: |
@@ -1322,7 +1376,7 @@ jobs:
   ready:
     name: Ready to merge
     if: github.event_name == 'pull_request' && always()
-    needs: [changes, linux, jetbrains, release-plan, vscode-package, nagi-package]
+    needs: [changes, linux, rust-1-88, jetbrains, release-plan, vscode-package, nagi-package]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -1335,15 +1389,16 @@ jobs:
         run: python scripts/ci/gate.py
 
   publish-release:
-    needs: [linux, release-plan, jetbrains, vscode-package, nagi-package]
+    needs: [linux, rust-1-88, release-plan, jetbrains, vscode-package, nagi-package]
     if: >-
       always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       (
-        needs.linux.result == 'success' ||
+        (needs.linux.result == 'success' && needs.rust-1-88.result == 'success') ||
         (needs.release-plan.outputs.release_jetbrains == 'true' &&
          needs.release-plan.outputs.release_nagi != 'true' &&
          needs.release-plan.outputs.release_vscode != 'true' &&
-         needs.linux.result == 'skipped')
+         needs.linux.result == 'skipped' &&
+         needs.rust-1-88.result == 'skipped')
       ) && needs.release-plan.result == 'success' &&
       (needs.jetbrains.result == 'success' || needs.jetbrains.result == 'skipped') &&
       (needs.vscode-package.result == 'success' || needs.vscode-package.result == 'skipped') &&
