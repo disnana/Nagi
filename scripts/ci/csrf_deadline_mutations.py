@@ -104,9 +104,11 @@ MUTANTS = (
      AUTH_BASE + AUTH_CASES[0],
      "same_queue_fixture phase=PositiveCheckpoint kind=Some(Denied) outcome=Some(RolledBack)"),
     ("csrf_reopen_refreshes_stored_expiry", "runtime/src/auth/csrf.rs",
-     """            if m.options!=options || m.origin!=origin { return Err(Failure::unavailable()); }
+     """            session::PreloginContext::track_sample(&mut wall,c,m.last_wall).map_err(Failure::session)?;
+            if m.options!=options || m.origin!=origin { return Err(Failure::unavailable()); }
             m.incarnation.try_into().map_err(|_|Failure::unavailable())""",
-     """            if m.options!=options || m.origin!=origin { return Err(Failure::unavailable()); }
+     """            let c=session::PreloginContext::track_sample(&mut wall,c,m.last_wall).map_err(Failure::session)?;
+            if m.options!=options || m.origin!=origin { return Err(Failure::unavailable()); }
             let refreshed_expiry = c.floor_ms.checked_add(options.ttl_ms)
                 .and_then(|expiry| expiry.checked_add(1))
                 .ok_or_else(Failure::unavailable)?;
