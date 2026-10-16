@@ -257,9 +257,21 @@ impl FallbackStatus {
         }
     }
 }
-pub(in crate::http_server) enum FallbackOutcome {
-    Wire { status: u16, wire: ChargedWire },
-    Close,
+// Inline optional payload keeps the original charged owners without introducing
+// a heap box or an uncharged allocation merely to shrink an enum discriminant.
+pub(in crate::http_server) struct FallbackOutcome {
+    response: Option<(u16, ChargedWire)>,
+}
+impl FallbackOutcome {
+    fn close() -> Self {
+        Self { response: None }
+    }
+    pub(in crate::http_server) fn is_close(&self) -> bool {
+        self.response.is_none()
+    }
+    pub(in crate::http_server) fn into_response(self) -> Option<(u16, ChargedWire)> {
+        self.response
+    }
 }
 impl FallbackLedger {
     pub(in crate::http_server) fn checked(
@@ -296,7 +308,7 @@ impl FallbackLedger {
     }
     pub(in crate::http_server) fn produce(&self, status: FallbackStatus) -> FallbackOutcome {
         let retry = match status {
-            FallbackStatus::Limited { retry_seconds: 0 } => return FallbackOutcome::Close,
+            FallbackStatus::Limited { retry_seconds: 0 } => return FallbackOutcome::close(),
             FallbackStatus::Limited { retry_seconds } => Some(retry_seconds),
             _ => None,
         };
@@ -323,11 +335,10 @@ impl FallbackLedger {
                 Ok(wire)
             });
         match result {
-            Ok(wire) => FallbackOutcome::Wire {
-                status: status.code(),
-                wire,
+            Ok(wire) => FallbackOutcome {
+                response: Some((status.code(), wire)),
             },
-            Err(_) => FallbackOutcome::Close,
+            Err(_) => FallbackOutcome::close(),
         }
     }
 }

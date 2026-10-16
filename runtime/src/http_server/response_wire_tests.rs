@@ -27,12 +27,12 @@ fn fallback_limits() -> FallbackLimits {
     }
 }
 fn fallback_wire(outcome: FallbackOutcome, expected: u16) -> ChargedWire {
-    match outcome {
-        FallbackOutcome::Wire { status, wire } => {
+    match outcome.into_response() {
+        Some((status, wire)) => {
             assert_eq!(status, expected);
             wire
         }
-        FallbackOutcome::Close => panic!("expected one finite fallback"),
+        None => panic!("expected one finite fallback"),
     }
 }
 
@@ -265,10 +265,7 @@ fn fallback_uses_independent_ledger_then_closes_without_another_allocation() {
         .producer
         .allocation_attempts
         .load(std::sync::atomic::Ordering::Relaxed);
-    assert!(matches!(
-        fallback.produce(FallbackStatus::Capacity),
-        FallbackOutcome::Close
-    ));
+    assert!(fallback.produce(FallbackStatus::Capacity).is_close());
     assert_eq!(
         fallback
             .producer
@@ -277,14 +274,11 @@ fn fallback_uses_independent_ledger_then_closes_without_another_allocation() {
         allocations
     );
     drop(headers);
-    assert!(matches!(
-        fallback.produce(FallbackStatus::Internal),
-        FallbackOutcome::Close
-    ));
+    assert!(fallback.produce(FallbackStatus::Internal).is_close());
     drop(frame);
     assert!(matches!(
-        fallback.produce(FallbackStatus::Internal),
-        FallbackOutcome::Wire { status: 500, .. }
+        fallback.produce(FallbackStatus::Internal).into_response(),
+        Some((500, _))
     ));
     capacity(&ordinary);
     drop(held);
@@ -319,10 +313,9 @@ fn fallback_preserves_statuses_and_positive_retry_without_ordinary_serializer() 
         }
         drop(wire);
     }
-    assert!(matches!(
-        fallback.produce(FallbackStatus::Limited { retry_seconds: 0 }),
-        FallbackOutcome::Close
-    ));
+    assert!(fallback
+        .produce(FallbackStatus::Limited { retry_seconds: 0 })
+        .is_close());
 }
 
 #[test]

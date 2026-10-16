@@ -8,9 +8,16 @@ import unittest
 ROOT = Path(os.environ.get("SF07_SOURCE_ROOT", Path(__file__).resolve().parents[2]))
 
 
+def canonical_bytes(data):
+    data = data.replace(b"\r\n", b"\n")
+    if b"\r" in data:
+        raise ValueError("lone carriage return")
+    return data
+
+
 def source(path):
     target = ROOT / path
-    return target.read_text() if target.exists() else ""
+    return canonical_bytes(target.read_bytes()).decode("utf-8") if target.exists() else ""
 
 
 class BridgeBoundaryTests(unittest.TestCase):
@@ -45,7 +52,7 @@ class BridgeBoundaryTests(unittest.TestCase):
         self.assertIn("Producer::checked_with(", constructor)
         self.assertIn("limits.responses < accepted_connections", constructor)
         self.assertIn("product(producer.limits.charge, accepted_connections)?", constructor)
-        self.assertIn("Err(_) => FallbackOutcome::Close", constructor)
+        self.assertIn("Err(_) => FallbackOutcome::close()", constructor)
         self.assertNotIn("self.produce(", constructor)
         self.assertNotIn("serde_json", constructor)
         self.assertNotIn("self.producer.text(", constructor)
@@ -57,10 +64,25 @@ class BridgeBoundaryTests(unittest.TestCase):
             "runtime/src/http_server/response_budget_tests.rs":"c9337486bac6d16c405c577447de1e36160cb898573afba271c5b38d7cf77bad",
         }
         for path, digest in expected.items():
-            self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), digest)
+            self.assertEqual(hashlib.sha256(canonical_bytes((ROOT/path).read_bytes())).hexdigest(), digest)
         producer = source("runtime/src/http_server/response_budget.rs")
-        self.assertIn('#[path = "../security_sf07_private/quota.rs"]', producer)
+        self.assertIn("use crate::security_sf07_private::quota;", producer)
+        self.assertNotIn('#[path = "../security_sf07_private/quota.rs"]', producer)
+        self.assertEqual(source("runtime/src/security_sf07_private/mod.rs").count("pub(crate) mod quota;"), 1)
         self.assertFalse((ROOT/"runtime/src/http_server/response_budget_quota.rs").exists())
+
+    def test_source_hash_preserves_lf_crlf_identity_and_rejects_mutation_and_lone_cr(self):
+        expected = {
+            "runtime/src/security_sf07_private/quota.rs":"a7031c5a4ad071d719f6efc41dd8889d9582169602197a337c94a54cbc4f6861",
+            "runtime/src/http_server/response_budget_tests.rs":"c9337486bac6d16c405c577447de1e36160cb898573afba271c5b38d7cf77bad",
+        }
+        for path, digest in expected.items():
+            lf = canonical_bytes((ROOT/path).read_bytes())
+            for data in (lf, lf.replace(b"\n", b"\r\n")):
+                self.assertEqual(hashlib.sha256(canonical_bytes(data)).hexdigest(), digest)
+                self.assertNotEqual(hashlib.sha256(canonical_bytes(data + b" ")).hexdigest(), digest)
+            with self.assertRaises(ValueError):
+                canonical_bytes(lf + b"\r")
 
     def test_all_twelve_native_oracles_registered_with_existing_nineteen(self):
         tests = source("runtime/src/http_server/response_wire_tests.rs")

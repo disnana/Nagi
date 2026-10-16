@@ -5,8 +5,7 @@ use axum::body::Bytes;
 use serde::Serialize;
 use std::{io, mem::size_of, sync::Arc};
 
-#[path = "../security_sf07_private/quota.rs"]
-mod quota;
+use crate::security_sf07_private::quota;
 #[path = "response_wire.rs"]
 pub(super) mod wire;
 use quota::{

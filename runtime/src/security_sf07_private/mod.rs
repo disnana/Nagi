@@ -1,7 +1,7 @@
 //! Test-only private SF07 core; no public API or HTTP attachment.
 mod indexed;
 mod legacy_rate;
-mod quota;
+pub(crate) mod quota;
 
 fn allocations_in<T>(f: impl FnOnce() -> T) -> (T, u64) {
     let (value, counts) = crate::metrics::measure(f);

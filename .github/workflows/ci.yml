@@ -89,13 +89,9 @@ jobs:
         run: |
           set -euo pipefail
           python -B scripts/tests/test_sf07_wire_source.py
-          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -c 'import re,sys
-          raw=sys.stdin.buffer.read(65537)
-          try: text=raw.decode("utf-8",errors="strict") if len(raw)<=65536 else ""
-          except UnicodeError: text=""
-          ok=len(re.findall(r"(?m)^test result: ok\. 31 passed; 0 failed; 0 ignored;",text))==1 and len(re.findall(r"(?m)^test http_server::response_budget::wire::tests::[^ ]+ \.\.\. ok$",text))==12
-          print("sf07_wire_checkpoint native31="+("passed" if ok else "unavailable"))
-          raise SystemExit(0 if ok else 1)'
+          python -B scripts/tests/test_sf07_checkpoint_summary.py
+          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -608,13 +604,9 @@ jobs:
         run: |
           set -euo pipefail
           python -B scripts/tests/test_sf07_wire_source.py
-          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -c 'import re,sys
-          raw=sys.stdin.buffer.read(65537)
-          try: text=raw.decode("utf-8",errors="strict") if len(raw)<=65536 else ""
-          except UnicodeError: text=""
-          ok=len(re.findall(r"(?m)^test result: ok\. 31 passed; 0 failed; 0 ignored;",text))==1 and len(re.findall(r"(?m)^test http_server::response_budget::wire::tests::[^ ]+ \.\.\. ok$",text))==12
-          print("sf07_wire_checkpoint native31="+("passed" if ok else "unavailable"))
-          raise SystemExit(0 if ok else 1)'
+          python -B scripts/tests/test_sf07_checkpoint_summary.py
+          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
