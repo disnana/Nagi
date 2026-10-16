@@ -459,7 +459,8 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
     await assert.rejects(probeEngine(name, type, settings(provisioned, ready, negative),
       (stage, engine) => events.push({ stage, engine })),
     /^Error: SF08 browser trust preflight refused$/);
-    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_unknown', engine: name });
+    assert.deepEqual(events.at(-1), { stage: name === 'webkit'
+      ? 'engine_wrong_ca_webkit_no_fixed_token' : 'engine_wrong_ca_unknown', engine: name });
     assert.doesNotMatch(JSON.stringify(events), /SEC_ERROR|SSL_ERROR|PRIVATE_SENTINEL/);
   }
 });
@@ -573,5 +574,51 @@ test('positive navigation failures classify closed facts without leaking excepti
     assert.equal(type.trace.pageClosed, 1);
     assert.equal(type.trace.contextClosed && type.trace.closed, true);
     assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|secret/);
+  }
+});
+
+
+test('WebKit wrong-CA diagnostics remain failure-only and emit fixed labels', async () => {
+  const url = negative.caOrigin + '/';
+  const prefix = 'page.goto: Protocol error (Playwright.navigate): Unacceptable TLS certificate';
+  const cases = [
+    { message: prefix, outcome: 'webkit_protocol_form' },
+    { message: prefix + ' at ' + url, outcome: 'webkit_protocol_form' },
+    { message: prefix + '\nCall log: PRIVATE_SENTINEL', outcome: 'webkit_protocol_form' },
+    { message: prefix + ' at https://private.invalid/', outcome: 'webkit_token_present' },
+    { message: 'page.goto: Protocol error (Page.navigate): Unacceptable TLS certificate', outcome: 'webkit_token_present' },
+    { message: 'failure\nCall log: Unacceptable TLS certificate', outcome: 'webkit_token_present' },
+    { message: 'Unacceptable TLS certificate trailing', outcome: 'webkit_token_present' },
+    { message: 'Unacceptable TLS certificate_SUFFIX', outcome: 'webkit_no_fixed_token' },
+    { message: 'PREFIX_Unacceptable TLS certificate', outcome: 'webkit_no_fixed_token' },
+    { message: 'unacceptable TLS certificate', outcome: 'webkit_no_fixed_token' },
+    { message: 'SEC_ERROR_UNKNOWN_ISSUER', outcome: 'webkit_no_fixed_token' },
+    { message: 'net::ERR_CONNECTION_REFUSED PRIVATE_SENTINEL', outcome: 'webkit_no_fixed_token' },
+    { message: 'Unacceptable TLS certificate' + 'x'.repeat(8193), outcome: 'webkit_shape_oversize' },
+    { kind: 'raw-non-error', message: 'Unacceptable TLS certificate', outcome: 'webkit_shape_non_error' },
+    { kind: 'message-non-string', outcome: 'webkit_shape_non_string' },
+    { kind: 'message-missing', outcome: 'webkit_shape_non_string' },
+    { kind: 'message-getter-throws', outcome: 'webkit_shape_access_failed' },
+  ];
+  for (const item of cases) {
+    const type = fake('webkit', undefined, { reason: 'ca', kind: item.kind ?? 'raw-error', message: item.message });
+    const events = [];
+    await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
+      (stage, engine) => events.push({ stage, engine })), /^Error: SF08 browser trust preflight refused$/);
+    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_' + item.outcome, engine: 'webkit' });
+    assert.equal(type.trace.contextClosed && type.trace.closed, true);
+    assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|Unacceptable|Protocol|certificate/);
+  }
+});
+
+test('new WebKit failure checkpoints refuse other engines', () => {
+  for (const suffix of ['webkit_protocol_form', 'webkit_token_present', 'webkit_no_fixed_token',
+    'webkit_shape_non_error', 'webkit_shape_non_string', 'webkit_shape_oversize', 'webkit_shape_access_failed']) {
+    const stage = 'engine_wrong_ca_' + suffix;
+    assert.equal(FAILURE_STAGES.includes(stage), true);
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+    for (const engine of ['none', 'chromium', 'firefox']) {
+      assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+    }
   }
 });

@@ -109,6 +109,34 @@ function firefoxWrongCADiagnosticOutcome(error) {
   }
 }
 
+
+// Failure-only lexical facts. These labels never authorize a TLS refusal.
+function webkitWrongCADiagnosticOutcome(error, probeURL) {
+  try {
+    if (!(error instanceof Error)) return 'webkit_shape_non_error';
+    const own = Object.hasOwn(error, 'message');
+    const message = error.message;
+    if (!own || typeof message !== 'string') return 'webkit_shape_non_string';
+    if (message.length > 8192) return 'webkit_shape_oversize';
+    const token = TLS_ERROR.webkit.ca;
+    const firstLine = message.split('\n', 1)[0];
+    const prefix = 'page.goto: Protocol error (Playwright.navigate): ' + token;
+    if (firstLine === prefix || firstLine === prefix + ' at ' + probeURL)
+      return 'webkit_protocol_form';
+    let index = message.indexOf(token);
+    while (index >= 0) {
+      const end = index + token.length;
+      if ((index === 0 || !isASCIIIdentifierUnit(message.charCodeAt(index - 1))) &&
+          (end === message.length || !isASCIIIdentifierUnit(message.charCodeAt(end))))
+        return 'webkit_token_present';
+      index = message.indexOf(token, index + 1);
+    }
+    return 'webkit_no_fixed_token';
+  } catch {
+    return 'webkit_shape_access_failed';
+  }
+}
+
 function wrongCAFailureStage(outcome) {
   switch (outcome) {
     case 'response_received': return 'engine_wrong_ca_response_received';
@@ -127,6 +155,13 @@ function wrongCAFailureStage(outcome) {
     case 'shape_non_string': return 'engine_wrong_ca_shape_non_string';
     case 'shape_oversize': return 'engine_wrong_ca_shape_oversize';
     case 'shape_access_failed': return 'engine_wrong_ca_shape_access_failed';
+    case 'webkit_protocol_form': return 'engine_wrong_ca_webkit_protocol_form';
+    case 'webkit_token_present': return 'engine_wrong_ca_webkit_token_present';
+    case 'webkit_no_fixed_token': return 'engine_wrong_ca_webkit_no_fixed_token';
+    case 'webkit_shape_non_error': return 'engine_wrong_ca_webkit_shape_non_error';
+    case 'webkit_shape_non_string': return 'engine_wrong_ca_webkit_shape_non_string';
+    case 'webkit_shape_oversize': return 'engine_wrong_ca_webkit_shape_oversize';
+    case 'webkit_shape_access_failed': return 'engine_wrong_ca_webkit_shape_access_failed';
     default: return 'engine_wrong_ca_unknown';
   }
 }
@@ -300,6 +335,8 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
             failureOutcome = wrongCAFailureOutcome(error, name, probeURL);
             if (failureOutcome === 'unknown' && name === 'firefox') {
               failureOutcome = firefoxWrongCADiagnosticOutcome(error);
+            } else if (failureOutcome === 'unknown' && name === 'webkit') {
+              failureOutcome = webkitWrongCADiagnosticOutcome(error, probeURL);
             }
             rejected = failureOutcome === 'expected_rejection';
           } else {
