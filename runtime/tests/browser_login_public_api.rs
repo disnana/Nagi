@@ -545,9 +545,9 @@ async fn input_and_strict_json_rejections_do_not_consume_or_call_verifier() {
         let set_cookie_count = good.values("set-cookie").len();
         let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
         let handler_calls = f.stats.handler.load(Ordering::SeqCst);
-        let cancelled = f.stats.cancelled.load(Ordering::SeqCst);
+        let mode6_cancel_seen = f.stats.cancelled.load(Ordering::SeqCst);
         eprintln!(
-            "browser_login_public_api_diag case=strict_json_valid phase=final_response status={} status_overflow={} body_bytes={} body_bytes_overflow={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} cancelled={} cancelled_overflow={}",
+            "sf03_browser_failure_counters_v1 case=strict_json_valid phase=final_response status={} status_overflow={} body_bytes={} body_bytes_overflow={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} mode6_cancel_seen={} mode6_cancel_seen_overflow={}",
             status.min(999),
             status > 999,
             body_bytes.min(8193),
@@ -562,8 +562,8 @@ async fn input_and_strict_json_rejections_do_not_consume_or_call_verifier() {
             handler_calls > 1023,
             f.stats.claim_committed.load(Ordering::SeqCst),
             f.stats.issue_committed.load(Ordering::SeqCst),
-            cancelled.min(1023),
-            cancelled > 1023,
+            mode6_cancel_seen.min(1023),
+            mode6_cancel_seen > 1023,
         );
     }
     assert!(good.status == 200);
@@ -1035,9 +1035,20 @@ async fn wire_body_cap_is_independent_of_db_quota_and_checked_before_claim() {
             let set_cookie_count = r.values("set-cookie").len();
             let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
             let handler_calls = f.stats.handler.load(Ordering::SeqCst);
-            let cancelled = f.stats.cancelled.load(Ordering::SeqCst);
+            let mode6_cancel_seen = f.stats.cancelled.load(Ordering::SeqCst);
             eprintln!(
-            "browser_login_public_api_diag case=wire_body_cap phase=exact_body_response iteration={} status={} status_overflow={} body_bytes={} body_bytes_overflow={} expected_body_bytes={} expected_body_bytes_overflow={} body_matches={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} cancelled={} cancelled_overflow={}",
+                "browser_login_public_api_diag case=wire_body_cap phase=exact_body_response iteration={} status={} body_bytes={} expected_body_bytes={} body_matches={} set_cookie_count={} auth_cookie={} deletion={}",
+                iteration,
+                r.status,
+                r.body.len(),
+                cap.len(),
+                r.body == cap,
+                r.values("set-cookie").len(),
+                r.auth_cookie(),
+                r.deletion(),
+            );
+            eprintln!(
+                "sf03_browser_failure_counters_v1 case=wire_body_cap phase=exact_body_response iteration={} status={} status_overflow={} body_bytes={} body_bytes_overflow={} expected_body_bytes={} expected_body_bytes_overflow={} body_matches={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} mode6_cancel_seen={} mode6_cancel_seen_overflow={}",
                 iteration,
                 status.min(999),
                 status > 999,
@@ -1056,8 +1067,8 @@ async fn wire_body_cap_is_independent_of_db_quota_and_checked_before_claim() {
                 handler_calls > 1023,
                 f.stats.claim_committed.load(Ordering::SeqCst),
                 f.stats.issue_committed.load(Ordering::SeqCst),
-                cancelled.min(1023),
-                cancelled > 1023,
+                mode6_cancel_seen.min(1023),
+                mode6_cancel_seen > 1023,
             );
         }
         assert!(r.status == 200 && r.body == cap && r.auth_cookie() && r.deletion());

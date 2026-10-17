@@ -91,11 +91,54 @@ OWNED_STATE_CI_ADDITIONS = (
     '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners\n',
     '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send\n')
 
+BROWSER_COUNTER_PROFILE_STEP = r"""      - name: Compare BrowserLogin failure cases alone and with the parallel public suite
+        shell: bash
+        run: |
+          set +e
+          run_probe() {
+            local profile="$1"
+            local mode="$2"
+            shift 2
+            local -a pipeline_status
+            CARGO_TERM_COLOR=never "$@" 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py "$mode"
+            pipeline_status=("${PIPESTATUS[@]}")
+            local cargo_exit="${pipeline_status[0]:-1}"
+            local inventory_exit="${pipeline_status[1]:-1}"
+            printf "browser_counter_probe profile=%s cargo_exit=%s inventory_exit=%s\n" "$profile" "$cargo_exit" "$inventory_exit"
+            if [ "$cargo_exit" -ne 0 ] || [ "$inventory_exit" -ne 0 ]; then
+              return 1
+            fi
+            return 0
+          }
+          if ! run_probe compile browser-counter-compile cargo test --locked -p nagi-runtime --test browser_login_public_api --no-run; then
+            echo "browser_counter_probe stop=compile"
+            exit 1
+          fi
+          if ! run_probe list browser-counter-list cargo test --locked -p nagi-runtime --test browser_login_public_api -- --list; then
+            echo "browser_counter_probe stop=list"
+            exit 1
+          fi
+          profile_failed=0
+          if ! run_probe single-strict browser-counter-strict cargo test --locked -p nagi-runtime --test browser_login_public_api input_and_strict_json_rejections_do_not_consume_or_call_verifier -- --exact; then
+            profile_failed=1
+          fi
+          if ! run_probe single-wire browser-counter-wire cargo test --locked -p nagi-runtime --test browser_login_public_api wire_body_cap_is_independent_of_db_quota_and_checked_before_claim -- --exact; then
+            profile_failed=1
+          fi
+          if ! run_probe parallel-ten browser-counter-parallel cargo test --locked -p nagi-runtime --test browser_login_public_api; then
+            profile_failed=1
+          fi
+          exit "$profile_failed"
+"""
+
 PRIVATE_CORE_COLOR_COMMAND = '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"\n'
 PRIVATE_CORE_COLOR_BASELINE = '          cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"\n'
 
 
 def inverse_workflow(source):
+    if source.count(BROWSER_COUNTER_PROFILE_STEP) != 1:
+        raise ValueError('BrowserLogin counter profile step mismatch')
+    source = source.replace(BROWSER_COUNTER_PROFILE_STEP, '')
     if source.count(PRIVATE_CORE_COLOR_COMMAND) != 2:
         raise ValueError("private-core color command mismatch")
     source = source.replace(PRIVATE_CORE_COLOR_COMMAND, PRIVATE_CORE_COLOR_BASELINE)

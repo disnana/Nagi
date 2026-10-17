@@ -99,7 +99,271 @@ EXPECTED = {
 }
 
 
+# BrowserLogin comparison profiles are an independent fixed inventory. They do
+# not alter the inherited SF07 native 83-case expectation table.
+BROWSER_COUNTER_CASES = (
+    "public_login_claims_once_then_named_verifier_issue_and_appended_cookies",
+    "input_and_strict_json_rejections_do_not_consume_or_call_verifier",
+    "committed_claim_stays_consumed_on_verifier_error_panic_and_deadline",
+    "issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cookie",
+    "wire_body_cap_is_independent_of_db_quota_and_checked_before_claim",
+    "browser_profile_refuses_non_post_and_wrong_startup_origin",
+    "body_own_deadline_408_security_earlier_or_equal_504_before_claim",
+    "shutdown_cancels_actual_request_and_committed_token_cannot_return",
+    "closed_native_pool_refuses_before_verifier_and_session_capacity_never_redelivers",
+    "json_value_nodes_and_container_depth_accept_exact_bounds",
+)
+BROWSER_COUNTER_PROFILES = {
+    "browser-counter-strict": (BROWSER_COUNTER_CASES[1],),
+    "browser-counter-wire": (BROWSER_COUNTER_CASES[4],),
+    "browser-counter-parallel": BROWSER_COUNTER_CASES,
+}
+BROWSER_COUNTER_LIST = "browser-counter-list"
+BROWSER_COUNTER_COMPILE = "browser-counter-compile"
+BROWSER_COUNTER_PROFILE_NAMES = set(BROWSER_COUNTER_PROFILES) | {
+    BROWSER_COUNTER_LIST, BROWSER_COUNTER_COMPILE
+}
+BROWSER_COUNTER_TEST_ROW = re.compile(
+    r"test ([A-Za-z_][A-Za-z0-9_:]*) \.\.\. (ok|FAILED|ignored)\Z"
+)
+BROWSER_COUNTER_LIST_ROW = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)[:] test\Z")
+BROWSER_COUNTER_FOOTER = re.compile(r"([0-9]{1,4}) tests?, ([0-9]{1,4}) benchmarks\Z")
+BROWSER_COUNTER_FAMILY_MARKER = "sf03_browser_failure_counter"
+BROWSER_COUNTER_CARGO_TEST_FAILURE = (
+    "error: test failed, to rerun pass `-p nagi-runtime --test browser_login_public_api`"
+)
+BROWSER_COUNTER_SECRET_TAINT = re.compile(
+    r"(?i)\bsecret\b|\b(?:authorization|cookie|set-cookie|bearer|password|token|"
+    r"csrf[-_ ]token|session[-_ ]id)\s*[:=]"
+)
+BROWSER_COUNTER_STRICT_ROW = re.compile(
+    r"sf03_browser_failure_counters_v1 case=strict_json_valid phase=final_response "
+    r"status=(?P<status>0|[1-9][0-9]*) status_overflow=(?P<status_overflow>true|false) "
+    r"body_bytes=(?P<body_bytes>0|[1-9][0-9]*) body_bytes_overflow=(?P<body_bytes_overflow>true|false) "
+    r"set_cookie_count=(?P<set_cookie_count>0|[1-9][0-9]*) "
+    r"set_cookie_count_overflow=(?P<set_cookie_count_overflow>true|false) "
+    r"auth_cookie=(?P<auth_cookie>true|false) deletion=(?P<deletion>true|false) "
+    r"verifier_calls=(?P<verifier_calls>0|[1-9][0-9]*) "
+    r"verifier_calls_overflow=(?P<verifier_calls_overflow>true|false) "
+    r"handler_calls=(?P<handler_calls>0|[1-9][0-9]*) "
+    r"handler_calls_overflow=(?P<handler_calls_overflow>true|false) "
+    r"claim_committed=(?P<claim_committed>true|false) "
+    r"issue_committed=(?P<issue_committed>true|false) "
+    r"mode6_cancel_seen=(?P<mode6_cancel_seen>0|[1-9][0-9]*) "
+    r"mode6_cancel_seen_overflow=(?P<mode6_cancel_seen_overflow>true|false)\Z"
+)
+BROWSER_COUNTER_WIRE_ROW = re.compile(
+    r"sf03_browser_failure_counters_v1 case=wire_body_cap phase=exact_body_response "
+    r"iteration=(?P<iteration>0|[1-9][0-9]*) "
+    r"status=(?P<status>0|[1-9][0-9]*) status_overflow=(?P<status_overflow>true|false) "
+    r"body_bytes=(?P<body_bytes>0|[1-9][0-9]*) body_bytes_overflow=(?P<body_bytes_overflow>true|false) "
+    r"expected_body_bytes=(?P<expected_body_bytes>0|[1-9][0-9]*) "
+    r"expected_body_bytes_overflow=(?P<expected_body_bytes_overflow>true|false) "
+    r"body_matches=(?P<body_matches>true|false) "
+    r"set_cookie_count=(?P<set_cookie_count>0|[1-9][0-9]*) "
+    r"set_cookie_count_overflow=(?P<set_cookie_count_overflow>true|false) "
+    r"auth_cookie=(?P<auth_cookie>true|false) deletion=(?P<deletion>true|false) "
+    r"verifier_calls=(?P<verifier_calls>0|[1-9][0-9]*) "
+    r"verifier_calls_overflow=(?P<verifier_calls_overflow>true|false) "
+    r"handler_calls=(?P<handler_calls>0|[1-9][0-9]*) "
+    r"handler_calls_overflow=(?P<handler_calls_overflow>true|false) "
+    r"claim_committed=(?P<claim_committed>true|false) "
+    r"issue_committed=(?P<issue_committed>true|false) "
+    r"mode6_cancel_seen=(?P<mode6_cancel_seen>0|[1-9][0-9]*) "
+    r"mode6_cancel_seen_overflow=(?P<mode6_cancel_seen_overflow>true|false)\Z"
+)
+BROWSER_COUNTER_STRICT_RANGES = {
+    "status": 999, "body_bytes": 8193, "set_cookie_count": 1023,
+    "verifier_calls": 1023, "handler_calls": 1023, "mode6_cancel_seen": 1023,
+}
+BROWSER_COUNTER_WIRE_RANGES = {
+    "iteration": 1, "status": 999, "body_bytes": 8193,
+    "expected_body_bytes": 8193, "set_cookie_count": 1023,
+    "verifier_calls": 1023, "handler_calls": 1023, "mode6_cancel_seen": 1023,
+}
+BROWSER_COUNTER_FAILURE_CASES = {
+    "strict_json_valid": BROWSER_COUNTER_CASES[1],
+    "wire_body_cap": BROWSER_COUNTER_CASES[4],
+}
+
+
+def _browser_counter_text(raw, allow_test_failure=False):
+    if len(raw) > MAX_BYTES:
+        return None, "invalid"
+    raw = raw.replace(b"\r\n", b"\n")
+    if b"\r" in raw:
+        return None, "invalid"
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeError:
+        return None, "invalid"
+    for line in text.splitlines():
+        if re.match(r"^error(?:\[E[0-9]+\]|:)", line):
+            if allow_test_failure and line == BROWSER_COUNTER_CARGO_TEST_FAILURE:
+                continue
+            return text, "compile_failed"
+    return text, None
+
+
+def classify_browser_counter_list(raw):
+    text, state = _browser_counter_text(raw)
+    if state:
+        return state
+    if text is None:
+        return "invalid"
+    entries = [match.group(1) for line in text.splitlines()
+               if (match := BROWSER_COUNTER_LIST_ROW.fullmatch(line))]
+    footers = [match.groups() for line in text.splitlines()
+               if (match := BROWSER_COUNTER_FOOTER.fullmatch(line))]
+    if not entries and not footers:
+        return "unavailable"
+    if (len(entries) != len(BROWSER_COUNTER_CASES)
+            or len(set(entries)) != len(BROWSER_COUNTER_CASES)
+            or set(entries) != set(BROWSER_COUNTER_CASES)
+            or footers != [(str(len(BROWSER_COUNTER_CASES)), "0")]):
+        return "invalid"
+    return "passed"
+
+
+def _browser_counter_sample(line, mode):
+    strict_match = BROWSER_COUNTER_STRICT_ROW.fullmatch(line)
+    wire_match = BROWSER_COUNTER_WIRE_ROW.fullmatch(line)
+    if bool(strict_match) == bool(wire_match):
+        return None
+    match = strict_match or wire_match
+    case = "strict_json_valid" if strict_match else "wire_body_cap"
+    allowed = {
+        "browser-counter-strict": {"strict_json_valid"},
+        "browser-counter-wire": {"wire_body_cap"},
+        "browser-counter-parallel": {"strict_json_valid", "wire_body_cap"},
+    }.get(mode, set())
+    if case not in allowed:
+        return None
+    ranges = BROWSER_COUNTER_STRICT_RANGES if strict_match else BROWSER_COUNTER_WIRE_RANGES
+    sample = {"case": case,
+              "phase": "final_response" if strict_match else "exact_body_response"}
+    seen = {"case", "phase"}
+    for name, raw_value in match.groupdict().items():
+        if name in seen:
+            return None
+        seen.add(name)
+        if name in ranges:
+            if len(raw_value) > len(str(ranges[name])):
+                return None
+            value = int(raw_value)
+            if value > ranges[name]:
+                return None
+        elif raw_value in ("true", "false"):
+            value = raw_value == "true"
+        else:
+            return None
+        sample[name] = value
+    return sample
+
+
+def _browser_counter_samples(text, mode, cases):
+    lines = [line for line in text.splitlines()
+             if BROWSER_COUNTER_FAMILY_MARKER in line]
+    if not lines:
+        return "absent", ()
+    if BROWSER_COUNTER_SECRET_TAINT.search(text):
+        return "unavailable", ()
+    failed = {name for name, status in cases if status == "failed"}
+    samples = []
+    identities = set()
+    for line in lines:
+        sample = _browser_counter_sample(line, mode)
+        if sample is None or BROWSER_COUNTER_FAILURE_CASES[sample["case"]] not in failed:
+            return "unavailable", ()
+        identity = (sample["case"], sample.get("iteration"))
+        if identity in identities:
+            return "unavailable", ()
+        identities.add(identity)
+        samples.append(sample)
+    case_order = {"strict_json_valid": 0, "wire_body_cap": 1}
+    samples.sort(key=lambda sample: (case_order[sample["case"]], sample.get("iteration", -1)))
+    return "present", tuple(samples)
+
+
+def _browser_counter_profile_projection(raw, mode):
+    expected = BROWSER_COUNTER_PROFILES.get(mode)
+    result = {"state": "invalid", "cases": None,
+              "counter_state": "unavailable", "samples": ()}
+    if expected is None:
+        return result
+    text, state = _browser_counter_text(raw, allow_test_failure=True)
+    if state:
+        result["state"] = state
+        return result
+    if text is None:
+        return result
+    count = len(expected)
+    filtered = len(BROWSER_COUNTER_CASES) - count
+    running = re.findall(r"(?m)^running ([0-9]{1,4}) tests?$", text)
+    rows = [match.groups() for line in text.splitlines()
+            if (match := BROWSER_COUNTER_TEST_ROW.fullmatch(line))]
+    test_lines = [line for line in text.splitlines()
+                  if line.startswith("test ") and not line.startswith("test result:")]
+    summaries = re.findall(r"(?m)^test result: ([^\n]+)$", text)
+    if not summaries:
+        result["state"] = "unavailable"
+        return result
+    if (running != [str(count)] or len(test_lines) != count or len(rows) != count
+            or {name for name, _ in rows} != set(expected)
+            or len({name for name, _ in rows}) != count
+            or any(status == "ignored" for _, status in rows)
+            or len(summaries) != 1):
+        return result
+    failures = sum(status == "FAILED" for _, status in rows)
+    if failures == 0:
+        pattern = (rf"ok\. {count} passed; 0 failed; 0 ignored; 0 measured; "
+                   rf"{filtered} filtered out; finished in [0-9.]+s")
+        if not re.fullmatch(pattern, summaries[0]):
+            return result
+    else:
+        pattern = (rf"FAILED\. {count-failures} passed; {failures} failed; 0 ignored; "
+                   rf"0 measured; {filtered} filtered out; finished in [0-9.]+s")
+        if not re.fullmatch(pattern, summaries[0]):
+            return result
+    failure_footers = text.splitlines().count(BROWSER_COUNTER_CARGO_TEST_FAILURE)
+    if failure_footers > 1 or (failure_footers and failures == 0):
+        return result
+    case_states = {name: status for name, status in rows}
+    cases = tuple((name, "failed" if case_states[name] == "FAILED" else "passed")
+                  for name in expected)
+    result["cases"] = cases
+    result["state"] = "test_failed" if failures else "passed"
+    if BROWSER_COUNTER_SECRET_TAINT.search(text):
+        result["state"] = "invalid"
+        return result
+    counter_state, samples = _browser_counter_samples(text, mode, cases)
+    result["counter_state"] = counter_state
+    result["samples"] = samples
+    if counter_state == "unavailable":
+        result["state"] = "invalid"
+    return result
+
+
+def classify_browser_counter_profile(raw, mode):
+    return _browser_counter_profile_projection(raw, mode)["state"]
+
+
+def classify_browser_counter_compile(raw):
+    text, state = _browser_counter_text(raw)
+    if state:
+        return state
+    if text is None:
+        return "invalid"
+    return "compiled"
+
+
 def classify(raw, mode):
+    if mode == BROWSER_COUNTER_LIST:
+        return classify_browser_counter_list(raw)
+    if mode == BROWSER_COUNTER_COMPILE:
+        return classify_browser_counter_compile(raw)
+    if mode in BROWSER_COUNTER_PROFILES:
+        return classify_browser_counter_profile(raw, mode)
     if mode not in EXPECTED or len(raw) > MAX_BYTES:
         return "invalid"
     raw = raw.replace(b"\r\n", b"\n")
@@ -164,12 +428,45 @@ def catalog_failure_projection(raw):
     return tuple("failed" if states[name] == "FAILED" else "passed" for name in expected)
 
 
+def _browser_counter_sample_line(sample):
+    parts = []
+    for name, value in sample.items():
+        if isinstance(value, bool):
+            rendered = "true" if value else "false"
+        else:
+            rendered = str(value)
+        parts.append(name + "=" + rendered)
+    return "sf07_browser_counter_sample " + " ".join(parts)
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) == 2 else ""
     raw = sys.stdin.buffer.read(MAX_BYTES + 1)
+    label = mode if mode in EXPECTED or mode in BROWSER_COUNTER_PROFILE_NAMES else "invalid"
+    if mode in BROWSER_COUNTER_PROFILES:
+        projection = _browser_counter_profile_projection(raw, mode)
+        state = projection["state"]
+        print("sf07_checkpoint scope=" + label + " state=" + state)
+        cases = projection["cases"]
+        if cases is None:
+            print("sf07_browser_cases state=unavailable")
+        else:
+            print("sf07_browser_cases state=complete count=" + str(len(cases)))
+            for name, case_state in cases:
+                print("sf07_browser_case name=" + name + " state=" + case_state)
+        counter_state = projection["counter_state"]
+        if counter_state == "present":
+            print("sf07_browser_counters state=present count=" + str(len(projection["samples"])))
+            for sample in projection["samples"]:
+                print(_browser_counter_sample_line(sample))
+        elif counter_state == "absent":
+            print("sf07_browser_counters state=absent count=0")
+        else:
+            print("sf07_browser_counters state=unavailable")
+        return 0 if state == "passed" else 1
+
     state = classify(raw, mode)
     # Both rendered fields are fixed enums, never values taken from the log.
-    label = mode if mode in EXPECTED else "invalid"
     print("sf07_checkpoint scope=" + label + " state=" + state)
     if mode == "catalog-retained" and state == "test_failed":
         projection = catalog_failure_projection(raw)
@@ -178,7 +475,7 @@ def main():
         else:
             print("sf07_catalog_diagnostic state=classified receipt=" + projection[0]
                   + " preallocation=" + projection[1] + " excess_capacity=" + projection[2])
-    return 0 if state == "passed" else 1
+    return 0 if state == "passed" or state == "compiled" else 1
 
 
 if __name__ == "__main__":

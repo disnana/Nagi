@@ -1,5 +1,6 @@
 """B1/CORS5 source inverses and bounded native9 CI summary; no native proof."""
 import hashlib
+import inspect
 from pathlib import Path
 import re
 import sys
@@ -99,9 +100,71 @@ def inverse_stage(source):
     return source
 
 
+PUBLIC_STRICT_COUNTER_FRAGMENT = '''if good.status != 200 {
+    let status = good.status;
+    let body_bytes = good.body.len();
+    let set_cookie_count = good.values("set-cookie").len();
+    let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+    let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+    let mode6_cancel_seen = f.stats.cancelled.load(Ordering::SeqCst);
+    eprintln!(
+        "sf03_browser_failure_counters_v1 case=strict_json_valid phase=final_response status={} status_overflow={} body_bytes={} body_bytes_overflow={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} mode6_cancel_seen={} mode6_cancel_seen_overflow={}",
+        status.min(999),
+        status > 999,
+        body_bytes.min(8193),
+        body_bytes > 8193,
+        set_cookie_count.min(1023),
+        set_cookie_count > 1023,
+        good.auth_cookie(),
+        good.deletion(),
+        verifier_calls.min(1023),
+        verifier_calls > 1023,
+        handler_calls.min(1023),
+        handler_calls > 1023,
+        f.stats.claim_committed.load(Ordering::SeqCst),
+        f.stats.issue_committed.load(Ordering::SeqCst),
+        mode6_cancel_seen.min(1023),
+        mode6_cancel_seen > 1023,
+    );
+}'''
+PUBLIC_WIRE_COUNTER_LOCALS_FRAGMENT = '''let status = r.status;
+let body_bytes = r.body.len();
+let expected_body_bytes = cap.len();
+let set_cookie_count = r.values("set-cookie").len();
+let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+let mode6_cancel_seen = f.stats.cancelled.load(Ordering::SeqCst);'''
+PUBLIC_WIRE_COUNTER_EPRINT_FRAGMENT = '''eprintln!(
+    "sf03_browser_failure_counters_v1 case=wire_body_cap phase=exact_body_response iteration={} status={} status_overflow={} body_bytes={} body_bytes_overflow={} expected_body_bytes={} expected_body_bytes_overflow={} body_matches={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} mode6_cancel_seen={} mode6_cancel_seen_overflow={}",
+    iteration,
+    status.min(999),
+    status > 999,
+    body_bytes.min(8193),
+    body_bytes > 8193,
+    expected_body_bytes.min(8193),
+    expected_body_bytes > 8193,
+    r.body == cap,
+    set_cookie_count.min(1023),
+    set_cookie_count > 1023,
+    r.auth_cookie(),
+    r.deletion(),
+    verifier_calls.min(1023),
+    verifier_calls > 1023,
+    handler_calls.min(1023),
+    handler_calls > 1023,
+    f.stats.claim_committed.load(Ordering::SeqCst),
+    f.stats.issue_committed.load(Ordering::SeqCst),
+    mode6_cancel_seen.min(1023),
+    mode6_cancel_seen > 1023,
+);'''
+
+
 def inverse_public(source):
-    """Remove exactly two strengthening additions, without projecting out diag."""
+    """Remove only the two fixed counter branches, then undo two strengthening additions."""
     source = norm(source)
+    source = rewrite(source, PUBLIC_STRICT_COUNTER_FRAGMENT, '')
+    source = rewrite(source, PUBLIC_WIRE_COUNTER_LOCALS_FRAGMENT, '')
+    source = rewrite(source, PUBLIC_WIRE_COUNTER_EPRINT_FRAGMENT, '')
     # This exact zero-row assertion is new only in the committed retry504 arm.
     source = rewrite(source, '''assert!(f.stats.handler.load(Ordering::SeqCst) == 0);
         assert!(number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == 0);
@@ -125,6 +188,16 @@ B1_STEP = """      - name: Check owned BrowserLogin business stage and cancellat
 """
 
 CHILD_TOKENS = {'dispatch': 'e15ba0fc1b4f45cabc893904d0028d51d2cda49edb8d83e236f3efc5d78e263f', 'stage': '61dbb99d727253ac4050226806d00e6e6807a2e1cfee93cdcd75c6a756c358cc', 'public': '95e8a9f83c93c7bb03ddff48d0d01ef104985b3e5cf5621c4d5369fbef5a2378'}
+INVERSE_PUBLIC_SOURCE_SHA256 = 'cc30e6fe54b83806728c40215b091ab5495e0c6a828cdeee033b623f9a134dbf'
+INVERSE_PUBLIC_HELPER_SHA256 = {
+    'norm': '2d899b7072c49d72e673447a8fdce99f807934659cc05f379071ff484f96dca8',
+    'rewrite': '8bd219920f1aadf84e1d3d75ffcc5d23fb1c1a21383d6ab977e9c54a0213374b',
+}
+INVERSE_PUBLIC_FRAGMENT_SHA256 = {
+    'strict': 'e15dc95d6cdaa83638283ed191a09f2e917df9ccd44bd94af02203c777b03e9b',
+    'wire_locals': 'fe27fc5dac6c5975072f7d6e5aa087f3baea4f8fc1c355a5d91b489d2b9d9266',
+    'wire_eprintln': '2f88404d46f468c32dc7c4a321dd4cea7a6ac0324aca85aa939751f51599ab48',
+}
 CHILD_BYTES = {'.github/workflows/ci.yml': 'd6a2753c59ad16e9ab03af39abd09b7e4b30403f52429da4766a7d4c345ae202', 'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6', 'runtime/src/auth/prelogin/browser.rs': '2428b3e1cdc49dbd922c9b9ce026192972ded7bfa04ae6b82f704d0cc1301f74', 'runtime/src/auth/prelogin/http_bridge.rs': 'd64e052c191e0b8c3853feb07cf5b1e04f0c1d57da2c399099cd7dfc5a031d55', 'scripts/ci/session_private_deadline_diagnostic.py': '1d0dd3c92e07c374de80d4f968c101141eb6290ba2b935bf9c06dcb85ac60913', 'scripts/ci/browser_login_stage_coverage.py': '19ef03623734ac9bbb505b02cab555fa8fd96a09fbc23dcda6f06f691b6ac33a'}
 
 def native_summary(raw):
@@ -191,10 +264,93 @@ class BackportSourceTests(unittest.TestCase):
                       'assert!(response_ok)', 'assert!(retry_response_ok)', 'assert!(replay_proof_ok)'):
             self.assertIn(token, source)
 
+    def test_public_inverse_source_hash_and_frozen_token_binding(self):
+        self.assertEqual(CHILD_TOKENS['public'], '95e8a9f83c93c7bb03ddff48d0d01ef104985b3e5cf5621c4d5369fbef5a2378')
+        self.assertEqual(
+            hashlib.sha256(inspect.getsource(inverse_public).encode()).hexdigest(),
+            INVERSE_PUBLIC_SOURCE_SHA256,
+        )
+        helpers = {'norm': norm, 'rewrite': rewrite}
+        self.assertEqual(
+            {name: hashlib.sha256(inspect.getsource(function).encode()).hexdigest() for name, function in helpers.items()},
+            INVERSE_PUBLIC_HELPER_SHA256,
+        )
+        fragments = {
+            'strict': PUBLIC_STRICT_COUNTER_FRAGMENT,
+            'wire_locals': PUBLIC_WIRE_COUNTER_LOCALS_FRAGMENT,
+            'wire_eprintln': PUBLIC_WIRE_COUNTER_EPRINT_FRAGMENT,
+        }
+        self.assertEqual(
+            {name: hashlib.sha256(value.encode()).hexdigest() for name, value in fragments.items()},
+            INVERSE_PUBLIC_FRAGMENT_SHA256,
+        )
+
+    def test_public_inverse_fails_closed_if_counter_fragments_are_deleted_or_changed(self):
+        source = read("runtime/tests/browser_login_public_api.rs")
+        mutants = (
+            source.replace('sf03_browser_failure_counters_v1 case=strict_json_valid', '', 1),
+            source.replace('sf03_browser_failure_counters_v1 case=wire_body_cap', '', 1),
+            source.replace('expected_body_bytes_overflow={}', '', 1),
+        )
+        for mutant in mutants:
+            with self.subTest(mutant_hash=hashlib.sha256(mutant.encode()).hexdigest()):
+                with self.assertRaises(ValueError):
+                    inverse_public(mutant)
+
     def test_workflow_is_only_two_required_native_steps_and_frozen_sources_remain(self):
         workflow = read('.github/workflows/ci.yml')
+        profile_step = projection.BROWSER_COUNTER_PROFILE_STEP
         self.assertEqual(workflow.count(B1_STEP), 2)
-        self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).replace(B1_STEP, '').encode()).hexdigest(), CHILD_BYTES['.github/workflows/ci.yml'])
+        self.assertEqual(workflow.count(profile_step), 1)
+        _, linux_tail = workflow.split('  linux:\n', 1)
+        linux_job, following_jobs = linux_tail.split('\n  release-plan:', 1)
+        self.assertEqual(linux_job.count(profile_step), 1)
+        self.assertNotIn(profile_step, following_jobs)
+        setup_node = ("      - uses: actions/setup-node@v4\n"
+                      "        with:\n"
+                      "          node-version: '22'\n")
+        first_test = '      - name: Check call_member_ recovery first with exact result on the target platform\n'
+        sf02_test = '      - name: Check SF02 public Session runtime and one-use delivery before other checks\n'
+        self.assertEqual(linux_job.count(setup_node), 1)
+        self.assertEqual(linux_job.count(first_test), 1)
+        self.assertEqual(linux_job.count(sf02_test), 1)
+        self.assertTrue(linux_job.split(setup_node, 1)[1].startswith(profile_step + first_test))
+        self.assertLess(linux_job.index(profile_step), linux_job.index(first_test))
+        self.assertLess(linux_job.index(profile_step), linux_job.index(sf02_test))
+        broad_suite = '      - run: cargo test --locked\n'
+        self.assertEqual(linux_job.count(broad_suite), 1)
+        self.assertLess(linux_job.index(profile_step), linux_job.index(broad_suite))
+        self.assertIn('input_and_strict_json_rejections_do_not_consume_or_call_verifier -- --exact', profile_step)
+        self.assertIn('wire_body_cap_is_independent_of_db_quota_and_checked_before_claim -- --exact', profile_step)
+        commands = (
+            'if ! run_probe compile browser-counter-compile cargo test --locked -p nagi-runtime --test browser_login_public_api --no-run; then',
+            'if ! run_probe list browser-counter-list cargo test --locked -p nagi-runtime --test browser_login_public_api -- --list; then',
+            'if ! run_probe single-strict browser-counter-strict cargo test --locked -p nagi-runtime --test browser_login_public_api input_and_strict_json_rejections_do_not_consume_or_call_verifier -- --exact; then',
+            'if ! run_probe single-wire browser-counter-wire cargo test --locked -p nagi-runtime --test browser_login_public_api wire_body_cap_is_independent_of_db_quota_and_checked_before_claim -- --exact; then',
+            'if ! run_probe parallel-ten browser-counter-parallel cargo test --locked -p nagi-runtime --test browser_login_public_api; then',
+        )
+        for command in commands:
+            self.assertEqual(profile_step.count(command), 1)
+        cargo_command = 'cargo test --locked -p nagi-runtime --test browser_login_public_api'
+        self.assertEqual(profile_step.count(cargo_command), 5)
+        self.assertEqual(profile_step.count('CARGO_TERM_COLOR=never'), 1)
+        self.assertIn('CARGO_TERM_COLOR=never "$@" 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py "$mode"', profile_step)
+        self.assertNotIn('RUSTFLAGS', profile_step)
+        self.assertNotIn('--test-threads', profile_step)
+        restored = projection.inverse_workflow(workflow)
+        self.assertEqual(hashlib.sha256(restored.replace(B1_STEP, '').encode()).hexdigest(), CHILD_BYTES['.github/workflows/ci.yml'])
+        mutants = (
+            profile_step.replace('-- --list', '--', 1),
+            profile_step.replace(' -- --exact', '', 1),
+            profile_step.replace('| python -B scripts/ci/sf07_checkpoint_summary.py \"$mode\"', '| cat', 1),
+            profile_step.replace('CARGO_TERM_COLOR=never "$@"', '"$@"', 1),
+            profile_step.replace('exit "$profile_failed"', 'true', 1),
+        )
+        for mutant in mutants:
+            self.assertNotEqual(mutant, profile_step)
+            changed = workflow.replace(profile_step, mutant, 1)
+            with self.assertRaises(ValueError):
+                projection.inverse_workflow(changed)
         for path, expected in CHILD_BYTES.items():
             if path != '.github/workflows/ci.yml':
                 value = read(path)
@@ -235,6 +391,8 @@ class BackportSourceTests(unittest.TestCase):
             )),
             'public': ('runtime/tests/browser_login_public_api.rs', inverse_public, (
                 ('assert!(response_ok)', 'assert!(true)'),
+                ('assert!(good.status == 200)', 'assert!(good.status == 201)'),
+                ('Duration::from_millis(400)', 'Duration::from_millis(401)'),
                 ('X-CSRF-Token', 'X-CSRF-TokeX'),
             )),
         }

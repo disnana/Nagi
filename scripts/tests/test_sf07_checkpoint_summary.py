@@ -225,5 +225,223 @@ class CatalogFailureDiagnosticTests(unittest.TestCase):
         self.assertEqual(result.stderr, b"")
 
 
+
+def browser_list_fixture(names=None, benchmarks=0):
+    names = summary.BROWSER_COUNTER_CASES if names is None else tuple(names)
+    rows = "".join(name + ": test\n" for name in names)
+    return (rows + f"{len(names)} tests, {benchmarks} benchmarks\n").encode()
+
+
+def browser_profile_fixture(mode, failures=()):
+    names = summary.BROWSER_COUNTER_PROFILES[mode]
+    failures = set(failures)
+    count = len(names)
+    filtered = len(summary.BROWSER_COUNTER_CASES) - count
+    running = "test" if count == 1 else "tests"
+    rows = "".join("test " + name + " ... " + ("FAILED" if name in failures else "ok") + "\n"
+                    for name in names)
+    if failures:
+        status = f"FAILED. {count-len(failures)} passed; {len(failures)} failed"
+    else:
+        status = f"ok. {count} passed; 0 failed"
+    return (f"running {count} {running}\n" + rows
+            + f"test result: {status}; 0 ignored; 0 measured; {filtered} filtered out; finished in 0.01s\n").encode()
+
+
+def browser_strict_counter_line():
+    return ("sf03_browser_failure_counters_v1 case=strict_json_valid phase=final_response "
+            "status=403 status_overflow=false body_bytes=2 body_bytes_overflow=false "
+            "set_cookie_count=0 set_cookie_count_overflow=false auth_cookie=false deletion=false "
+            "verifier_calls=0 verifier_calls_overflow=false handler_calls=0 handler_calls_overflow=false "
+            "claim_committed=false issue_committed=false mode6_cancel_seen=0 mode6_cancel_seen_overflow=false")
+
+
+def browser_wire_counter_line(iteration=0):
+    return ("sf03_browser_failure_counters_v1 case=wire_body_cap phase=exact_body_response "
+            f"iteration={iteration} status=200 status_overflow=false body_bytes=192 body_bytes_overflow=false "
+            "expected_body_bytes=192 expected_body_bytes_overflow=false body_matches=true "
+            "set_cookie_count=2 set_cookie_count_overflow=false auth_cookie=true deletion=true "
+            "verifier_calls=1 verifier_calls_overflow=false handler_calls=1 handler_calls_overflow=false "
+            "claim_committed=true issue_committed=true mode6_cancel_seen=0 mode6_cancel_seen_overflow=false")
+
+
+def run_browser_cli(mode, raw):
+    return subprocess.run([sys.executable, "-B", str(SCRIPT), mode], input=raw, capture_output=True)
+
+
+class BrowserCounterProfileTests(unittest.TestCase):
+    def test_independent_inventory_keeps_original_sf07_expectation_count(self):
+        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 83)
+        self.assertEqual(len(summary.BROWSER_COUNTER_CASES), 10)
+        self.assertEqual(len(summary.BROWSER_COUNTER_PROFILES["browser-counter-strict"]), 1)
+        self.assertEqual(len(summary.BROWSER_COUNTER_PROFILES["browser-counter-wire"]), 1)
+        self.assertEqual(summary.BROWSER_COUNTER_PROFILES["browser-counter-strict"][0],
+                         "input_and_strict_json_rejections_do_not_consume_or_call_verifier")
+        self.assertEqual(summary.BROWSER_COUNTER_PROFILES["browser-counter-wire"][0],
+                         "wire_body_cap_is_independent_of_db_quota_and_checked_before_claim")
+
+    def test_closed_inventory_matches_all_ten_public_rust_tests(self):
+        source = (ROOT / "runtime/tests/browser_login_public_api.rs").read_text()
+        names = re.findall(r"#\[tokio::test\]\s*async fn ([a-zA-Z0-9_]+)\(", source)
+        self.assertEqual(len(names), 10)
+        self.assertEqual(set(names), set(summary.BROWSER_COUNTER_CASES))
+
+    def test_list_requires_all_ten_exact_unique_names_and_no_benchmarks(self):
+        raw = browser_list_fixture()
+        for value in (raw, raw.replace(b"\n", b"\r\n")):
+            self.assertEqual(summary.classify(raw if value == raw else value, summary.BROWSER_COUNTER_LIST), "passed")
+        first, second = summary.BROWSER_COUNTER_CASES[:2]
+        malformed = (
+            raw.replace(second.encode(), b"renamed_test"),
+            raw.replace(second.encode(), first.encode()),
+            raw.replace((summary.BROWSER_COUNTER_CASES[-1] + ": test\n").encode(), b""),
+            raw + b"foreign_test: test\n",
+            raw.replace(b"10 tests, 0 benchmarks", b"0 tests, 0 benchmarks"),
+            raw.replace(b"10 tests, 0 benchmarks", b"10 tests, 1 benchmarks"),
+        )
+        for value in malformed:
+            self.assertEqual(summary.classify(value, summary.BROWSER_COUNTER_LIST), "invalid")
+
+    def test_all_three_profiles_require_exact_rows_and_exact_summaries(self):
+        for mode in summary.BROWSER_COUNTER_PROFILES:
+            raw = browser_profile_fixture(mode)
+            for value in (raw, raw.replace(b"\n", b"\r\n")):
+                self.assertEqual(summary.classify(value, mode), "passed")
+        strict = browser_profile_fixture("browser-counter-strict")
+        single_bad = (
+            strict.replace(b"running 1 test", b"running 0 tests"),
+            strict.replace(summary.BROWSER_COUNTER_PROFILES["browser-counter-strict"][0].encode(), b"foreign_test"),
+            strict.replace(b"9 filtered out", b"8 filtered out"),
+            strict.replace(b"0 ignored", b"1 ignored"),
+            strict + b"test duplicate ... ok\n",
+            strict.replace(b"test result: ok.", b"test result: ok.", 1) + b"test result: ok. duplicate\n",
+        )
+        for value in single_bad:
+            self.assertEqual(summary.classify(value, "browser-counter-strict"), "invalid")
+        parallel = browser_profile_fixture("browser-counter-parallel")
+        self.assertEqual(summary.classify(parallel.replace(b"running 10 tests", b"running 9 tests"),
+                                          "browser-counter-parallel"), "invalid")
+        self.assertEqual(summary.classify(parallel.replace(b"10 passed; 0 failed", b"9 passed; 0 failed"),
+                                          "browser-counter-parallel"), "invalid")
+
+    def test_failure_profiles_remain_failures_only_after_complete_inventory(self):
+        strict = summary.BROWSER_COUNTER_PROFILES["browser-counter-strict"][0]
+        wire = summary.BROWSER_COUNTER_PROFILES["browser-counter-wire"][0]
+        self.assertEqual(summary.classify(browser_profile_fixture("browser-counter-strict", (strict,)),
+                                          "browser-counter-strict"), "test_failed")
+        self.assertEqual(summary.classify(browser_profile_fixture("browser-counter-parallel", (wire,)),
+                                          "browser-counter-parallel"), "test_failed")
+        failed = browser_profile_fixture("browser-counter-parallel", (wire,))
+        for value in (failed.replace(b"0 ignored", b"1 ignored"),
+                      failed.replace(b"wire_body_cap_is_independent_of_db_quota_and_checked_before_claim", b"foreign_test"),
+                      failed.replace(b"9 passed; 1 failed", b"10 passed; 1 failed"),
+                      failed.replace(b"0 filtered out", b"1 filtered out")):
+            self.assertEqual(summary.classify(value, "browser-counter-parallel"), "invalid")
+
+    def test_cli_renders_exact_failed_case_and_validated_strict_sample(self):
+        name = summary.BROWSER_COUNTER_PROFILES["browser-counter-strict"][0]
+        raw = (browser_profile_fixture("browser-counter-strict", (name,))
+               + browser_strict_counter_line().encode() + b"\n"
+               + summary.BROWSER_COUNTER_CARGO_TEST_FAILURE.encode() + b"\n")
+        expected = ("sf07_checkpoint scope=browser-counter-strict state=test_failed\n"
+                    "sf07_browser_cases state=complete count=1\n"
+                    "sf07_browser_case name=input_and_strict_json_rejections_do_not_consume_or_call_verifier state=failed\n"
+                    "sf07_browser_counters state=present count=1\n"
+                    "sf07_browser_counter_sample case=strict_json_valid phase=final_response status=403 status_overflow=false body_bytes=2 body_bytes_overflow=false set_cookie_count=0 set_cookie_count_overflow=false auth_cookie=false deletion=false verifier_calls=0 verifier_calls_overflow=false handler_calls=0 handler_calls_overflow=false claim_committed=false issue_committed=false mode6_cancel_seen=0 mode6_cancel_seen_overflow=false\n").encode()
+        for value in (raw, raw.replace(b"\n", b"\r\n")):
+            result = run_browser_cli("browser-counter-strict", value)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(normalize_cli_stdout(result.stdout), expected)
+            self.assertEqual(result.stderr, b"")
+
+    def test_cli_parallel_inventory_is_complete_and_absent_counters_are_explicit(self):
+        raw = browser_profile_fixture("browser-counter-parallel")
+        expected = [
+            "sf07_checkpoint scope=browser-counter-parallel state=passed",
+            "sf07_browser_cases state=complete count=10",
+        ]
+        expected.extend("sf07_browser_case name=" + name + " state=passed"
+                        for name in summary.BROWSER_COUNTER_CASES)
+        expected.append("sf07_browser_counters state=absent count=0")
+        result = run_browser_cli("browser-counter-parallel", raw.replace(b"\n", b"\r\n"))
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(normalize_cli_stdout(result.stdout), ("\n".join(expected) + "\n").encode())
+        self.assertEqual(result.stderr, b"")
+
+    def test_cli_parallel_failures_show_both_schemas_without_cross_field_inference(self):
+        strict_name, wire_name = (summary.BROWSER_COUNTER_CASES[index] for index in (1, 4))
+        raw = (browser_profile_fixture("browser-counter-parallel", (strict_name, wire_name))
+               + (browser_strict_counter_line() + "\n" + browser_wire_counter_line(1) + "\n"
+                  + browser_wire_counter_line(0) + "\n").encode()
+               + summary.BROWSER_COUNTER_CARGO_TEST_FAILURE.encode() + b"\n")
+        result = run_browser_cli("browser-counter-parallel", raw)
+        output = normalize_cli_stdout(result.stdout)
+        self.assertEqual(result.returncode, 1)
+        self.assertIsNotNone(output)
+        lines = output.decode().splitlines()
+        self.assertEqual(lines[0], "sf07_checkpoint scope=browser-counter-parallel state=test_failed")
+        self.assertEqual(lines[1], "sf07_browser_cases state=complete count=10")
+        cases = lines[2:12]
+        self.assertEqual(cases, ["sf07_browser_case name=" + name + " state=" +
+                                 ("failed" if name in (strict_name, wire_name) else "passed")
+                                 for name in summary.BROWSER_COUNTER_CASES])
+        self.assertEqual(lines[12], "sf07_browser_counters state=present count=3")
+        samples = lines[13:]
+        self.assertEqual(len(samples), 3)
+        self.assertTrue(samples[0].startswith("sf07_browser_counter_sample case=strict_json_valid "))
+        self.assertIn("iteration=0 ", samples[1])
+        self.assertIn("iteration=1 ", samples[2])
+        self.assertEqual(result.stderr, b"")
+
+    def test_cli_rejects_secret_duplicate_unknown_and_out_of_range_counter_lines(self):
+        strict_name, wire_name = (summary.BROWSER_COUNTER_CASES[index] for index in (1, 4))
+        base = (browser_profile_fixture("browser-counter-parallel", (strict_name, wire_name))
+                + (browser_strict_counter_line() + "\n" + browser_wire_counter_line(0) + "\n").encode())
+        valid_wire = browser_wire_counter_line(0).encode()
+        bad_inputs = (
+            base + b"SECRET cookie=/private/raw\n",
+            base + valid_wire + b"\n",
+            base + b"sf03_browser_failure_counters_v1 case=unknown phase=final_response secret=/private\n",
+            base + valid_wire.replace(b"status=200", b"status=1000") + b"\n",
+            base + b"sf03_browser_failure_counters_v2 case=wire_body_cap secret=/private\n",
+            base + b"sf03_browser_failure_counters_v1 case=wire_body_cap phase=exact_body_response iteration=0 status=200 status_overflow=false secret=/private\n",
+            base + b"sf03_browser_failure_counters_v1 case=wire_body_cap phase=exact_body_response iteration=0 status=200\n",
+            base + valid_wire.replace(b"status=200", b"status=" + b"9" * 5000) + b"\n",
+        )
+        for raw in bad_inputs:
+            with self.subTest(input_sha256=__import__("hashlib").sha256(raw).hexdigest()):
+                result = run_browser_cli("browser-counter-parallel", raw)
+                output = normalize_cli_stdout(result.stdout)
+                self.assertEqual(result.returncode, 1)
+                self.assertIsNotNone(output)
+                self.assertIn(b"sf07_checkpoint scope=browser-counter-parallel state=invalid\n", output)
+                self.assertIn(b"sf07_browser_cases state=complete count=10\n", output)
+                self.assertIn(b"sf07_browser_counters state=unavailable\n", output)
+                self.assertNotIn(b"/private", output + result.stderr)
+                self.assertNotIn(b"SECRET", output + result.stderr)
+                self.assertNotIn(b"secret=", output + result.stderr)
+                self.assertEqual(result.stderr, b"")
+
+    def test_cli_compile_error_and_oversize_remain_closed_failures(self):
+        self.assertEqual(summary.classify_browser_counter_compile(b"Finished test profile\n"), "compiled")
+        self.assertEqual(summary.classify_browser_counter_compile(b"error[E0382]: private/path\n"), "compile_failed")
+        self.assertEqual(summary.classify_browser_counter_compile(b"x" * (summary.MAX_BYTES + 1)), "invalid")
+        compile_result = run_browser_cli("browser-counter-compile", b"error[E0382]: SECRET/private/path\n")
+        self.assertEqual(compile_result.returncode, 1)
+        self.assertEqual(normalize_cli_stdout(compile_result.stdout),
+                         b"sf07_checkpoint scope=browser-counter-compile state=compile_failed\n")
+        self.assertEqual(compile_result.stderr, b"")
+        raw = b"x" * (summary.MAX_BYTES + 1)
+        result = run_browser_cli("browser-counter-parallel", raw)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(normalize_cli_stdout(result.stdout),
+                         b"sf07_checkpoint scope=browser-counter-parallel state=invalid\n"
+                         b"sf07_browser_cases state=unavailable\n"
+                         b"sf07_browser_counters state=unavailable\n")
+        self.assertNotIn(b"x", result.stdout + result.stderr)
+        self.assertEqual(result.stderr, b"")
+
+
+
 if __name__ == "__main__":
     unittest.main()
