@@ -158,9 +158,39 @@ class OwnedStateSummaryTests(unittest.TestCase):
         filters = {"lock": "security_sf07_private::owned_state_lock::tests::", "owners": "security_sf07_private::owned_state_owner_tests::",
                    "send": "http_server::response_send::owned_state_lock_tests::"}
         for mode, filter_ in filters.items():
-            command = f"cargo test --locked -p nagi-runtime --lib {filter_} 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py {mode}\n"
+            command = f"CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib {filter_} 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py {mode}\n"
             self.assertEqual(workflow.count(command), 2)
         self.assertEqual(workflow.count("cargo test --locked -p nagi-runtime --lib native_finish 2>&1 | python -B scripts/ci/session_native_finish_summary.py\n"), 2)
+
+    def test_fake_cargo_color_is_rejected_globally_and_passes_with_command_scoped_never(self):
+        host = {"linux": "Linux", "win32": "Windows", "darwin": "macOS"}[sys.platform]
+        environment = dict(os.environ, RUNNER_OS=host, CARGO_TERM_COLOR="always")
+        environment.pop("CARGO_BUILD_TARGET", None)
+        filters = {"lock": "security_sf07_private::owned_state_lock::tests::", "owners": "security_sf07_private::owned_state_owner_tests::",
+                   "send": "http_server::response_send::owned_state_lock_tests::"}
+        fake_cargo = '''cargo() {
+    if [ "${CARGO_TERM_COLOR-}" = "never" ]; then
+        printf '%s' "$FAKE_CARGO_PLAIN"
+    else
+        printf '%s' "$FAKE_CARGO_ANSI"
+    fi
+}
+'''
+        for mode, filter_ in filters.items():
+            with patch.dict(os.environ, environment, clear=True):
+                expected = gate.expected(mode)
+            plain = green(expected).decode("utf-8")
+            environment["FAKE_CARGO_PLAIN"] = plain
+            environment["FAKE_CARGO_ANSI"] = "\x1b[32m" + plain + "\x1b[0m"
+            for prefix, state, gate_code in (("", "invalid", 1), ("CARGO_TERM_COLOR=never ", "passed", 0)):
+                command = f"{prefix}cargo test --locked -p nagi-runtime --lib {filter_} 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py {mode}"
+                script = ("set -euo pipefail\n" + fake_cargo + "export CARGO_TERM_COLOR=always\nset +e\n" + command
+                          + "\nstatuses=(\"${PIPESTATUS[@]}\")\nprintf 'fake_pipeline_status cargo=%s summary=%s\\n' \"${statuses[0]}\" \"${statuses[1]}\"\n")
+                result = subprocess.run(["bash", "-c", script], cwd=ROOT, capture_output=True, text=True,
+                                        env=environment, timeout=15)
+                self.assertEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, f"sf07_owned_state scope={mode} state={state}\nfake_pipeline_status cargo=0 summary={gate_code}\n")
+                self.assertEqual(result.stderr, "")
 
     def test_workflow_inverse_removes_only_exact_additions_and_preserves_frozen_hash(self):
         p = projection()
@@ -172,6 +202,13 @@ class OwnedStateSummaryTests(unittest.TestCase):
                             workflow.replace(addition, addition.replace("python", "python -c pass", 1), 1)):
                 with self.assertRaises(ValueError):
                     p.inverse_workflow(changed)
+        for mode, filter_ in (("lock", "security_sf07_private::owned_state_lock::tests::"),
+                              ("owners", "security_sf07_private::owned_state_owner_tests::"),
+                              ("send", "http_server::response_send::owned_state_lock_tests::")):
+            command = f"          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib {filter_} 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py {mode}\n"
+            mutant = workflow.replace(command, command.replace("CARGO_TERM_COLOR=never ", "", 1), 1)
+            with self.assertRaises(ValueError):
+                p.inverse_workflow(mutant)
         changed = workflow.replace("set -euo pipefail", "set -eu pipefail", 1)
         self.assertNotEqual(hashlib.sha256(p.inverse_workflow(changed).encode()).hexdigest(),
                             "5d7923afbefb4108ccfaedfb2441cf8832aea38d25a683fd6cc1d62400783eb7")
