@@ -1,0 +1,68 @@
+# Candidate reusable job. Root must integrate source bundle at tools/sf08-browser
+# and audit before activation. No local container/image execution has occurred.
+name: SF08 isolated browser TLS
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  browser-tls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Require runner space without deleting existing data
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import shutil
+          assert shutil.disk_usage('/').free >= 12 * 1024**3, 'SF08 runner capacity refused'
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check browser probe and closed-diagnostic controls
+        working-directory: tools/sf08-browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test_preflight.mjs test_browser_stage.mjs
+          python -B -m unittest test_integration test_r2_regressions
+      - name: Actual three-engine TLS and business suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='mcr.microsoft.com/playwright@sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9'
+          rust_bin=$(dirname "$(rustup which rustc)")
+          rust_root=$(dirname "$rust_bin")
+          # Fresh container only: no host HOME/CAs/DNS/cache mounts or docker socket.
+          # Retain container on failure/success. No --rm or cleanup deletion.
+          name="nagi-sf08-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker create --name "$name" --platform linux/amd64 --init \
+            --tmpfs /run/nagi-sf08:rw,exec,nosuid,nodev,mode=0700,size=4g \
+            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/input,readonly" \
+            --mount "type=bind,src=$rust_root,dst=/opt/rust,readonly" \
+            --add-host app.example.invalid:127.0.0.1 \
+            --add-host sf08-wronghost.invalid:127.0.0.1 \
+            --env GITHUB_ACTIONS=true \
+            --env NAGI_SF08_EPHEMERAL=sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9 \
+            --env PYTHONDONTWRITEBYTECODE=1 \
+            --entrypoint /bin/sleep "$image" infinity
+          docker start "$name" >/dev/null
+          # CLI is not PID1. Nonzero docker exec fails the required job.
+          # Container stays alive so its tmpfs/profile data are retained privately
+          # until the ephemeral runner lifetime ends; never copied to artifacts.
+          docker exec "$name" /bin/bash /input/tools/sf08-browser/container_bootstrap.sh
+          test "$(docker inspect --format '{{.State.Running}}' "$name")" = true
+# No artifacts from the container: never upload CA keys, SQLite, raw cookies,
+# raw Playwright JSON or profiles. Only fixed coordinator summary reaches logs.
