@@ -1,4 +1,3 @@
-#[cfg(test)]
 mod security_sf07_private;
 pub use axum;
 pub use rusqlite;

@@ -6,6 +6,16 @@
 
 The 2026-10-10 14:04 UTC GitHub readback confirms that Linux, all four OS packages, four IDE Stable/EAP checks, the common ZIP in main checks `38055073417`, and the website passed. `publish-release` failed because CHANGELOG lacks the required `## JetBrains 0.1.3` heading; no 0.1.3 tag or Release was created. Do not retry publication before approval. CodeQL run `38055084000` reported `Extraction failed: No source files found` during C/C++ extraction. This is not an all-checks-passed result.
 
+## 2026-10-16: adopted SF07 finite-budget policy
+
+The user's explicit replies adopt Q1's public API and explicit configuration for every route, Q2's mandatory budget settings, and Q3's finite fallback policy. This records a design decision, not completed public runtime/compiler integration or acceptance. The CI/publication observations dated 2026-10-10 above are historical observations.
+
+- In 0.2.0, finite budgets require explicit settings. Missing required settings are diagnosed and refused before listen; `default_options` does not silently supply the new budgets.
+- 4096 is not a fixed public ceiling. Check counts, retained bytes, exploration work, response retention and fallback capacity with checked arithmetic; verify finite startup allocation and the implementation's supported acceptance range. Configurable does not mean unlimited.
+- Japanese and English Docs must provide measured small configurations, measurement conditions and tuning steps. Illustrative numbers are neither implicit defaults, recommendations for every App, nor an SLA.
+- Keep acceptance for bound formulas, boundary refusal, budget retention/release, final close when finite fallback is exhausted, concurrency, and four-OS performance. Preserve existing deadlines, cancellation, actual join, CORS/managed headers and the release gate.
+- SF07 remains incomplete until public Context/factory/mapper/rate integration, High/saved-Low/handwritten-Low native evidence and integrated independent review are complete. Always producing an HTTP response and universal OOM recovery are not guaranteed.
+
 ## PR boundaries and dependencies
 
 | PR | Scope | Dependencies/decisions | Completion evidence |

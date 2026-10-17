@@ -883,3 +883,6 @@ async fn nondecreasing_clock_refusal_preserves_live_row_and_never_delivers() {
     drop(o);
     f.stop().await;
 }
+
+#[path = "fixed_wire_owner_tests.rs"]
+mod fixed_wire_owner_tests;

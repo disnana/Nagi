@@ -539,6 +539,33 @@ async fn input_and_strict_json_rejections_do_not_consume_or_call_verifier() {
         br#"{"n":1.25,"a":[true,null]}"#,
     )
     .await;
+    if good.status != 200 {
+        let status = good.status;
+        let body_bytes = good.body.len();
+        let set_cookie_count = good.values("set-cookie").len();
+        let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+        let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+        let cancelled = f.stats.cancelled.load(Ordering::SeqCst);
+        eprintln!(
+            "browser_login_public_api_diag case=strict_json_valid phase=final_response status={} status_overflow={} body_bytes={} body_bytes_overflow={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} cancelled={} cancelled_overflow={}",
+            status.min(999),
+            status > 999,
+            body_bytes.min(8193),
+            body_bytes > 8193,
+            set_cookie_count.min(1023),
+            set_cookie_count > 1023,
+            good.auth_cookie(),
+            good.deletion(),
+            verifier_calls.min(1023),
+            verifier_calls > 1023,
+            handler_calls.min(1023),
+            handler_calls > 1023,
+            f.stats.claim_committed.load(Ordering::SeqCst),
+            f.stats.issue_committed.load(Ordering::SeqCst),
+            cancelled.min(1023),
+            cancelled > 1023,
+        );
+    }
     assert!(good.status == 200);
     s.stop().await;
     f.stop().await;
@@ -1002,16 +1029,35 @@ async fn wire_body_cap_is_independent_of_db_quota_and_checked_before_claim() {
         let r = request(s.address, "POST", "/login", &h, &cap).await;
         // Bounded numeric failure shape only; response body and cookie values stay private.
         if !(r.status == 200 && r.body == cap && r.auth_cookie() && r.deletion()) {
+            let status = r.status;
+            let body_bytes = r.body.len();
+            let expected_body_bytes = cap.len();
+            let set_cookie_count = r.values("set-cookie").len();
+            let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+            let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+            let cancelled = f.stats.cancelled.load(Ordering::SeqCst);
             eprintln!(
-                "browser_login_public_api_diag case=wire_body_cap phase=exact_body_response iteration={} status={} body_bytes={} expected_body_bytes={} body_matches={} set_cookie_count={} auth_cookie={} deletion={}",
+            "browser_login_public_api_diag case=wire_body_cap phase=exact_body_response iteration={} status={} status_overflow={} body_bytes={} body_bytes_overflow={} expected_body_bytes={} expected_body_bytes_overflow={} body_matches={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} cancelled={} cancelled_overflow={}",
                 iteration,
-                r.status,
-                r.body.len(),
-                cap.len(),
+                status.min(999),
+                status > 999,
+                body_bytes.min(8193),
+                body_bytes > 8193,
+                expected_body_bytes.min(8193),
+                expected_body_bytes > 8193,
                 r.body == cap,
-                r.values("set-cookie").len(),
+                set_cookie_count.min(1023),
+                set_cookie_count > 1023,
                 r.auth_cookie(),
                 r.deletion(),
+                verifier_calls.min(1023),
+                verifier_calls > 1023,
+                handler_calls.min(1023),
+                handler_calls > 1023,
+                f.stats.claim_committed.load(Ordering::SeqCst),
+                f.stats.issue_committed.load(Ordering::SeqCst),
+                cancelled.min(1023),
+                cancelled > 1023,
             );
         }
         assert!(r.status == 200 && r.body == cap && r.auth_cookie() && r.deletion());

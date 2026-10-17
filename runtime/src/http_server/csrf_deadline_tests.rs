@@ -14,7 +14,7 @@ struct Fixture {
     pool: sqlite::Pool,
     store: session::Store,
     probe: Arc<session::deadline_probe::Probe>,
-    headers: HeaderMap,
+    headers: RequestHeaders,
 }
 impl Fixture {
     async fn new() -> Self {
@@ -83,7 +83,7 @@ impl Fixture {
             pool,
             store,
             probe,
-            headers: cookie,
+            headers: cookie.into(),
         }
     }
     async fn original_row(&self) -> DeadlineRow {
@@ -105,7 +105,7 @@ impl Fixture {
         Request {
             method: Method::POST,
             uri: "/guarded".parse().unwrap(),
-            headers: self.headers.clone(),
+            headers: self.headers.share(),
             body: Bytes::new(),
         }
     }

@@ -247,7 +247,7 @@ fn basic_request() -> Request {
     Request {
         method: Method::GET,
         uri: "/users/7?q=yes".parse().unwrap(),
-        headers: HeaderMap::new(),
+        headers: HeaderMap::new().into(),
         body: Bytes::from_static(b"body"),
     }
 }

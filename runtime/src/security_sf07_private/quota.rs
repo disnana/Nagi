@@ -2,20 +2,25 @@
 //!
 //! This file is deliberately unregistered and exposes no public Nagi API.
 
+use super::OwnedStateLock as Mutex;
+#[cfg(test)]
 use std::mem::size_of;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 const MAX_CLAIMS: usize = 8;
+#[cfg(test)]
 const MAX_CATALOG_ITEMS: usize = (u16::MAX as usize) + 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ResourceId(u16);
 
 #[derive(Clone, Copy, Debug)]
+#[cfg(test)]
 pub(crate) struct ResourceLimit {
     capacity: usize,
 }
 
+#[cfg(test)]
 impl ResourceLimit {
     pub(crate) const fn new(capacity: usize) -> Self {
         Self { capacity }
@@ -28,6 +33,7 @@ pub(crate) struct Claim {
     amount: usize,
 }
 
+#[cfg(test)]
 impl Claim {
     pub(crate) const fn new(resource: ResourceId, amount: usize) -> Self {
         Self { resource, amount }
@@ -35,12 +41,14 @@ impl Claim {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub(crate) enum StartupError {
     Invalid,
     Allocation,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(test)]
 pub(crate) enum QuotaError {
     Invalid,
     Capacity,
@@ -48,6 +56,7 @@ pub(crate) enum QuotaError {
 }
 
 struct ResourceState {
+    #[cfg(test)]
     capacity: usize,
     used: usize,
 }
@@ -72,6 +81,7 @@ pub(crate) struct Reservation {
     claims: FixedClaims,
 }
 
+#[cfg(test)]
 impl Quota {
     pub(crate) fn checked_catalog(
         limits: &[ResourceLimit],
@@ -125,6 +135,74 @@ impl Quota {
     }
 }
 
+// SF07_U2_RETAINED_CATALOG_BEGIN
+// One checked receipt for the existing Quota allocation. No second quota.
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct CatalogRetention {
+    bytes: usize,
+}
+#[cfg(test)]
+impl CatalogRetention {
+    pub(crate) fn bytes(self) -> usize {
+        self.bytes
+    }
+}
+#[cfg(test)]
+impl Quota {
+    pub(crate) fn retained_catalog_minimum(count: usize) -> Result<usize, StartupError> {
+        if count == 0 || count > MAX_CATALOG_ITEMS {
+            return Err(StartupError::Invalid);
+        }
+        let payload = checked_catalog_bytes(count, size_of::<ResourceState>())?;
+        size_of::<Self>()
+            .checked_add(2 * size_of::<usize>()) // Arc control block
+            .and_then(|fixed| fixed.checked_add(payload))
+            .filter(|bytes| *bytes <= isize::MAX as usize)
+            .ok_or(StartupError::Invalid)
+    }
+    pub(crate) fn checked_catalog_retained(
+        limits: &[ResourceLimit],
+        max_catalog: usize,
+        retained_limit: usize,
+    ) -> Result<(Arc<Self>, CatalogRetention), StartupError> {
+        // Reject impossible retention before the existing constructor allocates.
+        let minimum = Self::retained_catalog_minimum(limits.len())?;
+        if minimum > retained_limit {
+            return Err(StartupError::Invalid);
+        }
+        let owner = Self::checked_catalog(limits, max_catalog)?;
+        // Observe actual Vec capacity before this owner can be published.
+        let receipt = owner.catalog_retention(limits.len(), retained_limit)?;
+        Ok((owner, receipt))
+    }
+    fn catalog_retention(
+        &self,
+        planned_count: usize,
+        retained_limit: usize,
+    ) -> Result<CatalogRetention, StartupError> {
+        let state = self.state.lock().map_err(|_| StartupError::Invalid)?;
+        if state.resources.len() != planned_count || planned_count == 0 {
+            return Err(StartupError::Invalid);
+        }
+        let capacity = state.resources.capacity();
+        // try_reserve_exact is not assumed to report exactly the request.
+        if capacity > planned_count {
+            return Err(StartupError::Allocation);
+        }
+        let bytes = Self::retained_catalog_minimum(capacity)?;
+        if bytes > retained_limit {
+            return Err(StartupError::Invalid);
+        }
+        Ok(CatalogRetention { bytes })
+    }
+}
+#[cfg(test)]
+#[path = "quota_retention_tests.rs"]
+mod retained_catalog_tests;
+// SF07_U2_RETAINED_CATALOG_END
+
+#[cfg(test)]
 fn checked_catalog_bytes(count: usize, item_size: usize) -> Result<usize, StartupError> {
     count
         .checked_mul(item_size)
@@ -133,6 +211,7 @@ fn checked_catalog_bytes(count: usize, item_size: usize) -> Result<usize, Startu
 }
 
 /// Atomically reserves all claims or changes no counter. There is no wait path.
+#[cfg(test)]
 pub(crate) fn try_reserve(owner: &Arc<Quota>, claims: &[Claim]) -> Result<Reservation, QuotaError> {
     if claims.is_empty() || claims.len() > MAX_CLAIMS {
         return Err(QuotaError::Invalid);

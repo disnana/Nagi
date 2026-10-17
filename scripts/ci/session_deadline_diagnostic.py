@@ -7,6 +7,8 @@ import re
 import sys
 
 import auth_stage_diagnostic as auth_diag
+import session_native_finish_diagnostic as native_finish
+import session_private_deadline_diagnostic as private_diag
 
 RAW_LIMIT = 256 * 1024
 OUTPUT_LIMIT = 16 * 1024
@@ -189,6 +191,7 @@ AUTH_WIRE_LINE = re.compile(
 AUTH_WIRE_UNAVAILABLE = re.compile(rf"browser_wire=test=({IDENT}) unavailable\Z")
 HTTP_IO_LINE = re.compile(rf"http_test_io=phase=({auth_diag.IO_PHASE}) kind=({auth_diag.IO_KIND})\Z")
 KNOWN_MARKER_PREFIXES = (
+    native_finish.PREFIX,
     ASSERTION_PREFIX,
     BROWSER_PHASE_PREFIX,
     SESSION_PREFIX,
@@ -684,7 +687,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
     facts = {
         "session_deadline": [], "bootstrap": [], "pair": [], "json_bound": [],
         "bootstrap_deadline": [], "browser_phase": [], "assertion": [],
-        "token_deadline": [],
+        "token_deadline": [], "native_finish": [],
         "claim_initial": [], "claim_retry": [], "claim_replay_proof": [],
         "public": [], "http_test_io": [],
     }
@@ -707,7 +710,8 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
         # identifiers. Mark the record invalid above, but do not parse or persist it.
         if test_name not in cases or test_name not in failed_cases:
             continue
-        for line in block.splitlines():
+        block_lines = block.splitlines()
+        for line_index, line in enumerate(block_lines):
             mentions = [prefix for prefix in KNOWN_MARKER_PREFIXES if prefix in line]
             if not mentions:
                 continue
@@ -723,7 +727,28 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
             seen_exact.add(exact_key)
             key = None
             parsed = None
-            if prefix == BROWSER_PHASE_PREFIX:
+            if prefix == native_finish.PREFIX:
+                parsed = native_finish.parse(line)
+                previous = block_lines[line_index - 1] if line_index > 0 else ""
+                legacy = None
+                origin = -1
+                if previous.startswith(SESSION_PREFIX + " "):
+                    legacy = parse_delivery_marker(previous) if suite_name == "delivery" else parse_session_marker(previous)
+                    origin = 0
+                elif previous.startswith(TOKEN_PREFIX + " ") and suite_name == "session":
+                    legacy = parse_token_marker(previous)
+                    origin = 1
+                elif previous.startswith(BOOTSTRAP_DEADLINE_PREFIX + " ") and suite_name == "browser":
+                    legacy = parse_bootstrap_deadline_marker(previous)
+                    origin = 2
+                elif previous.startswith(private_diag.PREFIX + " ") and suite_name == "delivery":
+                    legacy = private_diag.marker(previous)
+                    origin = 3
+                if parsed is None or not native_finish.paired(parsed, legacy, origin):
+                    invalid = True
+                    continue
+                key = ("native_finish", test_name)
+            elif prefix == BROWSER_PHASE_PREFIX:
                 if suite_name != "browser":
                     invalid = True
                     continue
@@ -833,11 +858,11 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                 # Stalled-response markers belong to another fixed suite, not these APIs.
                 invalid = True
                 continue
-            if parsed is None or key is None or (key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline") and key in seen_case_kinds):
+            if parsed is None or key is None or (key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline", "native_finish") and key in seen_case_kinds):
                 invalid = True
                 continue
             parsed["test"] = test_name
-            if key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline"):
+            if key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline", "native_finish"):
                 seen_case_kinds.add(key)
             facts[key[0]].append(parsed)
 
@@ -877,7 +902,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
 def diagnose(session_raw: bytes | None, session_input_status: str, session_exit: int,
              browser_raw: bytes | None, browser_input_status: str, browser_exit: int) -> tuple[dict, int]:
     record = {
-        "schema": "nagi-session-deadline-public-diagnostic-v1",
+        "schema": "nagi-session-deadline-public-diagnostic-v2",
         "source_inventory": {"session_tests": len(SESSION_CASES), "browser_tests": len(BROWSER_CASES)},
         "status": "diagnostic_invalid",
         "marker_count": 0,
@@ -925,7 +950,7 @@ def diagnose_delivery(raw: bytes | None, input_status: str, cargo_exit: int,
                       case: str) -> tuple[dict, int]:
     test = DELIVERY_CASES.get(case)
     if test is None:
-        return {"schema": "nagi-session-delivery-native-diagnostic-v1",
+        return {"schema": "nagi-session-delivery-native-diagnostic-v2",
                 "status": "diagnostic_invalid"}, 1
     summary, text = _suite_structure(
         "delivery", raw, input_status, cargo_exit, expected=frozenset({test}),
@@ -953,7 +978,7 @@ def diagnose_delivery(raw: bytes | None, input_status: str, cargo_exit: int,
               else "tests_failed" if inventory == "failed"
               else "tests_not_run_or_incomplete")
     return {
-        "schema": "nagi-session-delivery-native-diagnostic-v1", "status": status,
+        "schema": "nagi-session-delivery-native-diagnostic-v2", "status": status,
         "source_inventory": {"delivery_tests": 1}, "marker_count": count,
         "case": case, "suites": {"delivery": summary},
     }, 0 if status == "passed" else 1
@@ -962,7 +987,7 @@ def diagnose_delivery(raw: bytes | None, input_status: str, cargo_exit: int,
 def _write_output(path: pathlib.Path, record: dict) -> bool:
     encoded = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii")
     if len(encoded) > OUTPUT_LIMIT:
-        encoded = b'{"schema":"nagi-session-deadline-public-diagnostic-v1","status":"output_limit_exceeded"}\n'
+        encoded = b'{"schema":"nagi-session-deadline-public-diagnostic-v2","status":"output_limit_exceeded"}\n'
         ok = False
     else:
         ok = True
@@ -978,8 +1003,8 @@ def _write_output(path: pathlib.Path, record: dict) -> bool:
 
 VERDICT_LINE_LIMIT = 320
 DELIVERY_VERDICT_LINE_LIMIT = 192
-PUBLIC_SCHEMA = "nagi-session-deadline-public-diagnostic-v1"
-DELIVERY_SCHEMA = "nagi-session-delivery-native-diagnostic-v1"
+PUBLIC_SCHEMA = "nagi-session-deadline-public-diagnostic-v2"
+DELIVERY_SCHEMA = "nagi-session-delivery-native-diagnostic-v2"
 PUBLIC_STATUSES = frozenset({"diagnostic_invalid", "tests_failed", "passed", "tests_not_run_or_incomplete"})
 INPUT_STATUSES = frozenset({"valid", "missing", "oversize", "invalid_utf8"})
 INVENTORY_STATUSES = frozenset({
@@ -991,7 +1016,7 @@ INVENTORY_STATUSES = frozenset({
 FACT_LISTS = (
     "session_deadline", "bootstrap", "pair", "json_bound", "bootstrap_deadline",
     "browser_phase", "assertion", "token_deadline", "claim_initial", "claim_retry",
-    "claim_replay_proof", "public", "http_test_io",
+    "claim_replay_proof", "public", "http_test_io", "native_finish",
 )
 SUITE_KEYS = frozenset({
     "cargo_exit", "input_status", "inventory_status", "running_count", "passed_count",
@@ -1014,9 +1039,10 @@ FACT_KEYS = frozenset({
     "marker_count", "suites", "cargo_exit", "input_status", "inventory_status", "running_count",
     "passed_count", "failed_count", "ignored_count", "failed_cases", "diagnostic_status",
     "session_tests", "browser_tests", "delivery_tests", "session", "browser", "delivery",
-    *FACT_LISTS,
+    *FACT_LISTS, *native_finish.FIELDS,
 })
 FACT_SHAPES = {
+    "native_finish": frozenset({*native_finish.FIELDS, "test"}),
     "session_deadline": frozenset({"status", "phase", "event", "db", "exit", "polls", "begins", "commands", "commits", "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "test"}),
     "token_deadline": frozenset({"status", "phase", "event", "db", "exit", "polls", "begins", "commands", "commits", "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "terminal", "test"}),
     "bootstrap_deadline": frozenset({"status", "phase", "event", "db", "exit", "polls", "begins", "commands", "commits", "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "security_budget_ms", "selected_end_kind", "test"}),
@@ -1063,6 +1089,7 @@ FACT_INT_KEYS = frozenset({
     "expected_status", "session_rows", "request", "before_gate", "poll_gate", "pending_phase",
     "pending_gate", "live_pending_phase", "exit_gate", "saw_pending", "saw_live_pending",
     "gate_refused", "row_missing", "rollback_ack", "restore_commit_ack", "consumed",
+    *native_finish.FIELDS,
 })
 FACT_BOOL_KEYS = frozenset({
     "auth_cookie", "deletion", "a_auth_cookie", "b_auth_cookie", "a_deletion", "b_deletion",
@@ -1159,6 +1186,11 @@ def _closed_record_shape(record: object, delivery: bool) -> bool:
                     return False
                 if any(type(key) is not str or key not in FACT_KEYS for key in fact):
                     return False
+                if fact_list == "native_finish":
+                    if not native_finish.valid({key: value for key, value in fact.items() if key != "test"}):
+                        return False
+                    if fact["origin"] not in {"session": {0, 1}, "browser": {2}, "delivery": {0, 3}}[suite_name]:
+                        return False
                 if "test" in fact and (type(fact["test"]) is not str or fact["test"] not in test_names):
                     return False
                 for key, value in fact.items():
@@ -1243,6 +1275,8 @@ def main(argv: list[str]) -> int:
             return 1
         print(closed_verdict_line(record, delivery=True))
         if record["status"] == "tests_failed":
+            for fact in record["suites"]["delivery"]["native_finish"]:
+                print("session_native_finish=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
             for fact in record["suites"]["delivery"]["session_deadline"]:
                 print("session_delivery_native=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
         return status
@@ -1263,6 +1297,9 @@ def main(argv: list[str]) -> int:
     # Reconstruct only parsed numeric facts + source-whitelisted test identity.
     # Never cat raw stdout/stderr or print an invalid sanitizer record.
     if record["status"] == "tests_failed":
+        for suite in record["suites"].values():
+            for fact in suite["native_finish"]:
+                print("session_native_finish=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
         for fact in record["suites"]["session"]["token_deadline"]:
             print("csrf_token_deadline=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
         for fact in record["suites"]["browser"]["browser_phase"]:

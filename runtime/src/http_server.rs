@@ -24,6 +24,8 @@ use std::{
 use tokio::{net::TcpListener, sync::Semaphore, task::JoinSet};
 
 mod closing_io;
+mod request_headers;
+use request_headers::RequestHeaders;
 #[cfg(test)]
 mod lifecycle_probe;
 #[cfg(all(test, windows))]
@@ -160,11 +162,12 @@ pub fn method_name(value: &Method) -> &str {
 }
 
 /// Native request components are moved into the handler, without cloning the
-/// method, URI, headers, or a single received body chunk.
+/// method, URI, or a single received body chunk. Header views share one native
+/// map owner, including any retained prior response claim.
 pub struct Request {
     pub method: Method,
     uri: Uri,
-    headers: HeaderMap,
+    headers: RequestHeaders,
     body: Bytes,
 }
 impl Request {
@@ -848,7 +851,9 @@ pub fn session_authenticated_policy<S: Send + Sync + 'static>(
             factory: Arc::new(move |head, _, lease, _| {
                 let store = Arc::clone(&store);
                 Box::pin(async move {
-                    let identity = store.lookup_http_identity(&head.headers).await?;
+                    let identity = store
+                        .lookup_http_identity(head.headers.authentication_headers())
+                        .await?;
                     let binding =
                         crate::auth::session::CsrfBinding::from_identity(&identity, &lease)?;
                     let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
@@ -883,12 +888,14 @@ where
                 let store = Arc::clone(&store);
                 let authorizer = Arc::clone(&authorizer);
                 Box::pin(async move {
-                    let identity = store.lookup_http_identity(&head.headers).await?;
+                    let identity = store
+                        .lookup_http_identity(head.headers.authentication_headers())
+                        .await?;
                     let binding =
                         crate::auth::session::CsrfBinding::from_identity(&identity, &lease)?;
                     let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
                     if matches!(profile, PreparationProfile::GuardedSession) {
-                        csrf_http::strip_credentials(&mut head.headers);
+                        head.headers.sanitize();
                     }
                     let grant = authorizer(scope, head, state).await?;
                     if !grant.belongs_to(&lease) {
@@ -977,7 +984,7 @@ impl Request {
         Self {
             method: self.method.clone(),
             uri: self.uri.clone(),
-            headers: self.headers.clone(),
+            headers: self.headers.share(),
             body: Bytes::new(),
         }
     }
@@ -1491,7 +1498,7 @@ where
                 &options,
             ));
         }
-        let (parts, body) = request.into_parts();
+        let (mut parts, body) = request.into_parts();
         let total = options
             .security_deadline
             .checked_add(options.body_deadline)
@@ -1551,10 +1558,11 @@ where
             crate::auth::session::retire_http_delivery(&owner);
             finalize_authenticated(response, route.source, head)
         };
+        let headers = RequestHeaders::from(std::mem::take(&mut parts.headers));
         let snapshot = Request {
             method: parts.method.clone(),
             uri: parts.uri.clone(),
-            headers: parts.headers.clone(),
+            headers: headers.share(),
             body: Bytes::new(),
         };
         let security_started = Instant::now();
@@ -1625,7 +1633,7 @@ where
         let request = Request {
             method: parts.method,
             uri: parts.uri,
-            headers: parts.headers,
+            headers,
             body,
         };
         // The constructor is synchronous for Rust hosts; both it and subsequent
@@ -2044,3 +2052,9 @@ pub(crate) fn session_delivery_headers_for_test(
 #[cfg(all(test, nagi_auth_stage_diag))]
 #[path = "http_server/private_deadline_calibration.rs"]
 mod private_deadline_calibration;
+
+// First SF07 bridge checkpoint: production attachment is a separate gate.
+#[cfg(test)]
+mod response_budget;
+#[cfg(test)]
+mod response_send;

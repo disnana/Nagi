@@ -205,18 +205,9 @@ impl Pool {
         }
         let mut cookie = HeaderValue::from_str(&value).map_err(|_| Failure::wire_internal())?;
         cookie.set_sensitive(true);
-        #[derive(serde::Serialize)]
-        struct Json<'a> {
-            csrf_token: &'a str,
-        }
-        let body = serde_json::to_vec(&Json {
-            csrf_token: &pair.token,
-        })
-        .map_err(|_| Failure::wire_internal())?;
-        if body.len() != 60 {
-            return Err(Failure::wire_internal());
-        }
-        // Finite library serialization is not forcibly preemptible. Recheck
+        let body = super::super::csrf::fixed_body::FixedTokenBody::new(&pair.token)
+            .ok_or_else(Failure::wire_internal)?;
+        // Finite cookie/body construction is not forcibly preemptible. Recheck
         // fresh observed UTC and live monotonic gates before wire ownership.
         let clock = self.context.sample().map_err(Failure::session)?;
         let _gate = owner
@@ -231,7 +222,7 @@ impl Pool {
         }
         Ok(Wire {
             cookie,
-            body: hyper::body::Bytes::from(body),
+            body: body.into_bytes(),
         })
     }
     #[cfg(test)]

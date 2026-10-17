@@ -18,6 +18,11 @@ mod same_queue_probe;
 #[cfg(test)]
 use same_queue_probe::Phase as CheckpointPhase;
 
+#[path = "csrf/fixed_body.rs"]
+pub(super) mod fixed_body;
+#[cfg(test)]
+pub(crate) const FIXED_TOKEN_BODY_BYTES: usize = fixed_body::BODY_BYTES;
+
 const ROW_BYTES: i64 = 88;
 const META: &str = "CREATE TABLE __nagi_csrf_meta(id INTEGER PRIMARY KEY CHECK(id=1),version INTEGER NOT NULL,incarnation BLOB NOT NULL CHECK(length(incarnation)=32),session_incarnation BLOB NOT NULL CHECK(length(session_incarnation)=32),max_stored INTEGER NOT NULL,max_payload_bytes INTEGER NOT NULL,cleanup_batch INTEGER NOT NULL,ttl_ms INTEGER NOT NULL,collision_attempts INTEGER NOT NULL,origin TEXT NOT NULL,last_wall INTEGER NOT NULL CHECK(last_wall>=0)) STRICT";
 const ROWS: &str = "CREATE TABLE __nagi_csrf_tokens(digest BLOB PRIMARY KEY CHECK(length(digest)=32),session_incarnation BLOB NOT NULL CHECK(length(session_incarnation)=32),lineage INTEGER NOT NULL CHECK(lineage>0),generation INTEGER NOT NULL CHECK(generation>=0),expiry_ms INTEGER NOT NULL CHECK(expiry_ms>0)) STRICT, WITHOUT ROWID";
@@ -1172,10 +1177,7 @@ impl Inner {
             c.phase = Phase::Terminal;
             (token, expiry, deadline, c.wall)
         };
-        let body = format!("{{\"csrf_token\":\"{token}\"}}");
-        if body.len() != 60 {
-            return Err(Failure::internal());
-        }
+        let body = fixed_body::FixedTokenBody::new(&token).ok_or_else(Failure::internal)?;
         let c = self.clock(&mut wall)?;
         b.check_clock(&c, &owner.lease.lease)
             .map_err(Failure::session)?;
@@ -1183,7 +1185,7 @@ impl Inner {
         if c.ceil_ms >= expiry || Instant::now() >= deadline {
             return Err(Failure::denied());
         }
-        Ok(hyper::body::Bytes::from(body))
+        Ok(body.into_bytes())
     }
 }
 fn project(c: &session::PreloginClock, expiry: i64) -> Result<Instant, Failure> {

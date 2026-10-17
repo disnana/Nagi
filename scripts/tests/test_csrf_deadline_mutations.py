@@ -32,9 +32,11 @@ class MutationEvidenceTests(unittest.TestCase):
         return ("running 12 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(guard.REQUIRED))
                 + "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
 
-    def auth_stock(self):
-        return ("running 14 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(guard.AUTH_REQUIRED))
-                + "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
+    def auth_stock(self, required=None):
+        required = guard.AUTH_REQUIRED if required is None else required
+        count = len(required)
+        return (f"running {count} tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(required))
+                + f"test result: ok. {count} passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
 
     @staticmethod
     def crlf(raw):
@@ -59,27 +61,59 @@ class MutationEvidenceTests(unittest.TestCase):
 
     def test_auth_csrf_source_inventory_is_exact(self):
         source = ROOT / "runtime/src/auth/csrf/tests.rs"
-        names = {guard.AUTH_BASE + name for name in
-                 re.findall(r"#\[(?:tokio::)?test\]\s*(?:async )?fn ([a-z0-9_]+)", source.read_text())}
-        self.assertEqual(names, guard.AUTH_REQUIRED)
-        self.assertEqual(len(names), 14)
+        source_text = source.read_text()
+        self.assertIn("mod fixed_wire_owner_tests;", source_text)
+        outer = {guard.AUTH_BASE + name for name in
+                 re.findall(r"#\[(?:tokio::)?test\]\s*(?:async )?fn ([a-z0-9_]+)", source_text)}
+        expected_outer = {guard.AUTH_BASE + name for name in guard.AUTH_CASES}
+        self.assertEqual(outer, expected_outer)
+        self.assertEqual(len(outer), 14)
+        self.assertEqual(len(guard.AUTH_CASES), 14)
+
+        nested_source = source.with_name("fixed_wire_owner_tests.rs")
+        nested = {"fixed_wire_owner_tests::" + name for name in
+                  re.findall(r"#\[(?:tokio::)?test\]\s*(?:async )?fn ([a-z0-9_]+)", nested_source.read_text())}
+        self.assertEqual(nested, set(guard.AUTH_ADDITIONAL))
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(outer | {guard.AUTH_BASE + name for name in nested}, guard.AUTH_REQUIRED)
+        self.assertEqual(len(guard.AUTH_REQUIRED), 15)
         self.assertIn("same_queue_reopen_reuses_data_context_without_refreshing_token_expiry",
                       guard.AUTH_CASES)
         self.assertIn("reopened_context_preserves_original_token_expiry_and_rejects_after_deadline",
                       guard.AUTH_CASES)
 
-    def test_auth_inventory_refuses_missing_duplicate_ignored_wrong_group_and_nonzero(self):
+    def test_auth_inventory_refuses_old_missing_duplicate_ignored_foreign_extra_and_nonzero(self):
         raw = self.auth_stock()
+        self.assertEqual(len(guard.AUTH_REQUIRED), 15)
         first = "test " + sorted(guard.AUTH_REQUIRED)[0] + " ... ok\n"
-        for candidate, code in (
-            (raw.replace(first, ""), 0),
-            (raw + first, 0),
-            (raw.replace(first, first.replace("... ok", "... ignored")), 0),
-            (raw.replace(guard.AUTH_BASE, "other::"), 0),
-            (raw.replace("14 passed", "13 passed"), 0),
-            (raw, 101),
+        nested_name = guard.AUTH_BASE + guard.AUTH_ADDITIONAL[0]
+        nested = "test " + nested_name + " ... ok\n"
+        old_required = frozenset(guard.AUTH_BASE + name for name in guard.AUTH_CASES)
+        old_fourteen = self.auth_stock(old_required)
+        missing_name = sorted(guard.AUTH_REQUIRED)[0]
+        missing = (raw.replace("test " + missing_name + " ... ok\n", "")
+                   .replace("running 15 tests", "running 14 tests")
+                   .replace("15 passed", "14 passed"))
+        duplicate = raw + first
+        ignored = (raw.replace(nested, "test " + nested_name + " ... ignored\n")
+                   .replace("15 passed; 0 failed; 0 ignored", "14 passed; 0 failed; 1 ignored"))
+        foreign = raw.replace(nested_name, "foreign::" + nested_name.split("::", 2)[-1])
+        extra = (raw.replace("running 15 tests", "running 16 tests")
+                 .replace("15 passed", "16 passed")
+                 + "test auth::csrf::tests::unexpected_extra_case ... ok\n")
+        wrong_count = raw.replace("15 passed", "14 passed")
+        for label, candidate, code in (
+            ("old fourteen", old_fourteen, 0),
+            ("missing", missing, 0),
+            ("duplicate", duplicate, 0),
+            ("ignored", ignored, 0),
+            ("foreign", foreign, 0),
+            ("extra", extra, 0),
+            ("wrong summary count", wrong_count, 0),
+            ("nonzero exit", raw, 101),
         ):
-            self.assertFalse(guard.inventory(candidate, code, guard.AUTH_REQUIRED))
+            with self.subTest(case=label):
+                self.assertFalse(guard.inventory(candidate, code, guard.AUTH_REQUIRED))
 
     def test_stock_green_and_crlf(self):
         self.assertTrue(guard.inventory(self.stock(), 0, guard.REQUIRED))

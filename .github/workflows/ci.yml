@@ -84,6 +84,34 @@ jobs:
           set -euo pipefail
           cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
           python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
+      - name: Check SF07 charged native wire checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf07_wire_source.py
+          python -B scripts/tests/test_sf07_transport_source.py
+          python -B scripts/tests/test_sf07_request_source.py
+          python -B scripts/tests/test_sf07_rate_source.py
+          python -B scripts/tests/test_sf07_checkpoint_summary.py
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            NAGI_TEST_BASH="$(cygpath -w "$BASH")"
+          else
+            NAGI_TEST_BASH="$BASH"
+          fi
+          export NAGI_TEST_BASH
+          python -B scripts/tests/test_sf07_owned_state_summary.py
+          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
+          cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
+          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::retained_catalog_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py catalog-retained
+          cargo test --locked -p nagi-runtime --lib auth::csrf::fixed_body::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py fixed-owner
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py csrf-issuer
+          cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py prelogin-issuer
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -154,6 +182,8 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/tests/test_session_deadline_diagnostic.py
+          python -B scripts/tests/test_session_native_finish_diagnostic.py
+          python -B scripts/tests/test_session_native_finish_summary.py
           set +e
           CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | python -c 'import sys
           limit=256*1024+1
@@ -212,6 +242,9 @@ jobs:
           expiry auth::session::http_bridge::delivery_tests::expiry_after_real_commit_retires_applied_material_without_cookie
           DELIVERY_CASES
           if [ "$delivery_fail" -ne 0 ]; then diagnose_rc=1; fi
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib native_finish 2>&1 | python -B scripts/ci/session_native_finish_summary.py
+          native_finish_status=("${PIPESTATUS[@]}")
+          if [ "${native_finish_status[0]}" -ne 0 ] || [ "${native_finish_status[1]}" -ne 0 ]; then diagnose_rc=1; fi
           exit "$diagnose_rc"
       - name: Preserve sanitized Session deadline diagnostics
         if: always()
@@ -242,7 +275,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":14, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -343,7 +376,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
           python scripts/check_sf07_private_tests.py "$RUNNER_TEMP/sf07-private-core.log"
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
@@ -538,8 +571,8 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '2941f52ab64ca0ef43612ff6cfdbfe14e0721bdaf86448598c5f52202e0dd755',
-              'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
+              'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6',
+              'runtime/src/http_server/tests.rs': '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
@@ -597,6 +630,34 @@ jobs:
           set -euo pipefail
           cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
           python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
+      - name: Check SF07 charged native wire checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf07_wire_source.py
+          python -B scripts/tests/test_sf07_transport_source.py
+          python -B scripts/tests/test_sf07_request_source.py
+          python -B scripts/tests/test_sf07_rate_source.py
+          python -B scripts/tests/test_sf07_checkpoint_summary.py
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            NAGI_TEST_BASH="$(cygpath -w "$BASH")"
+          else
+            NAGI_TEST_BASH="$BASH"
+          fi
+          export NAGI_TEST_BASH
+          python -B scripts/tests/test_sf07_owned_state_summary.py
+          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
+          cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
+          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::retained_catalog_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py catalog-retained
+          cargo test --locked -p nagi-runtime --lib auth::csrf::fixed_body::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py fixed-owner
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py csrf-issuer
+          cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py prelogin-issuer
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -678,6 +739,8 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/tests/test_session_deadline_diagnostic.py
+          python -B scripts/tests/test_session_native_finish_diagnostic.py
+          python -B scripts/tests/test_session_native_finish_summary.py
           set +e
           CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | python -c 'import sys
           limit=256*1024+1
@@ -736,6 +799,9 @@ jobs:
           expiry auth::session::http_bridge::delivery_tests::expiry_after_real_commit_retires_applied_material_without_cookie
           DELIVERY_CASES
           if [ "$delivery_fail" -ne 0 ]; then diagnose_rc=1; fi
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib native_finish 2>&1 | python -B scripts/ci/session_native_finish_summary.py
+          native_finish_status=("${PIPESTATUS[@]}")
+          if [ "${native_finish_status[0]}" -ne 0 ] || [ "${native_finish_status[1]}" -ne 0 ]; then diagnose_rc=1; fi
           exit "$diagnose_rc"
       - name: Preserve sanitized Session deadline diagnostics
         if: always()
@@ -766,7 +832,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":14, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":12, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -857,7 +923,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
           python scripts/check_sf07_private_tests.py "$RUNNER_TEMP/sf07-private-core.log"
       - run: cargo build --release --locked -p nagic
       - name: Check HTTP registry emission before the platform regression
@@ -968,8 +1034,8 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '2941f52ab64ca0ef43612ff6cfdbfe14e0721bdaf86448598c5f52202e0dd755',
-              'runtime/src/http_server/tests.rs': '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173',
+              'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6',
+              'runtime/src/http_server/tests.rs': '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f',
               'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',

@@ -10,10 +10,6 @@ use crate::auth::{csrf, session::CsrfBinding};
 mod body_deadline;
 use body_deadline::select_body_deadline;
 
-pub(super) fn strip_credentials(headers: &mut HeaderMap) {
-    headers.remove(names::COOKIE);
-    headers.remove("x-csrf-token");
-}
 pub(super) fn register<S, E>(
     mut app: App<S, E>,
     path: &str,
@@ -371,7 +367,7 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
     store: &csrf::Inner,
     prepare: &GuardedPrepare<S>,
     state: Arc<S>,
-    parts: axum::http::request::Parts,
+    mut parts: axum::http::request::Parts,
     body: hyper::body::Incoming,
     options: &Options,
     owner: LeaseOwner,
@@ -396,10 +392,11 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
         Ok(d) => d,
         Err(e) => return terminal(&owner, e.http_status(), head, true),
     };
+    let mut headers = RequestHeaders::from(std::mem::take(&mut parts.headers));
     let snapshot = Request {
         method: parts.method.clone(),
         uri: parts.uri.clone(),
-        headers: parts.headers.clone(),
+        headers: headers.share(),
         body: Bytes::new(),
     };
     let future = AssertUnwindSafe(async {
@@ -456,8 +453,7 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
         Ok(d) => d,
         Err(s) => return terminal(&owner, s, head, true),
     };
-    let mut headers = parts.headers;
-    strip_credentials(&mut headers);
+    headers.sanitize();
     let connect = parts.method == Method::CONNECT;
     let request = Request {
         method: parts.method,
