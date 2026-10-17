@@ -7,6 +7,9 @@ mod html;
 mod html_contract_tests;
 #[cfg(test)]
 mod html_semantic_tests;
+mod index;
+#[cfg(test)]
+mod index_tests;
 mod security;
 mod session;
 mod sqlite;
@@ -1435,6 +1438,10 @@ pub fn operation_module(operation: Operation) -> ModuleId {
     ModuleId(module_info(operation_info(operation).module).id.into())
 }
 pub fn resource_named(module: &ModuleId, name: &str) -> Option<Resource> {
+    index::resource_named(module, name)
+}
+#[cfg(test)]
+fn resource_named_uncached(module: &ModuleId, name: &str) -> Option<Resource> {
     RESOURCES.iter().copied().find(|resource| {
         resource_module(*resource) == *module && resource_info(*resource).name == name
     })
@@ -1455,18 +1462,30 @@ pub fn native_view_element(ty: &Type) -> Option<&Type> {
     resource(&element.0).map(|_| element)
 }
 pub fn resource(symbol: &str) -> Option<Resource> {
+    index::resource(symbol)
+}
+#[cfg(test)]
+fn resource_uncached(symbol: &str) -> Option<Resource> {
     RESOURCES
         .iter()
         .copied()
         .find(|r| crate::modules::symbol(&resource_id(*r)) == symbol)
 }
 pub fn operation(symbol: &str) -> Option<Operation> {
+    index::operation(symbol)
+}
+#[cfg(test)]
+fn operation_uncached(symbol: &str) -> Option<Operation> {
     OPERATIONS
         .iter()
         .copied()
         .find(|op| crate::modules::symbol(&function_id(*op)) == symbol)
 }
 pub fn definition(id: &DefId) -> bool {
+    index::definition(id)
+}
+#[cfg(test)]
+fn definition_uncached(id: &DefId) -> bool {
     is_registered_module(&id.module)
         && (RESOURCES.iter().any(|r| resource_id(*r) == *id)
             || OPERATIONS.iter().any(|op| function_id(*op) == *id))
@@ -2089,6 +2108,9 @@ pub fn declaration_source() -> String {
     module_source(&ModuleId(MODULE_ID.into()))
 }
 pub fn module_source(module: &ModuleId) -> String {
+    index::module_source(module)
+}
+fn module_source_uncached(module: &ModuleId) -> String {
     if !is_registered_module(module) {
         return String::new();
     }
@@ -2139,10 +2161,17 @@ fn display_type(ty: &Type) -> String {
     }
 }
 pub fn definitions(module: &ModuleId) -> Vec<DefinitionInfo> {
+    index::definitions(module)
+}
+#[cfg(test)]
+fn definitions_uncached(module: &ModuleId) -> Vec<DefinitionInfo> {
     if !is_registered_module(module) {
         return vec![];
     }
-    let source = module_source(module);
+    let source = module_source_uncached(module);
+    definitions_in_source(module, &source)
+}
+fn definitions_in_source(module: &ModuleId, source: &str) -> Vec<DefinitionInfo> {
     RESOURCES
         .iter()
         .map(|r| resource_id(*r))
@@ -2175,11 +2204,19 @@ pub fn definitions(module: &ModuleId) -> Vec<DefinitionInfo> {
         .collect()
 }
 pub fn member_line(resource: Resource, name: &str) -> Option<usize> {
+    index::member_line(resource, name)
+}
+#[cfg(test)]
+fn member_line_uncached(resource: Resource, name: &str) -> Option<usize> {
+    member_line_in_source(
+        resource,
+        name,
+        &module_source_uncached(&resource_module(resource)),
+    )
+}
+fn member_line_in_source(resource: Resource, name: &str, source: &str) -> Option<usize> {
     let mut active = false;
-    for (index, line) in module_source(&resource_module(resource))
-        .lines()
-        .enumerate()
-    {
+    for (index, line) in source.lines().enumerate() {
         if line.starts_with("resource ") {
             active = line.starts_with(&format!("resource {}", resource_info(resource).name));
         }
