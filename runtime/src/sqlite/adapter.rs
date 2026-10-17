@@ -750,6 +750,22 @@ impl Adapter {
             seams,
         }))
     }
+    pub(super) fn matches_main_source(&self, source: &super::MainSource) -> bool {
+        let path = self
+            .0
+            .pool
+            .0
+            .manager
+            .config
+            .path
+            .as_ref()
+            .and_then(|p| p.to_str());
+        super::main_source::MainSource::capture(path).is_some_and(|v| v == *source)
+    }
+    #[cfg(test)]
+    pub(super) fn same_handle(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
     pub fn is_closing(&self) -> bool {
         self.0.ledger.snapshot().closing
     }

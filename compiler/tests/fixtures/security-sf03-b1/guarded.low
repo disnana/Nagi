@@ -1,0 +1,35 @@
+import std.auth.csrf as csrf;
+import std.auth.session as session;
+import std.auth as auth;
+import std.http.server as http;
+record State { store: session.Store; }
+async fn open_csrf(store: view[session.Store],options: view[http.Options]) -> Result[csrf.CsrfStore,csrf.Failure] {
+ let config = try csrf.options(4,128,1,10000,2);
+ return await csrf.open(store,config,options);
+}
+fn clone_csrf(store: view[csrf.CsrfStore]) -> csrf.CsrfStore { return csrf.clone_store(store); }
+fn inspect_failure(failure: view[csrf.Failure]) -> i64 {
+ let kind = csrf.kind(failure);
+ let text = csrf.message(failure);
+ let outcome = csrf.outcome(failure);
+ return 0;
+}
+async fn inspect(request: http.Request,state: shared[State],scope: auth.AuthScope) -> Result[http.Response,Error] { return ok(http.empty(http.Status.OK)); }
+fn guarded_registration(store: view[session.Store],csrf_store: view[csrf.CsrfStore]) -> Result[http.App[State,Error],Error] {
+ let app = http.app_default[State](State(store = session.clone_store(store)));
+ app = try http.session_csrf_tokens[State,Error](app,"/_csrf",csrf.clone_store(csrf_store));
+ let policy = http.session_authenticated_policy[State](session.clone_store(store));
+ policy = try http.session_csrf_policy[State,auth.AuthScope](policy,csrf.clone_store(csrf_store));
+ return http.route(app,http.Method.POST,"/owned",policy,inspect);
+}
+fn unsafe_registration(store: view[session.Store]) -> Result[http.App[State,Error],Error] {
+ let app = http.app_default[State](State(store = session.clone_store(store)));
+ let policy = http.session_authenticated_policy[State](session.clone_store(store));
+ return http.route(app,http.Method.POST,"/owned",policy,inspect);
+}
+fn double_guard(store: view[session.Store],csrf_store: view[csrf.CsrfStore]) -> Result[http.Policy[State,auth.AuthScope],Error] {
+ let policy = http.session_authenticated_policy[State](session.clone_store(store));
+ policy = try http.session_csrf_policy[State,auth.AuthScope](policy,csrf.clone_store(csrf_store));
+ return http.session_csrf_policy[State,auth.AuthScope](policy,csrf.clone_store(csrf_store));
+}
+fn main() -> unit { print(0); }

@@ -1,11 +1,15 @@
 //! Compiler-owned standard definitions. Serialized Low names this registry;
 //! it cannot choose native paths, capabilities, or callback contracts.
 use crate::ast::*;
+mod csrf;
 mod html;
 #[cfg(test)]
 mod html_contract_tests;
 #[cfg(test)]
 mod html_semantic_tests;
+mod index;
+#[cfg(test)]
+mod index_tests;
 mod security;
 mod session;
 mod sqlite;
@@ -19,6 +23,8 @@ pub const ACTOR_MODULE_NAME: &str = "std.actor";
 pub const ACTOR_MODULE_ID: &str = "stdlib:std.actor";
 pub const RESULT_MODULE_NAME: &str = "std.result";
 pub const RESULT_MODULE_ID: &str = "stdlib:std.result";
+pub const AUTH_CSRF_MODULE_NAME: &str = "std.auth.csrf";
+pub const AUTH_CSRF_MODULE_ID: &str = "stdlib:std.auth.csrf";
 pub const AUTH_SESSION_MODULE_NAME: &str = "std.auth.session";
 pub const AUTH_SESSION_MODULE_ID: &str = "stdlib:std.auth.session";
 pub const AUTH_MODULE_NAME: &str = "std.auth";
@@ -37,6 +43,7 @@ pub enum StandardModule {
     Result,
     Auth,
     AuthSession,
+    AuthCsrf,
     Ownership,
     Task,
     Sqlite,
@@ -53,6 +60,7 @@ pub const MODULES: &[StandardModule] = &[
     StandardModule::Result,
     StandardModule::Auth,
     StandardModule::AuthSession,
+    StandardModule::AuthCsrf,
     StandardModule::Ownership,
     StandardModule::Task,
     StandardModule::Sqlite,
@@ -89,6 +97,11 @@ pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
             name: AUTH_SESSION_MODULE_NAME,
             id: AUTH_SESSION_MODULE_ID,
             rust_namespace: "::nagi_runtime::auth::session",
+        },
+        StandardModule::AuthCsrf => &StandardModuleInfo {
+            name: AUTH_CSRF_MODULE_NAME,
+            id: AUTH_CSRF_MODULE_ID,
+            rust_namespace: "::nagi_runtime::auth::csrf",
         },
         StandardModule::Ownership => &StandardModuleInfo {
             name: OWNERSHIP_MODULE_NAME,
@@ -142,6 +155,9 @@ pub enum Resource {
     SessionFailure,
     SessionResponse,
     SessionSameSite,
+    CsrfOptions,
+    CsrfStore,
+    CsrfFailure,
     Grant,
     Task,
     TaskFailure,
@@ -196,6 +212,14 @@ pub enum Operation {
     AuthorizedPolicy,
     SessionAuthenticatedPolicy,
     SessionAuthorizedPolicy,
+    SessionCsrfTokens,
+    SessionCsrfPolicy,
+    CsrfOptions,
+    CsrfOpen,
+    CsrfCloneStore,
+    CsrfKind,
+    CsrfMessage,
+    CsrfOutcome,
     SessionOptions,
     SessionCookieOptions,
     SessionOpen,
@@ -413,6 +437,9 @@ pub const RESOURCES: &[Resource] = &[
     Resource::SessionFailure,
     Resource::SessionResponse,
     Resource::SessionSameSite,
+    Resource::CsrfOptions,
+    Resource::CsrfStore,
+    Resource::CsrfFailure,
     Resource::Grant,
     Resource::Task,
     Resource::TaskFailure,
@@ -461,6 +488,14 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::AuthorizedPolicy,
     Operation::SessionAuthenticatedPolicy,
     Operation::SessionAuthorizedPolicy,
+    Operation::SessionCsrfTokens,
+    Operation::SessionCsrfPolicy,
+    Operation::CsrfOptions,
+    Operation::CsrfOpen,
+    Operation::CsrfCloneStore,
+    Operation::CsrfKind,
+    Operation::CsrfMessage,
+    Operation::CsrfOutcome,
     Operation::SessionOptions,
     Operation::SessionCookieOptions,
     Operation::SessionOpen,
@@ -1216,6 +1251,9 @@ fn resource_contract(resource: Resource) -> &'static ResourceContract {
         | Resource::SessionFailure
         | Resource::SessionResponse
         | Resource::SessionSameSite => session::resource_contract(resource),
+        Resource::CsrfOptions | Resource::CsrfStore | Resource::CsrfFailure => {
+            csrf::resource_contract(resource)
+        }
         Resource::SqlitePool
         | Resource::SqliteTx
         | Resource::SqliteQueryValue
@@ -1291,6 +1329,7 @@ pub fn operation_info(operation: Operation) -> &'static OperationInfo {
         | Operation::HtmlDocument
         | Operation::HttpHtmlResponse => html::operation_info(operation),
         Operation::PublicPolicy | Operation::AuthenticatedPolicy | Operation::AuthorizedPolicy | Operation::SessionAuthenticatedPolicy | Operation::SessionAuthorizedPolicy | Operation::SecurityTimeout | Operation::AuthSubject | Operation::AuthKind | Operation::AuthMessage | Operation::AuthInvalidCredential | Operation::AuthDenied | Operation::AuthExpired | Operation::AuthInvalidRequest | Operation::AuthUnavailable | Operation::AuthInternal => security::operation_info(operation),
+        Operation::CsrfOptions | Operation::CsrfOpen | Operation::CsrfCloneStore | Operation::CsrfKind | Operation::CsrfMessage | Operation::CsrfOutcome | Operation::SessionCsrfTokens | Operation::SessionCsrfPolicy => csrf::operation_info(operation),
         Operation::SessionOptions
         | Operation::SessionCookieOptions
         | Operation::SessionOpen
@@ -1399,6 +1438,10 @@ pub fn operation_module(operation: Operation) -> ModuleId {
     ModuleId(module_info(operation_info(operation).module).id.into())
 }
 pub fn resource_named(module: &ModuleId, name: &str) -> Option<Resource> {
+    index::resource_named(module, name)
+}
+#[cfg(test)]
+fn resource_named_uncached(module: &ModuleId, name: &str) -> Option<Resource> {
     RESOURCES.iter().copied().find(|resource| {
         resource_module(*resource) == *module && resource_info(*resource).name == name
     })
@@ -1419,18 +1462,30 @@ pub fn native_view_element(ty: &Type) -> Option<&Type> {
     resource(&element.0).map(|_| element)
 }
 pub fn resource(symbol: &str) -> Option<Resource> {
+    index::resource(symbol)
+}
+#[cfg(test)]
+fn resource_uncached(symbol: &str) -> Option<Resource> {
     RESOURCES
         .iter()
         .copied()
         .find(|r| crate::modules::symbol(&resource_id(*r)) == symbol)
 }
 pub fn operation(symbol: &str) -> Option<Operation> {
+    index::operation(symbol)
+}
+#[cfg(test)]
+fn operation_uncached(symbol: &str) -> Option<Operation> {
     OPERATIONS
         .iter()
         .copied()
         .find(|op| crate::modules::symbol(&function_id(*op)) == symbol)
 }
 pub fn definition(id: &DefId) -> bool {
+    index::definition(id)
+}
+#[cfg(test)]
+fn definition_uncached(id: &DefId) -> bool {
     is_registered_module(&id.module)
         && (RESOURCES.iter().any(|r| resource_id(*r) == *id)
             || OPERATIONS.iter().any(|op| function_id(*op) == *id))
@@ -2053,6 +2108,9 @@ pub fn declaration_source() -> String {
     module_source(&ModuleId(MODULE_ID.into()))
 }
 pub fn module_source(module: &ModuleId) -> String {
+    index::module_source(module)
+}
+fn module_source_uncached(module: &ModuleId) -> String {
     if !is_registered_module(module) {
         return String::new();
     }
@@ -2103,10 +2161,17 @@ fn display_type(ty: &Type) -> String {
     }
 }
 pub fn definitions(module: &ModuleId) -> Vec<DefinitionInfo> {
+    index::definitions(module)
+}
+#[cfg(test)]
+fn definitions_uncached(module: &ModuleId) -> Vec<DefinitionInfo> {
     if !is_registered_module(module) {
         return vec![];
     }
-    let source = module_source(module);
+    let source = module_source_uncached(module);
+    definitions_in_source(module, &source)
+}
+fn definitions_in_source(module: &ModuleId, source: &str) -> Vec<DefinitionInfo> {
     RESOURCES
         .iter()
         .map(|r| resource_id(*r))
@@ -2139,11 +2204,19 @@ pub fn definitions(module: &ModuleId) -> Vec<DefinitionInfo> {
         .collect()
 }
 pub fn member_line(resource: Resource, name: &str) -> Option<usize> {
+    index::member_line(resource, name)
+}
+#[cfg(test)]
+fn member_line_uncached(resource: Resource, name: &str) -> Option<usize> {
+    member_line_in_source(
+        resource,
+        name,
+        &module_source_uncached(&resource_module(resource)),
+    )
+}
+fn member_line_in_source(resource: Resource, name: &str, source: &str) -> Option<usize> {
     let mut active = false;
-    for (index, line) in module_source(&resource_module(resource))
-        .lines()
-        .enumerate()
-    {
+    for (index, line) in source.lines().enumerate() {
         if line.starts_with("resource ") {
             active = line.starts_with(&format!("resource {}", resource_info(resource).name));
         }
@@ -2270,6 +2343,9 @@ mod resource_contract_tests {
     }
 }
 
+#[cfg(test)]
+#[path = "stdlib/csrf_contract_tests.rs"]
+mod csrf_contract_tests;
 #[cfg(test)]
 #[path = "stdlib/session_contract_tests.rs"]
 mod session_contract_tests;

@@ -1425,7 +1425,14 @@ fn index_impl(
         dest.modules.merge_native(p.modules.clone())?;
     }
     let owned_types = analyze
-        .then(|| crate::check::editor_types(&primary, &native))
+        .then(|| {
+            #[cfg(nagi_editor_stage_diag)]
+            crate::editor_stage_diag::mark(6);
+            let types = crate::check::editor_types(&primary, &native);
+            #[cfg(nagi_editor_stage_diag)]
+            crate::editor_stage_diag::mark(7);
+            types
+        })
         .flatten();
     let typed = typed.or(owned_types.as_ref());
     let mut types = Types {

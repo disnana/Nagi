@@ -26,8 +26,15 @@ use tokio::{net::TcpListener, sync::Semaphore, task::JoinSet};
 mod closing_io;
 use closing_io::ClosingIo;
 mod authority;
+mod browser_login;
+mod csrf_http;
+mod prelogin_http;
+pub(crate) use authority::checked_prelogin_origin;
 use authority::require_authority;
+pub(crate) use authority::ExternalOrigin as BoundOrigin;
 pub use authority::{authority, trusted_proxy};
+#[cfg(test)]
+use prelogin_http::{finalize_prelogin, register_prelogin_bootstrap, PreloginCompletion};
 
 pub use axum::http::Method;
 
@@ -657,7 +664,34 @@ enum PolicySource {
     Public,
     Bearer,
     Session,
+    Prelogin,
+    BrowserLogin,
 }
+type BrowserPolicyFuture<A> =
+    Pin<Box<dyn Future<Output = Result<A, crate::auth::prelogin::Failure>> + Send>>;
+type BrowserPolicyFactory<S, A> = dyn Fn(Request, Arc<S>, crate::auth::prelogin::ClaimContext) -> BrowserPolicyFuture<A>
+    + Send
+    + Sync;
+enum PolicyKind<S, A> {
+    Ordinary(Arc<PolicyFactory<S, A>>),
+    Session {
+        store: Arc<crate::auth::session::Store>,
+        factory: Arc<SessionPolicyFactory<S, A>>,
+        csrf: Option<Arc<crate::auth::csrf::Inner>>,
+    },
+    Browser {
+        pool: Arc<crate::auth::prelogin::Pool>,
+        factory: Arc<BrowserPolicyFactory<S, A>>,
+    },
+}
+enum PreparationProfile {
+    Plain,
+    GuardedSession,
+}
+type SessionPolicyFuture<A> =
+    Pin<Box<dyn Future<Output = Result<(A, crate::auth::session::CsrfBinding), Failure>> + Send>>;
+type SessionPolicyFactory<S, A> =
+    dyn Fn(Request, Arc<S>, Arc<Lease>, PreparationProfile) -> SessionPolicyFuture<A> + Send + Sync;
 fn require_session_csrf(source: PolicySource, method: &Method) -> Result<(), Error> {
     if source == PolicySource::Session
         && method != Method::GET
@@ -672,7 +706,7 @@ fn require_session_csrf(source: PolicySource, method: &Method) -> Result<(), Err
 }
 pub struct Policy<S, A> {
     source: PolicySource,
-    factory: Arc<PolicyFactory<S, A>>,
+    kind: PolicyKind<S, A>,
 }
 impl<S, A> fmt::Debug for Policy<S, A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -682,7 +716,7 @@ impl<S, A> fmt::Debug for Policy<S, A> {
 pub fn public_policy<S: Send + Sync + 'static>() -> Policy<S, ()> {
     Policy {
         source: PolicySource::Public,
-        factory: Arc::new(|_, _, _| Box::pin(async { Ok(()) })),
+        kind: PolicyKind::Ordinary(Arc::new(|_, _, _| Box::pin(async { Ok(()) }))),
     }
 }
 fn security_response(failure: Failure, source: PolicySource) -> Response {
@@ -732,7 +766,7 @@ where
     let verifier = Arc::new(verifier);
     Policy {
         source: PolicySource::Bearer,
-        factory: Arc::new(move |head, state, lease| {
+        kind: PolicyKind::Ordinary(Arc::new(move |head, state, lease| {
             let verifier = Arc::clone(&verifier);
             Box::pin(async move {
                 bearer_headers(&head)?;
@@ -744,7 +778,7 @@ where
                 scope.validate()?;
                 Ok(scope)
             })
-        }),
+        })),
     }
 }
 pub fn authorized_policy<S, P, H, V, A, Fut>(verifier: H, authorizer: A) -> Policy<S, Grant<P>>
@@ -760,7 +794,7 @@ where
     let authorizer = Arc::new(authorizer);
     Policy {
         source: PolicySource::Bearer,
-        factory: Arc::new(move |head, state, lease| {
+        kind: PolicyKind::Ordinary(Arc::new(move |head, state, lease| {
             let verifier = Arc::clone(&verifier);
             let authorizer = Arc::clone(&authorizer);
             Box::pin(async move {
@@ -775,7 +809,7 @@ where
                 grant.validate()?;
                 Ok(grant)
             })
-        }),
+        })),
     }
 }
 /// Fixed Session source over a checked persistent Store; no verifier fallback.
@@ -785,18 +819,24 @@ pub fn session_authenticated_policy<S: Send + Sync + 'static>(
     let store = Arc::new(store);
     Policy {
         source: PolicySource::Session,
-        factory: Arc::new(move |head, _, lease| {
-            let store = Arc::clone(&store);
-            Box::pin(async move {
-                let identity = store.lookup_http_identity(&head.headers).await?;
-                let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
-                if !scope.belongs_to(&lease) {
-                    return Err(Failure::invalid_request());
-                }
-                scope.validate()?;
-                Ok(scope)
-            })
-        }),
+        kind: PolicyKind::Session {
+            store: Arc::clone(&store),
+            csrf: None,
+            factory: Arc::new(move |head, _, lease, _| {
+                let store = Arc::clone(&store);
+                Box::pin(async move {
+                    let identity = store.lookup_http_identity(&head.headers).await?;
+                    let binding =
+                        crate::auth::session::CsrfBinding::from_identity(&identity, &lease)?;
+                    let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
+                    if !scope.belongs_to(&lease) {
+                        return Err(Failure::invalid_request());
+                    }
+                    scope.validate()?;
+                    Ok((scope, binding))
+                })
+            }),
+        },
     }
 }
 pub fn session_authorized_policy<S, P, A, Fut>(
@@ -813,20 +853,96 @@ where
     let authorizer = Arc::new(authorizer);
     Policy {
         source: PolicySource::Session,
-        factory: Arc::new(move |head, state, lease| {
-            let store = Arc::clone(&store);
-            let authorizer = Arc::clone(&authorizer);
-            Box::pin(async move {
-                let identity = store.lookup_http_identity(&head.headers).await?;
-                let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
-                let grant = authorizer(scope, head, state).await?;
-                if !grant.belongs_to(&lease) {
-                    return Err(Failure::invalid_request());
-                }
-                grant.validate()?;
-                Ok(grant)
-            })
-        }),
+        kind: PolicyKind::Session {
+            store: Arc::clone(&store),
+            csrf: None,
+            factory: Arc::new(move |mut head, state, lease, profile| {
+                let store = Arc::clone(&store);
+                let authorizer = Arc::clone(&authorizer);
+                Box::pin(async move {
+                    let identity = store.lookup_http_identity(&head.headers).await?;
+                    let binding =
+                        crate::auth::session::CsrfBinding::from_identity(&identity, &lease)?;
+                    let scope = AuthScope::bind(identity, Arc::clone(&lease))?;
+                    if matches!(profile, PreparationProfile::GuardedSession) {
+                        csrf_http::strip_credentials(&mut head.headers);
+                    }
+                    let grant = authorizer(scope, head, state).await?;
+                    if !grant.belongs_to(&lease) {
+                        return Err(Failure::invalid_request());
+                    }
+                    grant.validate()?;
+                    Ok((grant, binding))
+                })
+            }),
+        },
+    }
+}
+/// Attach the sealed authenticated B1 checkpoint to an existing Session policy.
+pub fn session_csrf_policy<S, A>(
+    mut policy: Policy<S, A>,
+    store: crate::auth::csrf::CsrfStore,
+) -> Result<Policy<S, A>, Error> {
+    match &mut policy.kind {
+        PolicyKind::Session {
+            store: session,
+            csrf,
+            ..
+        } if policy.source == PolicySource::Session
+            && csrf.is_none()
+            && store.matches_store(session) =>
+        {
+            *csrf = Some(store.into_inner());
+            Ok(policy)
+        }
+        _ => Err(Error::invalid(
+            "CSRF requires an unguarded policy over the same checked Session store",
+        )),
+    }
+}
+/// Register closed authenticated GET and explicit HEAD token delivery.
+pub fn session_csrf_tokens<S, E>(
+    app: App<S, E>,
+    path: &str,
+    store: crate::auth::csrf::CsrfStore,
+) -> Result<App<S, E>, Error> {
+    csrf_http::register(app, path, store.into_inner())
+}
+/// Dedicated POST BrowserLogin source. The named Rust adapter remains trusted
+/// to verify Bearer credentials; cookie/CSRF material never reaches callbacks.
+pub fn browser_login_policy<S, H, Fut>(
+    pool: crate::auth::prelogin::PreLoginPool,
+    verifier: H,
+) -> Policy<S, AuthScope>
+where
+    S: Send + Sync + 'static,
+    H: Fn(Request, Arc<S>) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<VerifiedIdentity, Failure>> + Send + 'static,
+{
+    let verifier = Arc::new(verifier);
+    Policy {
+        source: PolicySource::BrowserLogin,
+        kind: PolicyKind::Browser {
+            pool: crate::auth::prelogin::into_http_pool(pool),
+            factory: Arc::new(move |head, state, context| {
+                let verifier = Arc::clone(&verifier);
+                Box::pin(async move {
+                    let lease = context.lease();
+                    let identity = context.verify(|| verifier(head, state)).await?;
+                    let scope = AuthScope::bind(identity, Arc::clone(&lease))
+                        .map_err(crate::auth::prelogin::Failure::from_authority)?;
+                    if !scope.belongs_to(&lease) {
+                        return Err(crate::auth::prelogin::Failure::from_authority(
+                            Failure::invalid_request(),
+                        ));
+                    }
+                    scope
+                        .validate()
+                        .map_err(crate::auth::prelogin::Failure::from_authority)?;
+                    Ok(scope)
+                })
+            }),
+        },
     }
 }
 pub fn security_timeout(mut options: Options, ms: i64) -> Result<Options, Error> {
@@ -846,10 +962,53 @@ impl Request {
 type PreparedHandler<S> = Box<dyn FnOnce(Request, Arc<S>) -> ResponseFuture + Send>;
 type PrepareFuture<S> = Pin<Box<dyn Future<Output = Result<PreparedHandler<S>, Failure>> + Send>>;
 type RoutePrepare<S> = Box<dyn Fn(Request, Arc<S>, Arc<Lease>) -> PrepareFuture<S> + Send + Sync>;
+type GuardedPrepare<S> = Box<
+    dyn Fn(
+            Request,
+            Arc<S>,
+            Arc<Lease>,
+        ) -> Pin<
+            Box<
+                dyn Future<
+                        Output = Result<
+                            (PreparedHandler<S>, crate::auth::session::CsrfBinding),
+                            Failure,
+                        >,
+                    > + Send,
+            >,
+        > + Send
+        + Sync,
+>;
+type BrowserPrepare<S> = Box<
+    dyn Fn(
+            Request,
+            Arc<S>,
+            crate::auth::prelogin::ClaimContext,
+        ) -> Pin<
+            Box<
+                dyn Future<Output = Result<PreparedHandler<S>, crate::auth::prelogin::Failure>>
+                    + Send,
+            >,
+        > + Send
+        + Sync,
+>;
+enum RouteKind<S> {
+    Ordinary(RoutePrepare<S>),
+    CsrfTokens(Arc<crate::auth::csrf::Inner>),
+    Guarded {
+        store: Arc<crate::auth::csrf::Inner>,
+        prepare: GuardedPrepare<S>,
+    },
+    Bootstrap(Arc<crate::auth::prelogin::Pool>),
+    Browser {
+        pool: Arc<crate::auth::prelogin::Pool>,
+        prepare: BrowserPrepare<S>,
+    },
+}
 struct Route<S> {
     source: PolicySource,
     method: Method,
-    prepare: RoutePrepare<S>,
+    kind: RouteKind<S>,
 }
 pub struct App<S, E> {
     state: Arc<S>,
@@ -893,7 +1052,15 @@ pub fn app_default<S>(state: S) -> App<S, Error> {
 }
 fn require_route_policies<S, E>(app: &App<S, E>) -> Result<(), Error> {
     for route in app.routes.values().flatten() {
-        require_session_csrf(route.source, &route.method)?;
+        if matches!(&route.kind, RouteKind::Guarded { .. }) {
+            if route.source != PolicySource::Session {
+                return Err(Error::invalid(
+                    "CSRF route has an incompatible policy source",
+                ));
+            }
+        } else {
+            require_session_csrf(route.source, &route.method)?;
+        }
     }
     Ok(())
 }
@@ -929,7 +1096,12 @@ where
     H: Fn(Request, Arc<S>, A) -> Fut + Send + Sync + 'static,
     Fut: Future<Output = Result<Response, F>> + Send + 'static,
 {
-    require_session_csrf(policy.source, &method)?;
+    if !matches!(&policy.kind, PolicyKind::Session { csrf: Some(_), .. }) {
+        require_session_csrf(policy.source, &method)?;
+    }
+    if policy.source == PolicySource::BrowserLogin && method != Method::POST {
+        return Err(Error::invalid("BrowserLogin is a dedicated POST profile"));
+    }
     if !path.starts_with('/')
         || path
             .bytes()
@@ -952,32 +1124,97 @@ where
     }
     let handler = Arc::new(handler);
     let source = policy.source;
+    let kind = match policy.kind {
+        PolicyKind::Session { factory, csrf, .. } => {
+            if let Some(store) = csrf {
+                RouteKind::Guarded {
+                    store,
+                    prepare: Box::new(move |head, state, lease| {
+                        let handler = Arc::clone(&handler);
+                        let factory = Arc::clone(&factory);
+                        Box::pin(async move {
+                            let (authority, binding) = factory(
+                                head,
+                                state,
+                                Arc::clone(&lease),
+                                PreparationProfile::GuardedSession,
+                            )
+                            .await?;
+                            Ok((
+                                prepared_handler(handler, mapper, authority, lease, source),
+                                binding,
+                            ))
+                        })
+                    }),
+                }
+            } else {
+                RouteKind::Ordinary(Box::new(move |head, state, lease| {
+                    let handler = Arc::clone(&handler);
+                    let factory = Arc::clone(&factory);
+                    Box::pin(async move {
+                        let (authority, _) =
+                            factory(head, state, Arc::clone(&lease), PreparationProfile::Plain)
+                                .await?;
+                        Ok(prepared_handler(handler, mapper, authority, lease, source))
+                    })
+                }))
+            }
+        }
+        PolicyKind::Ordinary(factory) => {
+            RouteKind::Ordinary(Box::new(move |head, state, lease| {
+                let handler = Arc::clone(&handler);
+                let factory = Arc::clone(&factory);
+                Box::pin(async move {
+                    let authority = factory(head, state, Arc::clone(&lease)).await?;
+                    Ok(prepared_handler(handler, mapper, authority, lease, source))
+                })
+            }))
+        }
+        PolicyKind::Browser { pool, factory } => RouteKind::Browser {
+            pool,
+            prepare: Box::new(move |head, state, context| {
+                let handler = Arc::clone(&handler);
+                let factory = Arc::clone(&factory);
+                Box::pin(async move {
+                    let lease = context.lease();
+                    let authority = factory(head, state, context).await?;
+                    Ok(prepared_handler(handler, mapper, authority, lease, source))
+                })
+            }),
+        },
+    };
     routes.push(Route {
         source,
         method,
-        prepare: Box::new(move |head, state, lease| {
-            let handler = Arc::clone(&handler);
-            let factory = Arc::clone(&policy.factory);
-            Box::pin(async move {
-                let authority = factory(head, state, Arc::clone(&lease)).await?;
-                let prepared: PreparedHandler<S> = Box::new(move |request, state| {
-                    Box::pin(async move {
-                        if let Err(failure) = lease.validate() {
-                            return PreparedCompletion::Replacement(security_response(
-                                failure, source,
-                            ));
-                        }
-                        match handler(request, state, authority).await {
-                            Ok(response) => PreparedCompletion::HandlerOk(response),
-                            Err(error) => PreparedCompletion::Replacement(mapper(error)),
-                        }
-                    })
-                });
-                Ok(prepared)
-            })
-        }),
+        kind,
     });
     Ok(app)
+}
+fn prepared_handler<S, A, H, Fut, F>(
+    handler: Arc<H>,
+    mapper: fn(F) -> Response,
+    authority: A,
+    lease: Arc<Lease>,
+    source: PolicySource,
+) -> PreparedHandler<S>
+where
+    S: Send + Sync + 'static,
+    A: Send + 'static,
+    F: 'static,
+    H: Fn(Request, Arc<S>, A) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<Response, F>> + Send + 'static,
+{
+    Box::new(move |request, state| {
+        Box::pin(async move {
+            if let Err(failure) = lease.validate() {
+                return PreparedCompletion::Replacement(security_response(failure, source));
+            }
+            match handler(request, state, authority).await {
+                Ok(response) => PreparedCompletion::HandlerOk(response),
+                Err(error) => PreparedCompletion::Replacement(mapper(error)),
+            }
+        })
+    })
 }
 
 enum BodyFailure {
@@ -1071,6 +1308,9 @@ fn finalize_authenticated(
             names::VARY,
             HeaderValue::from_static(match source {
                 PolicySource::Session => "Cookie",
+                PolicySource::Prelogin | PolicySource::BrowserLogin => {
+                    "Cookie, Authorization, Origin"
+                }
                 _ => "Authorization",
             }),
         );
@@ -1126,7 +1366,7 @@ fn finalize_session_response(
     };
     let mut wire = finalize_authenticated(response.into_http(head), effective_source, head);
     if let Some(cookie) = cookie {
-        wire.headers_mut().insert(names::SET_COOKIE, cookie);
+        wire.headers_mut().append(names::SET_COOKIE, cookie);
         if source == PolicySource::Bearer {
             wire.headers_mut().insert(
                 names::VARY,
@@ -1153,7 +1393,13 @@ where
     };
     if let Err(status) = authority.check(request.version(), request.uri(), request.headers(), peer)
     {
-        return Ok(authority_rejection(status, head));
+        return Ok(csrf_http::finalize_path(
+            authority_rejection(status, head),
+            &app,
+            request.method(),
+            request.uri().path(),
+            head,
+        ));
     }
     let connect = request.method() == Method::CONNECT;
     let Ok(matched) = app.paths.at(request.uri().path()) else {
@@ -1187,7 +1433,7 @@ where
         }
         return Ok(response);
     };
-    let finish = |response| finalize_authenticated(response, route.source, head);
+    let finish = |response| csrf_http::finalize_route(response, route, head);
     let Ok(_permit) = requests.try_acquire_owned() else {
         return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
     };
@@ -1206,12 +1452,54 @@ where
         .security_deadline
         .checked_add(options.body_deadline)
         .and_then(|t| t.checked_add(options.handler_deadline));
-    let Some(deadline) = total.and_then(|t| Instant::now().checked_add(t)) else {
+    let admitted = Instant::now();
+    let Some(deadline) = total.and_then(|t| admitted.checked_add(t)) else {
         return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
     };
     let owner = match LeaseOwner::new(deadline) {
         Ok(owner) => owner,
         Err(_) => return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true))),
+    };
+    let prepare_route = match &route.kind {
+        RouteKind::CsrfTokens(store) => {
+            return Ok(csrf_http::dispatch_tokens(
+                store, parts, body, &options, owner, head, admitted,
+            )
+            .await)
+        }
+        RouteKind::Guarded { store, prepare } => {
+            return Ok(csrf_http::dispatch_guarded(
+                store,
+                prepare,
+                Arc::clone(&app.state),
+                parts,
+                body,
+                &options,
+                owner,
+                head,
+                admitted,
+            )
+            .await)
+        }
+        RouteKind::Browser { pool, prepare } => {
+            return Ok(browser_login::dispatch_browser(
+                pool,
+                prepare,
+                Arc::clone(&app.state),
+                axum::http::Request::from_parts(parts, body),
+                &options,
+                owner,
+                admitted,
+            )
+            .await);
+        }
+        RouteKind::Ordinary(prepare) => prepare,
+        RouteKind::Bootstrap(pool) => {
+            return Ok(prelogin_http::dispatch_bootstrap(
+                pool, parts, body, &options, owner, head, admitted,
+            )
+            .await);
+        }
     };
     // All terminal replacements discard the slot, including pending/ready/
     // applied material; accepted SQL effects are not rolled back by this Drop.
@@ -1227,7 +1515,7 @@ where
     };
     let security_started = Instant::now();
     let prepare = AssertUnwindSafe(async {
-        (route.prepare)(snapshot, Arc::clone(&app.state), Arc::clone(&owner.lease)).await
+        (prepare_route)(snapshot, Arc::clone(&app.state), Arc::clone(&owner.lease)).await
     })
     .catch_unwind();
     let prepared = match tokio::time::timeout(options.security_deadline, prepare).await {
@@ -1356,6 +1644,20 @@ impl<T: hyper::rt::Write + Unpin> hyper::rt::Write for TimedIo<T> {
     }
 }
 
+/// Register fixed bootstrap GET and explicit HEAD. No user callback or response
+/// factory can inspect the secret material; startup still checks pool origin.
+pub fn prelogin_bootstrap<S, E>(
+    app: App<S, E>,
+    path: &str,
+    pool: crate::auth::prelogin::PreLoginPool,
+) -> Result<App<S, E>, Error> {
+    prelogin_http::register_prelogin_bootstrap(
+        app,
+        path,
+        crate::auth::prelogin::into_http_pool(pool),
+    )
+}
+
 pub async fn serve<S, E>(app: App<S, E>, port: i64, options: Options) -> Result<(), Error>
 where
     S: Send + Sync + 'static,
@@ -1363,6 +1665,8 @@ where
 {
     require_authority(&options)?;
     require_route_policies(&app)?;
+    prelogin_http::check_startup(&app, &options)?;
+    csrf_http::check_startup(&app, &options)?;
     let port = u16::try_from(port)
         .ok()
         .filter(|port| *port != 0)
@@ -1389,6 +1693,8 @@ where
 {
     require_authority(&options)?;
     require_route_policies(&app)?;
+    prelogin_http::check_startup(&app, &options)?;
+    csrf_http::check_startup(&app, &options)?;
     let app = Arc::new(app);
     let options = Arc::new(options);
     let connections = Arc::new(Semaphore::new(options.connections));
@@ -1490,6 +1796,10 @@ pub(crate) fn conflicting_cache_for_test(mut response: Response) -> Response {
         .insert(names::CACHE_CONTROL, HeaderValue::from_static("public"));
     response
 }
+
+#[cfg(test)]
+#[path = "http_server/prelogin_tests.rs"]
+mod prelogin_tests;
 
 #[cfg(test)]
 mod finalizer_tests;

@@ -8,10 +8,13 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+#[path = "session/csrf_bridge.rs"]
+mod csrf_bridge;
 #[path = "session/delivery.rs"]
 pub(super) mod delivery;
 #[path = "session/http_bridge.rs"]
 mod http_bridge;
+pub(crate) use csrf_bridge::CsrfBinding;
 pub(crate) use http_bridge::{retire_http_delivery, take_http_cookie};
 #[path = "session/mutation.rs"]
 mod mutation;
@@ -337,6 +340,7 @@ impl Snapshot {
     }
 }
 pub(super) struct Foundation {
+    main_source: Option<sqlite::MainSource>,
     pool: sqlite::Pool,
     options: Options,
     incarnation: [u8; 32],
@@ -570,7 +574,7 @@ impl Foundation {
             if sample.ceil_ms<m.last_wall {return Err(Failure::unavailable());}
             exec(&tx,"UPDATE __nagi_session_meta SET last_wall=? WHERE id=1",sqlite::bind_i64(sqlite::parameters(),sample.ceil_ms)).await?;
             let incarnation=m.incarnation.as_slice().try_into().map_err(|_|Failure::invalid())?;
-            Ok(Self {pool:sqlite::clone_pool(pool),options,incarnation,clock,cookie_name:cookie_name.to_owned(),same_site})
+            Ok(Self {main_source:tx.checked_main_source(),pool:sqlite::clone_pool(pool),options,incarnation,clock,cookie_name:cookie_name.to_owned(),same_site})
         }.await;
         // Startup failures never adopt or mutate a conflicting schema/config.
         match result {
@@ -734,5 +738,163 @@ impl Foundation {
             Ok(snapshot) // preserve the pre-touch authority of this lookup.
         }.await;
         finish(tx, result, None).await
+    }
+}
+
+// Closed Session context for independent prelogin startup and each acquired Tx.
+pub(super) struct PreloginContext {
+    foundation: Arc<Foundation>,
+    source: sqlite::MainSource,
+    #[cfg(test)]
+    test_clock: Option<Clock>,
+}
+pub(super) struct PreloginClock {
+    pub(super) monotonic: Instant,
+    pub(super) floor_ms: i64,
+    pub(super) ceil_ms: i64,
+}
+impl Store {
+    pub(super) fn fork_prelogin(
+        &self,
+        options: sqlite::Options,
+    ) -> Result<(sqlite::Pool, PreloginContext), Failure> {
+        let source = self
+            .foundation
+            .main_source
+            .as_ref()
+            .ok_or_else(Failure::unavailable)?
+            .clone();
+        let pool = sqlite::fork_same_main(&self.foundation.pool, &source, options)
+            .map_err(Failure::database)?;
+        Ok((
+            pool,
+            PreloginContext {
+                foundation: Arc::clone(&self.foundation),
+                source,
+                #[cfg(test)]
+                test_clock: None,
+            },
+        ))
+    }
+}
+impl PreloginContext {
+    pub(super) fn sample(&self) -> Result<PreloginClock, Failure> {
+        #[cfg(test)]
+        let provider = self.test_clock.as_ref().unwrap_or(&self.foundation.clock);
+        #[cfg(not(test))]
+        let provider = &self.foundation.clock;
+        let c = provider()?;
+        Foundation::validate_clock(&c)?;
+        Ok(PreloginClock {
+            monotonic: c.monotonic,
+            floor_ms: c.floor_ms,
+            ceil_ms: c.ceil_ms,
+        })
+    }
+    pub(super) fn reserved_bytes(&self) -> Option<i64> {
+        self.foundation.options.max_stored.checked_mul(ROW_BYTES)
+    }
+    pub(super) fn cookie_name(&self) -> &str {
+        &self.foundation.cookie_name
+    }
+    pub(super) fn bind_incarnation(&self, p: sqlite::Parameters) -> sqlite::Parameters {
+        sqlite::bind_bytes(p, self.foundation.incarnation.to_vec())
+    }
+    pub(super) fn matches_incarnation(&self, value: &[u8]) -> bool {
+        value == self.foundation.incarnation
+    }
+    // Numeric observation only, not an authority factory. Retain the greatest
+    // persisted/trusted observed value even when a later sample is rejected.
+    pub(super) fn track_sample(
+        wall: &mut Option<i64>,
+        clock: PreloginClock,
+        persisted: i64,
+    ) -> Result<PreloginClock, Failure> {
+        let bound = wall.unwrap_or(0).max(persisted);
+        *wall = Some(bound.max(clock.ceil_ms));
+        if clock.ceil_ms < bound {
+            return Err(Failure::unavailable());
+        }
+        Ok(clock)
+    }
+    #[cfg(test)]
+    pub(super) fn set_test_clock_sequence(&mut self, values: Vec<i64>) {
+        assert!(!values.is_empty() && values.len() <= 16);
+        let values = std::sync::Mutex::new(std::collections::VecDeque::from(values));
+        self.test_clock = Some(Arc::new(move || {
+            let monotonic = Instant::now();
+            let ceil_ms = values
+                .lock()
+                .map_err(|_| Failure::unavailable())?
+                .pop_front()
+                .ok_or_else(Failure::unavailable)?;
+            let monotonic_after = Instant::now();
+            Ok(ClockSample {
+                monotonic,
+                monotonic_after,
+                floor_ms: ceil_ms,
+                ceil_ms,
+            })
+        }));
+    }
+    // Per-fixture logical clock for boundary tests. Every supplied sample still
+    // passes the production validation in sample() and persisted-wall tracking.
+    #[cfg(test)]
+    pub(super) fn set_test_paired_clock_sequence(
+        &mut self,
+        values: Vec<(Instant, i64)>,
+    ) -> Arc<std::sync::atomic::AtomicUsize> {
+        assert!(!values.is_empty() && values.len() <= 16);
+        let consumed = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = Arc::clone(&consumed);
+        let values = std::sync::Mutex::new(std::collections::VecDeque::from(values));
+        self.test_clock = Some(Arc::new(move || {
+            let (monotonic, wall) = values
+                .lock()
+                .map_err(|_| Failure::unavailable())?
+                .pop_front()
+                .ok_or_else(Failure::unavailable)?;
+            observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(ClockSample {
+                monotonic,
+                monotonic_after: monotonic,
+                floor_ms: wall,
+                ceil_ms: wall,
+            })
+        }));
+        consumed
+    }
+    pub(super) async fn verify(
+        &self,
+        tx: &sqlite::Tx,
+        wall: &mut Option<i64>,
+    ) -> Result<PreloginClock, Failure> {
+        if tx.checked_main_source().as_ref() != Some(&self.source) {
+            return Err(Failure::unavailable());
+        }
+        let existing=sqlite::all::<Schema>(tx,sqlite::literal("SELECT name,sql FROM sqlite_schema WHERE name GLOB '__nagi_session_*' OR tbl_name GLOB '__nagi_session_*' ORDER BY name"),sqlite::parameters()).await.map_err(Failure::database)?;
+        let expected = [
+            ("__nagi_session_digest", INDEX),
+            ("__nagi_session_meta", META),
+            ("__nagi_session_rows", ROWS),
+        ];
+        if existing.len() != 3
+            || existing
+                .iter()
+                .zip(expected)
+                .any(|(r, (n, s))| r.name != n || r.sql != s)
+        {
+            return Err(Failure::unavailable());
+        }
+        let m = metadata(tx).await?;
+        if m.version != 1
+            || m.incarnation.as_slice() != self.foundation.incarnation
+            || m.options != self.foundation.options
+            || m.cookie_name != self.foundation.cookie_name
+            || m.same_site != self.foundation.same_site
+        {
+            return Err(Failure::unavailable());
+        }
+        Self::track_sample(wall, self.sample()?, m.last_wall)
     }
 }

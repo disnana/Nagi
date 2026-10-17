@@ -132,6 +132,9 @@ fn security_nonclone(resource: crate::stdlib::Resource) -> bool {
         crate::stdlib::Resource::HttpPolicy
             | crate::stdlib::Resource::VerifiedIdentity
             | crate::stdlib::Resource::AuthFailure
+            | crate::stdlib::Resource::CsrfOptions
+            | crate::stdlib::Resource::CsrfStore
+            | crate::stdlib::Resource::CsrfFailure
             | crate::stdlib::Resource::SessionOptions
             | crate::stdlib::Resource::SessionCookieOptions
             | crate::stdlib::Resource::SessionStore
@@ -176,6 +179,7 @@ pub(crate) fn contains_security_nonshared(
             crate::stdlib::Resource::HttpPolicy
                 | crate::stdlib::Resource::VerifiedIdentity
                 | crate::stdlib::Resource::AuthFailure
+                | crate::stdlib::Resource::CsrfFailure
                 | crate::stdlib::Resource::SessionFailure
         ) && !crate::stdlib::resource_info(resource).shared
     })

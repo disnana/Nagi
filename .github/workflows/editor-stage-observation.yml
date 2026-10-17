@@ -1,0 +1,33 @@
+name: Closed editor stage observation
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/editor-stage-observation.yml'
+      - 'compiler/**'
+      - 'editors/vscode-nagi/test/**'
+      - 'scripts/ci/editor_stage_*'
+      - 'scripts/tests/test_editor_stage_observation*'
+permissions:
+  contents: read
+jobs:
+  intel-editor-observation:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.number == 121
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exact observation sources and closed fakes
+        run: |
+          python -B scripts/ci/editor_stage_source_guard.py
+          python -B scripts/tests/test_editor_stage_observation_source.py
+          node scripts/tests/test_editor_stage_observation.cjs
+      - name: Measure two isolated cases and current parallel editor suite
+        run: node scripts/ci/editor_stage_measurement.cjs

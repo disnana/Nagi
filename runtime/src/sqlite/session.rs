@@ -522,6 +522,7 @@ enum Command {
 pub struct Tx {
     // Native main database metadata, not a path/identity/durability proof.
     persistent_main: bool,
+    main_source: Option<super::MainSource>,
     sender: mpsc::Sender<Command>,
     #[cfg(test)]
     enqueues: Arc<std::sync::atomic::AtomicUsize>,
@@ -568,6 +569,9 @@ impl ExecReservation<'_> {
 impl Tx {
     // Internal Store prerequisite only. No filename or borrowed Connection
     // escapes; the actual native transaction's main DB supplied this value.
+    pub(crate) fn checked_main_source(&self) -> Option<super::MainSource> {
+        self.main_source.clone()
+    }
     pub(crate) fn has_persistent_main(&self) -> bool {
         self.persistent_main
     }
@@ -866,6 +870,7 @@ fn run_session(
         }
         let _ = request.reply.send(Ok(Tx {
             persistent_main: native.path().is_some_and(|name| !name.is_empty()),
+            main_source: super::main_source::MainSource::capture_native(&native),
             sender,
             #[cfg(test)]
             enqueues: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
