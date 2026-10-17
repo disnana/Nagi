@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -23,6 +24,32 @@ def green(names):
     count = len(names)
     return (f"running {count} tests\n" + "".join("test " + n + " ... ok\n" for n in names)
             + f"test result: ok. {count} passed; 0 failed; 0 ignored; 0 measured; 999 filtered out; finished in 0.01s\n").encode()
+
+
+def run_test_bash(script, environment, timeout=15):
+    executable = environment["NAGI_TEST_BASH"] if "NAGI_TEST_BASH" in environment else "bash"
+    try:
+        return subprocess.run([executable, "-c", script], cwd=ROOT, capture_output=True, text=True,
+                              env=environment, timeout=timeout), None
+    except FileNotFoundError:
+        return None, "missing"
+    except subprocess.TimeoutExpired:
+        return None, "timeout"
+    except OSError:
+        return None, "launch"
+
+
+def private_catalog_names():
+    path = ROOT / "scripts/check_sf07_private_tests.py"
+    tree = ast.parse(path.read_text())
+    first = next(n for n in tree.body if isinstance(n, ast.Assign)
+                 and any(isinstance(t, ast.Name) and t.id == "EXPECTED" for t in n.targets))
+    additions = [n for n in tree.body if isinstance(n, ast.AugAssign)
+                 and isinstance(n.target, ast.Name) and n.target.id == "EXPECTED"]
+    names = ast.literal_eval(first.value)
+    for node in additions:
+        names.extend(ast.literal_eval(node.value))
+    return names + sorted(gate.expected("private"))
 
 
 def projection():
@@ -152,9 +179,18 @@ class OwnedStateSummaryTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(json.dumps(summary.EXPECTED, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
                          "643c31aa2c66ac769a3cd478c5bdd57f324f058ba9a314352927b0e63dc4409d")
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        p = projection()
         for mode in summary.EXPECTED:
             self.assertEqual(workflow.count("| python -B scripts/ci/sf07_checkpoint_summary.py " + mode + "\n"), 2)
-        self.assertEqual(workflow.count("python -B scripts/tests/test_sf07_owned_state_summary.py\n"), 2)
+        self.assertEqual(workflow.count(p.OWNED_STATE_CI_ADDITIONS[0]), 2)
+        self.assertEqual(p.OWNED_STATE_CI_ADDITIONS[0].count('cygpath -w "$BASH"'), 1)
+        self.assertEqual(p.OWNED_STATE_CI_ADDITIONS[0].count('NAGI_TEST_BASH="$BASH"'), 1)
+        self.assertNotIn('NAGI_TEST_BASH="$BASH" python -B scripts/tests/test_sf07_owned_state_summary.py\n', workflow)
+        diagnostic = (ROOT / "scripts/tests/test_sf07_owned_state_summary.py").read_text()
+        self.assertNotIn(" pipe=cargo:" + "0,", diagnostic)
+        self.assertIn("expected_pipe=cargo:", diagnostic)
+        self.assertNotIn("stdout_" + "bytes=", diagnostic)
+        self.assertEqual(workflow.count(p.PRIVATE_CORE_COLOR_COMMAND), 2)
         filters = {"lock": "security_sf07_private::owned_state_lock::tests::", "owners": "security_sf07_private::owned_state_owner_tests::",
                    "send": "http_server::response_send::owned_state_lock_tests::"}
         for mode, filter_ in filters.items():
@@ -186,11 +222,48 @@ class OwnedStateSummaryTests(unittest.TestCase):
                 command = f"{prefix}cargo test --locked -p nagi-runtime --lib {filter_} 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py {mode}"
                 script = ("set -euo pipefail\n" + fake_cargo + "export CARGO_TERM_COLOR=always\nset +e\n" + command
                           + "\nstatuses=(\"${PIPESTATUS[@]}\")\nprintf 'fake_pipeline_status cargo=%s summary=%s\\n' \"${statuses[0]}\" \"${statuses[1]}\"\n")
-                result = subprocess.run(["bash", "-c", script], cwd=ROOT, capture_output=True, text=True,
-                                        env=environment, timeout=15)
-                self.assertEqual(result.returncode, 0)
-                self.assertEqual(result.stdout, f"sf07_owned_state scope={mode} state={state}\nfake_pipeline_status cargo=0 summary={gate_code}\n")
-                self.assertEqual(result.stderr, "")
+                result, launch_class = run_test_bash(script, environment)
+                if launch_class is not None:
+                    self.fail(f"fake_bash class={launch_class} rc=unavailable expected_pipe=unavailable")
+                expected_stdout = f"sf07_owned_state scope={mode} state={state}\nfake_pipeline_status cargo=0 summary={gate_code}\n"
+                if result.returncode != 0 or result.stdout != expected_stdout or result.stderr:
+                    self.fail(f"fake_bash class=unknown rc={result.returncode} expected_pipe=cargo:0,summary:{gate_code} "
+                              f"stdout_chars={len(result.stdout)} stderr_chars={len(result.stderr)}")
+
+    def test_private_core_color_is_rejected_globally_and_passes_with_scoped_never(self):
+        host = {"linux": "Linux", "win32": "Windows", "darwin": "macOS"}[sys.platform]
+        environment = dict(os.environ, RUNNER_OS=host, CARGO_TERM_COLOR="always")
+        environment.pop("CARGO_BUILD_TARGET", None)
+        with patch.dict(os.environ, environment, clear=True):
+            names = private_catalog_names()
+        plain = green(names).decode("utf-8")
+        colored = "\x1b[32mFinished test profile\x1b[0m\n" + plain
+        environment.update(FAKE_CARGO_PLAIN=plain, FAKE_CARGO_ANSI=colored)
+        fake_cargo = ("cargo() { if [ \"${CARGO_TERM_COLOR-}\" = \"never\" ]; then "
+                      "printf '%s' \"$FAKE_CARGO_PLAIN\"; else "
+                      "printf '%s' \"$FAKE_CARGO_ANSI\"; fi; }\n")
+        with tempfile.TemporaryDirectory() as temporary:
+            missing = dict(environment, NAGI_TEST_BASH=str(Path(temporary) / "missing-bash"))
+            result, launch_class = run_test_bash("exit 0", missing)
+            self.assertIsNone(result)
+            self.assertEqual(launch_class, "missing")
+            environment["RUNNER_TEMP"] = temporary
+            for prefix, expected_code, checker_code in (("", 1, 1), ("CARGO_TERM_COLOR=never ", 0, 0)):
+                command = (f'{prefix}cargo test --locked -p nagi-runtime --lib security_sf07_private:: '
+                           '2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log" >/dev/null')
+                script = ("set -uo pipefail\n" + fake_cargo + "export CARGO_TERM_COLOR=always\n" + command
+                          + '\npipeline=("${PIPESTATUS[@]}")\n'
+                          + 'python -B scripts/check_sf07_private_tests.py "$RUNNER_TEMP/sf07-private-core.log" >/dev/null 2>&1\n'
+                          + 'checker=$?\n'
+                          + "printf 'fake_private_core cargo=%s tee=%s checker=%s\\n' \"${pipeline[0]}\" \"${pipeline[1]}\" \"$checker\"\n"
+                          + 'exit "$checker"\n')
+                result, launch_class = run_test_bash(script, environment)
+                if launch_class is not None:
+                    self.fail(f"private_core_fake class={launch_class} rc=unavailable expected_pipe=unavailable")
+                expected = f"fake_private_core cargo=0 tee=0 checker={checker_code}\n"
+                if result.returncode != expected_code or result.stdout != expected or result.stderr:
+                    self.fail(f"private_core_fake class=unknown rc={result.returncode} expected_pipe=cargo:0,tee:0 "
+                              f"expected_checker={checker_code} stdout_chars={len(result.stdout)} stderr_chars={len(result.stderr)}")
 
     def test_workflow_inverse_removes_only_exact_additions_and_preserves_frozen_hash(self):
         p = projection()
@@ -209,6 +282,9 @@ class OwnedStateSummaryTests(unittest.TestCase):
             mutant = workflow.replace(command, command.replace("CARGO_TERM_COLOR=never ", "", 1), 1)
             with self.assertRaises(ValueError):
                 p.inverse_workflow(mutant)
+        private_mutant = workflow.replace(p.PRIVATE_CORE_COLOR_COMMAND, p.PRIVATE_CORE_COLOR_BASELINE, 1)
+        with self.assertRaises(ValueError):
+            p.inverse_workflow(private_mutant)
         changed = workflow.replace("set -euo pipefail", "set -eu pipefail", 1)
         self.assertNotEqual(hashlib.sha256(p.inverse_workflow(changed).encode()).hexdigest(),
                             "5d7923afbefb4108ccfaedfb2441cf8832aea38d25a683fd6cc1d62400783eb7")

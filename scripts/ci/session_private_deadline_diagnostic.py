@@ -208,6 +208,68 @@ def native_command(name: str) -> list[str]:
             "--", "--exact", "--show-output"]
 
 
+def _prep_timer_pair_control_passes(raw: bytes, returncode: int, *, oversized: bool = False) -> bool:
+    """Prove the swapped-handler mutant emitted one exact paired witness.
+
+    This is a counterfactual check only: it repairs the two terminal fields in
+    memory and asks the unchanged collector whether the corrected evidence
+    passes. It never changes what the native test or collector accepts.
+    """
+    if oversized or len(raw) > RAW_LIMIT or returncode != 0:
+        return False
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeError:
+        return False
+    if "\x00" in text or b"\r" in raw.replace(b"\r\n", b""):
+        return False
+    private_prefix = PREFIX.encode("ascii")
+    native_prefix = native_finish.PREFIX.encode("ascii")
+    if raw.count(private_prefix) != 1 or raw.count(native_prefix) != 1:
+        return False
+    # A private terminal and its native_finish projection are emitted as two
+    # adjacent lines from the same Closed snapshot. Reject any extra terminal
+    # observation before considering a repair.
+    if raw.count(b" terminal=3") != 2:
+        return False
+    lines = text.splitlines()
+    private_prefix_text = private_prefix.decode("ascii")
+    native_prefix_text = native_prefix.decode("ascii")
+    private_positions = [i for i, line in enumerate(lines) if private_prefix_text in line]
+    native_positions = [i for i, line in enumerate(lines) if native_prefix_text in line]
+    if len(private_positions) != 1 or len(native_positions) != 1:
+        return False
+    private_index, native_index = private_positions[0], native_positions[0]
+    if native_index != private_index + 1:
+        return False
+    # The source mutation changes only the enum label from
+    # PreparationTimer (1) to HandlerTimer (3). Keep the preparation phase and
+    # validate the legacy record after the one intended enum-field repair.
+    legacy_line = lines[private_index]
+    if legacy_line.count(" terminal=3") != 1:
+        return False
+    legacy = marker(legacy_line.replace(" terminal=3", " terminal=1", 1))
+    native = native_finish.parse(lines[native_index])
+    if legacy is None or native is None or (legacy["terminal"], legacy["event"]) != (1, 1):
+        return False
+    # The native record must still bind to the emitted wrong enum value while
+    # sharing the exact request counters validated in the repaired legacy row.
+    paired_legacy = dict(legacy, terminal=3)
+    if not native_finish.paired(native, paired_legacy, 3):
+        return False
+
+    # Preserve LF/CRLF bytes and touch only the two validated terminal fields.
+    raw_lines = raw.splitlines(keepends=True)
+    if len(raw_lines) != len(lines):
+        return False
+    for index in (private_index, native_index):
+        if raw_lines[index].count(b" terminal=3") != 1:
+            return False
+        raw_lines[index] = raw_lines[index].replace(b" terminal=3", b" terminal=1", 1)
+    repaired = b"".join(raw_lines)
+    return collect("prep_timer", repaired, returncode)["state"] == "passed"
+
+
 def wiring_controls(root: Path, env: dict) -> bool:
     """CI-only owned-checkout mutations; restore exact bytes even on failure."""
     path = root / "runtime/src/http_server.rs"
@@ -237,12 +299,7 @@ def wiring_controls(root: Path, env: dict) -> bool:
                 # The passing exact native test must have no private witness.
                 valid_red &= PREFIX.encode() not in raw
             else:
-                # Repair only the deliberately wrong terminal in captured
-                # evidence; every other grammar/summary/bound must then pass.
-                wrong = b" terminal=3"
-                valid_red = (code == 0 and raw.count(wrong) == 1 and result["reason"] == 4
-                             and collect("prep_timer", raw.replace(wrong, b" terminal=1"), code,
-                                         oversized=oversized)["state"] == "passed")
+                valid_red = _prep_timer_pair_control_passes(raw, code, oversized=oversized)
             passed &= valid_red
             print("session_private_deadline_control " + json.dumps({
                 "control": control, "state": "expected_red" if valid_red else "invalid"},

@@ -79,10 +79,26 @@ U2_NATIVE_LINES = (
 SESSION_NATIVE_FINISH_ADDITIONS = ('          python -B scripts/tests/test_session_native_finish_diagnostic.py\n', '          python -B scripts/tests/test_session_native_finish_summary.py\n', '          CARGO_TERM_COLOR=never RUSTFLAGS=\'--cfg nagi_auth_stage_diag\' cargo test --locked -p nagi-runtime --lib native_finish 2>&1 | python -B scripts/ci/session_native_finish_summary.py\n          native_finish_status=("${PIPESTATUS[@]}")\n          if [ "${native_finish_status[0]}" -ne 0 ] || [ "${native_finish_status[1]}" -ne 0 ]; then diagnose_rc=1; fi\n')
 
 
-OWNED_STATE_CI_ADDITIONS = ('          python -B scripts/tests/test_sf07_owned_state_summary.py\n', '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock\n', '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners\n', '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send\n')
+OWNED_STATE_CI_ADDITIONS = (
+    '          if [ "$RUNNER_OS" = "Windows" ]; then\n'
+    '            NAGI_TEST_BASH="$(cygpath -w "$BASH")"\n'
+    '          else\n'
+    '            NAGI_TEST_BASH="$BASH"\n'
+    '          fi\n'
+    '          export NAGI_TEST_BASH\n'
+    '          python -B scripts/tests/test_sf07_owned_state_summary.py\n',
+    '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock\n',
+    '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners\n',
+    '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send\n')
+
+PRIVATE_CORE_COLOR_COMMAND = '          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"\n'
+PRIVATE_CORE_COLOR_BASELINE = '          cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"\n'
 
 
 def inverse_workflow(source):
+    if source.count(PRIVATE_CORE_COLOR_COMMAND) != 2:
+        raise ValueError("private-core color command mismatch")
+    source = source.replace(PRIVATE_CORE_COLOR_COMMAND, PRIVATE_CORE_COLOR_BASELINE)
     for addition in OWNED_STATE_CI_ADDITIONS:
         if source.count(addition) != 2:
             raise ValueError('owned-state workflow registration mismatch')
@@ -136,7 +152,40 @@ def inverse_prelogin_wire(source):
 SESSION_NATIVE_COLLECTOR_INVERSE = (('\nfrom collections import Counter\nimport hashlib\nimport importlib.util\nimport json\nimport os\nfrom pathlib import Path\n', '\nfrom collections import Counter\nimport hashlib\nimport json\nimport os\nfrom pathlib import Path\n'), ('import subprocess\nimport sys\nimport threading\n\n_NATIVE_SPEC = importlib.util.spec_from_file_location(\n    "session_native_finish_diagnostic", Path(__file__).with_name("session_native_finish_diagnostic.py"))\nnative_finish = importlib.util.module_from_spec(_NATIVE_SPEC)\n_NATIVE_SPEC.loader.exec_module(native_finish)\n\nPREFIX = "session_private_deadline_diag"\nRAW_LIMIT = 256 * 1024\n', 'import subprocess\nimport sys\nimport threading\n\nPREFIX = "session_private_deadline_diag"\nRAW_LIMIT = 256 * 1024\n'), ('def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) -> dict:\n    # Unknown identity is never echoed. Callers cannot enlarge the native suite.\n    if case not in CASES:\n        return {"case": "unknown", "state": "invalid", "reason": 1, "facts": [], "native_finish": []}\n    result = {"case": case, "state": "invalid", "reason": 2, "facts": [], "native_finish": []}\n    if oversized or len(raw) > RAW_LIMIT:\n        return result\n    try:\n', 'def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) -> dict:\n    # Unknown identity is never echoed. Callers cannot enlarge the native suite.\n    if case not in CASES:\n        return {"case": "unknown", "state": "invalid", "reason": 1, "facts": []}\n    result = {"case": case, "state": "invalid", "reason": 2, "facts": []}\n    if oversized or len(raw) > RAW_LIMIT:\n        return result\n    try:\n'), ('        result["reason"] = 3\n        return result\n    facts = []\n    native_facts = []\n    seen = set()\n    headings = [index for index, line in enumerate(lines)\n                if line.startswith("---- ") and line.endswith(" stdout ----")]\n', '        result["reason"] = 3\n        return result\n    facts = []\n    seen = set()\n    headings = [index for index, line in enumerate(lines)\n                if line.startswith("---- ") and line.endswith(" stdout ----")]\n'), ('    for index, line in enumerate(lines):\n        # Prefix embedded in an arbitrary tail, alternate shape, or truncation\n        # is invalid rather than silently ignored or rendered.\n        if native_finish.PREFIX in line:\n            value = native_finish.parse(line)\n            legacy = marker(lines[index - 1]) if index > 0 else None\n            if (not block_start < index < block_end or value is None\n                    or not native_finish.paired(value, legacy, 3)\n                    or line in seen or len(native_facts) >= MARKER_LIMIT):\n                result["reason"] = 4\n                return result\n            native_facts.append(value)\n            seen.add(line)\n            continue\n        if PREFIX not in line:\n            continue\n        if not block_start < index < block_end:\n', '    for index, line in enumerate(lines):\n        # Prefix embedded in an arbitrary tail, alternate shape, or truncation\n        # is invalid rather than silently ignored or rendered.\n        if PREFIX not in line:\n            continue\n        if not block_start < index < block_end:\n'), ('                item[key] != 0 for key in ("begins", "commands", "commits")) for item in facts):\n            result["reason"] = 6\n            return result\n    result.update(state="passed" if good else "tests_failed", reason=0, facts=facts, native_finish=native_facts)\n    if len(json.dumps(result, separators=(",", ":")).encode()) > JSON_LIMIT:\n        return {"case": case, "state": "invalid", "reason": 2, "facts": [], "native_finish": []}\n    return result\n\n\n', '                item[key] != 0 for key in ("begins", "commands", "commits")) for item in facts):\n            result["reason"] = 6\n            return result\n    result.update(state="passed" if good else "tests_failed", reason=0, facts=facts)\n    if len(json.dumps(result, separators=(",", ":")).encode()) > JSON_LIMIT:\n        return {"case": case, "state": "invalid", "reason": 2, "facts": []}\n    return result\n\n\n'), ('            raw, code, oversized = capture(native_command(name), env)\n            result = collect(case, raw, code, oversized=oversized)\n        except (OSError, ValueError, subprocess.SubprocessError):\n            result = {"case": case, "state": "unavailable", "reason":8, "facts": [], "native_finish": []}\n        failed |= result["state"] != "passed"\n        if name.startswith(CALIBRATION):\n            calibration_passed &= result["state"] == "passed"\n', '            raw, code, oversized = capture(native_command(name), env)\n            result = collect(case, raw, code, oversized=oversized)\n        except (OSError, ValueError, subprocess.SubprocessError):\n            result = {"case": case, "state": "unavailable", "reason":8, "facts": []}\n        failed |= result["state"] != "passed"\n        if name.startswith(CALIBRATION):\n            calibration_passed &= result["state"] == "passed"\n'))
 
 
+PRIVATE_PAIR_HELPER_START = "\ndef _prep_timer_pair_control_passes("
+PRIVATE_PAIR_HELPER_END = "\ndef wiring_controls("
+PRIVATE_PAIR_HELPER_SHA256 = "ffc45286d83222cd1f349b47ab337987e6a9871acd0bdb23594b14c0084c14a2"
+PRIVATE_PAIR_CONTROL_AFTER = (
+    '            else:\n'
+    '                valid_red = _prep_timer_pair_control_passes(raw, code, oversized=oversized)\n'
+)
+PRIVATE_PAIR_CONTROL_BEFORE = (
+    '            else:\n'
+    '                # Repair only the deliberately wrong terminal in captured\n'
+    '                # evidence; every other grammar/summary/bound must then pass.\n'
+    '                wrong = b" terminal=3"\n'
+    '                valid_red = (code == 0 and raw.count(wrong) == 1 and result["reason"] == 4\n'
+    '                             and collect("prep_timer", raw.replace(wrong, b" terminal=1"), code,\n'
+    '                                         oversized=oversized)["state"] == "passed")\n'
+)
+
+
+def inverse_private_pair_control(source):
+    if source.count(PRIVATE_PAIR_HELPER_START) != 1 or source.count(PRIVATE_PAIR_HELPER_END) != 1:
+        raise ValueError("private paired-control helper registration mismatch")
+    start = source.index(PRIVATE_PAIR_HELPER_START)
+    end = source.index(PRIVATE_PAIR_HELPER_END, start)
+    helper = source[start:end]
+    if hashlib.sha256(helper.encode()).hexdigest() != PRIVATE_PAIR_HELPER_SHA256:
+        raise ValueError("private paired-control helper digest mismatch")
+    source = source[:start] + source[end:]
+    if source.count(PRIVATE_PAIR_CONTROL_AFTER) != 1:
+        raise ValueError("private paired-control branch mismatch")
+    return source.replace(PRIVATE_PAIR_CONTROL_AFTER, PRIVATE_PAIR_CONTROL_BEFORE, 1)
+
+
 def inverse_collector(source):
+    source = inverse_private_pair_control(source)
     for added, inherited in SESSION_NATIVE_COLLECTOR_INVERSE:
         if source.count(added) != 1:
             raise ValueError('Session native finish collector inverse mismatch')

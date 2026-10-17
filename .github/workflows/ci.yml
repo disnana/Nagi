@@ -93,6 +93,12 @@ jobs:
           python -B scripts/tests/test_sf07_request_source.py
           python -B scripts/tests/test_sf07_rate_source.py
           python -B scripts/tests/test_sf07_checkpoint_summary.py
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            NAGI_TEST_BASH="$(cygpath -w "$BASH")"
+          else
+            NAGI_TEST_BASH="$BASH"
+          fi
+          export NAGI_TEST_BASH
           python -B scripts/tests/test_sf07_owned_state_summary.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
@@ -370,7 +376,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
           python scripts/check_sf07_private_tests.py "$RUNNER_TEMP/sf07-private-core.log"
       - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
@@ -633,6 +639,12 @@ jobs:
           python -B scripts/tests/test_sf07_request_source.py
           python -B scripts/tests/test_sf07_rate_source.py
           python -B scripts/tests/test_sf07_checkpoint_summary.py
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            NAGI_TEST_BASH="$(cygpath -w "$BASH")"
+          else
+            NAGI_TEST_BASH="$BASH"
+          fi
+          export NAGI_TEST_BASH
           python -B scripts/tests/test_sf07_owned_state_summary.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
@@ -911,7 +923,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
           python scripts/check_sf07_private_tests.py "$RUNNER_TEMP/sf07-private-core.log"
       - run: cargo build --release --locked -p nagic
       - name: Check HTTP registry emission before the platform regression

@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import importlib.util
 import io
 import json
@@ -22,6 +23,22 @@ def witness(terminal=1, event=1):
     return (f"{diag.PREFIX} status=504 phase={phase} event={event} db=0 polls=1 "
             f"begins=0 commands=0 commits=0 budget_ms={budget} entry_remaining_ms={budget} "
             f"phase_remaining_ms={budget} exit_remaining_ms=0 terminal={terminal}")
+
+
+def native_witness(terminal=3, **changes):
+    values = {"status": 504, "origin": 3, "terminal": terminal, "diagnostic_valid": 1,
+              "native_state": 0, "commit_result": 0, "cleanup_result": 0, "cleanup_reason": 0,
+              **{name: diag.native_finish.UNSEEN_US for name in diag.native_finish.TIMES},
+              "begins": 0, "commits": 0, "selected_deadline_passed": 1}
+    values.update(changes)
+    return diag.native_finish.PREFIX + " " + " ".join(
+        f"{name}={values[name]}" for name in diag.native_finish.FIELDS)
+
+
+def paired_raw(legacy_terminal=3, native_terminal=3, native_changes=None, extra=()):
+    legacy = witness(1, 1).replace("terminal=1", f"terminal={legacy_terminal}")
+    markers = [legacy, native_witness(native_terminal, **(native_changes or {}))]
+    return raw(markers=markers + list(extra))
 
 
 def raw(case="prep_timer", markers=None, failed=False):
@@ -96,6 +113,60 @@ class ClosedCollectorTests(unittest.TestCase):
         self.assertEqual(diag.collect("foreign_grant", raw("foreign_grant", markers), 0)["reason"], 4)
         self.assertEqual(diag.collect("prep_timer", b"\xff", 0)["state"], "invalid")
 
+    def test_paired_control_requires_exact_pair_and_repairs_only_terminals(self):
+        valid = paired_raw()
+        repaired = valid.replace(b" terminal=3", b" terminal=1")
+        for observed in (valid, valid.replace(b"\n", b"\r\n")):
+            expected = observed.replace(b" terminal=3", b" terminal=1")
+            captured = []
+            original_collect = diag.collect
+
+            def capture_collect(case, data, code, **kwargs):
+                captured.append(data)
+                return original_collect(case, data, code, **kwargs)
+
+            with mock.patch.object(diag, "collect", side_effect=capture_collect):
+                self.assertTrue(diag._prep_timer_pair_control_passes(observed, 0))
+            self.assertEqual(captured, [expected])
+            self.assertEqual(captured[0].count(b" terminal=1"), 2)
+        self.assertEqual(diag.collect("prep_timer", repaired, 0)["state"], "passed")
+
+        legacy = witness(1, 1).replace("terminal=1", "terminal=3")
+        native = native_witness()
+        counter_mismatch = native_witness(
+            native_state=1, begins=1, commit_enter_us=0)
+        commit_mismatch = native_witness(
+            native_state=2, commit_result=1, commit_enter_us=0, commit_return_us=0,
+            begins=1, commits=1)
+        invalid_fields = native.replace("diagnostic_valid=1", "diagnostic_valid=0")
+        variants = [
+            raw(markers=[legacy]),                         # native record missing
+            raw(markers=[native]),                         # legacy record missing
+            raw(markers=[native, legacy]),                 # reversed pair
+            raw(markers=[legacy, native, native]),         # duplicate native
+            raw(markers=[legacy, native, legacy]),         # duplicate legacy
+            raw(markers=[legacy, native_witness(origin=1)]),  # wrong origin
+            raw(markers=[legacy, native_witness(2)]),      # wrong native terminal
+            raw(markers=[witness(4, 1), native]),          # wrong private terminal
+            raw(markers=[witness(3, 2), native]),          # wrong private event
+            raw(markers=[legacy, counter_mismatch]),       # begins mismatch
+            raw(markers=[legacy, commit_mismatch]),        # commits mismatch
+            raw(markers=[legacy, native + " extra=1"]),   # unknown field
+            raw(markers=[legacy, invalid_fields]),         # invalid closed value
+            raw(markers=[legacy, native, "other terminal=3"]),  # extra terminal
+            raw(markers=[legacy, native]).replace(b"running 1 test", b"running 0 tests"),
+            raw(markers=[legacy, native]).replace(b"test result: ok", b"test result: FAILED"),
+            b"compile failed\n",
+            b"\xff" + valid,
+        ]
+        for sample in variants:
+            with self.subTest(sample_length=len(sample)):
+                self.assertFalse(diag._prep_timer_pair_control_passes(sample, 0))
+        self.assertFalse(diag._prep_timer_pair_control_passes(valid, 101))
+        self.assertFalse(diag._prep_timer_pair_control_passes(valid, -1))  # timed out
+        self.assertFalse(diag._prep_timer_pair_control_passes(valid, 0, oversized=True))
+        self.assertFalse(diag._prep_timer_pair_control_passes(b"x" * (diag.RAW_LIMIT + 1), 0))
+
     def test_exact_single_execution_summary_returncode_and_identity(self):
         samples = [raw().replace(b"running 1 test", b"running 0 tests"),
                    raw().replace(b"1 passed; 0 failed", b"0 passed; 0 failed"),
@@ -161,7 +232,7 @@ class ClosedCollectorTests(unittest.TestCase):
                 source = target.read_bytes()
                 if b"let _ = observer;" in source:
                     return raw(markers=[]), 0, False
-                return raw(markers=[witness().replace("terminal=1", "terminal=3")]), 0, False
+                return paired_raw(), 0, False
 
             with mock.patch.object(diag, "capture", side_effect=fake), contextlib.redirect_stdout(io.StringIO()):
                 self.assertTrue(diag.wiring_controls(root, {}))
@@ -190,8 +261,12 @@ class ClosedCollectorTests(unittest.TestCase):
                 def fake(command, env):
                     source = target.read_bytes()
                     if b"let _ = observer;" in source:
-                        return raw(markers=[]), 0, False
-                    return raw(markers=[witness().replace("terminal=1", "terminal=3")]), 0, False
+                        output = raw(markers=[])
+                    else:
+                        output = paired_raw()
+                    if b"\r\n" in original:
+                        output = output.replace(b"\n", b"\r\n")
+                    return output, 0, False
                 with mock.patch.object(diag, "capture", side_effect=fake) as capture, contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(diag.wiring_controls(root, {}), accepted)
                     self.assertEqual(capture.call_count, 2 if accepted else 0)
@@ -225,6 +300,34 @@ class SourceWiringControls(unittest.TestCase):
         method = source.split("pub(crate) fn emit_private", 1)[1].split("pub(crate) fn emit_token", 1)[0]
         self.assertIn("self.closed(504)", method)
         self.assertNotIn("ACTIVE", method.replace("ACTIVE is deliberately not consulted here", ""))
+
+    def test_paired_control_inverse_is_exact_and_rejects_helper_or_branch_mutants(self):
+        projection_spec = importlib.util.spec_from_file_location(
+            "request_projection", self.root / "scripts/ci/sf07_request_projection.py")
+        projection = importlib.util.module_from_spec(projection_spec)
+        projection_spec.loader.exec_module(projection)
+        source = (self.root / "scripts/ci/session_private_deadline_diagnostic.py").read_text()
+        restored = projection.inverse_collector(source)
+        self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
+                         "1d0dd3c92e07c374de80d4f968c101141eb6290ba2b935bf9c06dcb85ac60913")
+
+        helper_start = source.index(projection.PRIVATE_PAIR_HELPER_START)
+        helper_end = source.index(projection.PRIVATE_PAIR_HELPER_END, helper_start)
+        helper = source[helper_start:helper_end]
+        branch = projection.PRIVATE_PAIR_CONTROL_AFTER
+        mutants = (
+            source.replace(helper, "", 1),
+            source.replace(helper, helper + helper, 1),
+            source.replace("return collect(\"prep_timer\", repaired, returncode)[\"state\"] == \"passed\"",
+                           "return False", 1),
+            source.replace(branch, "", 1),
+            source.replace(branch, branch + branch, 1),
+            source.replace(branch, branch.replace("_prep_timer_pair_control_passes", "_other_control"), 1),
+        )
+        for mutant in mutants:
+            with self.subTest(mutant_hash=hashlib.sha256(mutant.encode()).hexdigest()):
+                with self.assertRaises(ValueError):
+                    projection.inverse_collector(mutant)
 
 
 if __name__ == "__main__":
