@@ -1682,6 +1682,8 @@ fn cargo_manifest(
 }
 
 pub fn cli(args: Vec<String>) -> Result<(), String> {
+    #[cfg(nagi_editor_stage_diag)]
+    let _editor_stage = crate::editor_stage_diag::begin(&args);
     if crate::sql_check::worker(&args)? {
         return Ok(());
     }
@@ -1717,6 +1719,8 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     } else {
         (crate::project::resolve(&args, &cwd)?, None)
     };
+    #[cfg(nagi_editor_stage_diag)]
+    crate::editor_stage_diag::mark(1);
     let project_manifest = options.manifest_path;
     let cmd = options.command.as_str();
     let path = options.source;
@@ -1745,7 +1749,11 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     } else {
         std::collections::HashMap::new()
     };
+    #[cfg(nagi_editor_stage_diag)]
+    crate::editor_stage_diag::mark(2);
     let mut sources = crate::source::load_with_overlays(&path, high, &overlays)?;
+    #[cfg(nagi_editor_stage_diag)]
+    crate::editor_stage_diag::mark(3);
     let mut p = std::mem::take(&mut sources.program);
     let native = options.native;
     let out = options.out;
@@ -1778,8 +1786,20 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             .map_err(|e| sources.diagnostic(&e))?;
     }
     crate::modules::rebind_native(&mut p, &mut all).map_err(|e| sources.diagnostic(&e))?;
+    #[cfg(nagi_editor_stage_diag)]
+    crate::editor_stage_diag::mark(4);
     if cmd == "symbols" {
+        #[cfg(not(nagi_editor_stage_diag))]
         println!("{}", crate::symbols::index(&sources, &[&p, &all])?);
+        #[cfg(nagi_editor_stage_diag)]
+        {
+            crate::editor_stage_diag::mark(5);
+            let index = crate::symbols::index(&sources, &[&p, &all])?;
+            crate::editor_stage_diag::mark(8);
+            crate::editor_stage_diag::mark(9);
+            println!("{}", index);
+            crate::editor_stage_diag::mark(10);
+        }
         return Ok(());
     }
     // 手書きLowの通常関数はHighの名前解決にも使う。置換本体はLowの統合時に検査する。
