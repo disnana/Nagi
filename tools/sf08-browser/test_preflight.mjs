@@ -29,7 +29,13 @@ function fake(name, mode, fault) {
       async newContext(options) {
         trace.context = options;
         return { async close() { trace.contextClosed = true; }, async newPage() {
-          return { async close() { trace.pageClosed++; }, async goto(url, options) {
+          if (fault?.reason === 'host' && fault.kind === 'page-open' && trace.urls.length === 4)
+            throw new Error('PRIVATE_SENTINEL');
+          return { async close() {
+            trace.pageClosed++;
+            if (fault?.reason === 'host' && fault.kind === 'page-close' &&
+                trace.urls.at(-1) === config.negative.host + '/') throw new Error('PRIVATE_SENTINEL');
+          }, async goto(url, options) {
             trace.urls.push(url);
             trace.timeouts.push(options.timeout);
             if (url.startsWith(config.negative.ca) || url.startsWith(config.negative.host)) {
@@ -38,6 +44,11 @@ function fake(name, mode, fault) {
               if (mode === 'accepted') return { status: () => 200 };
               if (mode === 'network') throw new Error('net::ERR_CONNECTION_REFUSED PRIVATE_SENTINEL');
               if (fault && fault.reason === reason) {
+                if (fault.kind === 'resolved-response') return { status: () => 200 };
+                if (fault.kind === 'null-response') return null;
+                if (fault.kind === 'webkit-protocol') throw new Error(
+                  'page.goto: Protocol error (Playwright.navigate): ' + token + ' at ' + url);
+                if (fault.kind === 'cancelled') throw new Error('Operation was cancelled');
                 if (fault.kind === 'protocol-wrapper') throw new Error(
                   'page.goto: Protocol error (browsingContext.navigate): ' + (fault.token ?? token) + ' at ' + url);
                 if (fault.kind === 'raw-error') throw new Error(fault.message);
@@ -401,7 +412,7 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
   await assert.rejects(probeEngine('firefox', wrappedHost, settings(provisioned, ready, negative),
     (stage, engine) => wrappedHostEvents.push({ stage, engine })),
   /^Error: SF08 browser trust preflight refused$/);
-  assert.deepEqual(wrappedHostEvents.at(-1), { stage: 'engine_wrong_host', engine: 'firefox' });
+  assert.deepEqual(wrappedHostEvents.at(-1), { stage: 'engine_wrong_host_unknown', engine: 'firefox' });
   assert.equal(wrappedHost.trace.contextClosed && wrappedHost.trace.closed, true);
 
   const cases = [
@@ -637,5 +648,43 @@ test('WebKit cancellation phrase is a failure-only lexical observation', async (
       { schema_version: 1, stage: 'engine_wrong_ca_webkit_cancelled_present', engine: 'webkit' });
     assert.equal(type.trace.contextClosed && type.trace.closed, true);
     assert.doesNotMatch(JSON.stringify(events), /Operation|cancelled PRIVATE|PRIVATE_SENTINEL|Call log/);
+  }
+});
+
+test('WebKit wrong-host failures receive bounded labels without changing acceptance', async () => {
+  const cases = [
+    { kind: 'resolved-response', stage: 'engine_wrong_host_response_received' },
+    { kind: 'null-response', stage: 'engine_wrong_host_no_response' },
+    { kind: 'timeout', stage: 'engine_wrong_host_timeout' },
+    { kind: 'webkit-protocol', stage: 'engine_wrong_host_webkit_protocol_form' },
+    { kind: 'raw-error', message: 'Navigation failed\nCall log: Unacceptable TLS certificate',
+      stage: 'engine_wrong_host_webkit_token_present' },
+    { kind: 'cancelled', stage: 'engine_wrong_host_webkit_cancelled_present' },
+    { kind: 'unknown', stage: 'engine_wrong_host_webkit_no_fixed_token' },
+    { kind: 'non-error', stage: 'engine_wrong_host_webkit_shape_non_error' },
+    { kind: 'oversized', stage: 'engine_wrong_host_webkit_shape_oversize' },
+    { kind: 'message-non-string', stage: 'engine_wrong_host_webkit_shape_non_string' },
+    { kind: 'message-missing', stage: 'engine_wrong_host_webkit_shape_non_string' },
+    { kind: 'message-getter-throws', stage: 'engine_wrong_host_webkit_shape_access_failed' },
+    { kind: 'page-open', stage: 'engine_wrong_host_page_open' },
+    { kind: 'page-close', stage: 'engine_wrong_host_page_close' },
+  ];
+  for (const item of cases) {
+    const type = fake('webkit', undefined, { reason: 'host', ...item });
+    const events = [];
+    await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
+      (stage, engine) => events.push({ stage, engine })),
+    /^Error: SF08 browser trust preflight refused$/);
+    assert.deepEqual(events.at(-1), { stage: item.stage, engine: 'webkit' });
+    assert.deepEqual(checkedFailure(item.stage, 'webkit'),
+      { schema_version: 1, stage: item.stage, engine: 'webkit' });
+    if (item.stage.startsWith('engine_wrong_host_webkit_')) {
+      for (const engine of ['none', 'chromium', 'firefox']) {
+        assert.throws(() => checkedFailure(item.stage, engine), /^Error: SF08 checkpoint refused$/);
+      }
+    }
+    assert.equal(type.trace.closed && type.trace.contextClosed, true);
+    assert.doesNotMatch(JSON.stringify(events),
+      /PRIVATE_SENTINEL|Unacceptable TLS certificate|Protocol error|private\.invalid|sf08-wronghost/);
   }
 });

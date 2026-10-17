@@ -111,7 +111,13 @@ export const FAILURE_STAGES = ['none','settings','native_wrong_ca','guard','nati
   'engine_wrong_ca_diag_hostname_present','engine_wrong_ca_diag_other_tls_present',
   'engine_wrong_ca_diag_multiple_codes','engine_wrong_ca_diag_no_fixed_code',
   'engine_wrong_ca_shape_non_error','engine_wrong_ca_shape_non_string',
-  'engine_wrong_ca_shape_oversize','engine_wrong_ca_shape_access_failed','engine_wrong_host','engine_close',
+  'engine_wrong_ca_shape_oversize','engine_wrong_ca_shape_access_failed','engine_wrong_host',
+  'engine_wrong_host_page_open','engine_wrong_host_page_close','engine_wrong_host_response_received',
+  'engine_wrong_host_no_response','engine_wrong_host_timeout','engine_wrong_host_unknown',
+  'engine_wrong_host_webkit_protocol_form','engine_wrong_host_webkit_token_present',
+  'engine_wrong_host_webkit_no_fixed_token','engine_wrong_host_webkit_cancelled_present',
+  'engine_wrong_host_webkit_shape_non_error','engine_wrong_host_webkit_shape_non_string',
+  'engine_wrong_host_webkit_shape_oversize','engine_wrong_host_webkit_shape_access_failed','engine_close',
   'business_config','business','receipt','input'];
 const FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES = [
   'engine_wrong_ca_diag_bad_signature_present','engine_wrong_ca_diag_unknown_issuer_present',
@@ -120,12 +126,18 @@ const FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES = [
   'engine_wrong_ca_shape_non_error','engine_wrong_ca_shape_non_string',
   'engine_wrong_ca_shape_oversize','engine_wrong_ca_shape_access_failed'];
 const WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES = ["engine_wrong_ca_webkit_protocol_form", "engine_wrong_ca_webkit_token_present", "engine_wrong_ca_webkit_no_fixed_token","engine_wrong_ca_webkit_cancelled_present", "engine_wrong_ca_webkit_shape_non_error", "engine_wrong_ca_webkit_shape_non_string", "engine_wrong_ca_webkit_shape_oversize", "engine_wrong_ca_webkit_shape_access_failed"];
+const WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES = [
+  'engine_wrong_host_webkit_protocol_form','engine_wrong_host_webkit_token_present',
+  'engine_wrong_host_webkit_no_fixed_token','engine_wrong_host_webkit_cancelled_present',
+  'engine_wrong_host_webkit_shape_non_error','engine_wrong_host_webkit_shape_non_string',
+  'engine_wrong_host_webkit_shape_oversize','engine_wrong_host_webkit_shape_access_failed'];
 export const FAILURE_ENGINES = ['none','chromium','firefox','webkit'];
 export function checkedFailure(stage, engine) {
   if (!FAILURE_STAGES.includes(stage) || !FAILURE_ENGINES.includes(engine) ||
       (stage.startsWith('engine_') !== (engine !== 'none')) ||
       (FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'firefox') ||
       (WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||
+      (WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||
       (['engine_wrong_ca_bad_signature','engine_wrong_ca_other_tls'].includes(stage) && engine !== 'firefox') ||
       (stage === 'engine_wrong_ca_hostname' && engine === 'webkit')) throw new Error('SF08 checkpoint refused');
   return { schema_version: 1, stage, engine };

@@ -864,6 +864,16 @@ class IntegrationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
                     fc.validate({'schema_version': 1, 'stage': stage, 'engine': engine})
 
+    def test_registered_webkit_wrong_host_diagnostics_are_webkit_only(self):
+        for stage in fc.WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES:
+            self.assertIn(stage, fc.STAGES)
+            good = {'schema_version': 1, 'stage': stage, 'engine': 'webkit'}
+            self.assertEqual(fc.validate(good), good)
+            for engine in ('chromium', 'firefox', 'none'):
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$') as caught:
+                    fc.validate(dict(good, engine=engine))
+                self.assertNotIn('PRIVATE_SENTINEL', str(caught.exception))
+
 
 class ProvisionMountFlagsTests(unittest.TestCase):
     def check_scope_with_mount_flags(self, base_flags, duplicate_base=False):

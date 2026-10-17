@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { stage, businessConfig, trustEnv } from './browser_stage.mjs';
+import { stage, businessConfig, trustEnv, FAILURE_STAGES } from './browser_stage.mjs';
 const IMAGE = 'sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9';
 const home = '/run/nagi-sf08/trust-unit/home';
 const ca = Buffer.from('synthetic-public-main-ca');
@@ -162,4 +162,23 @@ test('failure checkpoint reports finite stage and engine without raw data', asyn
   await assert.rejects(stage(input(), f.deps));
   assert.deepEqual(last, { schema_version:1, stage:'engine_wrong_ca', engine:'firefox' });
   assert.deepEqual([...f.calls], ['native']);
+});
+
+test('wrong-host diagnosis stays closed and limits WebKit detail labels to WebKit', async () => {
+  const { checkedFailure } = await import('./browser_stage.mjs');
+  for (const suffix of ['protocol_form', 'token_present', 'no_fixed_token', 'cancelled_present',
+    'shape_non_error', 'shape_non_string', 'shape_oversize', 'shape_access_failed']) {
+    const stage = 'engine_wrong_host_webkit_' + suffix;
+    assert.equal(FAILURE_STAGES.includes(stage), true);
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+    for (const engine of ['none', 'chromium', 'firefox']) {
+      assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+    }
+  }
+  for (const stage of ['engine_wrong_host_page_open', 'engine_wrong_host_page_close',
+    'engine_wrong_host_response_received', 'engine_wrong_host_no_response',
+    'engine_wrong_host_timeout', 'engine_wrong_host_unknown']) {
+    assert.equal(FAILURE_STAGES.includes(stage), true);
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+  }
 });

@@ -146,6 +146,51 @@ function webkitWrongCADiagnosticOutcome(error, probeURL) {
   }
 }
 
+function webkitWrongHostDiagnosticOutcome(error, probeURL) {
+  try {
+    if (!(error instanceof Error)) return 'webkit_shape_non_error';
+    const own = Object.hasOwn(error, 'message');
+    const message = error.message;
+    if (!own || typeof message !== 'string') return 'webkit_shape_non_string';
+    if (message.length > 8192) return 'webkit_shape_oversize';
+    const token = TLS_ERROR.webkit.host;
+    const firstLine = message.split('\n', 1)[0];
+    const prefix = 'page.goto: Protocol error (Playwright.navigate): ' + token;
+    if (firstLine === prefix || firstLine === prefix + ' at ' + probeURL)
+      return 'webkit_protocol_form';
+    let index = message.indexOf(token);
+    while (index >= 0) {
+      const end = index + token.length;
+      if ((index === 0 || !isASCIIIdentifierUnit(message.charCodeAt(index - 1))) &&
+          (end === message.length || !isASCIIIdentifierUnit(message.charCodeAt(end))))
+        return 'webkit_token_present';
+      index = message.indexOf(token, index + 1);
+    }
+    const cancelled = 'Operation was cancelled';
+    index = message.indexOf(cancelled);
+    while (index >= 0) {
+      const end = index + cancelled.length;
+      if ((index === 0 || !isASCIIIdentifierUnit(message.charCodeAt(index - 1))) &&
+          (end === message.length || !isASCIIIdentifierUnit(message.charCodeAt(end))))
+        return 'webkit_cancelled_present';
+      index = message.indexOf(cancelled, index + 1);
+    }
+    return 'webkit_no_fixed_token';
+  } catch {
+    return 'webkit_shape_access_failed';
+  }
+}
+
+function wrongHostFailureOutcome(error, name, probeURL) {
+  try {
+    if (!(error instanceof Error)) return name === 'webkit' ? 'webkit_shape_non_error' : 'unknown';
+    if (error.name === 'TimeoutError') return 'timeout';
+    return name === 'webkit' ? webkitWrongHostDiagnosticOutcome(error, probeURL) : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 function wrongCAFailureStage(outcome) {
   switch (outcome) {
     case 'response_received': return 'engine_wrong_ca_response_received';
@@ -173,6 +218,23 @@ function wrongCAFailureStage(outcome) {
     case 'webkit_shape_oversize': return 'engine_wrong_ca_webkit_shape_oversize';
     case 'webkit_shape_access_failed': return 'engine_wrong_ca_webkit_shape_access_failed';
     default: return 'engine_wrong_ca_unknown';
+  }
+}
+
+function wrongHostFailureStage(outcome) {
+  switch (outcome) {
+    case 'response_received': return 'engine_wrong_host_response_received';
+    case 'no_response': return 'engine_wrong_host_no_response';
+    case 'timeout': return 'engine_wrong_host_timeout';
+    case 'webkit_protocol_form': return 'engine_wrong_host_webkit_protocol_form';
+    case 'webkit_token_present': return 'engine_wrong_host_webkit_token_present';
+    case 'webkit_cancelled_present': return 'engine_wrong_host_webkit_cancelled_present';
+    case 'webkit_no_fixed_token': return 'engine_wrong_host_webkit_no_fixed_token';
+    case 'webkit_shape_non_error': return 'engine_wrong_host_webkit_shape_non_error';
+    case 'webkit_shape_non_string': return 'engine_wrong_host_webkit_shape_non_string';
+    case 'webkit_shape_oversize': return 'engine_wrong_host_webkit_shape_oversize';
+    case 'webkit_shape_access_failed': return 'engine_wrong_host_webkit_shape_access_failed';
+    default: return 'engine_wrong_host_unknown';
   }
 }
 
@@ -331,6 +393,7 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
       }
       for (const reason of ['ca', 'host']) {
         checkpoint(reason === 'ca' ? 'engine_wrong_ca' : 'engine_wrong_host', name);
+        if (reason === 'host') checkpoint('engine_wrong_host_page_open', name);
         const page = await context.newPage();
         let rejected = false;
         let failureOutcome = 'unknown';
@@ -338,6 +401,8 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
         try {
           const response = await page.goto(probeURL, { waitUntil: 'load', timeout: 10000 });
           if (reason === 'ca') failureOutcome = response === null || response === undefined
+            ? 'no_response' : 'response_received';
+          else failureOutcome = response === null || response === undefined
             ? 'no_response' : 'response_received';
         } catch (error) {
           // Preserve the exact acceptance oracle; only failure gets finite facts.
@@ -350,11 +415,18 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
             }
             rejected = failureOutcome === 'expected_rejection';
           } else {
-            rejected = expectedTLSFailure(error, name, reason, probeURL);
+            try {
+              rejected = expectedTLSFailure(error, name, reason, probeURL);
+            } catch { rejected = false; }
+            if (!rejected) failureOutcome = wrongHostFailureOutcome(error, name, probeURL);
           }
-        } finally { await page.close(); }
+        } finally {
+          if (reason === 'host') checkpoint('engine_wrong_host_page_close', name);
+          await page.close();
+        }
         if (!rejected) {
           if (reason === 'ca') checkpoint(wrongCAFailureStage(failureOutcome), name);
+          else checkpoint(wrongHostFailureStage(failureOutcome), name);
           refuse();
         }
       }

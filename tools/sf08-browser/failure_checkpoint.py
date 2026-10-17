@@ -12,7 +12,13 @@ STAGES = {'none','settings','native_wrong_ca','guard','native_positive','native_
           'engine_wrong_ca_diag_hostname_present','engine_wrong_ca_diag_other_tls_present',
           'engine_wrong_ca_diag_multiple_codes','engine_wrong_ca_diag_no_fixed_code',
           'engine_wrong_ca_shape_non_error','engine_wrong_ca_shape_non_string',
-          'engine_wrong_ca_shape_oversize','engine_wrong_ca_shape_access_failed','engine_wrong_host','engine_close',
+          'engine_wrong_ca_shape_oversize','engine_wrong_ca_shape_access_failed','engine_wrong_host',
+          'engine_wrong_host_page_open','engine_wrong_host_page_close','engine_wrong_host_response_received',
+          'engine_wrong_host_no_response','engine_wrong_host_timeout','engine_wrong_host_unknown',
+          'engine_wrong_host_webkit_protocol_form','engine_wrong_host_webkit_token_present',
+          'engine_wrong_host_webkit_no_fixed_token','engine_wrong_host_webkit_cancelled_present',
+          'engine_wrong_host_webkit_shape_non_error','engine_wrong_host_webkit_shape_non_string',
+          'engine_wrong_host_webkit_shape_oversize','engine_wrong_host_webkit_shape_access_failed','engine_close',
           'business_config','business','receipt','input'}
 FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES = {
     'engine_wrong_ca_diag_bad_signature_present','engine_wrong_ca_diag_unknown_issuer_present',
@@ -21,6 +27,11 @@ FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES = {
     'engine_wrong_ca_shape_non_error','engine_wrong_ca_shape_non_string',
     'engine_wrong_ca_shape_oversize','engine_wrong_ca_shape_access_failed'}
 WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES = {'engine_wrong_ca_webkit_shape_non_string', 'engine_wrong_ca_webkit_shape_oversize', 'engine_wrong_ca_webkit_shape_access_failed', 'engine_wrong_ca_webkit_protocol_form', 'engine_wrong_ca_webkit_shape_non_error', 'engine_wrong_ca_webkit_token_present', 'engine_wrong_ca_webkit_no_fixed_token','engine_wrong_ca_webkit_cancelled_present'}
+WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES = {
+    'engine_wrong_host_webkit_protocol_form','engine_wrong_host_webkit_token_present',
+    'engine_wrong_host_webkit_no_fixed_token','engine_wrong_host_webkit_cancelled_present',
+    'engine_wrong_host_webkit_shape_non_error','engine_wrong_host_webkit_shape_non_string',
+    'engine_wrong_host_webkit_shape_oversize','engine_wrong_host_webkit_shape_access_failed'}
 ENGINES = {'none','chromium','firefox','webkit'}
 
 
@@ -32,6 +43,7 @@ def validate(value, *, outer=False):
             or (value['stage'].startswith('engine_') != (value['engine'] != 'none'))
             or (value['stage'] in FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES and value['engine'] != 'firefox')
             or (value['stage'] in WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES and value['engine'] != 'webkit')
+            or (value['stage'] in WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES and value['engine'] != 'webkit')
             or (value['stage'] in {'engine_wrong_ca_bad_signature','engine_wrong_ca_other_tls'}
                 and value['engine'] != 'firefox')
             or (value['stage'] == 'engine_wrong_ca_hostname' and value['engine'] == 'webkit')
