@@ -39,7 +39,7 @@ jobs:
         import sys
         from pathlib import Path
         
-        PARENT = '37beae2434e818a2a22eb14dd408abb6f54404cf'
+        PARENT = '9a223d4f1bf8e5e8c7b9ffc658d1885773ae9947'
         BRANCH = 'test/sf07-session-parallel-reply-observe-20261018'
         WORKFLOW = '.github/workflows/sf07-session-parallel-reply-observe.yml'
         SOURCE = 'runtime/tests/session_csrf_public_api.rs'
@@ -52,7 +52,7 @@ jobs:
             'runtime/src/http_server/rate_public.rs': ('3b23397f4a0576c05522188239679abd400676447205accf00302bde2eaa4f16', 11311, 314),
             'runtime/src/http_server.rs': ('0ffc9a34b9a8153326c9bc8da99a6935adf77ee923807f96d88a228a77affcb6', 79170, 2127),
         }
-        CHANGED = (WORKFLOW, *tuple(sorted(HOOK_SOURCES)))
+        CHANGED = (WORKFLOW,)
         CASE = 'one_reusable_token_admits_two_distinct_actual_requests'
         DIAGNOSTIC_ONLY_CASE = 'controlled_same_file_writer_reports_native_token_identity_boundary'
         FULL_CASES = (
@@ -154,12 +154,16 @@ jobs:
                 validate_hook_bytes(hook_raw, expected_sha256, expected_size, expected_lines)
             if canonical.count(b'csrf_public_assertion_diag phase=ParallelReplies status_one={} status_two={} checked_calls={:?} calls_at_failure={} checked_rows={:?}') != 1:
                 raise Invalid('assertion identity mismatch')
-            print('source_guard=pass parent=exact changed_paths=5 session_source=sha256_bound hook_sources=4 LF_CRLF_bound=pass overflow_projection=unavailable cfg=nagi_auth_stage_diag')
+            print('source_guard=pass parent=exact changed_paths=1 session_source=sha256_bound hook_sources=4 LF_CRLF_bound=pass overflow_projection=unavailable cfg=nagi_auth_stage_diag')
         
         
         def capture(argv: list[str], limit: int) -> tuple[int, bytes, bool]:
             try:
-                process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                # Only stdout is libtest inventory. Cargo warnings/progress are stderr.
+                # Complete bounded stdout, process exit and exact identities remain required.
+                listing = argv[-2:] == ['--', '--list']
+                process = subprocess.Popen(argv, stdout=subprocess.PIPE,
+                                           stderr=subprocess.DEVNULL if listing else subprocess.STDOUT,
                                            bufsize=0)
             except OSError:
                 return 127, b'', False
@@ -1095,9 +1099,14 @@ jobs:
                 if code != 0 or overflow:
                     raise Invalid('unit list process')
                 unit_count = parse_unit_listing(listing)
-            except Exception:
+            except Exception as error:
+                reason = str(error) if isinstance(error, Invalid) else 'internal'
+                allowed = {'unit list process', 'unit inventory empty', 'unit inventory footer',
+                           'unit inventory row', 'unit inventory count', 'unit case identity',
+                           'bare carriage return', 'internal'}
+                reason = reason.replace(' ', '_') if reason in allowed else 'internal'
                 print('session_parallel_reply phase=unit_collection state=unavailable cargo_exit=' + str(code)
-                      + ' capture=' + ('overflow' if overflow else 'bounded'))
+                      + ' capture=' + ('overflow' if overflow else 'bounded') + ' reason=' + reason)
                 return code if code else 2
             print('session_parallel_reply phase=unit_collection state=pass total=' + str(unit_count)
                   + ' selected=' + str(len(UNIT_CASES)) + ' filtered_execution=' + str(unit_count - 1))
