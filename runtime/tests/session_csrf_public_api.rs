@@ -65,6 +65,9 @@ async fn number(pool: &sqlite::Pool, query: &'static str) -> i64 {
     n
 }
 fn checked() -> http::Options {
+    checked_with_deadlines(1000, 1000)
+}
+fn checked_with_deadlines(body_ms: i64, security_ms: i64) -> http::Options {
     let response_limits = http::response_limits(
         16_777_216,
         512,
@@ -85,14 +88,14 @@ fn checked() -> http::Options {
         http::security_timeout(
             http::with_rate_limits(
                 http::with_response_limits(
-                    http::options(256, 1000, 1000, 1000).unwrap(),
+                    http::options(256, body_ms, 1000, 1000).unwrap(),
                     response_limits,
                 )
                 .unwrap(),
                 rate_limits,
             )
             .unwrap(),
-            1000,
+            security_ms,
         )
         .unwrap(),
         "https://localhost",
@@ -981,18 +984,7 @@ async fn guarded_partial_body_preparation_uses_original_security_deadline() {
         .await
         .token();
         bootstrap.stop().await;
-        let options = http::authority(
-            http::security_timeout(
-                http::options(256, body_ms, 1000, 1000).unwrap(),
-                security_ms,
-            )
-            .unwrap(),
-            "https://localhost",
-            vec!["localhost".to_owned()],
-            1,
-            128,
-        )
-        .unwrap();
+        let options = checked_with_deadlines(body_ms, security_ms);
         let s = Server::new_with_options(&f, options).await;
         let held = sqlite::begin(&f.pool, sqlite::BeginMode::Immediate)
             .await

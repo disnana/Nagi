@@ -306,19 +306,16 @@ impl Server {
             32,
         )
         .unwrap();
+        let options = http::capacity(
+            http::options(32, 1000, handler_ms, 1000).unwrap(),
+            8,
+            capacity,
+        )
+        .unwrap();
+        let options = http::with_response_limits(options, response_limits).unwrap();
+        let options = with_test_rate_limits(options);
         let options = http::authority(
-            http::capacity(
-                with_test_rate_limits(
-                    http::with_response_limits(
-                        http::options(32, 1000, handler_ms, 1000).unwrap(),
-                        response_limits,
-                    )
-                    .unwrap(),
-                ),
-                8,
-                capacity,
-            )
-            .unwrap(),
+            options,
             "https://localhost",
             vec!["localhost".into()],
             1,
