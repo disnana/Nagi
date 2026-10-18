@@ -279,9 +279,9 @@ fn inspect(response: client::Response, status:i64) {
 struct AppState { operation: client::ProtectedOperation<super::__STATE__,super::__PERMISSION__,Vec<u8>> }
 async fn verify(_:http::Request,_:Arc<AppState>)->Result<auth::VerifiedIdentity,auth::Failure>{auth::VerifiedIdentity::from_verified(7,Instant::now()+Duration::from_secs(5))}
 async fn authorize(scope:auth::AuthScope,_:http::Request,_:Arc<AppState>)->Result<auth::Grant<super::__PERMISSION__>,auth::Failure>{auth::Grant::from_authorized(scope,91)}
-async fn handler(_:http::Request,state:Arc<AppState>,grant:auth::Grant<super::__PERMISSION__>)->Result<http::Response,crate::Error>{
+async fn handler(request:http::Request,state:Arc<AppState>,grant:auth::Grant<super::__PERMISSION__>)->Result<http::Response,crate::Error>{
  let response=super::__CALL_PROTECTED__(&state.operation,grant,b"dto".to_vec()).await.map_err(|_|crate::Error::internal("outbound failure"))?;
- inspect(response,403);Ok(http::text(http::Status::OK,"bound"))
+ inspect(response,403);http::text(http::response_context(&request),http::Status::OK,"bound")
 }
 #[tokio::test]
 async fn real_tls_and_grant(){
@@ -297,8 +297,15 @@ async fn real_tls_and_grant(){
  let spec=ProtectedSpec::checked(Arc::clone(&fixture.service),1,hyper::Method::POST,limits(),fixed_headers(&catalog),fixture.credential.take()).unwrap();
  let operation=register_protected(&mut catalog,spec,Arc::new(super::__STATE__{n:42}),freeze,prepare_protected).unwrap();let mut owner=catalog.freeze();
  let app=http::route(http::app_default(AppState{operation}),http::Method::GET,"/",http::authorized_policy(verify,authorize),handler).unwrap();
+ let app=http::rate_route(app,http::Method::GET,"/",http::rate_policy(10,1000).unwrap()).unwrap();
+ // One actual inbound request; its ordinary and fallback ledgers are distinct.
+ let options=http::capacity(http::default_options(),1,1).unwrap();
+ let limits=http::response_limits(1024,128,4,512,12,128,1,131072,1,131072,512,12).unwrap();
+ let options=http::with_response_limits(options,limits).unwrap();
+ let rates=http::rate_limits(4,1,2,131072,256).unwrap();
+ let options=http::with_rate_limits(options,rates).unwrap();
  let listener=TcpListener::bind("127.0.0.1:0").await.unwrap();let endpoint=listener.local_addr().unwrap();let(stop,stopped)=oneshot::channel();
- let server=tokio::spawn(http::serve_listener(listener,app,http::authority(http::default_options(),"https://localhost",vec!["localhost".into()],1,128).unwrap(),async{let _=stopped.await;}));
+ let server=tokio::spawn(http::serve_listener(listener,app,http::authority(options,"https://localhost",vec!["localhost".into()],1,128).unwrap(),async{let _=stopped.await;}));
  let mut stream=TcpStream::connect(endpoint).await.unwrap();stream.write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer fixture\r\nConnection: close\r\n\r\n").await.unwrap();
  let mut wire=Vec::new();let received=tokio::time::timeout(Duration::from_secs(3),stream.read_to_end(&mut wire)).await;
  let _=stop.send(());server.await.unwrap().unwrap();owner.shutdown().await;

@@ -1,0 +1,45 @@
+name: Nagi 0.2.0 SF06 generated fixture native follow-up
+on:
+  push:
+    branches: [test/nagi020-sf06-fixture-20261018]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch locked dependencies before native test
+        run: cargo fetch --locked
+      - name: Compile and collect the intended native test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagic --test http_client_native --no-run
+          cargo test --locked -p nagic --test http_client_native generated_operations_execute_real_tls_and_grant_in_three_test_network_paths -- --exact --list > "$RUNNER_TEMP/sf06-fixture-list.txt"
+          python - "$RUNNER_TEMP/sf06-fixture-list.txt" <<'PY'
+          import pathlib, sys
+          rows = pathlib.Path(sys.argv[1]).read_text().splitlines()
+          expected = 'generated_operations_execute_real_tls_and_grant_in_three_test_network_paths: test'
+          assert rows.count(expected) == 1
+          assert [row for row in rows if row.endswith(': test')] == [expected]
+          assert '1 test, 0 benchmarks' in rows
+          PY
+      - name: Execute actual High saved Low handwritten Low TLS and Grant
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagic --test http_client_native generated_operations_execute_real_tls_and_grant_in_three_test_network_paths -- --exact --nocapture 2>&1 | tee "$RUNNER_TEMP/sf06-fixture-result.txt"
+          python - "$RUNNER_TEMP/sf06-fixture-result.txt" <<'PY'
+          import pathlib, re, sys
+          rows = pathlib.Path(sys.argv[1]).read_text().splitlines()
+          summaries = [row for row in rows if row.startswith('test result:')]
+          assert len(summaries) == 1
+          assert re.fullmatch(r'test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in [0-9]+\.[0-9]+s', summaries[0])
+          PY
