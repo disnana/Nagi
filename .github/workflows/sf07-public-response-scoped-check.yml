@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "ede330cb7df252045c592126418d1ae849a22733"
+          test "$(git rev-parse HEAD^)" = "d1ac39b1c1e062ae8cf047957ecfc2c258f87704"
           test -z "${RUST_TEST_THREADS+x}"
           sha256sum --check <<'HASHES'
           29abe918f3567626736e473c2ce33ad8ab545e0a06e88c47617682a31debfe21  runtime/src/auth/session.rs
@@ -35,7 +35,7 @@ jobs:
           46c19926ec6fd5c22751b3d6dd7a07fe608c373ffd3320433a79ad47e842fd53  runtime/src/http_server/private_deadline_calibration.rs
           1bcba7ff1ff3afc84c9b8b54a275ba1ad703b686337108eae9b8f8230b3f2741  runtime/src/http_server/rate_public_tests.rs
           1a993e32549d5d60b647427b99892528085b54ccac697fa0d632defa40f6b4cc  runtime/src/http_server/request_headers_tests.rs
-          d40afa116be878bca501ba1ecee8c4998573eb27cdba74a0dd5bd26c09230d0b  runtime/src/http_server/response_budget.rs
+          ba894c38ff30ca09f69a3671c685145d39eb996447a970e0d70a78a027b4f889  runtime/src/http_server/response_budget.rs
           036c841558e1afc9709f68b61bc733ebcd0cec58c77d4107c735cb5b3708c3b2  runtime/src/http_server/response_finalize.rs
           4313083b9bc4d055124cfe7585162bdd5c581ea0f8e27cd8a27f31552e1964b2  runtime/src/http_server/response_public.rs
           c365844d07b111d546f881c3e32e12a355b05a5903910a4cde1134bf7e89bf79  runtime/src/http_server/response_public_tests.rs

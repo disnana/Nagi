@@ -59,7 +59,6 @@ struct CheckedLimits {
     writes: usize,
     charge: usize,
     wire: Option<wire::WireLayout>,
-    #[cfg(test)]
     metadata: usize,
 }
 pub(super) struct Producer {
@@ -203,7 +202,6 @@ impl Producer {
                 writes: limits.serialization_writes,
                 charge,
                 wire,
-                #[cfg(test)]
                 metadata,
             },
             quota,
