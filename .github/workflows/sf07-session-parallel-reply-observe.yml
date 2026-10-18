@@ -1,0 +1,755 @@
+name: SF07 Windows Session exact and conditional parallel observation
+permissions:
+  contents: read
+'on':
+  push:
+    branches:
+    - test/sf07-session-parallel-reply-observe-20261018
+jobs:
+  observe-one-session-case:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/test/sf07-session-parallel-reply-observe-20261018'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.sha }}
+        fetch-depth: 2
+        persist-credentials: false
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Compile, run exact Session case, then conditional full Session suite once
+      env:
+        CARGO_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-session-parallel-reply-target
+      shell: bash
+      run: |
+        set -euo pipefail
+        cat > "$RUNNER_TEMP/sf07-session-parallel-reply-guard.py" <<'PY'
+        """Staged bounded collector for the SF07 Session parallel reply observation."""
+        from __future__ import annotations
+        
+        import contextlib
+        import hashlib
+        import io
+        import os
+        import re
+        import subprocess
+        import sys
+        from pathlib import Path
+        
+        PARENT = '96707e1cec9b18900ab67a5ed01de0130733a621'
+        BRANCH = 'test/sf07-session-parallel-reply-observe-20261018'
+        WORKFLOW = '.github/workflows/sf07-session-parallel-reply-observe.yml'
+        SOURCE = 'runtime/tests/session_csrf_public_api.rs'
+        SOURCE_SIZE = 43085
+        SOURCE_LINES = 1249
+        SOURCE_SHA256 = 'e6214e0267d6d8a713578c0c173c9ca18bfc11c910f34f51d4ce3a8875457467'
+        CASE = 'one_reusable_token_admits_two_distinct_actual_requests'
+        FULL_CASES = (
+            'controlled_same_file_writer_reports_native_token_identity_boundary',
+            'checked_profiles_reject_unsealed_or_incompatible_policy_sources',
+            'tokens_are_authenticated_reusable_and_preserve_bounded_ledger',
+            'guarded_rotation_and_logout_invalidate_old_generation_tokens',
+            'body_checkpoint_rejects_generation_changed_after_actual_authorization',
+            'finite_origin_and_header_refusals_preserve_existing_token_and_capacity',
+            CASE,
+            'guarded_partial_body_preparation_uses_original_security_deadline',
+            'failed_guarded_handler_never_finalizes_committed_rotation_cookie',
+            'mismatched_startup_origin_refuses_token_and_guarded_routes_before_bind',
+            'pending_guarded_authorizer_expires_at_bound_session_and_recovers_permit',
+        )
+        DIAGNOSTIC_PREFIX = 'csrf_public_assertion_diag phase=ParallelReplies'
+        INFRA_LIMIT = 2 * 1024 * 1024
+        OUTPUT_LIMIT = 64 * 1024
+        
+        class Invalid(Exception):
+            pass
+        
+        
+        def normalized(raw: bytes) -> str:
+            text = raw.decode('utf-8', errors='strict').replace('\r\n', '\n')
+            if '\r' in text:
+                raise Invalid('bare carriage return')
+            return text
+        
+        
+        def source_guard() -> None:
+            if os.environ.get('GITHUB_REF') != 'refs/heads/' + BRANCH:
+                raise Invalid('wrong branch')
+            if os.environ.get('GITHUB_EVENT_NAME') != 'push':
+                raise Invalid('wrong event')
+            if any(name in os.environ for name in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUST_TEST_THREADS')):
+                raise Invalid('test environment override')
+            parent = subprocess.run(['git', 'rev-parse', 'HEAD^'], stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, check=False)
+            if parent.returncode or parent.stdout.decode('ascii', errors='strict').strip() != PARENT:
+                raise Invalid('parent mismatch')
+            changed = subprocess.run(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'],
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
+            if changed.returncode or changed.stdout.decode('utf-8', errors='strict').splitlines() != [WORKFLOW]:
+                raise Invalid('changed path set mismatch')
+            path = Path(SOURCE)
+            if path.is_symlink() or not path.is_file():
+                raise Invalid('source is not a regular file')
+            with path.open('rb') as stream:
+                raw = stream.read(SOURCE_SIZE + SOURCE_LINES + 1)
+            if len(raw) > SOURCE_SIZE + SOURCE_LINES:
+                raise Invalid('source size limit')
+            canonical = raw.replace(b'\r\n', b'\n')
+            if b'\r' in canonical or len(canonical) != SOURCE_SIZE:
+                raise Invalid('source line ending or size')
+            canonical.decode('utf-8', errors='strict')
+            if hashlib.sha256(canonical).hexdigest() != SOURCE_SHA256:
+                raise Invalid('source hash mismatch')
+            if canonical.count(b'async fn ' + CASE.encode() + b'()') != 1:
+                raise Invalid('case identity mismatch')
+            if canonical.count(b'csrf_public_assertion_diag phase=ParallelReplies status_one={} status_two={} checked_calls={:?} calls_at_failure={} checked_rows={:?}') != 1:
+                raise Invalid('assertion identity mismatch')
+            print('source_guard=pass parent=exact changed_paths=1 session_source=sha256_bound')
+        
+        
+        def capture(argv: list[str], limit: int) -> tuple[int, bytes, bool]:
+            try:
+                process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                           bufsize=0)
+            except OSError:
+                return 127, b'', False
+            output = bytearray()
+            overflow = False
+            assert process.stdout is not None
+            while True:
+                chunk = process.stdout.read(8192)
+                if not chunk:
+                    break
+                room = limit - len(output)
+                if room > 0:
+                    output.extend(chunk[:room])
+                if len(chunk) > room:
+                    overflow = True
+            return process.wait(), bytes(output), overflow
+        
+        
+        def _listing_lines(raw: bytes) -> list[str]:
+            lines = [line for line in normalized(raw).splitlines() if line]
+            preamble: list[str] = []
+            while lines and (re.fullmatch(r'\s*Finished .+', lines[0])
+                             or re.fullmatch(r'\s*Running .+', lines[0])):
+                preamble.append(lines.pop(0))
+            if any(not re.fullmatch(r'\s*(?:Finished|Running) .+', line) for line in preamble):
+                raise Invalid('list preamble')
+            return lines
+        
+        
+        def parse_listing(raw: bytes) -> None:
+            lines = _listing_lines(raw)
+            if lines != [CASE + ': test', '1 test, 0 benchmarks']:
+                raise Invalid('exact listing mismatch')
+        
+        
+        def parse_full_listing(raw: bytes) -> None:
+            lines = _listing_lines(raw)
+            if len(lines) != len(FULL_CASES) + 1 or lines[-1] != '11 tests, 0 benchmarks':
+                raise Invalid('full listing count')
+            rows = lines[:-1]
+            names = []
+            for row in rows:
+                match = re.fullmatch(r'([A-Za-z0-9_:]+): test', row)
+                if match is None:
+                    raise Invalid('full listing row')
+                names.append(match.group(1))
+            if len(set(names)) != len(FULL_CASES) or set(names) != set(FULL_CASES):
+                raise Invalid('full listing identity')
+        
+        
+        def parse_assertion_block(block: list[str]) -> dict[str, str] | None:
+            prefixed = [line for line in block if 'csrf_public_assertion_diag' in line]
+            if len(prefixed) != 1 or not prefixed[0].startswith(DIAGNOSTIC_PREFIX + ' '):
+                return None
+            pattern = re.compile(
+                r'^csrf_public_assertion_diag phase=ParallelReplies '
+                r'status_one=([0-9]{3}) status_two=([0-9]{3}) '
+                r'checked_calls=(None|Some\((0|[1-9][0-9]{0,3})\)) '
+                r'calls_at_failure=(0|[1-9][0-9]{0,3}) '
+                r'checked_rows=(None|Some\((0|[1-9][0-9]{0,3})\))$'
+            )
+            match = pattern.fullmatch(prefixed[0])
+            if match is None:
+                return None
+            status_one, status_two, checked_calls, checked_call_n, calls_at_failure, checked_rows, checked_rows_n = match.groups()
+            numeric = [int(status_one), int(status_two)]
+            if any(status < 100 or status > 599 for status in numeric):
+                return None
+            bounded_counts = [int(calls_at_failure)]
+            if checked_call_n is not None:
+                bounded_counts.append(int(checked_call_n))
+            if checked_rows_n is not None:
+                bounded_counts.append(int(checked_rows_n))
+            if any(value > 1024 for value in bounded_counts):
+                return None
+            return {
+                'status_one': status_one,
+                'status_two': status_two,
+                'checked_calls': 'none' if checked_calls == 'None' else 'some:' + str(int(checked_call_n)),
+                'calls_at_failure': str(int(calls_at_failure)),
+                'checked_rows': 'none' if checked_rows == 'None' else 'some:' + str(int(checked_rows_n)),
+            }
+        
+        
+        def _stdout_markers(segment: list[str]) -> list[tuple[int, str]]:
+            markers: list[tuple[int, str]] = []
+            for index, line in enumerate(segment):
+                if line.startswith('---- ') and ' stdout' in line:
+                    match = re.fullmatch(r'---- ([A-Za-z0-9_:]+) stdout ----', line)
+                    if match is None:
+                        raise Invalid('malformed stdout marker')
+                    markers.append((index, match.group(1)))
+            return markers
+        
+        
+        def _reject_outside_run(lines: list[str], run_index: int, summary_index: int) -> None:
+            outside = lines[:run_index] + lines[summary_index + 1:]
+            if any('csrf_public_assertion_diag' in line for line in outside) or _stdout_markers(outside):
+                raise Invalid('diagnostic or stdout marker outside run interval')
+        
+        
+        def _summary_rows(lines: list[str]) -> tuple[int, str, int, int, int, int, int]:
+            summaries: list[tuple[int, str, int, int, int, int, int]] = []
+            summary_pattern = re.compile(
+                r'^test result: (ok|FAILED)\. ([0-9]+) passed; ([0-9]+) failed; '
+                r'([0-9]+) ignored; ([0-9]+) measured; ([0-9]+) filtered out; finished in .+$'
+            )
+            for i, line in enumerate(lines):
+                match = summary_pattern.fullmatch(line)
+                if match:
+                    summaries.append((i, match.group(1), *(int(match.group(n)) for n in range(2, 7))))
+            if len(summaries) != 1:
+                raise Invalid('run summary count')
+            return summaries[0]
+        
+        
+        def parse_run(raw: bytes, cargo_exit: int) -> tuple[str, dict[str, str] | None]:
+            lines = normalized(raw).splitlines()
+            running = [i for i, line in enumerate(lines) if line == 'running 1 test']
+            if len(running) != 1:
+                raise Invalid('run count')
+            run_index = running[0]
+            summary_index, outcome, passed, failed, ignored, measured, filtered = _summary_rows(lines)
+            if run_index >= summary_index or filtered != 10 or measured != 0:
+                raise Invalid('run counts')
+            _reject_outside_run(lines, run_index, summary_index)
+            segment = lines[run_index + 1:summary_index]
+            rows = [re.fullmatch(r'test ([A-Za-z0-9_:]+) \.\.\. (ok|FAILED|ignored)', line)
+                    for line in segment]
+            rows = [row for row in rows if row]
+            if len(rows) != 1 or rows[0].group(1) != CASE:
+                raise Invalid('test row identity')
+            state = rows[0].group(2)
+            if state == 'ok':
+                if (outcome, passed, failed, ignored) != ('ok', 1, 0, 0) or cargo_exit != 0:
+                    raise Invalid('pass exit/count mismatch')
+                if any('csrf_public_assertion_diag' in line for line in segment):
+                    raise Invalid('diagnostic outside failure')
+                if _stdout_markers(segment):
+                    raise Invalid('stdout marker outside failure')
+                return 'passed', None
+            if state != 'FAILED' or (outcome, passed, failed, ignored) != ('FAILED', 0, 1, 0) or cargo_exit == 0:
+                raise Invalid('failure exit/count mismatch')
+            markers = _stdout_markers(segment)
+            headers = [i for i, line in enumerate(segment) if line == 'failures:']
+            if len(headers) != 2 or len(markers) != 1 or markers[0][1] != CASE:
+                raise Invalid('failure block identity')
+            marker_index = markers[0][0]
+            if not (headers[0] < marker_index < headers[1]):
+                raise Invalid('failure block order')
+            footer_rows = [line[4:] for line in segment[headers[1] + 1:]
+                           if re.fullmatch(r'    [A-Za-z0-9_:]+', line)]
+            if footer_rows != [CASE]:
+                raise Invalid('failure footer identity')
+            block_start = marker_index + 1
+            block_end = headers[1]
+            diagnostic_lines = [i for i, line in enumerate(segment) if 'csrf_public_assertion_diag' in line]
+            if any(not (block_start <= i < block_end) for i in diagnostic_lines):
+                raise Invalid('diagnostic outside selected failure block')
+            return 'failed', parse_assertion_block(segment[block_start:block_end])
+        
+        
+        def parse_full_run(raw: bytes, cargo_exit: int) -> tuple[str, tuple[str, ...], dict[str, str] | None]:
+            lines = normalized(raw).splitlines()
+            running = [i for i, line in enumerate(lines) if line == 'running 11 tests']
+            if len(running) != 1:
+                raise Invalid('full run count')
+            run_index = running[0]
+            summary_index, outcome, passed, failed, ignored, measured, filtered = _summary_rows(lines)
+            if run_index >= summary_index or measured != 0 or filtered != 0 or ignored != 0:
+                raise Invalid('full run summary bounds')
+            _reject_outside_run(lines, run_index, summary_index)
+            segment = lines[run_index + 1:summary_index]
+            row_matches = [re.fullmatch(r'test ([A-Za-z0-9_:]+) \.\.\. (ok|FAILED|ignored)', line)
+                           for line in segment]
+            rows = [row for row in row_matches if row]
+            names = [row.group(1) for row in rows]
+            if (len(rows) != len(FULL_CASES) or len(set(names)) != len(FULL_CASES)
+                    or set(names) != set(FULL_CASES) or any(row.group(2) == 'ignored' for row in rows)):
+                raise Invalid('full run inventory')
+            failed_cases = tuple(row.group(1) for row in rows if row.group(2) == 'FAILED')
+            if not failed_cases:
+                if (outcome, passed, failed) != ('ok', len(FULL_CASES), 0) or cargo_exit != 0:
+                    raise Invalid('full pass exit/count mismatch')
+                if any('csrf_public_assertion_diag' in line for line in segment) or _stdout_markers(segment):
+                    raise Invalid('unexpected full-run diagnostic')
+                return 'passed', (), None
+            if outcome != 'FAILED' or passed + failed != len(FULL_CASES) or failed != len(failed_cases) or cargo_exit == 0:
+                raise Invalid('full failure exit/count mismatch')
+        
+            # Names and summary bind the failure set. The optional ParallelReplies fields are
+            # projected only from that case's unique stdout block; malformed/foreign blocks
+            # leave its fields unavailable while preserving the original failed exit.
+            headers = [i for i, line in enumerate(segment) if line == 'failures:']
+            if len(headers) != 2 or headers[0] >= headers[1]:
+                return 'failed', failed_cases, None
+            footer_rows = [line[4:] for line in segment[headers[1] + 1:]
+                           if re.fullmatch(r'    [A-Za-z0-9_:]+', line)]
+            if len(footer_rows) != len(failed_cases) or set(footer_rows) != set(failed_cases):
+                return 'failed', failed_cases, None
+            try:
+                markers = _stdout_markers(segment)
+            except Invalid:
+                return 'failed', failed_cases, None
+            marker_names = [name for _, name in markers]
+            if (len(set(marker_names)) != len(marker_names)
+                    or set(marker_names) != set(failed_cases)
+                    or any(name not in failed_cases for name in marker_names)
+                    or any(not (headers[0] < index < headers[1]) for index, _ in markers)):
+                return 'failed', failed_cases, None
+            if CASE not in failed_cases or marker_names.count(CASE) != 1:
+                return 'failed', failed_cases, None
+            marker_index = next(index for index, name in markers if name == CASE)
+            if not (headers[0] < marker_index < headers[1]):
+                return 'failed', failed_cases, None
+            next_markers = [index for index, _ in markers if index > marker_index]
+            block_start = marker_index + 1
+            block_end = min(next_markers + [headers[1]])
+            diagnostic_lines = [i for i, line in enumerate(segment) if 'csrf_public_assertion_diag' in line]
+            if any(not (block_start <= index < block_end) for index in diagnostic_lines):
+                return 'failed', failed_cases, None
+            return 'failed', failed_cases, parse_assertion_block(segment[block_start:block_end])
+        
+        
+        def fields(diag: dict[str, str] | None) -> str:
+            if diag is None:
+                values = {key: 'unavailable' for key in
+                          ('status_one', 'status_two', 'checked_calls', 'calls_at_failure', 'checked_rows')}
+                projection = 'unavailable'
+            else:
+                values = diag
+                projection = 'closed'
+            return ('status_one=' + values['status_one']
+                    + ' status_two=' + values['status_two']
+                    + ' checked_calls=' + values['checked_calls']
+                    + ' calls_at_failure=' + values['calls_at_failure']
+                    + ' checked_rows=' + values['checked_rows']
+                    + ' projection=' + projection)
+        
+        
+        def selftest() -> None:
+            def raw(state: str = 'FAILED', diag: str | None = None, *, case: str = CASE,
+                    trailer: str = 'failures:\n    ' + CASE + '\n') -> bytes:
+                status = 'FAILED' if state == 'FAILED' else state
+                summary = ('test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.01s'
+                           if status == 'FAILED' else
+                           'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.01s')
+                if status == 'FAILED':
+                    inside = "thread '" + case + "' panicked at runtime/tests/session_csrf_public_api.rs:946:5:\n"
+                    if diag is not None:
+                        inside += diag + '\n'
+                    body = ('running 1 test\ntest ' + case + ' ... FAILED\n\nfailures:\n\n---- '
+                            + case + ' stdout ----\n' + inside + trailer + '\n' + summary + '\n')
+                    return body.encode()
+                return ('running 1 test\ntest ' + case + ' ... ok\n\n' + summary + '\n').encode()
+        
+            listing = (CASE + ': test\n\n1 test, 0 benchmarks\n').encode()
+            parse_listing(listing)
+            parse_listing(('    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s\n'
+                           '     Running tests/session_csrf_public_api.rs (target/debug/deps/session_csrf_public_api-abc)\n'
+                           + CASE + ': test\n\n1 test, 0 benchmarks\n').encode())
+            for malformed_list in (
+                (CASE + ': test\n\n0 tests, 0 benchmarks\n').encode(),
+                (CASE + ': test\n' + CASE + ': test\n\n2 tests, 0 benchmarks\n').encode(),
+                (CASE + ': test\n\n1 test, 1 benchmark\n').encode(),
+                ('warning: unexpected\n' + CASE + ': test\n\n1 test, 0 benchmarks\n').encode(),
+            ):
+                try:
+                    parse_listing(malformed_list)
+                except Invalid:
+                    pass
+                else:
+                    raise AssertionError('invalid exact collection accepted')
+            good_diag = (DIAGNOSTIC_PREFIX + ' status_one=200 status_two=403 checked_calls=Some(1) '
+                         'calls_at_failure=2 checked_rows=None')
+            expected = {'status_one': '200', 'status_two': '403', 'checked_calls': 'some:1',
+                        'calls_at_failure': '2', 'checked_rows': 'none'}
+            good_lf = raw(diag=good_diag)
+            assert parse_run(good_lf, 101) == ('failed', expected)
+            assert parse_run(good_lf.replace(b'\n', b'\r\n'), 101) == ('failed', expected)
+            boundary_diag = (DIAGNOSTIC_PREFIX + ' status_one=100 status_two=599 checked_calls=Some(1024) '
+                             'calls_at_failure=0 checked_rows=Some(0)')
+            boundary = {'status_one': '100', 'status_two': '599', 'checked_calls': 'some:1024',
+                        'calls_at_failure': '0', 'checked_rows': 'some:0'}
+            assert parse_run(raw(diag=boundary_diag), 101) == ('failed', boundary)
+            none_diag = (DIAGNOSTIC_PREFIX + ' status_one=200 status_two=201 checked_calls=None '
+                         'calls_at_failure=2 checked_rows=None')
+            none_fields = {'status_one': '200', 'status_two': '201', 'checked_calls': 'none',
+                           'calls_at_failure': '2', 'checked_rows': 'none'}
+            assert parse_run(raw(diag=none_diag), 101) == ('failed', none_fields)
+            assert parse_run(raw('ok'), 0) == ('passed', None)
+        
+            def exact_failure(body: str, *, after_footer: str = '') -> bytes:
+                summary = ('test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; '
+                           '10 filtered out; finished in 0.01s')
+                return ('running 1 test\ntest ' + CASE + ' ... FAILED\n\nfailures:\n\n'
+                        + body + '\nfailures:\n    ' + CASE + '\n' + after_footer + '\n'
+                        + summary + '\n').encode()
+        
+            case_block = ('---- ' + CASE + ' stdout ----\nthread \'' + CASE
+                          + "' panicked at runtime/tests/session_csrf_public_api.rs:936:5:\n"
+                          + good_diag + '\n')
+            case_without_diag = ('---- ' + CASE + ' stdout ----\nthread \'' + CASE
+                                 + "' panicked at runtime/tests/session_csrf_public_api.rs:936:5:\n")
+            foreign_block = ('---- foreign_case stdout ----\nthread \'foreign_case\' panicked at '
+                             + 'C:\\private\\secret.rs:7:9:\n' + good_diag + '\n')
+            association_controls = {
+                'foreign-before': exact_failure(foreign_block + case_block),
+                'foreign-inside': exact_failure(case_without_diag + foreign_block),
+                'foreign-after': exact_failure(case_block + foreign_block),
+                'duplicate-block': exact_failure(case_block + case_block),
+                'diagnostic-before-block': exact_failure(good_diag + '\n' + case_without_diag),
+                'diagnostic-after-block': exact_failure(case_without_diag, after_footer=good_diag + '\n'),
+            }
+            for label, transcript in association_controls.items():
+                try:
+                    parse_run(transcript, 101)
+                except Invalid:
+                    continue
+                raise AssertionError('unbound diagnostic association accepted: ' + label)
+        
+            def full_listing(names=FULL_CASES) -> bytes:
+                return ('\n'.join(name + ': test' for name in names) + '\n\n'
+                        + str(len(names)) + ' tests, 0 benchmarks\n').encode()
+        
+            parse_full_listing(full_listing())
+            full_preamble = ('    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s\n'
+                             '     Running tests/session_csrf_public_api.rs (target/debug/deps/session_csrf_public_api-abc)\n').encode()
+            parse_full_listing(full_preamble + full_listing())
+            bad_full_lists = [
+                full_listing(FULL_CASES[:-1]),
+                full_listing(FULL_CASES[:-1] + (FULL_CASES[0],)),
+                full_listing(FULL_CASES[:-1] + ('foreign_case',)),
+                full_listing()[:-1].replace(b'11 tests, 0 benchmarks', b'11 tests, 1 benchmark'),
+            ]
+            for transcript in bad_full_lists:
+                try:
+                    parse_full_listing(transcript)
+                except Invalid:
+                    continue
+                raise AssertionError('invalid full collection accepted')
+        
+            def full_run(*, failed_cases: tuple[str, ...] = (), markers: tuple[str, ...] | None = None,
+                         diagnostics: dict[str, str] | None = None, after_footer: str = '') -> bytes:
+                failed_set = set(failed_cases)
+                if not failed_set.issubset(FULL_CASES):
+                    raise AssertionError('bad test fixture')
+                rows = ['test ' + name + ' ... ' + ('FAILED' if name in failed_set else 'ok')
+                        for name in FULL_CASES]
+                run = 'running 11 tests\n' + '\n'.join(rows) + '\n'
+                if not failed_set:
+                    return (run + '\ntest result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; '
+                            '0 filtered out; finished in 0.01s\n').encode()
+                selected_markers = markers if markers is not None else tuple(failed_cases)
+                body = ''
+                for name in selected_markers:
+                    body += ('\n---- ' + name + ' stdout ----\nthread \'' + name
+                             + "' panicked at runtime/tests/session_csrf_public_api.rs:936:5:\n")
+                    if diagnostics and name in diagnostics:
+                        body += diagnostics[name] + '\n'
+                footer = '\nfailures:\n' + ''.join('    ' + name + '\n' for name in failed_cases)
+                summary = ('\ntest result: FAILED. ' + str(len(FULL_CASES) - len(failed_cases))
+                           + ' passed; ' + str(len(failed_cases))
+                           + ' failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n')
+                return (run + '\nfailures:\n' + body + footer + after_footer + summary).encode()
+        
+            assert parse_full_run(full_run(), 0) == ('passed', (), None)
+            parallel_failure = full_run(failed_cases=(CASE,), diagnostics={CASE: good_diag})
+            assert parse_full_run(parallel_failure, 101) == ('failed', (CASE,), expected)
+            assert parse_full_run(parallel_failure.replace(b'\n', b'\r\n'), 101) == ('failed', (CASE,), expected)
+            # R6: inspect the entire capture, not only running..summary. Ordinary
+            # Cargo preamble/trailer remains valid; outside metadata never disappears.
+            ordinary_prefix = b'   Compiling nagi-runtime v0.1.11 (checkout/runtime)\n    Finished arbitrary valid Cargo profile\n     Running ordinary test executable\n'
+            ordinary_suffix = b'error: test failed, to rerun pass -p nagi-runtime --test session_csrf_public_api\n'
+            outside_metadata = (
+                (good_diag + '\n').encode(),
+                b'csrf_public_assertion_diag phase=Other synthetic_private\n',
+                b'---- foreign_case stdout ----\n',
+                ('---- ' + CASE + ' stdout ----\n').encode(),
+                b'---- foreign_case stdout ---- malformed\n',
+            )
+            for parser, inside, no_inside_diag, passed_run in (
+                (parse_run, good_lf, raw(diag=None), raw('ok')),
+                (parse_full_run, parallel_failure, full_run(failed_cases=(CASE,)), full_run()),
+            ):
+                for crlf in (False, True):
+                    convert = lambda value: value.replace(b'\n', b'\r\n') if crlf else value
+                    assert parser(convert(ordinary_prefix + inside + ordinary_suffix), 101)[-1] == expected
+                    assert parser(convert(ordinary_prefix + passed_run + ordinary_suffix), 0)[0] == 'passed'
+                    for base_output in (inside, no_inside_diag, passed_run):
+                        for metadata in outside_metadata:
+                            for before in (True, False):
+                                outside = metadata + base_output if before else base_output + metadata
+                                try:
+                                    parser(convert(outside), 0 if base_output is passed_run else 101)
+                                except Invalid:
+                                    continue
+                                raise AssertionError('outside run metadata accepted')
+        
+            other = next(name for name in FULL_CASES if name != CASE)
+            known_parallel_and_other = full_run(failed_cases=(CASE, other), diagnostics={CASE: good_diag})
+            full_state, full_failed, full_diag = parse_full_run(known_parallel_and_other, 101)
+            assert full_state == 'failed' and set(full_failed) == {CASE, other} and full_diag == expected
+            foreign_full = full_run(failed_cases=(CASE,), markers=(CASE, 'foreign_case'), diagnostics={CASE: good_diag})
+            duplicate_full = full_run(failed_cases=(CASE,), markers=(CASE, CASE), diagnostics={CASE: good_diag})
+            outside_full = full_run(failed_cases=(CASE,), markers=(CASE,), after_footer=good_diag + '\n')
+            foreign_diagnostic = full_run(failed_cases=(CASE, other), diagnostics={other: good_diag})
+            for transcript in (foreign_full, duplicate_full, outside_full, foreign_diagnostic):
+                state, names, diag = parse_full_run(transcript, 101)
+                assert state == 'failed' and CASE in names and diag is None
+                assert all(token not in fields(diag) for token in ('csrf_public_assertion_diag', 'secret.rs', 'private'))
+            absent_expected = full_run(failed_cases=(other,), diagnostics={other: good_diag})
+            assert parse_full_run(absent_expected, 101) == ('failed', (other,), None)
+            panic_without_parallel_diag = full_run(failed_cases=(CASE,))
+            assert parse_full_run(panic_without_parallel_diag, 101) == ('failed', (CASE,), None)
+            missing_foreign_block = full_run(failed_cases=(CASE, other), markers=(CASE,), diagnostics={CASE: good_diag})
+            state, names, diag = parse_full_run(missing_foreign_block, 101)
+            assert state == 'failed' and set(names) == {CASE, other} and diag is None
+            for bad, code in ((parallel_failure, 0), (full_run(), 101)):
+                try:
+                    parse_full_run(bad, code)
+                except Invalid:
+                    continue
+                raise AssertionError('full run exit inconsistency accepted')
+        
+            exact_listing = listing
+            parallel_listing = full_listing()
+            def observe_with_fake_capture(responses):
+                calls = []
+                def fake_capture(argv, limit):
+                    calls.append((list(argv), limit))
+                    if not responses:
+                        raise AssertionError('unexpected retry or extra command')
+                    return responses.pop(0)
+                old_capture = globals()['capture']
+                old_guard = globals()['source_guard']
+                globals()['capture'] = fake_capture
+                globals()['source_guard'] = lambda: None
+                try:
+                    output = io.StringIO()
+                    with contextlib.redirect_stdout(output):
+                        code = observe()
+                    return code, calls, output.getvalue(), len(responses)
+                finally:
+                    globals()['capture'] = old_capture
+                    globals()['source_guard'] = old_guard
+        
+            compile_ok = (0, b'', False)
+            staged_pass = [compile_ok, (0, exact_listing, False), (0, raw('ok'), False),
+                           (0, parallel_listing, False), (0, full_run(), False)]
+            code, calls, output, remaining = observe_with_fake_capture(staged_pass)
+            assert code == 0 and remaining == 0 and len(calls) == 5
+            expected_prefix = ['cargo', 'test', '--locked', '-p', 'nagi-runtime', '--test', 'session_csrf_public_api']
+            assert calls[0][0] == expected_prefix + ['--no-run']
+            assert calls[1][0] == expected_prefix + [CASE, '--', '--exact', '--list']
+            assert calls[2][0] == expected_prefix + [CASE, '--', '--exact']
+            assert calls[3][0] == expected_prefix + ['--', '--list']
+            assert calls[4][0] == expected_prefix
+            assert all(not any(flag in argv for flag in ('--test-threads', '--nocapture', '--show-output'))
+                       for argv, _ in calls)
+        
+            exact_failed = [compile_ok, (0, exact_listing, False), (101, good_lf, False)]
+            code, calls, output, remaining = observe_with_fake_capture(exact_failed)
+            assert code == 101 and len(calls) == 3 and remaining == 0
+            assert 'phase=exact_run state=failed cargo_exit=101' in output
+            assert 'phase=parallel_collection' not in output
+        
+            malformed_parallel_list = [compile_ok, (0, exact_listing, False), (0, raw('ok'), False),
+                                       (0, b'0 tests, 0 benchmarks\n', False)]
+            code, calls, output, remaining = observe_with_fake_capture(malformed_parallel_list)
+            assert code == 2 and len(calls) == 4 and remaining == 0
+            assert 'phase=parallel_collection state=unavailable' in output
+        
+            staged_failure = [compile_ok, (0, exact_listing, False), (0, raw('ok'), False),
+                              (0, parallel_listing, False), (101, parallel_failure, False)]
+            code, calls, output, remaining = observe_with_fake_capture(staged_failure)
+            assert code == 101 and len(calls) == 5 and remaining == 0
+            assert 'session_full_failed_case=' + CASE + ' source=unavailable' in output
+            assert 'phase=parallel_run state=failed cargo_exit=101' in output and 'projection=closed' in output
+            assert 'csrf_public_assertion_diag' not in output and 'runtime/tests/' not in output
+        
+            exact_outside = [compile_ok, (0, exact_listing, False),
+                             (101, (good_diag + '\n').encode() + good_lf, False)]
+            code, calls, output, remaining = observe_with_fake_capture(exact_outside)
+            assert code == 101 and len(calls) == 3 and remaining == 0
+            assert 'phase=exact_run state=unavailable cargo_exit=101' in output
+            assert 'phase=parallel_collection' not in output and 'projection=closed' not in output
+            full_outside = [compile_ok, (0, exact_listing, False), (0, raw('ok'), False),
+                            (0, parallel_listing, False),
+                            (101, parallel_failure + (good_diag + '\n').encode(), False)]
+            code, calls, output, remaining = observe_with_fake_capture(full_outside)
+            assert code == 101 and len(calls) == 5 and remaining == 0
+            assert 'phase=parallel_run state=unavailable cargo_exit=101' in output
+            assert 'csrf_public_assertion_diag' not in output and 'projection=closed' not in output
+        
+            invalid_diags = [
+                good_diag + ' extra=Bearer synthetic_secret',
+                good_diag.replace('status_one=200', 'status_one=099'),
+                good_diag.replace('status_two=403', 'status_two=600'),
+                good_diag.replace('calls_at_failure=2', 'calls_at_failure=1025'),
+                good_diag.replace('checked_calls=Some(1)', 'checked_calls=Some(0001)'),
+                good_diag + '\n' + good_diag,
+                'csrf_public_assertion_diag phase=Other status_one=200 status_two=403 checked_calls=None calls_at_failure=2 checked_rows=None',
+            ]
+            for item in invalid_diags:
+                parsed_state, parsed_diag = parse_run(raw(diag=item), 101)
+                assert parsed_state == 'failed' and parsed_diag is None
+                projected = fields(parsed_diag)
+                assert 'synthetic_secret' not in projected and 'Bearer' not in projected
+                assert 'runtime/' not in projected and 'session_csrf_public_api.rs' not in projected
+            wrong_case = raw(diag=good_diag, case='other_known_case', trailer='failures:\n    other_known_case\n')
+            try:
+                parse_run(wrong_case, 101)
+            except Invalid:
+                pass
+            else:
+                raise AssertionError('wrong test case accepted')
+            missing = parse_run(raw(diag=None), 101)
+            assert missing == ('failed', None)
+            unavailable = fields(None)
+            assert all(part + '=unavailable' in unavailable for part in
+                       ('status_one', 'status_two', 'checked_calls', 'calls_at_failure', 'checked_rows'))
+            for code, output in ((0, good_lf), (101, raw('ok'))):
+                try:
+                    parse_run(output, code)
+                except Invalid:
+                    pass
+                else:
+                    raise AssertionError('cargo/result exit mismatch accepted')
+            for bad in (b'\xff', b'running 1 test\rtest\r'):
+                try:
+                    normalized(bad)
+                except (Invalid, UnicodeDecodeError):
+                    pass
+                else:
+                    raise AssertionError('invalid encoding/line ending accepted')
+            print('selftest=pass exact_and_full_lists=pass exact_and_parallel_counts=closed LF_CRLF=pass failure_block_association=closed foreign_duplicate_outside_diagnostic=closed status_range=100..599 counters_bound=0..1024 absent_fields=unavailable exits=strict')
+        
+        
+        def observe() -> int:
+            try:
+                source_guard()
+            except Exception:
+                print('session_parallel_reply phase=source_guard state=unavailable')
+                return 2
+            target = ['-p', 'nagi-runtime', '--test', 'session_csrf_public_api']
+            code, _, overflow = capture(['cargo', 'test', '--locked', *target, '--no-run'], INFRA_LIMIT)
+            print('session_parallel_reply phase=compile state=' + ('pass' if code == 0 and not overflow else 'fail')
+                  + ' cargo_exit=' + str(code) + ' capture=' + ('overflow' if overflow else 'bounded'))
+            if code != 0 or overflow:
+                return code if code else 2
+            list_args = ['cargo', 'test', '--locked', *target, CASE, '--', '--exact', '--list']
+            code, listing, overflow = capture(list_args, OUTPUT_LIMIT)
+            try:
+                if code != 0 or overflow:
+                    raise Invalid('exact list process')
+                parse_listing(listing)
+            except Exception:
+                print('session_parallel_reply phase=exact_collection state=unavailable cargo_exit=' + str(code)
+                      + ' capture=' + ('overflow' if overflow else 'bounded'))
+                return code if code else 2
+            print('session_parallel_reply phase=exact_collection state=pass exact_cases=1 filtered_execution=10')
+            run_args = ['cargo', 'test', '--locked', *target, CASE, '--', '--exact']
+            code, output, overflow = capture(run_args, OUTPUT_LIMIT)
+            try:
+                if overflow:
+                    raise Invalid('exact run capture overflow')
+                state, diag = parse_run(output, code)
+            except Exception:
+                print('session_parallel_reply phase=exact_run state=unavailable cargo_exit=' + str(code)
+                      + ' status_one=unavailable status_two=unavailable checked_calls=unavailable '
+                      + 'calls_at_failure=unavailable checked_rows=unavailable projection=unavailable '
+                      + 'capture=' + ('overflow' if overflow else 'bounded'))
+                return code if code else 2
+            if state != 'passed':
+                print('session_parallel_reply phase=exact_run state=failed cargo_exit=' + str(code) + ' ' + fields(diag))
+                return code if code else 2
+            print('session_parallel_reply phase=exact_run state=passed cargo_exit=0 '
+                  'status_one=unavailable status_two=unavailable checked_calls=unavailable '
+                  'calls_at_failure=unavailable checked_rows=unavailable projection=not_applicable')
+        
+            full_list_args = ['cargo', 'test', '--locked', *target, '--', '--list']
+            code, listing, overflow = capture(full_list_args, OUTPUT_LIMIT)
+            try:
+                if code != 0 or overflow:
+                    raise Invalid('full list process')
+                parse_full_listing(listing)
+            except Exception:
+                print('session_parallel_reply phase=parallel_collection state=unavailable cargo_exit=' + str(code)
+                      + ' capture=' + ('overflow' if overflow else 'bounded'))
+                return code if code else 2
+            print('session_parallel_reply phase=parallel_collection state=pass cases=11 filtered=0')
+        
+            # Deliberately omit filters and test-thread overrides: this is one ordinary
+            # default-parallel invocation, conditional on the exact case passing above.
+            full_run_args = ['cargo', 'test', '--locked', *target]
+            code, output, overflow = capture(full_run_args, OUTPUT_LIMIT)
+            try:
+                if overflow:
+                    raise Invalid('parallel run capture overflow')
+                state, failed_cases, diag = parse_full_run(output, code)
+            except Exception:
+                print('session_parallel_reply phase=parallel_run state=unavailable cargo_exit=' + str(code)
+                      + ' status_one=unavailable status_two=unavailable checked_calls=unavailable '
+                      + 'calls_at_failure=unavailable checked_rows=unavailable projection=unavailable '
+                      + 'capture=' + ('overflow' if overflow else 'bounded'))
+                return code if code else 2
+            if state == 'passed':
+                print('session_parallel_reply phase=parallel_run state=passed cargo_exit=0 cases=11 failed=0 ignored=0')
+                return 0
+            for name in failed_cases:
+                print('session_full_failed_case=' + name + ' source=unavailable')
+            if CASE in failed_cases:
+                print('session_parallel_reply phase=parallel_run state=failed cargo_exit=' + str(code) + ' ' + fields(diag))
+            else:
+                print('session_parallel_reply phase=parallel_run state=expected_case_not_failed cargo_exit=' + str(code)
+                      + ' ' + fields(None))
+            return code if code else 2
+        
+        
+        def main() -> int:
+            if len(sys.argv) != 2:
+                print('session_parallel_reply state=unavailable')
+                return 2
+            if sys.argv[1] == 'selftest':
+                try:
+                    selftest()
+                    return 0
+                except Exception:
+                    print('selftest=fail')
+                    return 1
+            if sys.argv[1] == 'observe':
+                return observe()
+            print('session_parallel_reply state=unavailable')
+            return 2
+        
+        if __name__ == '__main__':
+            raise SystemExit(main())
+        PY
+        python "$RUNNER_TEMP/sf07-session-parallel-reply-guard.py" selftest
+        python "$RUNNER_TEMP/sf07-session-parallel-reply-guard.py" observe
