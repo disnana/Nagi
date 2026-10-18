@@ -1,4 +1,4 @@
-name: Nagi020 scoped Session head-finalizer cause
+name: Nagi020 Windows newline source controls
 'on':
   push:
     branches:
@@ -9,32 +9,21 @@ permissions:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 10
     env:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
       NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
     - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@stable
     - uses: actions/setup-python@v5
       with:
         python-version: '3.12'
-    - name: Fetch locked dependencies before native gates
-      run: cargo fetch --locked
-    - name: Diagnose private Session phase deadlines on Windows
-      if: always() && runner.os == 'Windows'
-      timeout-minutes: 30
+    - name: Validate exact LF and CRLF source controls
       shell: bash
-      run: 'set +e
+      run: 'set -euo pipefail
 
         python -B scripts/tests/test_session_private_deadline_diagnostic.py
 
-        fake_rc=$?
-
-        python -B scripts/ci/session_private_deadline_diagnostic.py --run-case head_finalizer
-
-        native_rc=$?
-
-        if [ "$fake_rc" -ne 0 ] || [ "$native_rc" -ne 0 ]; then exit 1; fi
+        python -B scripts/tests/test_sf07_request_source.py
 
         '

@@ -351,17 +351,24 @@ class HeadFinalizerObservationTests(unittest.TestCase):
 
     def test_exact_source_binding_lf_crlf_and_mutation_rejected(self):
         self.assertTrue(diag.source_inventory(ROOT))
-        with tempfile.TemporaryDirectory() as directory:
-            fixture = Path(directory)
-            for path in ("runtime/src/auth/session/http_bridge_tests.rs",
-                         "runtime/src/http_server/private_deadline_calibration.rs"):
-                target = fixture / path
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_bytes((ROOT / path).read_bytes().replace(b"\n", b"\r\n"))
-            self.assertTrue(diag.source_inventory(fixture))
-            target = fixture / "runtime/src/auth/session/http_bridge_tests.rs"
-            target.write_bytes(target.read_bytes() + b" ")
-            self.assertFalse(diag.source_inventory(fixture))
+        for input_newline in (b"\n", b"\r\n"):
+            for output_newline in (b"\n", b"\r\n"):
+                with self.subTest(input_newline=input_newline, output_newline=output_newline), \
+                        tempfile.TemporaryDirectory() as directory:
+                    fixture = Path(directory)
+                    for path in ("runtime/src/auth/session/http_bridge_tests.rs",
+                                 "runtime/src/http_server/private_deadline_calibration.rs"):
+                        target = fixture / path
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        canonical = (ROOT / path).read_bytes().replace(b"\r\n", b"\n")
+                        supplied = canonical.replace(b"\n", input_newline)
+                        rendered = supplied.replace(b"\r\n", b"\n").replace(b"\n", output_newline)
+                        self.assertNotIn(b"\r\r\n", rendered)
+                        target.write_bytes(rendered)
+                    self.assertTrue(diag.source_inventory(fixture))
+                    target = fixture / "runtime/src/auth/session/http_bridge_tests.rs"
+                    target.write_bytes(target.read_bytes() + b" ")
+                    self.assertFalse(diag.source_inventory(fixture))
 
 
 class SourceWiringControls(unittest.TestCase):
