@@ -1,0 +1,43 @@
+name: BrowserLogin workspace executable diagnostic
+on:
+  create:
+permissions:
+  contents: read
+concurrency:
+  group: browser-login-workspace-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser-login-workspace-diagnostic:
+    if: >-
+      github.event.ref_type == 'branch' &&
+      github.event.ref == 'diag/session-workspace-executable-20261018' &&
+      github.ref == 'refs/heads/diag/session-workspace-executable-20261018'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        id: rust
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: |
+            nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+            nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check bounded workspace diagnostic fakes
+        run: python -B -m unittest discover -s scripts/tests -p 'test_browser_login_workspace_diagnostic.py'
+      - name: Compare exact failures and the default parallel suite using one workspace executable
+        env:
+          CARGO_TERM_COLOR: never
+        run: python -B scripts/ci/browser_login_workspace_diagnostic.py
