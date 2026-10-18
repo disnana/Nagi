@@ -1,4 +1,4 @@
-"""Exact inverse of U1's narrow ownership changes, never a runtime proof."""
+"""Historical U1 inverses and reviewed U4 production profiles; no native proof."""
 import hashlib
 import re
 
@@ -58,12 +58,50 @@ def inverse_csrf(source):
     return source
 
 
+# U4/U5 made the producer, native driver and attached Request Context production.
+# Historical U1 inverses above intentionally remain frozen; current source is
+# instead bound to the independently reviewed public RC commit/tree below.
+PRODUCTION_COMMIT = '9dd70dc73b2722fb537edc34452916030670d027'
+PRODUCTION_TREE = '726d6c476d7e4a69c2a4ba8ab84dd922eac1d2dc'
+PRODUCTION_SOURCES = {'http': {'path': 'runtime/src/http_server.rs',
+          'blob': '581551f3f2544b4d59ed806af106996d5795ed54',
+          'sha256': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
+          'tokens': '4dea895e5e943d98cecd93c2f1e28b0c348c0b6581364ff6fa8c885cc5b7a12e'},
+ 'browser': {'path': 'runtime/src/http_server/browser_login.rs',
+             'blob': '41878db9c1e5cf78d4a8c682f7f7d53f8ddfe557',
+             'sha256': '17252effa839788999212f90b1418bdba27173ef3c230ee4223311ebd4ce64b6',
+             'tokens': '071429be0bc17b652cbff8589312ea8104f367e14ba390c3de0eec94f9a2bc01'},
+ 'stage': {'path': 'runtime/src/http_server/browser_login_stage_tests.rs',
+           'blob': '6d57cdbf3cff4051b061c3f71bddb6827ad4e3a5',
+           'sha256': '220975a888800934f209be4ec4a96449e32f3cedef90119e517d6c01b2dcb3a3',
+           'tokens': 'a13eac9ab415613067261d9927594ce023d421bcd4518d6feb76f0819f6d8164'},
+ 'csrf': {'path': 'runtime/src/http_server/csrf_http.rs',
+          'blob': '93095cab1709b4753237c0e8a8705f6bfa1a64a8',
+          'sha256': '4e97c5c0268ad6caa49df5a4d5e2cb6e9b4e7cdc5c74e7d900b0439b1ff0a6e1',
+          'tokens': 'aa7607f96728acb1a74c964a441c97799d68409027e999c09c596838ce45d533'},
+ 'public': {'path': 'runtime/tests/browser_login_public_api.rs',
+            'blob': 'aeafab34a1842038538b71bf15b1989eaac268bd',
+            'sha256': '4999e44ad29bf7777a9f92d349eee025c9d3c1112162b7cc7d0524c74e745050',
+            'tokens': 'fe23e1f3098b190113722979aed4fbaffeb10153f0869ba083dabf3674ac8156'}}
+
+
+def approved_production(name, source):
+    expected = PRODUCTION_SOURCES.get(name)
+    if expected is None or hashlib.sha256(source.encode()).hexdigest() != expected['sha256']:
+        raise ValueError('approved U4 production source identity mismatch')
+    if digest(source) != expected['tokens']:
+        raise ValueError('approved U4 production token mismatch')
+    return norm(source)
+
+
 # Frozen from exact9b7 base bytes before U1, not adjusted to the candidate.
 BASE_TOKENS = {'http': '8efe1130c731238099553c0e9fc58a19ff103fc57278c55c7ec8839de26d1f3e', 'browser': '2b61c339bfeecc0519ccf72517cc64346f40b6c51d2bab946004f2f6f2a71dab', 'stage': '8b5e8f0c3ab595d8fa6b93d2c4c400ef670f64933c576db994315c620bdcced4', 'csrf': '21ae359e321f254d831f0c29b43392f2b8490e8c14ccddaef733f58c8b7b95d3'}
 HTTP_BEFORE = 'e6969a04326ed5fc4b3795f64a2909ffb5bbfae16f679589b93a819922084485'
-HTTP_AFTER = '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6'
+HISTORICAL_HTTP_AFTER = '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6'
+HTTP_AFTER = 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31'
 TESTS_BEFORE = '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173'
-TESTS_AFTER = '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f'
+HISTORICAL_TESTS_AFTER = '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f'
+TESTS_AFTER = 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584'
 SOURCE_LINE = '          python -B scripts/tests/test_sf07_request_source.py\n'
 NATIVE_LINE = '          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request\n'
 RATE_SOURCE_LINE = '          python -B scripts/tests/test_sf07_rate_source.py\n'
@@ -271,6 +309,8 @@ def inverse_quota_owned_state_lock(source):
 
 def inverse_quota(source):
     source = inverse_quota_owned_state_lock(source)
+    production_doc = ('//! The production HTTP producer uses the private retained catalogue and atomic\n'
+                      '//! reservation path. No public Nagi quota API is exposed.')
     # U2 extends the existing owner with a retained-catalog receipt. Remove
     # only that independently reviewed exact block, never arbitrary new code.
     start = '// SF07_U2_RETAINED_CATALOG_BEGIN'
@@ -281,11 +321,22 @@ def inverse_quota(source):
         left = source.index(start)
         right = source.index(end) + len(end)
         block = source[left:right]
-        if hashlib.sha256(block.encode()).hexdigest() != '33a82908cee4b72230b2d5ac1c5b966ba010f673e33562c4092d2b49cc0d39a3':
+        expected_block = ('577790bd4be8d2cfdfdc90526c834e7a3006538d8687eb9c5fa63f216ba62828'
+                          if production_doc in source else
+                          '33a82908cee4b72230b2d5ac1c5b966ba010f673e33562c4092d2b49cc0d39a3')
+        if hashlib.sha256(block.encode()).hexdigest() != expected_block:
             raise ValueError('U2 quota extension digest mismatch')
         source = source[:left] + source[right:]
-    for before, after in QUOTA_CFG_ADDITIONS:
-        if source.count(after) != 1:
-            raise ValueError('U1 quota cfg inverse mismatch')
-        source = source.replace(after, before)
+    if production_doc in source:
+        # Full U4 restoration is one exact profile, not a mixed set of cfgs.
+        for before, after in QUOTA_CFG_ADDITIONS:
+            if after in source or source.count(before) != 1:
+                raise ValueError('U4 quota production restoration mismatch')
+        source = source.replace(production_doc,
+            '//! This file is deliberately unregistered and exposes no public Nagi API.', 1)
+    else:
+        for before, after in QUOTA_CFG_ADDITIONS:
+            if source.count(after) != 1:
+                raise ValueError('U1 quota cfg inverse mismatch')
+            source = source.replace(after, before)
     return source

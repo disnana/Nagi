@@ -145,7 +145,7 @@ with patch("subprocess.Popen", side_effect=AssertionError("process")), patch("ct
         self.assertEqual(workflow.count("if: always() && steps.session_deadline_diag.outcome != 'skipped'"), 2)
         self.assertEqual(workflow.count("run: test '${{ steps.session_deadline_diag.outcome }}' = success"), 2)
         self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(),
-                         "5d7923afbefb4108ccfaedfb2441cf8832aea38d25a683fd6cc1d62400783eb7")
+                         "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79")
         for added in additions:
             for mutated in (workflow.replace(added, "", 1), workflow.replace(added, added + added, 1),
                             workflow.replace(added, added.replace("python", "python -c pass", 1), 1)):

@@ -1,0 +1,51 @@
+name: Nagi 0.2.0 SF07 post-cutover Windows native gates
+'on':
+  push:
+    branches:
+    - test/nagi020-sf07-gates-20261018
+  workflow_dispatch: null
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Fetch locked dependencies before native gates
+      run: cargo fetch --locked
+    - name: Check native buffered send deadline and idle Keep-Alive early on Windows
+      if: runner.os == 'Windows'
+      shell: bash
+      run: "set -euo pipefail\npython - <<'PYSOURCE'\nimport hashlib, pathlib\nexpected = {\n    'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',\n    'runtime/src/http_server/tests.rs': 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584',\n    'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',\n    'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',\n    'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',\n}\nfor name, digest in expected.items():\n    source = pathlib.Path(name).read_bytes()\n    if b\"\\r\" in source.replace(b\"\\r\\n\", b\"\\n\"):\n        raise AssertionError(\"unexpected lone CR in native fixture source\")\n    actual = hashlib.sha256(source.replace(b\"\\r\\n\", b\"\\n\")).hexdigest()\n    if actual != digest:\n        raise AssertionError(\"reviewed native send fixture source differs: \" + name)\n    print(\"native send fixture sha256=\" + actual + \" file=\" + name)\nPYSOURCE\ncargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee \"$RUNNER_TEMP/http-send-deadline.log\"\npython - <<'PYCODE'\nimport os, pathlib, re\ntext=(pathlib.Path(os.environ[\"RUNNER_TEMP\"])/\"http-send-deadline.log\").read_text(encoding=\"utf-8\")\nrequired={\n    \"header_flush_before_buffered_frame_keeps_original_send_end\",\n    \"empty_response_completion_does_not_expire_idle_keep_alive\",\n    \"buffered_response_completion_does_not_expire_idle_keep_alive\",\n}\nsummaries=re.findall(r\"(?m)^test result: ok\\. 3 passed; 0 failed; 0 ignored;.*$\",text)\nif len(summaries)!=1:\n    raise AssertionError(\"three actual native send-deadline cases required\")\nfor name in required:\n    pattern=rf\"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \\.\\.\\. ok$\"\n    if len(re.findall(pattern,text))!=1:\n        raise AssertionError(\"native send-deadline case missing, duplicate or failed\")\nPYCODE\n"
+    - name: Check stalled send permit release and graceful join early on Windows
+      if: runner.os == 'Windows'
+      shell: bash
+      run: "set -euo pipefail\ncargo test --locked -p nagi-runtime --lib stalled_response_send_ 2>&1 | tee \"$RUNNER_TEMP/http-stalled-send.log\"\npython - <<'PYCODE'\nimport os, pathlib, re\ntext=(pathlib.Path(os.environ[\"RUNNER_TEMP\"])/\"http-stalled-send.log\").read_text(encoding=\"utf-8\")\nrequired={\n    \"stalled_response_send_expires_and_releases_connection_permit\",\n    \"graceful_shutdown_preserves_stalled_response_send_deadline\",\n}\nsummaries=re.findall(r\"(?m)^test result: ok\\. 2 passed; 0 failed; 0 ignored;.*$\",text)\nif len(summaries)!=1:\n    raise AssertionError(\"two actual stalled-send lifecycle cases required\")\nfor name in required:\n    pattern=rf\"(?m)^test http_server::tests::{re.escape(name)} \\.\\.\\. ok$\"\n    if len(re.findall(pattern,text))!=1:\n        raise AssertionError(\"stalled-send case missing, duplicate or failed\")\nPYCODE\n"
+    - name: Check SF07 charged native wire checkpoint
+      shell: bash
+      run: "set -euo pipefail\npython -B scripts/tests/test_sf07_wire_source.py\npython -B scripts/tests/test_sf07_transport_source.py\npython -B scripts/tests/test_sf07_request_source.py\npython -B scripts/tests/test_sf07_rate_source.py\npython -B scripts/tests/test_sf07_checkpoint_summary.py\nif [ \"$RUNNER_OS\" = \"Windows\" ]; then\n  NAGI_TEST_BASH=\"$(cygpath -w \"$BASH\")\"\nelse\n  NAGI_TEST_BASH=\"$BASH\"\nfi\nexport NAGI_TEST_BASH\npython -B scripts/tests/test_sf07_owned_state_summary.py\ncargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire\ncargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota\ncargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport\ncargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request\ncargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup\ncargo test --locked -p nagi-runtime --lib security_sf07_private::quota::retained_catalog_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py catalog-retained\ncargo test --locked -p nagi-runtime --lib auth::csrf::fixed_body::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py fixed-owner\ncargo test --locked -p nagi-runtime --lib auth::csrf::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py csrf-issuer\ncargo test --locked -p nagi-runtime --lib auth::prelogin::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py prelogin-issuer\nCARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock\nCARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners\nCARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send\n"
+    - name: Diagnose private Session phase deadlines on Windows
+      if: always() && runner.os == 'Windows'
+      timeout-minutes: 30
+      shell: bash
+      run: 'set +e
+
+        python -B scripts/tests/test_session_private_deadline_diagnostic.py
+
+        fake_rc=$?
+
+        python -B scripts/ci/session_private_deadline_diagnostic.py --run
+
+        native_rc=$?
+
+        if [ "$fake_rc" -ne 0 ] || [ "$native_rc" -ne 0 ]; then exit 1; fi
+
+        '

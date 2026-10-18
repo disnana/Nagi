@@ -39,14 +39,43 @@ class RequestSourceTests(unittest.TestCase):
             self.assertEqual(len(digests), 2, path)
             self.assertEqual(digests, [hashlib.sha256(read(path).encode()).hexdigest()] * 2, path)
 
-    def test_all_control_tokens_project_to_exact_inherited_http_and_b1(self):
-        for name, path, inverse in (
-            ('http', 'runtime/src/http_server.rs', projection.inverse_http),
-            ('browser', 'runtime/src/http_server/browser_login.rs', projection.inverse_browser),
-            ('stage', 'runtime/src/http_server/browser_login_stage_tests.rs', projection.inverse_stage),
-            ('csrf', 'runtime/src/http_server/csrf_http.rs', projection.inverse_csrf),
+    def test_actual_native_send_source_guards_keep_lf_crlf_and_reject_each_mutation(self):
+        import contextlib
+        import io
+        import textwrap
+        from unittest.mock import patch
+        workflow = read('.github/workflows/ci.yml')
+        fragments = workflow.split("python - <<'PYSOURCE'\n")[1:]
+        guards = [textwrap.dedent(fragment.split('          PYSOURCE', 1)[0]) for fragment in fragments]
+        self.assertEqual(len(guards), 2)
+        self.assertEqual(guards[0], guards[1])
+        paths = ('runtime/src/http_server.rs', 'runtime/src/http_server/tests.rs',
+                 'runtime/src/http_server/send_deadline_tests.rs',
+                 'runtime/src/http_server/windows_native_fixture.rs',
+                 'runtime/src/http_server/transport_lifecycle_tests.rs')
+        canonical = {path: read(path).encode() for path in paths}
+        code = compile(guards[0], '<native-source-guard>', 'exec')
+        def execute(files):
+            def value(path):
+                return files[path.as_posix()]
+            with patch.object(Path, 'read_bytes', value), contextlib.redirect_stdout(io.StringIO()):
+                exec(code, {})
+        execute(canonical)
+        execute({path: raw.replace(b'\n', b'\r\n') for path, raw in canonical.items()})
+        for path in paths:
+            for changed in (canonical[path] + b' ', canonical[path] + b'\r'):
+                with self.assertRaises(AssertionError):
+                    execute({**canonical, path: changed})
+
+    def test_reviewed_public_production_profile_is_distinct_from_historical_u1(self):
+        for name, path in (
+            ('http', 'runtime/src/http_server.rs'),
+            ('browser', 'runtime/src/http_server/browser_login.rs'),
+            ('stage', 'runtime/src/http_server/browser_login_stage_tests.rs'),
+            ('csrf', 'runtime/src/http_server/csrf_http.rs'),
         ):
-            self.assertEqual(projection.digest(inverse(read(path))), projection.BASE_TOKENS[name], name)
+            self.assertEqual(projection.digest(projection.approved_production(name, read(path))),
+                             projection.PRODUCTION_SOURCES[name]['tokens'], name)
 
     def test_production_owner_extraction_keeps_quota_single_and_fixture_cfgs(self):
         lib = read('runtime/src/lib.rs')
@@ -56,10 +85,14 @@ class RequestSourceTests(unittest.TestCase):
         calibration = '#[cfg(test)]\npub(crate) fn calibrate_allocation_meter()'
         self.assertEqual(modules.count(calibration), 1)
         modules = modules.replace(calibration, '#[cfg(test)]\nfn calibrate_allocation_meter()', 1)
+        for name in ('indexed', 'startup_rate'):
+            declaration = 'pub(crate) mod ' + name + ';'
+            self.assertEqual(modules.count(declaration), 1)
+            self.assertNotIn('#[cfg(test)]\n' + declaration, modules)
+            modules = modules.replace(declaration, '#[cfg(test)]\nmod ' + name + ';', 1)
+        self.assertIn('#[cfg(test)]\nmod legacy_rate;', modules)
         self.assertEqual(hashlib.sha256(modules.encode()).hexdigest(),
                          '585dc4c6335c70bfae2293a28c682d89fc868a191bb7ae908118a8c4d801af6a')
-        for name in ('indexed', 'legacy_rate'):
-            self.assertIn('#[cfg(test)]\nmod ' + name + ';', modules)
         for name in ('allocations_in', 'calibrate_allocation_meter'):
             self.assertRegex(modules, r'#\[cfg\(test\)\]\s*fn ' + name)
         self.assertEqual(modules.count('pub(crate) mod quota;'), 1)
@@ -67,15 +100,23 @@ class RequestSourceTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(projection.inverse_quota(quota).encode()).hexdigest(), 'a7031c5a4ad071d719f6efc41dd8889d9582169602197a337c94a54cbc4f6861')
         http = read('runtime/src/http_server.rs')
         for name in ('response_budget', 'response_send'):
-            self.assertIn('#[cfg(test)]\nmod ' + name + ';', http)
+            self.assertEqual(http.count('mod ' + name + ';'), 1)
+            self.assertNotIn('#[cfg(test)]\nmod ' + name + ';', http)
         self.assertIn('mod request_headers;', http)
-        self.assertNotIn('ResponseContext', http)
+        self.assertIn('ResponseContext', http)
+        public = read('runtime/src/http_server/response_public.rs')
+        self.assertIn('pub fn response_context(request: &Request) -> &ResponseContext', public)
+        self.assertNotIn('impl Default for ResponseContext', public)
 
     def test_same_map_and_prior_claim_drop_together_without_clone_or_copy_on_write(self):
         owner = read('runtime/src/http_server/request_headers.rs')
         fields = owner.split('struct ReceivedHeaders', 1)[1].split('impl ReceivedHeaders', 1)[0]
         self.assertLess(fields.index('map: HeaderMap'), fields.index('_prior: Option<Arc<Reservation>>'))
-        self.assertIn(projection.norm('Self { map, _prior: prior }'), projection.norm(owner))
+        self.assertIn('_extensions: extensions', owner)
+        self.assertIn('_prior: prior', owner)
+        self.assertIn('context: ContextOwner::Attached(context)', owner)
+        self.assertLess(fields.index('_extensions: Extensions'), fields.index('_prior:'))
+        self.assertLess(fields.index('context: ContextOwner'), fields.index('request_owner:'))
         self.assertIn('Arc::clone(&self.owner)', owner)
         self.assertIn('visibility: self.visibility', owner)
         self.assertNotIn('Arc::make_mut', owner)
@@ -83,8 +124,24 @@ class RequestSourceTests(unittest.TestCase):
         self.assertNotRegex(owner, r'impl Clone for (?:ReceivedHeaders|RequestHeaders)')
         send = read('runtime/src/http_server/response_send.rs')
         self.assertIn('pub(super) use super::request_headers::ReceivedHeaders;', send)
-        self.assertIn('ReceivedHeaders::new(parts.headers, prior)', send)
+        self.assertIn('ReceivedHeaders::new_native(parts.headers, parts.extensions, prior)', send)
         self.assertNotIn('struct ReceivedHeaders', send)
+
+    def test_production_native_owner_and_finite_admission_are_not_optional(self):
+        http = read('runtime/src/http_server.rs')
+        constructor = http.split('impl<B> IncomingRequest<B>', 1)[1]
+        self.assertIn('ReceivedHeaders::configured_native(', constructor)
+        self.assertIn('parts.extensions', constructor)
+        self.assertIn('request.parts.headers.admit(permit)', http)
+        self.assertLess(http.index('request.parts.headers.admit(permit)'), http.index('if let Err(reason)=rate.route()'))
+        public = read('runtime/src/http_server/response_public.rs')
+        self.assertIn('explicit response limits are required', public)
+        for name, path in (('http', 'runtime/src/http_server.rs'), ('browser', 'runtime/src/http_server/browser_login.rs'), ('csrf', 'runtime/src/http_server/csrf_http.rs')):
+            original = read(path)
+            with self.assertRaises(ValueError):
+                projection.approved_production(name, original + ' ')
+            with self.assertRaises(ValueError):
+                projection.approved_production(name, original.replace('Request', 'UncheckedRequest', 1))
 
     def test_visibility_is_per_request_and_all_public_getters_keep_validation(self):
         owner = read('runtime/src/http_server/request_headers.rs')
@@ -112,7 +169,7 @@ class RequestSourceTests(unittest.TestCase):
         summary = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(summary)
         self.assertEqual(set(summary.EXPECTED['request']), {'http_server::request_headers::tests::' + n for n in names})
-        self.assertEqual(tuple(len(summary.EXPECTED[n]) for n in ('wire', 'quota', 'transport')), (38, 9, 9))
+        self.assertEqual(tuple(len(summary.EXPECTED[n]) for n in ('wire', 'quota', 'transport')), (39, 9, 9))
         self.assertEqual(len(re.findall(r'#\[tokio::test\]\s*async fn', read('runtime/src/http_server/response_send_tests.rs'))), 9)
         import json
         inherited = {k: list(summary.EXPECTED[k]) for k in ('wire', 'quota', 'transport', 'request', 'rate-startup')}
@@ -137,7 +194,7 @@ class RequestSourceTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(read('runtime/src/http_server.rs').encode()).hexdigest(), projection.HTTP_AFTER)
         self.assertEqual(workflow.count(projection.HTTP_AFTER), 2)
         self.assertEqual(read('scripts/ci/session_private_deadline_diagnostic.py').count(projection.HTTP_AFTER), 1)
-        self.assertEqual(read('scripts/tests/test_browser_login_stage_backport.py').count(projection.HTTP_AFTER), 1)
+        self.assertIn('projection.approved_production', read('scripts/tests/test_browser_login_stage_backport.py'))
         self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(), BASE_WORKFLOW_SHA)
         self.assertEqual(hashlib.sha256(projection.inverse_collector(read('scripts/ci/session_private_deadline_diagnostic.py')).encode()).hexdigest(), BASE_PRIVATE_COLLECTOR_SHA)
 
@@ -154,10 +211,10 @@ class RequestSourceTests(unittest.TestCase):
             self.assertIn(before, source)
             changed = source.replace(before, after, 1)
             try:
-                actual = projection.digest(inverse(changed))
+                actual = projection.digest(projection.approved_production(name, changed))
             except ValueError:
                 continue
-            self.assertNotEqual(actual, projection.BASE_TOKENS[name])
+            self.assertNotEqual(actual, projection.PRODUCTION_SOURCES[name]['tokens'])
 
     def test_u2_workflow_inverse_is_exact_and_keeps_unrelated_changes_visible(self):
         workflow = read('.github/workflows/ci.yml')
@@ -187,7 +244,7 @@ class RequestSourceTests(unittest.TestCase):
         self.assertEqual(summary.classify(b'error[E0382]: private/path\n', 'request'), 'compile_failed')
 
 
-BASE_WORKFLOW_SHA = '5d7923afbefb4108ccfaedfb2441cf8832aea38d25a683fd6cc1d62400783eb7'
+BASE_WORKFLOW_SHA = '6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79'
 BASE_PRIVATE_COLLECTOR_SHA = '1d0dd3c92e07c374de80d4f968c101141eb6290ba2b935bf9c06dcb85ac60913'
 if __name__ == '__main__':
     unittest.main()
