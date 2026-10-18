@@ -39,7 +39,7 @@ jobs:
         import sys
         from pathlib import Path
         
-        PARENT = '9a223d4f1bf8e5e8c7b9ffc658d1885773ae9947'
+        PARENT = '81c8b8d9f9d08d0212bb7cdc22bcf162c352771f'
         BRANCH = 'test/sf07-session-parallel-reply-observe-20261018'
         WORKFLOW = '.github/workflows/sf07-session-parallel-reply-observe.yml'
         SOURCE = 'runtime/tests/session_csrf_public_api.rs'
@@ -161,7 +161,7 @@ jobs:
             try:
                 # Only stdout is libtest inventory. Cargo warnings/progress are stderr.
                 # Complete bounded stdout, process exit and exact identities remain required.
-                listing = argv[-2:] == ['--', '--list']
+                listing = argv[-1:] == ['--list'] and '--' in argv
                 process = subprocess.Popen(argv, stdout=subprocess.PIPE,
                                            stderr=subprocess.DEVNULL if listing else subprocess.STDOUT,
                                            bufsize=0)
