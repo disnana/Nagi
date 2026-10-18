@@ -89,14 +89,32 @@ fn cookie() -> prelogin::CookieOptions {
     prelogin::cookie_options("__Host-prelogin", session::SameSite::Strict).unwrap()
 }
 fn checked(origin: &str) -> http::Options {
-    http::authority(
-        http::options(64, 1000, 1000, 1000).unwrap(),
-        origin,
-        vec!["localhost".to_owned()],
-        1,
+    let response_limits = http::response_limits(
+        16_777_216,
+        512,
+        16,
+        4096,
+        32,
         128,
+        256,
+        150_994_944,
+        1024,
+        285_212_672,
+        4096,
+        32,
     )
-    .unwrap()
+    .unwrap();
+    let rate_limits = http::rate_limits(64, 64, 1, 67_108_864, 65_536).unwrap();
+    let options = http::with_rate_limits(
+        http::with_response_limits(
+            http::options(64, 1000, 1000, 1000).unwrap(),
+            response_limits,
+        )
+        .unwrap(),
+        rate_limits,
+    )
+    .unwrap();
+    http::authority(options, origin, vec!["localhost".to_owned()], 1, 128).unwrap()
 }
 struct Number(i64);
 impl FromRow for Number {
@@ -221,6 +239,8 @@ async fn serve(
     tokio::task::JoinHandle<Result<(), Error>>,
 ) {
     let app = http::prelogin_bootstrap(http::app_default(()), "/bootstrap", pool).unwrap();
+    let app = attach_test_rate(app, http::Method::GET, "/bootstrap");
+    let app = attach_test_rate(app, http::Method::HEAD, "/bootstrap");
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let (stop, until) = oneshot::channel();
@@ -228,6 +248,14 @@ async fn serve(
         let _ = until.await;
     }));
     (address, stop, task)
+}
+fn attach_test_rate<S, E>(
+    app: http::App<S, E>,
+    method: http::Method,
+    path: &str,
+) -> http::App<S, E> {
+    let policy = http::rate_policy(1000, 1000).unwrap();
+    http::rate_route(app, method, path, policy).unwrap()
 }
 async fn stop_server(stop: oneshot::Sender<()>, task: tokio::task::JoinHandle<Result<(), Error>>) {
     stop.send(()).unwrap();
@@ -321,6 +349,8 @@ async fn mismatched_serve_rejects_before_bind_or_accept() {
             prelogin::clone_pool(&pool),
         )
         .unwrap();
+        let app = attach_test_rate(app, http::Method::GET, "/bootstrap");
+        let app = attach_test_rate(app, http::Method::HEAD, "/bootstrap");
         let error = http::serve(app, i64::from(port), checked(origin))
             .await
             .err()
@@ -340,6 +370,8 @@ async fn mismatched_serve_rejects_before_bind_or_accept() {
             prelogin::clone_pool(&pool),
         )
         .unwrap();
+        let app = attach_test_rate(app, http::Method::GET, "/bootstrap");
+        let app = attach_test_rate(app, http::Method::HEAD, "/bootstrap");
         let error = http::serve_listener(listener, app, checked(origin), async {})
             .await
             .err()

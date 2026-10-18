@@ -1,6 +1,7 @@
 //! Compiler-owned standard definitions. Serialized Low names this registry;
 //! it cannot choose native paths, capabilities, or callback contracts.
 use crate::ast::*;
+mod client;
 mod cors;
 #[cfg(test)]
 mod cors_contract_tests;
@@ -10,6 +11,9 @@ mod html;
 mod html_contract_tests;
 #[cfg(test)]
 mod html_semantic_tests;
+mod index;
+#[cfg(test)]
+mod index_tests;
 mod security;
 mod session;
 mod sqlite;
@@ -17,6 +21,8 @@ mod sqlite;
 pub const HTML_MODULE_NAME: &str = "std.html";
 pub const HTML_MODULE_ID: &str = "stdlib:std.html";
 
+pub const CLIENT_MODULE_NAME: &str = "std.http.client";
+pub const CLIENT_MODULE_ID: &str = "stdlib:std.http.client";
 pub const MODULE_NAME: &str = "std.http.server";
 pub const MODULE_ID: &str = "stdlib:std.http.server";
 pub const ACTOR_MODULE_NAME: &str = "std.actor";
@@ -38,6 +44,7 @@ pub const SQLITE_MODULE_ID: &str = "stdlib:std.db.sqlite";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StandardModule {
+    HttpClient,
     HttpServer,
     Actor,
     Result,
@@ -55,6 +62,7 @@ pub struct StandardModuleInfo {
     pub rust_namespace: &'static str,
 }
 pub const MODULES: &[StandardModule] = &[
+    StandardModule::HttpClient,
     StandardModule::HttpServer,
     StandardModule::Actor,
     StandardModule::Result,
@@ -68,6 +76,11 @@ pub const MODULES: &[StandardModule] = &[
 ];
 pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
     match module {
+        StandardModule::HttpClient => &StandardModuleInfo {
+            name: CLIENT_MODULE_NAME,
+            id: CLIENT_MODULE_ID,
+            rust_namespace: "::nagi_runtime::http_client",
+        },
         StandardModule::Html => &StandardModuleInfo {
             name: HTML_MODULE_NAME,
             id: HTML_MODULE_ID,
@@ -124,10 +137,14 @@ pub fn module_info(module: StandardModule) -> &'static StandardModuleInfo {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Resource {
     Request,
+    ResponseContext,
     Response,
     Method,
     Status,
     Options,
+    ResponseLimits,
+    RateLimits,
+    RatePolicy,
     App,
     Supervisor,
     Control,
@@ -179,12 +196,19 @@ pub enum Resource {
     HtmlFragment,
     HtmlDocument,
     HtmlTag,
+    ProtectedOperation,
+    PublicOperation,
+    ClientResponse,
+    ClientFailure,
+    ClientFailureKind,
+    ClientOutcome,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Operation {
     Status,
     Method,
     MethodName,
+    ResponseContext,
     Empty,
     Text,
     Html,
@@ -198,6 +222,13 @@ pub enum Operation {
     IsJsonContentType,
     DefaultOptions,
     Options,
+    ResponseLimits,
+    WithResponseLimits,
+    RateLimits,
+    WithRateLimits,
+    RatePolicy,
+    RateSubject,
+    RateRoute,
     Capacity,
     HeaderTimeout,
     HeaderLimits,
@@ -303,6 +334,16 @@ pub enum Operation {
     HtmlCopyFragment,
     HtmlDocument,
     HttpHtmlResponse,
+    ClientExecute,
+    ClientExecutePublic,
+    ClientStatus,
+    ClientHeaders,
+    ClientBody,
+    ClientTakeBody,
+    ClientKind,
+    ClientMessage,
+    ClientAuthKind,
+    ClientOutcome,
 }
 
 /// Compiler-owned operation behavior. Public declaration metadata remains a
@@ -410,10 +451,14 @@ pub struct ConstantInfo {
 
 pub const RESOURCES: &[Resource] = &[
     Resource::Request,
+    Resource::ResponseContext,
     Resource::Response,
     Resource::Method,
     Resource::Status,
     Resource::Options,
+    Resource::ResponseLimits,
+    Resource::RateLimits,
+    Resource::RatePolicy,
     Resource::App,
     Resource::Supervisor,
     Resource::Control,
@@ -465,11 +510,18 @@ pub const RESOURCES: &[Resource] = &[
     Resource::HtmlFragment,
     Resource::HtmlDocument,
     Resource::HtmlTag,
+    Resource::ProtectedOperation,
+    Resource::PublicOperation,
+    Resource::ClientResponse,
+    Resource::ClientFailure,
+    Resource::ClientFailureKind,
+    Resource::ClientOutcome,
 ];
 pub const OPERATIONS: &[Operation] = &[
     Operation::Status,
     Operation::Method,
     Operation::MethodName,
+    Operation::ResponseContext,
     Operation::Empty,
     Operation::Text,
     Operation::Html,
@@ -483,6 +535,13 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::IsJsonContentType,
     Operation::DefaultOptions,
     Operation::Options,
+    Operation::ResponseLimits,
+    Operation::WithResponseLimits,
+    Operation::RateLimits,
+    Operation::WithRateLimits,
+    Operation::RatePolicy,
+    Operation::RateSubject,
+    Operation::RateRoute,
     Operation::Capacity,
     Operation::HeaderTimeout,
     Operation::HeaderLimits,
@@ -588,6 +647,16 @@ pub const OPERATIONS: &[Operation] = &[
     Operation::HtmlCopyFragment,
     Operation::HtmlDocument,
     Operation::HttpHtmlResponse,
+    Operation::ClientExecute,
+    Operation::ClientExecutePublic,
+    Operation::ClientStatus,
+    Operation::ClientHeaders,
+    Operation::ClientBody,
+    Operation::ClientTakeBody,
+    Operation::ClientKind,
+    Operation::ClientMessage,
+    Operation::ClientAuthKind,
+    Operation::ClientOutcome,
 ];
 
 pub fn module(name: &str) -> Option<ModuleId> {
@@ -860,6 +929,29 @@ static CONTRACT_REQUEST: ResourceContract = ResourceContract::new(
     &[],
 );
 
+// The request-borrowed context is opaque and grants no owned storage, sharing,
+// copying, equality, or debug capability; its borrow is represented by the
+// response_context operation's owner index instead.
+static CONTRACT_RESPONSE_CONTEXT: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        name: "ResponseContext",
+        arity: 0,
+        rust_path: "::nagi_runtime::http_server::ResponseContext",
+        copy: false,
+        equality: false,
+        storage: false,
+        shared: false,
+        debug: false,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
 static CONTRACT_RESPONSE: ResourceContract = ResourceContract::new(
     ResourceInfo {
         module: StandardModule::HttpServer,
@@ -933,6 +1025,66 @@ static CONTRACT_OPTIONS: ResourceContract = ResourceContract::new(
         storage: true,
         shared: true,
         debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_RESPONSE_LIMITS: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        name: "ResponseLimits",
+        arity: 0,
+        rust_path: "::nagi_runtime::http_server::ResponseLimits",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_RATE_LIMITS: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        name: "RateLimits",
+        arity: 0,
+        rust_path: "::nagi_runtime::http_server::RateLimits",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: true,
+    },
+    &[],
+    &[],
+    &[],
+    &[],
+);
+
+static CONTRACT_RATE_POLICY: ResourceContract = ResourceContract::new(
+    ResourceInfo {
+        module: StandardModule::HttpServer,
+        type_parameters: &[],
+        inline_type_arguments: &[],
+        name: "RatePolicy",
+        arity: 0,
+        rust_path: "::nagi_runtime::http_server::RatePolicy",
+        copy: false,
+        equality: false,
+        storage: true,
+        shared: true,
+        debug: false,
     },
     &[],
     &[],
@@ -1243,6 +1395,12 @@ static CONTRACT_EVENT: ResourceContract = ResourceContract::new(
 fn resource_contract(resource: Resource) -> &'static ResourceContract {
     match resource {
         Resource::CorsPolicy | Resource::CorsCredentials => cors::resource_contract(resource),
+        Resource::ProtectedOperation
+        | Resource::PublicOperation
+        | Resource::ClientResponse
+        | Resource::ClientFailure
+        | Resource::ClientFailureKind
+        | Resource::ClientOutcome => client::resource_contract(resource),
         Resource::HtmlPolicy
         | Resource::HtmlAttributes
         | Resource::NavigationUrl
@@ -1278,10 +1436,14 @@ fn resource_contract(resource: Resource) -> &'static ResourceContract {
         Resource::TaskFailure => &CONTRACT_TASK_FAILURE,
         Resource::TaskFailureKind => &CONTRACT_TASK_FAILURE_KIND,
         Resource::Request => &CONTRACT_REQUEST,
+        Resource::ResponseContext => &CONTRACT_RESPONSE_CONTEXT,
         Resource::Response => &CONTRACT_RESPONSE,
         Resource::Method => &CONTRACT_METHOD,
         Resource::Status => &CONTRACT_STATUS,
         Resource::Options => &CONTRACT_OPTIONS,
+        Resource::ResponseLimits => &CONTRACT_RESPONSE_LIMITS,
+        Resource::RateLimits => &CONTRACT_RATE_LIMITS,
+        Resource::RatePolicy => &CONTRACT_RATE_POLICY,
         Resource::App => &CONTRACT_APP,
         Resource::Supervisor => &CONTRACT_SUPERVISOR,
         Resource::WaitKind => &CONTRACT_WAIT_KIND,
@@ -1325,6 +1487,16 @@ pub(crate) fn native_serde_supported(resource: Resource) -> bool {
 pub fn operation_info(operation: Operation) -> &'static OperationInfo {
     match operation {
         Operation::CorsPolicy | Operation::CorsRoute => cors::operation_info(operation),
+        Operation::ClientExecute
+        | Operation::ClientExecutePublic
+        | Operation::ClientStatus
+        | Operation::ClientHeaders
+        | Operation::ClientBody
+        | Operation::ClientTakeBody
+        | Operation::ClientKind
+        | Operation::ClientMessage
+        | Operation::ClientAuthKind
+        | Operation::ClientOutcome => client::operation_info(operation),
         Operation::HtmlPolicy
         | Operation::HtmlLimits
         | Operation::HtmlEmpty
@@ -1376,11 +1548,12 @@ pub fn operation_info(operation: Operation) -> &'static OperationInfo {
  Operation::Status => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "status", rust_path: "::nagi_runtime::http_server::status", arity: 1, generic_arity: 0, parameters: &[Passing::Move], borrow_owner: None, signature: "(value: i64) -> Result[Status, Error]" },
  Operation::Method => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "method", rust_path: "::nagi_runtime::http_server::method", arity: 1, generic_arity: 0, parameters: &[Passing::Reference], borrow_owner: None, signature: "(name: view[str]) -> Result[Method, Error]" },
  Operation::MethodName => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "method_name", rust_path: "::nagi_runtime::http_server::method_name", arity: 1, generic_arity: 0, parameters: &[Passing::Reference], borrow_owner: Some(0), signature: "(method: view[Method]) -> view[str]" },
- Operation::Empty => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "empty", rust_path: "::nagi_runtime::http_server::empty", arity: 1, generic_arity: 0, parameters: &[Passing::Move], borrow_owner: None, signature: "(status: Status) -> Response" },
- Operation::Text => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "text", rust_path: "::nagi_runtime::http_server::text", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Reference], borrow_owner: None, signature: "(status: Status, body: view[str]) -> Response" },
+ Operation::ResponseContext => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "response_context", rust_path: "::nagi_runtime::http_server::response_context", arity: 1, generic_arity: 0, parameters: &[Passing::Reference], borrow_owner: Some(0), signature: "(request: view[Request]) -> view[ResponseContext]" },
+ Operation::Empty => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "empty", rust_path: "::nagi_runtime::http_server::empty", arity: 2, generic_arity: 0, parameters: &[Passing::Reference, Passing::Move], borrow_owner: None, signature: "(context: view[ResponseContext], status: Status) -> Result[Response, Error]" },
+ Operation::Text => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "text", rust_path: "::nagi_runtime::http_server::text", arity: 3, generic_arity: 0, parameters: &[Passing::Reference, Passing::Move, Passing::Reference], borrow_owner: None, signature: "(context: view[ResponseContext], status: Status, body: view[str]) -> Result[Response, Error]" },
  Operation::Html => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "html", rust_path: "::nagi_runtime::http_server::html", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Reference], borrow_owner: None, signature: "(status: Status, body: view[str]) -> Response" },
- Operation::Bytes => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "bytes", rust_path: "::nagi_runtime::http_server::bytes", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Reference], borrow_owner: None, signature: "(status: Status, body: view[bytes]) -> Response" },
- Operation::Json => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &["T"], asynchronous: false, emit_type_arguments: true, name: "json", rust_path: "::nagi_runtime::http_server::json", arity: 2, generic_arity: 1, parameters: &[Passing::Move, Passing::Borrow], borrow_owner: None, signature: "[T](status: Status, value: T) -> Result[Response, Error]" },
+ Operation::Bytes => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "bytes", rust_path: "::nagi_runtime::http_server::bytes", arity: 3, generic_arity: 0, parameters: &[Passing::Reference, Passing::Move, Passing::Reference], borrow_owner: None, signature: "(context: view[ResponseContext], status: Status, body: view[bytes]) -> Result[Response, Error]" },
+ Operation::Json => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &["T"], asynchronous: false, emit_type_arguments: true, name: "json", rust_path: "::nagi_runtime::http_server::json", arity: 3, generic_arity: 1, parameters: &[Passing::Reference, Passing::Move, Passing::Borrow], borrow_owner: None, signature: "[T](context: view[ResponseContext], status: Status, value: T) -> Result[Response, Error]" },
  Operation::AppendHeader => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "append_header", rust_path: "::nagi_runtime::http_server::append_header", arity: 3, generic_arity: 0, parameters: &[Passing::Move, Passing::Reference, Passing::Reference], borrow_owner: None, signature: "(response: Response, name: view[str], value: view[bytes]) -> Result[Response, Error]" },
  Operation::AppendHeaderText => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "append_header_text", rust_path: "::nagi_runtime::http_server::append_header_text", arity: 3, generic_arity: 0, parameters: &[Passing::Move, Passing::Reference, Passing::Reference], borrow_owner: None, signature: "(response: Response, name: view[str], value: view[str]) -> Result[Response, Error]" },
  Operation::Header => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "header", rust_path: "::nagi_runtime::http_server::header", arity: 2, generic_arity: 0, parameters: &[Passing::Reference, Passing::Reference], borrow_owner: Some(0), signature: "(request: view[Request], name: view[str]) -> Result[Option[view[bytes]], Error]" },
@@ -1389,16 +1562,23 @@ pub fn operation_info(operation: Operation) -> &'static OperationInfo {
  Operation::IsJsonContentType => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "is_json_content_type", rust_path: "::nagi_runtime::http_server::is_json_content_type", arity: 1, generic_arity: 0, parameters: &[Passing::Reference], borrow_owner: None, signature: "(request: view[Request]) -> Result[bool, Error]" },
  Operation::DefaultOptions => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "default_options", rust_path: "::nagi_runtime::http_server::default_options", arity: 0, generic_arity: 0, parameters: &[], borrow_owner: None, signature: "() -> Options" },
  Operation::Options => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "options", rust_path: "::nagi_runtime::http_server::options", arity: 4, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(body_bytes: i64, body_ms: i64, handler_ms: i64, shutdown_ms: i64) -> Result[Options, Error]" },
+ Operation::ResponseLimits => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "response_limits", rust_path: "::nagi_runtime::http_server::response_limits", arity: 12, generic_arity: 0, parameters: &[Passing::Move; 12], borrow_owner: None, signature: "(body_bytes: i64, user_header_bytes: i64, user_header_count: i64, managed_header_bytes: i64, managed_header_count: i64, serialization_writes: i64, live_responses: i64, retained_bytes: i64, fallback_responses: i64, fallback_retained_bytes: i64, fallback_managed_header_bytes: i64, fallback_managed_header_count: i64) -> Result[ResponseLimits, Error]" },
+ Operation::WithResponseLimits => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "with_response_limits", rust_path: "::nagi_runtime::http_server::with_response_limits", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, limits: ResponseLimits) -> Result[Options, Error]" },
+ Operation::RateLimits => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "rate_limits", rust_path: "::nagi_runtime::http_server::rate_limits", arity: 5, generic_arity: 0, parameters: &[Passing::Move; 5], borrow_owner: None, signature: "(rules: i64, domains: i64, subject_slots: i64, retained_bytes: i64, request_work: i64) -> Result[RateLimits, Error]" },
+ Operation::WithRateLimits => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "with_rate_limits", rust_path: "::nagi_runtime::http_server::with_rate_limits", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, limits: RateLimits) -> Result[Options, Error]" },
+ Operation::RatePolicy => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "rate_policy", rust_path: "::nagi_runtime::http_server::rate_policy", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Move], borrow_owner: None, signature: "(burst: i64, refill_ms: i64) -> Result[RatePolicy, Error]" },
+ Operation::RateSubject => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "rate_subject", rust_path: "::nagi_runtime::http_server::rate_subject", arity: 5, generic_arity: 0, parameters: &[Passing::Move; 5], borrow_owner: None, signature: "(policy: RatePolicy, burst: i64, refill_ms: i64, subject_slots: i64, idle_ms: i64) -> Result[RatePolicy, Error]" },
+ Operation::RateRoute => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: false, name: "rate_route", rust_path: "::nagi_runtime::http_server::rate_route", arity: 4, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Reference, Passing::Move], borrow_owner: None, signature: "(app: App[S, E], method: Method, path: view[str], policy: RatePolicy) -> Result[App[S, E], Error]" },
  Operation::Capacity => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "capacity", rust_path: "::nagi_runtime::http_server::capacity", arity: 3, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, connections: i64, requests: i64) -> Result[Options, Error]" },
  Operation::HeaderTimeout => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "header_timeout", rust_path: "::nagi_runtime::http_server::header_timeout", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, milliseconds: i64) -> Result[Options, Error]" },
  Operation::HeaderLimits => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "header_limits", rust_path: "::nagi_runtime::http_server::header_limits", arity: 3, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, bytes: i64, count: i64) -> Result[Options, Error]" },
  Operation::SendTimeout => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "send_timeout", rust_path: "::nagi_runtime::http_server::send_timeout", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, milliseconds: i64) -> Result[Options, Error]" },
  Operation::Authority => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "authority", rust_path: "::nagi_runtime::http_server::authority", arity: 5, generic_arity: 0, parameters: &[Passing::Move, Passing::Reference, Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, external_origin: view[str], authorities: List[str], entry_limit: i64, byte_limit: i64) -> Result[Options, Error]" },
  Operation::TrustedProxy => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: true, name: "trusted_proxy", rust_path: "::nagi_runtime::http_server::trusted_proxy", arity: 2, generic_arity: 0, parameters: &[Passing::Move, Passing::Move], borrow_owner: None, signature: "(options: Options, peer_ips: List[str]) -> Result[Options, Error]" },
- Operation::App => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &["S", "E"], asynchronous: false, emit_type_arguments: true, name: "app", rust_path: "::nagi_runtime::http_server::app", arity: 2, generic_arity: 2, parameters: &[Passing::Move, Passing::Mapper], borrow_owner: None, signature: "[S, E](state: S, mapper: fn[E, Response]) -> App[S, E]" },
+ Operation::App => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &["S", "E"], asynchronous: false, emit_type_arguments: true, name: "app", rust_path: "::nagi_runtime::http_server::app", arity: 2, generic_arity: 2, parameters: &[Passing::Move, Passing::Mapper], borrow_owner: None, signature: "[S, E](state: S, mapper: fn[view[ResponseContext], E, Result[Response, Error]]) -> App[S, E]" },
  Operation::AppDefault => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &["S"], asynchronous: false, emit_type_arguments: true, name: "app_default", rust_path: "::nagi_runtime::http_server::app_default", arity: 1, generic_arity: 1, parameters: &[Passing::Move], borrow_owner: None, signature: "[S](state: S) -> App[S, Error]" },
  Operation::Route => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: false, name: "route", rust_path: "::nagi_runtime::http_server::route", arity: 5, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Reference, Passing::Move, Passing::Handler], borrow_owner: None, signature: "(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, E]]]) -> Result[App[S, E], Error]" },
- Operation::RouteMapped => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: false, name: "route_mapped", rust_path: "::nagi_runtime::http_server::route_mapped", arity: 6, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Reference, Passing::Move, Passing::Handler, Passing::Mapper], borrow_owner: None, signature: "(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, F]]], mapper: fn[F, Response]) -> Result[App[S, E], Error]" },
+ Operation::RouteMapped => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: false, emit_type_arguments: false, name: "route_mapped", rust_path: "::nagi_runtime::http_server::route_mapped", arity: 6, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Reference, Passing::Move, Passing::Handler, Passing::Mapper], borrow_owner: None, signature: "(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, F]]], mapper: fn[view[ResponseContext], F, Result[Response, Error]]) -> Result[App[S, E], Error]" },
  Operation::Serve => &OperationInfo { module: StandardModule::HttpServer, type_parameters: &[], asynchronous: true, emit_type_arguments: true, name: "serve", rust_path: "::nagi_runtime::http_server::serve", arity: 3, generic_arity: 0, parameters: &[Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(app: App[S, E], port: i64, options: Options) -> Future[Result[unit, Error]]" },
         Operation::ActorDefaultOptions => &OperationInfo { module: StandardModule::Actor, name: "default_options", rust_path: "::nagi_runtime::actor::default_options", arity: 0, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: true, parameters: &[], borrow_owner: None, signature: "() -> Options" },
         Operation::ActorOptions => &OperationInfo { module: StandardModule::Actor, name: "options", rust_path: "::nagi_runtime::actor::options", arity: 5, generic_arity: 0, type_parameters: &[], asynchronous: false, emit_type_arguments: true, parameters: &[Passing::Move, Passing::Move, Passing::Move, Passing::Move, Passing::Move], borrow_owner: None, signature: "(children: i64, events: i64, restarts: i64, window_ms: i64, shutdown_ms: i64) -> Result[Options, Error]" },
@@ -1448,6 +1628,10 @@ pub fn operation_module(operation: Operation) -> ModuleId {
     ModuleId(module_info(operation_info(operation).module).id.into())
 }
 pub fn resource_named(module: &ModuleId, name: &str) -> Option<Resource> {
+    index::resource_named(module, name)
+}
+#[cfg(test)]
+fn resource_named_uncached(module: &ModuleId, name: &str) -> Option<Resource> {
     RESOURCES.iter().copied().find(|resource| {
         resource_module(*resource) == *module && resource_info(*resource).name == name
     })
@@ -1468,18 +1652,30 @@ pub fn native_view_element(ty: &Type) -> Option<&Type> {
     resource(&element.0).map(|_| element)
 }
 pub fn resource(symbol: &str) -> Option<Resource> {
+    index::resource(symbol)
+}
+#[cfg(test)]
+fn resource_uncached(symbol: &str) -> Option<Resource> {
     RESOURCES
         .iter()
         .copied()
         .find(|r| crate::modules::symbol(&resource_id(*r)) == symbol)
 }
 pub fn operation(symbol: &str) -> Option<Operation> {
+    index::operation(symbol)
+}
+#[cfg(test)]
+fn operation_uncached(symbol: &str) -> Option<Operation> {
     OPERATIONS
         .iter()
         .copied()
         .find(|op| crate::modules::symbol(&function_id(*op)) == symbol)
 }
 pub fn definition(id: &DefId) -> bool {
+    index::definition(id)
+}
+#[cfg(test)]
+fn definition_uncached(id: &DefId) -> bool {
     is_registered_module(&id.module)
         && (RESOURCES.iter().any(|r| resource_id(*r) == *id)
             || OPERATIONS.iter().any(|op| function_id(*op) == *id))
@@ -1897,6 +2093,7 @@ pub fn constants(resource: Resource) -> &'static [ConstantInfo] {
     }
 
     match resource {
+        Resource::ClientFailureKind | Resource::ClientOutcome => client::constants(resource),
         Resource::HtmlTag => html::TAG_CONSTANTS,
         Resource::CorsCredentials => cors::CREDENTIAL_CONSTANTS,
         Resource::SqliteBeginMode | Resource::SqliteFailureKind | Resource::SqliteOutcome => {
@@ -2103,6 +2300,9 @@ pub fn declaration_source() -> String {
     module_source(&ModuleId(MODULE_ID.into()))
 }
 pub fn module_source(module: &ModuleId) -> String {
+    index::module_source(module)
+}
+fn module_source_uncached(module: &ModuleId) -> String {
     if !is_registered_module(module) {
         return String::new();
     }
@@ -2153,10 +2353,17 @@ fn display_type(ty: &Type) -> String {
     }
 }
 pub fn definitions(module: &ModuleId) -> Vec<DefinitionInfo> {
+    index::definitions(module)
+}
+#[cfg(test)]
+fn definitions_uncached(module: &ModuleId) -> Vec<DefinitionInfo> {
     if !is_registered_module(module) {
         return vec![];
     }
-    let source = module_source(module);
+    let source = module_source_uncached(module);
+    definitions_in_source(module, &source)
+}
+fn definitions_in_source(module: &ModuleId, source: &str) -> Vec<DefinitionInfo> {
     RESOURCES
         .iter()
         .map(|r| resource_id(*r))
@@ -2189,11 +2396,19 @@ pub fn definitions(module: &ModuleId) -> Vec<DefinitionInfo> {
         .collect()
 }
 pub fn member_line(resource: Resource, name: &str) -> Option<usize> {
+    index::member_line(resource, name)
+}
+#[cfg(test)]
+fn member_line_uncached(resource: Resource, name: &str) -> Option<usize> {
+    member_line_in_source(
+        resource,
+        name,
+        &module_source_uncached(&resource_module(resource)),
+    )
+}
+fn member_line_in_source(resource: Resource, name: &str, source: &str) -> Option<usize> {
     let mut active = false;
-    for (index, line) in module_source(&resource_module(resource))
-        .lines()
-        .enumerate()
-    {
+    for (index, line) in source.lines().enumerate() {
         if line.starts_with("resource ") {
             active = line.starts_with(&format!("resource {}", resource_info(resource).name));
         }
@@ -2233,6 +2448,8 @@ mod resource_contract_tests {
         use TypeArgumentRole::*;
         for &resource in RESOURCES {
             let expected: &[TypeArgumentRole] = match resource {
+                Resource::ProtectedOperation => &[SharedPayload, NominalPhantom, IndirectProtocol],
+                Resource::PublicOperation => &[SharedPayload, IndirectProtocol],
                 Resource::App => &[SharedPayload, CallbackSignature],
                 Resource::Supervisor => &[SharedPayload],
                 Resource::Actor => &[IndirectProtocol, IndirectProtocol, IndirectProtocol],

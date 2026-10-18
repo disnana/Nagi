@@ -21,6 +21,37 @@ pub struct CorsPolicy {
     header_count: usize,
     header_bytes: usize,
 }
+impl CorsPolicy {
+    pub(super) fn retained_bytes(&self) -> Result<usize, Error> {
+        let invalid = || Error::invalid("CORS metadata overflow");
+        let mut bytes = self
+            .origins
+            .capacity()
+            .checked_mul(std::mem::size_of::<(Origin, HeaderValue)>())
+            .ok_or_else(invalid)?;
+        bytes = bytes
+            .checked_add(
+                self.headers
+                    .capacity()
+                    .checked_mul(std::mem::size_of::<HeaderName>())
+                    .ok_or_else(invalid)?,
+            )
+            .ok_or_else(invalid)?;
+        bytes = bytes
+            .checked_add(self.max_age.as_bytes().len())
+            .ok_or_else(invalid)?;
+        for (origin, wire) in &self.origins {
+            bytes = bytes
+                .checked_add(origin.retained_bytes())
+                .and_then(|n| n.checked_add(wire.as_bytes().len()))
+                .ok_or_else(invalid)?;
+        }
+        for name in &self.headers {
+            bytes = bytes.checked_add(name.as_str().len()).ok_or_else(invalid)?;
+        }
+        Ok(bytes)
+    }
+}
 impl fmt::Debug for CorsPolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CorsPolicy")
@@ -204,10 +235,24 @@ impl<'a> Context<'a> {
             dependencies,
         }
     }
-    pub(super) fn finish(
-        self,
-        mut response: axum::http::Response<BufferedBody>,
-    ) -> axum::http::Response<BufferedBody> {
+    pub(super) fn profile(&self) -> response_public::ResponseProfile {
+        response_public::ResponseProfile {
+            origin: self.grant.clone(),
+            credentials: self
+                .route
+                .is_some_and(|p| p.credentials == CorsCredentials::Allow),
+            dependencies: self.dependencies,
+        }
+    }
+    pub(super) fn finish(self, mut response: HttpResponse) -> HttpResponse {
+        // Current request is authoritative, including absence and credentials
+        // denial. A retained same-producer Response carries no CORS grant.
+        response
+            .headers_mut()
+            .remove(names::ACCESS_CONTROL_ALLOW_ORIGIN);
+        response
+            .headers_mut()
+            .remove(names::ACCESS_CONTROL_ALLOW_CREDENTIALS);
         if let Some(origin) = self.grant {
             response
                 .headers_mut()
@@ -226,10 +271,7 @@ impl<'a> Context<'a> {
         vary::finish(response)
     }
 }
-pub(super) fn route_less(
-    mut response: axum::http::Response<BufferedBody>,
-    preflight: bool,
-) -> axum::http::Response<BufferedBody> {
+pub(super) fn route_less(mut response: HttpResponse, preflight: bool) -> HttpResponse {
     if preflight {
         vary::add(&mut response, vary::Dependencies::PREFLIGHT);
     }
@@ -283,8 +325,9 @@ pub(super) fn preflight<S>(
     headers: &HeaderMap,
     body: &hyper::body::Incoming,
     options: &Options,
-) -> axum::http::Response<BufferedBody> {
-    let run = || -> Result<axum::http::Response<BufferedBody>, Status> {
+    context: &ResponseContext,
+) -> HttpResponse {
+    let run = || -> Result<HttpResponse, Status> {
         if !body.is_end_stream()
             || headers.contains_key(names::TRANSFER_ENCODING)
             || headers
@@ -312,7 +355,9 @@ pub(super) fn preflight<S>(
         {
             return Err(Status::FORBIDDEN);
         }
-        let mut response = empty(Status::NO_CONTENT).into_http(false);
+        let mut response = empty(context, Status::NO_CONTENT)
+            .map_err(|_| Status::SERVICE_UNAVAILABLE)?
+            .into_http(false);
         response
             .headers_mut()
             .insert(names::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -336,7 +381,7 @@ pub(super) fn preflight<S>(
             .insert(names::ACCESS_CONTROL_MAX_AGE, policy.max_age.clone());
         Ok(response)
     };
-    run().unwrap_or_else(|status| transport(status, false, true))
+    run().unwrap_or_else(|status| transport(context, status, false, true))
 }
 
 #[cfg(test)]

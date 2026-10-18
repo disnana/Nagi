@@ -91,6 +91,8 @@ impl Server {
             128,
         )
         .unwrap();
+        let config = super::tests::with_response_fixture(config);
+        let (app, config) = super::tests::with_rate_fixture(app, config);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stop, until) = tokio::sync::oneshot::channel();
@@ -267,6 +269,8 @@ async fn origin_credential_and_body_rejections_never_issue_state() {
 }
 #[tokio::test]
 async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
+    let response_request = response_public::tests::request_fixture(64);
+    let response_context = response_context(&response_request);
     let f = Fixture::new(1000).await;
     let first = prelogin::HttpOwner::new(
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
@@ -275,7 +279,13 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     f.pool.bootstrap_http(&first, None).await.unwrap();
     let seal = first.seal().unwrap();
     tokio::time::sleep(Duration::from_millis(1000)).await;
-    let denied = finalize_prelogin(PreloginCompletion::Ready(seal), &first, false, &f.pool);
+    let denied = finalize_prelogin(
+        response_context,
+        PreloginCompletion::Ready(seal),
+        &first,
+        false,
+        &f.pool,
+    );
     assert!(
         denied.status() == StatusCode::GATEWAY_TIMEOUT
             && !denied.headers().contains_key(names::SET_COOKIE)
@@ -283,6 +293,7 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     // Apply the same outer Vary projection as the actual dispatcher.
     let denied = vary::finish(denied);
     no_terminal_material(&denied, StatusCode::GATEWAY_TIMEOUT, &first);
+    drop(denied);
     drop(first);
     assert!(!weak.has_live_owner());
     assert!(f.count().await == 1);
@@ -299,9 +310,16 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     let foreign = prelogin::HttpOwner::new(
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
     );
-    let denied = finalize_prelogin(PreloginCompletion::Ready(seal), &foreign, false, &f.pool);
+    let denied = finalize_prelogin(
+        response_context,
+        PreloginCompletion::Ready(seal),
+        &foreign,
+        false,
+        &f.pool,
+    );
     assert!(denied.status() == StatusCode::INTERNAL_SERVER_ERROR);
     assert!(!denied.headers().contains_key(names::SET_COOKIE));
+    drop(denied);
     // A second seal cannot resurrect the first material after terminal discard.
     owner.retire();
     assert!(owner.seal().is_err());
@@ -311,13 +329,15 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     f.pool.bootstrap_http(&owner, None).await.unwrap();
     let seal = owner.seal().unwrap();
     let denied = finalize_prelogin(
-        PreloginCompletion::Replacement(Some(seal), empty(Status::OK)),
+        response_context,
+        PreloginCompletion::Replacement(Some(seal), empty(response_context, Status::OK).unwrap()),
         &owner,
         false,
         &f.pool,
     );
     assert!(!denied.headers().contains_key(names::SET_COOKIE));
     assert!(owner.seal().is_err());
+    drop(denied);
     f.stop().await;
     // Destructive success and impossible cache/304 replacements are separate
     // terminal cases; bounded new fixtures preserve the two-live-row budget.
@@ -327,14 +347,20 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     );
     f.pool.bootstrap_http(&owner, None).await.unwrap();
     let seal = owner.seal().unwrap();
-    let accepted = finalize_prelogin(PreloginCompletion::Ready(seal), &owner, false, &f.pool);
+    let accepted = finalize_prelogin(
+        response_context,
+        PreloginCompletion::Ready(seal),
+        &owner,
+        false,
+        &f.pool,
+    );
     assert!(accepted.status() == StatusCode::OK);
     assert!(accepted.headers().contains_key(names::SET_COOKIE));
     assert!(owner.seal().is_err());
     f.stop().await;
     for response in [
-        empty(Status::NOT_MODIFIED),
-        conflicting_cache_for_test(empty(Status::OK)),
+        empty(response_context, Status::NOT_MODIFIED).unwrap(),
+        conflicting_cache_for_test(empty(response_context, Status::OK).unwrap()),
     ] {
         let f = Fixture::new(1000).await;
         let owner = prelogin::HttpOwner::new(
@@ -343,6 +369,7 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
         f.pool.bootstrap_http(&owner, None).await.unwrap();
         let seal = owner.seal().unwrap();
         let denied = finalize_prelogin(
+            response_context,
             PreloginCompletion::Replacement(Some(seal), response),
             &owner,
             false,
@@ -409,11 +436,7 @@ async fn prior_cookie_replacement_and_duplicate_pair_rejection_use_actual_rows()
 
 // IR01 classification oracles written before revision2 production edits.
 // Intended runtime assertion failures, never compiled RED in this environment.
-fn no_terminal_material(
-    response: &axum::http::Response<BufferedBody>,
-    status: StatusCode,
-    owner: &prelogin::HttpOwner,
-) {
+fn no_terminal_material(response: &HttpResponse, status: StatusCode, owner: &prelogin::HttpOwner) {
     assert!(response.status() == status);
     assert!(!response.headers().contains_key(names::SET_COOKIE));
     assert!(!response
@@ -435,6 +458,8 @@ fn no_terminal_material(
 
 #[tokio::test]
 async fn earlier_security_deadline_rejects_finite_non_yielding_ready_as_504() {
+    let response_request = response_public::tests::request_fixture(64);
+    let response_context = response_context(&response_request);
     let f = Fixture::new(1000).await;
     let owner = prelogin::HttpOwner::new(
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
@@ -446,6 +471,7 @@ async fn earlier_security_deadline_rejects_finite_non_yielding_ready_as_504() {
     let handler_until = admitted + Duration::from_secs(1);
     owner.constrain_until(security_until).unwrap();
     let response = prelogin_http::complete_bootstrap(
+        response_context,
         &f.pool,
         &owner,
         handler_until.min(security_until),
@@ -466,6 +492,8 @@ async fn earlier_security_deadline_rejects_finite_non_yielding_ready_as_504() {
 
 #[tokio::test]
 async fn real_security_gate_expiring_after_seal_is_504_and_clears_material() {
+    let response_request = response_public::tests::request_fixture(64);
+    let response_context = response_context(&response_request);
     let f = Fixture::new(1000).await;
     let owner = prelogin::HttpOwner::new(
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
@@ -476,7 +504,13 @@ async fn real_security_gate_expiring_after_seal_is_504_and_clears_material() {
         .constrain_until(Instant::now() + Duration::from_millis(10))
         .unwrap();
     tokio::time::sleep(Duration::from_millis(20)).await;
-    let response = finalize_prelogin(PreloginCompletion::Ready(seal), &owner, false, &f.pool);
+    let response = finalize_prelogin(
+        response_context,
+        PreloginCompletion::Ready(seal),
+        &owner,
+        false,
+        &f.pool,
+    );
     // Apply the same outer Vary projection as the actual dispatcher.
     let response = vary::finish(response);
     no_terminal_material(&response, StatusCode::GATEWAY_TIMEOUT, &owner);
@@ -486,6 +520,8 @@ async fn real_security_gate_expiring_after_seal_is_504_and_clears_material() {
 
 #[tokio::test]
 async fn controlled_wire_clock_backstep_is_503_before_and_after_serialization() {
+    let response_request = response_public::tests::request_fixture(64);
+    let response_context = response_context(&response_request);
     for after_serialization in [false, true] {
         let mut f = Fixture::new(1000).await;
         let owner = prelogin::HttpOwner::new(
@@ -502,7 +538,13 @@ async fn controlled_wire_clock_backstep_is_503_before_and_after_serialization() 
                     vec![wall - 1]
                 }
             });
-        let response = finalize_prelogin(PreloginCompletion::Ready(seal), &owner, false, &f.pool);
+        let response = finalize_prelogin(
+            response_context,
+            PreloginCompletion::Ready(seal),
+            &owner,
+            false,
+            &f.pool,
+        );
         // Apply the same outer Vary projection as the actual dispatcher.
         let response = vary::finish(response);
         no_terminal_material(&response, StatusCode::SERVICE_UNAVAILABLE, &owner);
@@ -513,6 +555,8 @@ async fn controlled_wire_clock_backstep_is_503_before_and_after_serialization() 
 
 #[tokio::test]
 async fn controlled_wire_absolute_expiry_is_504_before_and_after_serialization() {
+    let response_request = response_public::tests::request_fixture(64);
+    let response_context = response_context(&response_request);
     for after_serialization in [false, true] {
         let mut f = Fixture::new(1000).await;
         let owner = prelogin::HttpOwner::new(
@@ -529,7 +573,13 @@ async fn controlled_wire_absolute_expiry_is_504_before_and_after_serialization()
                     vec![expiry]
                 }
             });
-        let response = finalize_prelogin(PreloginCompletion::Ready(seal), &owner, false, &f.pool);
+        let response = finalize_prelogin(
+            response_context,
+            PreloginCompletion::Ready(seal),
+            &owner,
+            false,
+            &f.pool,
+        );
         // Apply the same outer Vary projection as the actual dispatcher.
         let response = vary::finish(response);
         no_terminal_material(&response, StatusCode::GATEWAY_TIMEOUT, &owner);

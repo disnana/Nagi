@@ -14,14 +14,14 @@ def task_id(request: view[http.Request]) -> Result[i64, Error]:
     return parse_i64(try slice(request.path, 11, len(request.path)))
 
 async def home(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, "Task JSON API is available at /api/tasks."))
+    return http.text(http.response_context(view(request)), http.Status.OK, "Task JSON API is available at /api/tasks.")
 
 async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, "ok"))
+    return http.text(http.response_context(view(request)), http.Status.OK, "ok")
 
 async def list_tasks(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     rows = try await storage_list_tasks(view(state.db))
-    return http.json[List[Task]](http.Status.OK, rows)
+    return http.json[List[Task]](http.response_context(view(request)), http.Status.OK, rows)
 
 async def get_task(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try task_id(view(request))
@@ -31,9 +31,9 @@ async def get_task(request: http.Request, state: shared[State], authority: unit)
         case Ok(found):
             match found:
                 case Some(task):
-                    return http.json[Task](http.Status.OK, task)
+                    return http.json[Task](http.response_context(view(request)), http.Status.OK, task)
                 case None:
-                    return ok(http.empty(http.Status.NOT_FOUND))
+                    return http.empty(http.response_context(view(request)), http.Status.NOT_FOUND)
         case Err(problem):
             return fail(problem)
 
@@ -44,7 +44,7 @@ async def create_task(request: http.Request, state: shared[State], authority: un
     if input.done:
         done = 1
     task = try await storage_create_task(view(state.db), input.title, done)
-    return http.json[Task](http.Status.OK, task)
+    return http.json[Task](http.response_context(view(request)), http.Status.OK, task)
 
 async def update_task(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try task_id(view(request))
@@ -56,23 +56,23 @@ async def update_task(request: http.Request, state: shared[State], authority: un
     if input.done:
         done = 1
     task = try await storage_update_task(view(state.db), id, input.title, done)
-    return http.json[Task](http.Status.OK, task)
+    return http.json[Task](http.response_context(view(request)), http.Status.OK, task)
 
 async def delete_task(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try task_id(view(request))
     if id < 1:
         return error("id must be positive")
     deleted = try await storage_delete_task(view(state.db), id)
-    return http.json[i64](http.Status.OK, deleted)
+    return http.json[i64](http.response_context(view(request)), http.Status.OK, deleted)
 
 async def stats(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     match await storage_task_stats(view(state.db), 0):
         case Ok(found):
             match found:
                 case Some(value):
-                    return http.json[TaskStats](http.Status.OK, value)
+                    return http.json[TaskStats](http.response_context(view(request)), http.Status.OK, value)
                 case None:
-                    return ok(http.empty(http.Status.NOT_FOUND))
+                    return http.empty(http.response_context(view(request)), http.Status.NOT_FOUND)
         case Err(problem):
             return fail(problem)
 
@@ -84,15 +84,39 @@ async def main() -> Result[unit, Error]:
     try await bootstrap_tasks(view(db))
     app = http.app_default[State](State(db=db))
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    route_policy_1 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/health", route_policy_1)
     app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), home)
+    route_policy_2 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/", route_policy_2)
     app = try http.route(app, http.Method.GET, "/api/tasks", http.public_policy[State](), list_tasks)
+    route_policy_3 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/api/tasks", route_policy_3)
     app = try http.route(app, http.Method.GET, "/api/tasks/{id}", http.public_policy[State](), get_task)
+    route_policy_4 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/api/tasks/{id}", route_policy_4)
     app = try http.route(app, http.Method.POST, "/api/tasks", http.public_policy[State](), create_task)
+    route_policy_5 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.POST, "/api/tasks", route_policy_5)
     app = try http.route(app, http.Method.PUT, "/api/tasks/{id}", http.public_policy[State](), update_task)
+    route_policy_6 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.PUT, "/api/tasks/{id}", route_policy_6)
     app = try http.route(app, http.Method.DELETE, "/api/tasks/{id}", http.public_policy[State](), delete_task)
+    route_policy_7 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.DELETE, "/api/tasks/{id}", route_policy_7)
     app = try http.route(app, http.Method.GET, "/api/stats", http.public_policy[State](), stats)
+    route_policy_8 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/api/stats", route_policy_8)
     print("Task JSON API ready on 127.0.0.1")
-    return await http.serve(app, port, http.default_options())
+    options = http.default_options()
+    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    options = try http.with_response_limits(options, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    options = try http.with_rate_limits(options, rate_budget)
+    return await http.serve(app, port, options)
 
 # This HTTP-facing projection preserves the primary Error. The SQLite Failure
 # (outcome, cleanup and retired metadata) stays observable in database APIs.

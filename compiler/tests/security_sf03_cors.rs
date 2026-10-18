@@ -15,7 +15,15 @@ fn actual_owned_cors_registration_and_wire_metadata() {
         assert!(bad.is_err());
         let listener=::tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address=listener.local_addr().unwrap();
-        let options=::nagi_runtime::http_server::authority(::nagi_runtime::http_server::default_options(),"https://localhost",vec!["localhost".to_owned()],1,128).unwrap();
+        let response_limits=::nagi_runtime::http_server::response_limits(
+            1048576,8192,32,8192,32,65536,256,83886080,1024,285212672,8192,32
+        ).unwrap();
+        let options=::nagi_runtime::http_server::with_response_limits(
+            ::nagi_runtime::http_server::default_options(),response_limits
+        ).unwrap();
+        let rate_limits=::nagi_runtime::http_server::rate_limits(64,64,4096,4194304,65536).unwrap();
+        let options=::nagi_runtime::http_server::with_rate_limits(options,rate_limits).unwrap();
+        let options=::nagi_runtime::http_server::authority(options,"https://localhost",vec!["localhost".to_owned()],1,128).unwrap();
         let (stop,shutdown)=::tokio::sync::oneshot::channel();
         let mut task=::tokio::spawn(::nagi_runtime::http_server::serve_listener(listener,app,options,async {let _=shutdown.await;}));
         for (method,extra,expected) in [("OPTIONS","Access-Control-Request-Method: GET\r\nAccess-Control-Request-Headers: content-type\r\n",204),("GET","",200)] {

@@ -1,8 +1,9 @@
 import std.http.server as web
 class HtmlDocument:
     value: i64
-def plain() -> web.Response:
+def plain(request: web.Request) -> Result[web.Response, Error]:
+    context = web.response_context(view(request))
     policy = web.public_policy[i64]()
-    return web.text(web.Status.OK, "plain")
+    return web.text(context, web.Status.OK, "plain")
 def user_value() -> i64:
     return HtmlDocument(value=9).value

@@ -221,17 +221,26 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
     };
     #[cfg(not(windows))]
     let (accepted_send_before, accepted_send_after) = (0_i32, 0_i32);
+    let response_request = response_public::tests::request_fixture(STALLED_BODY_LENGTH);
     let reply = append_header(
-        representation(
+        response_public::tests::adopt_bytes_fixture(
+            response_context(&response_request),
             Status::OK,
-            BodyKind::Binary,
             Bytes::from(vec![b'x'; STALLED_BODY_LENGTH]),
-        ),
+            BodyKind::Binary,
+        )
+        .unwrap(),
         "x-padding",
         &vec![b'p'; 8192],
     )
     .unwrap()
     .into_http(false);
+    let context = response_context(&response_request);
+    let ledger = response_send::SendLedger::new(
+        Arc::clone(&context.producer),
+        Arc::clone(&context.fallback),
+    );
+    let reply = reply.transfer_native(&ledger, false).unwrap();
     let transferred = Arc::new(AtomicBool::new(false));
     let header_flush = Arc::new(AtomicBool::new(false));
     #[cfg(windows)]
@@ -281,7 +290,12 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
     };
     let mut builder = http1::Builder::new();
     builder.max_buf_size(8192);
-    let task = tokio::spawn(builder.serve_connection(io, service));
+    let permit = Arc::new(Semaphore::new(1)).try_acquire_owned().unwrap();
+    let task = tokio::spawn(response_send::NativeDriver::new(
+        builder.serve_connection(io, service),
+        ledger,
+        permit,
+    ));
     send(&mut client, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
     // Read only the actual headers, leaving the large body backpressured.
     // Preserve the 2s watchdog and all required native premises. Cleanup and
@@ -380,8 +394,8 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
 
 #[tokio::test]
 async fn empty_response_completion_does_not_expire_idle_keep_alive() {
-    async fn reply(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(empty(Status::NO_CONTENT))
+    async fn reply(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+        empty(response_context(&request), Status::NO_CONTENT)
     }
     let app = route(app_default(()), Method::GET, "/", public_policy(), reply).unwrap();
     let probe = Arc::new(lifecycle_probe::Probe::default());
@@ -404,8 +418,8 @@ async fn empty_response_completion_does_not_expire_idle_keep_alive() {
 
 #[tokio::test]
 async fn buffered_response_completion_does_not_expire_idle_keep_alive() {
-    async fn reply(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(text(Status::OK, "ok"))
+    async fn reply(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+        text(response_context(&request), Status::OK, "ok")
     }
     let app = route(app_default(()), Method::GET, "/", public_policy(), reply).unwrap();
     let probe = Arc::new(lifecycle_probe::Probe::default());

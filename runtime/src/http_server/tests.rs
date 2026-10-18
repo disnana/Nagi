@@ -8,6 +8,68 @@ use tokio::{
     sync::{oneshot, Notify},
 };
 
+pub(super) fn with_response_fixture(options: Options) -> Options {
+    if options.response_limits.is_none() {
+        // Explicit finite test-only response profile: enough for the
+        // existing 16 MiB stalled-send fixture and no production default.
+        let body_bytes = options.body_bytes.max(STALLED_BODY_LENGTH);
+        let retained_bytes = body_bytes
+            .checked_mul(8)
+            .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
+            .expect("test response retained bound fits usize");
+        let fallback_retained_bytes = options
+            .connections
+            .checked_mul(262_144)
+            .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
+            .expect("test fallback retained bound fits usize");
+        let limits = response_limits(
+            i64::try_from(body_bytes).expect("test body bound fits i64"),
+            65_536,
+            256,
+            4096,
+            32,
+            131_072,
+            i64::try_from(options.requests).expect("test request count fits i64"),
+            i64::try_from(retained_bytes).expect("test retained bound fits i64"),
+            i64::try_from(options.connections).expect("test connection count fits i64"),
+            i64::try_from(fallback_retained_bytes).expect("test fallback retained bound fits i64"),
+            4096,
+            32,
+        )
+        .expect("fixed test response limits are valid");
+        with_response_limits(options, limits).expect("fixed test response profile validates")
+    } else {
+        options
+    }
+}
+
+// Explicit finite profile for old lifecycle fixtures only. Startup-refusal and
+// rate tests use the public API directly and never pass through this helper.
+pub(crate) fn with_rate_fixture<S, E>(
+    mut app: App<S, E>,
+    options: Options,
+) -> (App<S, E>, Options) {
+    for route in app.routes.values_mut().flatten() {
+        if route.rate.is_none() {
+            route.rate = Some(rate_policy(1_000_000, 1000).expect("finite test route policy"));
+        }
+    }
+    let options = if options.rate_limits.is_none() {
+        with_rate_limits(
+            options,
+            rate_limits(64, 64, 4096, 4 * 1024 * 1024, 65_536).unwrap(),
+        )
+        .expect("finite test rate metadata fits")
+    } else {
+        options
+    };
+    (app, options)
+}
+
+fn response_fixture_request(body_bound: usize) -> Request {
+    super::response_public::tests::request_fixture(body_bound)
+}
+
 #[path = "authority_tests.rs"]
 mod authority_tests;
 #[path = "panic_tests.rs"]
@@ -49,6 +111,8 @@ impl Server {
         } else {
             options
         };
+        let options = with_response_fixture(options);
+        let (app, options) = with_rate_fixture(app, options);
         let listener = if let Some(bytes) = send_buffer_bytes {
             // Only stalled-send fixtures constrain native buffering. The
             // accepted socket inherits this listener setting; actual write
@@ -545,6 +609,8 @@ fn borrowed_lookup_validation_agrees_with_native_token_rules_and_length_limits()
 
 #[test]
 fn response_headers_reject_managed_values_and_keep_ordinary_duplicates() {
+    let request = response_fixture_request(16);
+    let context = response_context(&request);
     for (name, value) in [
         ("bad name", b"v".as_slice()),
         ("valid", b"a\r\nb"),
@@ -558,16 +624,21 @@ fn response_headers_reject_managed_values_and_keep_ordinary_duplicates() {
         ("Content-Security-Policy", b"default-src 'self'"),
         ("X-Content-Type-Options", b"nosniff"),
     ] {
-        assert!(append_header(empty(Status::OK), name, value).is_err());
+        assert!(append_header(empty(context, Status::OK).unwrap(), name, value).is_err());
     }
-    assert!(append_header_text(empty(Status::OK), "x-value", "a\r\nb").is_err());
+    assert!(append_header_text(empty(context, Status::OK).unwrap(), "x-value", "a\r\nb").is_err());
     // SF01 intentionally removes the raw-HTML activation path and user-managed
     // Set-Cookie output. HTML bytes remain an inert binary representation;
     // ordinary duplicate application headers remain available.
-    let inactive_html = bytes(Status::CREATED, b"<p>ok</p>");
+    let inactive_html = bytes(context, Status::CREATED, b"<p>ok</p>").unwrap();
     assert!(append_header_text(inactive_html, "Content-Type", "text/html").is_err());
     let result = append_header(
-        append_header(bytes(Status::CREATED, b"ok"), "X-Trace", b"a=1").unwrap(),
+        append_header(
+            bytes(context, Status::CREATED, b"ok").unwrap(),
+            "X-Trace",
+            b"a=1",
+        )
+        .unwrap(),
         "X-Trace",
         b"b=2",
     )
@@ -592,8 +663,12 @@ fn response_headers_reject_managed_values_and_keep_ordinary_duplicates() {
 
 #[test]
 fn ordinary_response_framing_uses_the_native_body_length_without_allocating_a_header_value() {
-    let (_, normal) = crate::metrics::measure(|| text(Status::OK, "hello").into_http(false));
-    let (_, head) = crate::metrics::measure(|| text(Status::OK, "hello").into_http(true));
+    let request = response_fixture_request(16);
+    let context = response_context(&request);
+    let normal_response = text(context, Status::OK, "hello").unwrap();
+    let head_response = text(context, Status::OK, "hello").unwrap();
+    let (_, normal) = crate::metrics::measure(|| normal_response.into_http(false));
+    let (_, head) = crate::metrics::measure(|| head_response.into_http(true));
     let (_, framing) = crate::metrics::measure(|| HeaderValue::from(5usize));
     // The locked native builder allocates the decimal buffer and, because its
     // capacity exceeds the length, Bytes ownership metadata. Ordinary frames
@@ -615,18 +690,20 @@ fn ordinary_response_framing_uses_the_native_body_length_without_allocating_a_he
 
 #[test]
 fn json_encoding_is_fallible_and_default_internal_mapping_hides_details() {
+    let request = response_fixture_request(256);
+    let context = response_context(&request);
     struct Fails;
     impl Serialize for Fails {
         fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
             Err(serde::ser::Error::custom("private serializer failure"))
         }
     }
-    let error = json(Status::OK, &Fails).unwrap_err();
+    let error = json(context, Status::OK, &Fails).unwrap_err();
     assert!(matches!(error.kind, ErrorKind::Internal));
-    let response = default_error(error);
+    let response = default_error(context, error).unwrap();
     assert_eq!(response.status(), Status::INTERNAL_SERVER_ERROR);
     assert_eq!(response.body(), b"internal error");
-    let response = json(Status::CREATED, &vec![1, 2]).unwrap();
+    let response = json(context, Status::CREATED, &vec![1, 2]).unwrap();
     assert_eq!(response.status(), Status::CREATED);
     assert_eq!(response.body(), b"[1,2]");
 }
@@ -648,8 +725,8 @@ fn options_validate_capacity_deadlines_and_leave_state_out_of_debug() {
     assert!(!format!("{:?}", app_default("very secret state")).contains("secret"));
 }
 
-async fn hello(_: Request, state: Arc<String>, _: ()) -> Result<Response, Error> {
-    Ok(text(Status::OK, &state))
+async fn hello(request: Request, state: Arc<String>, _: ()) -> Result<Response, Error> {
+    text(response_context(&request), Status::OK, &state)
 }
 #[test]
 fn route_validation_returns_errors_without_panicking_and_supports_templates() {
@@ -876,8 +953,8 @@ async fn oversized_headers_and_header_counts_are_rejected_without_reusing_the_co
 
 #[tokio::test]
 async fn head_uses_get_representation_length_explicit_head_wins_and_allow_is_correct() {
-    async fn head_only(_: Request, _: Arc<String>, _: ()) -> Result<Response, Error> {
-        Ok(text(Status::CREATED, "explicit"))
+    async fn head_only(request: Request, _: Arc<String>, _: ()) -> Result<Response, Error> {
+        text(response_context(&request), Status::CREATED, "explicit")
     }
     let app = route(
         app_default("hello".to_owned()),
@@ -927,19 +1004,22 @@ enum Business {
     Auth,
     Conflict,
     Limited,
+    Factory(Error),
 }
-fn business(error: Business) -> Response {
-    text(
-        match error {
-            Business::Auth => Status::UNAUTHORIZED,
-            Business::Conflict => Status::CONFLICT,
-            Business::Limited => Status::TOO_MANY_REQUESTS,
-        },
-        "default",
-    )
+fn business(context: &ResponseContext, error: Business) -> Result<Response, Error> {
+    let status = match error {
+        Business::Factory(error) => return Err(error),
+        Business::Auth => Status::UNAUTHORIZED,
+        Business::Conflict => Status::CONFLICT,
+        Business::Limited => Status::TOO_MANY_REQUESTS,
+    };
+    text(context, status, "default")
 }
-fn override_business(_: Business) -> Response {
-    text(Status::FORBIDDEN, "override")
+fn override_business(context: &ResponseContext, error: Business) -> Result<Response, Error> {
+    if let Business::Factory(error) = error {
+        return Err(error);
+    }
+    text(context, Status::FORBIDDEN, "override")
 }
 #[tokio::test]
 async fn async_handlers_use_app_mapping_route_override_and_leave_success_alone() {
@@ -953,15 +1033,15 @@ async fn async_handlers_use_app_mapping_route_override_and_leave_success_alone()
     async fn limited(_: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
         Err(Business::Limited)
     }
-    async fn success(_: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
-        Ok(text(Status::CREATED, "created"))
+    async fn success(request: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
+        text(response_context(&request), Status::CREATED, "created").map_err(Business::Factory)
     }
     async fn independent(_: Request, _: Arc<()>, _: ()) -> Result<Response, i64> {
         Err(42)
     }
-    fn map_number(error: i64) -> Response {
+    fn map_number(context: &ResponseContext, error: i64) -> Result<Response, Error> {
         assert_eq!(error, 42);
-        text(Status::CONFLICT, "independent")
+        text(context, Status::CONFLICT, "independent")
     }
     let app = route(
         app((), business),
@@ -1026,7 +1106,11 @@ async fn async_handlers_use_app_mapping_route_override_and_leave_success_alone()
 async fn forbidden_response_bodies_do_not_desynchronize_keepalive() {
     async fn suppress(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         let code: i64 = request.path().trim_start_matches('/').parse().unwrap();
-        Ok(text(status(code).unwrap(), "must not be transmitted"))
+        text(
+            response_context(&request),
+            status(code).unwrap(),
+            "must not be transmitted",
+        )
     }
     let mut app = app_default(());
     for code in [204, 205, 304] {
@@ -1064,10 +1148,10 @@ async fn forbidden_response_bodies_do_not_desynchronize_keepalive() {
 async fn sockets_preserve_raw_duplicate_headers_and_strict_authorization() {
     async fn inspect(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         if header_text(&request, "authorization")?.is_none() {
-            return Ok(empty(Status::UNAUTHORIZED));
+            return empty(response_context(&request), Status::UNAUTHORIZED);
         }
         let raw = headers(&request, "x-many")?;
-        let result = bytes(Status::OK, &raw.concat());
+        let result = bytes(response_context(&request), Status::OK, &raw.concat())?;
         append_header_text(
             append_header_text(result, "x-trace", "a=1")?,
             "x-trace",
@@ -1104,7 +1188,7 @@ async fn sockets_preserve_raw_duplicate_headers_and_strict_authorization() {
 #[tokio::test]
 async fn actual_chunk_sizes_and_absolute_body_deadlines_are_bounded() {
     async fn echo(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(bytes(Status::OK, request.body()))
+        bytes(response_context(&request), Status::OK, request.body())
     }
     let server = Server::new(
         route(app_default(()), Method::POST, "/", public_policy(), echo).unwrap(),
@@ -1147,9 +1231,13 @@ struct OversizedBodyState {
 }
 
 async fn oversized_body_server() -> (Server, Arc<AtomicUsize>) {
-    async fn counted(_: Request, state: Arc<OversizedBodyState>, _: ()) -> Result<Response, Error> {
+    async fn counted(
+        request: Request,
+        state: Arc<OversizedBodyState>,
+        _: (),
+    ) -> Result<Response, Error> {
         state.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(text(Status::OK, "accepted"))
+        text(response_context(&request), Status::OK, "accepted")
     }
     let calls = Arc::new(AtomicUsize::new(0));
     let state = OversizedBodyState {
@@ -1454,11 +1542,11 @@ impl Drop for Dropped {
         self.0.fetch_add(1, Ordering::SeqCst);
     }
 }
-async fn wait(_: Request, state: Arc<Gate>, _: ()) -> Result<Response, Error> {
+async fn wait(request: Request, state: Arc<Gate>, _: ()) -> Result<Response, Error> {
     let _dropped = Dropped(Arc::clone(&state.cancelled));
     state.started.notify_one();
     state.released.notified().await;
-    Ok(text(Status::OK, "released"))
+    text(response_context(&request), Status::OK, "released")
 }
 fn gate() -> (Gate, Arc<Notify>, Arc<Notify>, Arc<AtomicUsize>) {
     let started = Arc::new(Notify::new());
@@ -1531,14 +1619,14 @@ async fn handler_timeout_cancels_future_and_releases_request_capacity() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn handler_timeout_rejects_a_ready_response_after_blocking_poll() {
-    async fn slow(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+    async fn slow(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         // A timer cannot preempt this poll. Once it returns, the server must
         // still reject a response completed after the handler deadline.
         std::thread::sleep(Duration::from_millis(80));
-        Ok(text(Status::OK, "late"))
+        text(response_context(&request), Status::OK, "late")
     }
-    async fn fast(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(text(Status::OK, "fast"))
+    async fn fast(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+        text(response_context(&request), Status::OK, "fast")
     }
     let app = route(app_default(()), Method::GET, "/slow", public_policy(), slow).unwrap();
     let app = route(app, Method::GET, "/fast", public_policy(), fast).unwrap();
@@ -1574,8 +1662,8 @@ async fn handler_panic_after_deadline_returns_500_and_releases_admission() {
         std::thread::sleep(Duration::from_millis(80));
         panic!("private late handler failure");
     }
-    async fn healthy(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(text(Status::OK, "healthy"))
+    async fn healthy(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+        text(response_context(&request), Status::OK, "healthy")
     }
     let app = route(
         app_default(()),
@@ -1656,6 +1744,8 @@ async fn graceful_shutdown_finishes_an_in_flight_handler_and_response() {
     )
     .unwrap();
     config.lifecycle_probe = Some(Arc::clone(&probe));
+    let config = with_response_fixture(config);
+    let (app, config) = with_rate_fixture(app, config);
     let task = tokio::spawn(serve_listener(listener, app, config, async {
         stopping.await.unwrap();
         observed.send(()).unwrap();
@@ -1935,22 +2025,23 @@ fn prepared_large() -> PreparedLarge {
     }
 }
 async fn prepared_large_response(
-    _: Request,
+    request: Request,
     state: Arc<PreparedLarge>,
     _: (),
 ) -> Result<Response, Error> {
-    Ok(representation(
+    response_public::tests::adopt_bytes_fixture(
+        response_context(&request),
         Status::OK,
-        BodyKind::Binary,
         state.body.clone(),
-    ))
+        BodyKind::Binary,
+    )
 }
 async fn prepared_healthy_response(
-    _: Request,
+    request: Request,
     _: Arc<PreparedLarge>,
     _: (),
 ) -> Result<Response, Error> {
-    Ok(text(Status::OK, "ok"))
+    text(response_context(&request), Status::OK, "ok")
 }
 async fn backpressured_socket(server: &Server) -> BufReader<TcpStream> {
     let socket = tokio::net::TcpSocket::new_v4().unwrap();

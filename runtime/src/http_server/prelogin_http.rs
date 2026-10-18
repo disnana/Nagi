@@ -4,8 +4,16 @@ use crate::auth::prelogin::{HttpOwner, HttpSeal, Pool};
 #[cfg(nagi_auth_stage_diag)]
 use crate::auth::session_deadline_observer::{self as diag, Exit, Observer, Phase};
 
+#[cfg_attr(
+    test,
+    allow(
+        clippy::large_enum_variant,
+        reason = "Test-only inline replacement preserves the production no-allocation completion."
+    )
+)]
 pub(super) enum PreloginCompletion {
     Ready(HttpSeal),
+    #[cfg(test)]
     Replacement(Option<HttpSeal>, Response),
 }
 pub(super) fn register_prelogin_bootstrap<S, E>(
@@ -39,6 +47,8 @@ pub(super) fn register_prelogin_bootstrap<S, E>(
     let routes = app.routes.entry(path.to_owned()).or_default();
     for method in [Method::GET, Method::HEAD] {
         routes.push(Route {
+            rate: None,
+            rate_index: None,
             cors: None,
             source: PolicySource::Prelogin,
             method,
@@ -67,29 +77,28 @@ pub(super) fn check_startup<S, E>(app: &App<S, E>, options: &Options) -> Result<
     Ok(())
 }
 fn terminal(
-    pool: &Pool,
+    context: &ResponseContext,
+    _pool: &Pool,
     owner: &HttpOwner,
     status: Status,
     head: bool,
-) -> axum::http::Response<BufferedBody> {
-    let mut response = text(status, "pre-login request failed");
-    response
-        .headers
-        .insert(names::CONNECTION, HeaderValue::from_static("close"));
-    finalize_prelogin(
-        PreloginCompletion::Replacement(None, response),
-        owner,
+) -> HttpResponse {
+    owner.retire();
+    finalize_authenticated(
+        transport(context, status, head, true),
+        PolicySource::Prelogin,
         head,
-        pool,
     )
 }
 pub(super) fn finalize_prelogin(
+    context: &ResponseContext,
     completion: PreloginCompletion,
     owner: &HttpOwner,
     head: bool,
     pool: &Pool,
-) -> axum::http::Response<BufferedBody> {
+) -> HttpResponse {
     match completion {
+        #[cfg(test)]
         PreloginCompletion::Replacement(seal, response) => {
             drop(seal);
             owner.retire();
@@ -98,40 +107,40 @@ pub(super) fn finalize_prelogin(
         PreloginCompletion::Ready(seal) => {
             if head {
                 drop(seal);
-                return terminal(pool, owner, Status::INTERNAL_SERVER_ERROR, head);
+                return terminal(context, pool, owner, Status::INTERNAL_SERVER_ERROR, head);
             }
             #[cfg(nagi_auth_stage_diag)]
             diag::phase(Phase::Delivery);
-            let material = match pool.take_wire(owner, seal) {
-                Ok(material) => material,
-                Err(failure) => {
+            use response_budget::finalize::{FrameworkBody, FrameworkError};
+            let prepared = context
+                .framework(FrameworkBody::Prelogin, Some(512))
+                .and_then(|ticket| ticket.take_prelogin(pool, owner, seal))
+                .and_then(|prepared| prepared.finish().map_err(FrameworkError::Budget));
+            match prepared {
+                Ok(wire) => finalize_authenticated(
+                    HttpResponse::from_wire(StatusCode::OK, wire, Arc::clone(&context.fallback)),
+                    PolicySource::Prelogin,
+                    false,
+                ),
+                Err(error) => {
                     #[cfg(nagi_auth_stage_diag)]
                     diag::exit(Exit::Wire);
-                    return terminal(pool, owner, failure.http_status(), head);
+                    owner.retire();
+                    terminal(context, pool, owner, error.status(), head)
                 }
-            };
-            let mut response = empty(Status::OK).into_http(false);
-            response.headers_mut().insert(
-                names::CONTENT_TYPE,
-                HeaderValue::from_static("application/json"),
-            );
-            response
-                .headers_mut()
-                .insert(names::SET_COOKIE, material.cookie);
-            response.body_mut().bytes = material.body;
-            finalize_authenticated(response, PolicySource::Prelogin, false)
+            }
         }
     }
 }
 pub(super) async fn dispatch_bootstrap(
     pool: &Pool,
-    parts: axum::http::request::Parts,
+    parts: RequestParts,
     body: hyper::body::Incoming,
     options: &Options,
     lease: LeaseOwner,
     head: bool,
     admitted: Instant,
-) -> axum::http::Response<BufferedBody> {
+) -> HttpResponse {
     #[cfg(nagi_auth_stage_diag)]
     if let Some(until) = admitted.checked_add(options.security_deadline) {
         let observer = Observer::new(admitted, until);
@@ -148,43 +157,47 @@ pub(super) async fn dispatch_bootstrap(
 }
 async fn dispatch_bootstrap_inner(
     pool: &Pool,
-    parts: axum::http::request::Parts,
+    parts: RequestParts,
     body: hyper::body::Incoming,
     options: &Options,
     lease: LeaseOwner,
     head: bool,
     admitted: Instant,
-) -> axum::http::Response<BufferedBody> {
+) -> HttpResponse {
+    let context = parts.headers.response_context();
     let owner = HttpOwner::new(lease);
     let Some(until) = admitted.checked_add(options.security_deadline) else {
-        return terminal(pool, &owner, Status::SERVICE_UNAVAILABLE, head);
+        return terminal(context, pool, &owner, Status::SERVICE_UNAVAILABLE, head);
     };
     if let Err(failure) = owner.constrain_until(until) {
         #[cfg(nagi_auth_stage_diag)]
         diag::exit(Exit::Gate);
-        return terminal(pool, &owner, failure.http_status(), head);
+        return terminal(context, pool, &owner, failure.http_status(), head);
     }
     // Body input is not part of this fixed safe profile. Refuse before any
     // entropy/DB work; ordinary routes retain their existing receive_body path.
     if !hyper::body::Body::is_end_stream(&body)
         || parts.headers.contains_key(names::TRANSFER_ENCODING)
     {
-        return terminal(pool, &owner, Status::BAD_REQUEST, head);
+        return terminal(context, pool, &owner, Status::BAD_REQUEST, head);
     }
     let Some(authority) = options.authority.as_ref() else {
-        return terminal(pool, &owner, Status::INTERNAL_SERVER_ERROR, head);
+        return terminal(context, pool, &owner, Status::INTERNAL_SERVER_ERROR, head);
     };
-    if let Err(status) = authority.check_safe_origin(&parts.headers) {
-        return terminal(pool, &owner, status, head);
+    if let Err(status) = authority.check_safe_origin(parts.headers.authentication_headers()) {
+        return terminal(context, pool, &owner, status, head);
     }
-    let old = match pool.previous_cookie(&parts.headers) {
+    let old = match pool.previous_cookie(parts.headers.authentication_headers()) {
         Ok(old) => old,
-        Err(failure) => return terminal(pool, &owner, failure.http_status(), head),
+        Err(failure) => return terminal(context, pool, &owner, failure.http_status(), head),
     };
     if head {
         // Corresponding fixed GET representation has canonical43ASCII +17B.
         // No entropy, native session/table query, mutation, cookie or token.
-        let mut response = empty(Status::OK).into_http(true);
+        let mut response = match empty(context, Status::OK) {
+            Ok(response) => response.into_http(true),
+            Err(_) => return terminal(context, pool, &owner, Status::SERVICE_UNAVAILABLE, true),
+        };
         response.headers_mut().insert(
             names::CONTENT_TYPE,
             HeaderValue::from_static("application/json"),
@@ -205,18 +218,19 @@ async fn dispatch_bootstrap_inner(
         owner.seal()
     };
     let Some(handler_until) = Instant::now().checked_add(options.handler_deadline) else {
-        return terminal(pool, &owner, Status::SERVICE_UNAVAILABLE, false);
+        return terminal(context, pool, &owner, Status::SERVICE_UNAVAILABLE, false);
     };
-    complete_bootstrap(pool, &owner, handler_until.min(until), future).await
+    complete_bootstrap(context, pool, &owner, handler_until.min(until), future).await
 }
 
 // One absolute timer and post-poll check, including a finite non-yielding Ready.
 pub(super) async fn complete_bootstrap(
+    context: &ResponseContext,
     pool: &Pool,
     owner: &HttpOwner,
     until: Instant,
     future: impl std::future::Future<Output = Result<HttpSeal, crate::auth::prelogin::Failure>>,
-) -> axum::http::Response<BufferedBody> {
+) -> HttpResponse {
     #[cfg(nagi_auth_stage_diag)]
     diag::select_until(until);
     let result = tokio::time::timeout_at(
@@ -228,21 +242,23 @@ pub(super) async fn complete_bootstrap(
         Ok(_) if Instant::now() >= until => {
             #[cfg(nagi_auth_stage_diag)]
             diag::exit(Exit::LateReady);
-            terminal(pool, owner, Status::GATEWAY_TIMEOUT, false)
+            terminal(context, pool, owner, Status::GATEWAY_TIMEOUT, false)
         }
-        Ok(Ok(Ok(seal))) => finalize_prelogin(PreloginCompletion::Ready(seal), owner, false, pool),
+        Ok(Ok(Ok(seal))) => {
+            finalize_prelogin(context, PreloginCompletion::Ready(seal), owner, false, pool)
+        }
         Ok(Ok(Err(failure))) => {
             #[cfg(nagi_auth_stage_diag)]
             if crate::auth::prelogin::kind(&failure) == crate::auth::FailureKind::Expired {
                 diag::exit(Exit::Gate);
             }
-            terminal(pool, owner, failure.http_status(), false)
+            terminal(context, pool, owner, failure.http_status(), false)
         }
-        Ok(Err(_)) => terminal(pool, owner, Status::INTERNAL_SERVER_ERROR, false),
+        Ok(Err(_)) => terminal(context, pool, owner, Status::INTERNAL_SERVER_ERROR, false),
         Err(_) => {
             #[cfg(nagi_auth_stage_diag)]
             diag::exit(Exit::Timer);
-            terminal(pool, owner, Status::GATEWAY_TIMEOUT, false)
+            terminal(context, pool, owner, Status::GATEWAY_TIMEOUT, false)
         }
     }
 }

@@ -353,7 +353,7 @@ fn legacy_principal_is_a_checker_migration_diagnostic() {
 }
 #[test]
 fn policy_free_route_is_a_checker_migration_diagnostic() {
-    Fixture::new().reject("import std.http.server as http\nclass State:\n    count: i64\nasync def handler(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:\n    return ok(http.empty(http.Status.OK))\ndef setup() -> Result[http.App[State, Error], Error]:\n    app = http.app_default[State](State(count=7))\n    return http.route(app, http.Method.GET, \"/\", handler)\n", "SF01 migration",8,"_f_726f757465(");
+    Fixture::new().reject("import std.http.server as http\nclass State:\n    count: i64\nasync def handler(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:\n    return http.empty(http.response_context(view(request)), http.Status.OK)\ndef setup() -> Result[http.App[State, Error], Error]:\n    app = http.app_default[State](State(count=7))\n    return http.route(app, http.Method.GET, \"/\", handler)\n", "SF01 migration",8,"_f_726f757465(");
 }
 
 #[test]
@@ -362,7 +362,7 @@ fn handwritten_low_cannot_use_retired_or_policy_free_entrypoints() {
   ("@get(\"/answer\")\nasync fn handler() -> Result[i64, Error] { return ok(7); }\n",2),
   ("import std.auth as auth;\n@rust(\"native::old\")\nextern fn old() -> auth.Principal;\n",3),
   ("async fn main() -> Result[unit, Error] {\n let db = 0;\n try await serve(db,0);\n return ok(print(0));\n}\n",3),
-  ("import std.http.server as http;\nasync fn handler(r: http.Request, s: shared[i64]) -> Result[http.Response, Error] { return ok(http.empty(http.Status.OK)); }\nfn setup() -> Result[http.App[i64, Error], Error] {\n let app = http.app_default[i64](7);\n return http.route(app,http.Method.GET,\"/\",handler);\n}\n",5),
+  ("import std.http.server as http;\nasync fn handler(r: http.Request, s: shared[i64]) -> Result[http.Response, Error] { return http.empty(http.response_context(view(r)), http.Status.OK); }\nfn setup() -> Result[http.App[i64, Error], Error] {\n let app = http.app_default[i64](7);\n return http.route(app,http.Method.GET,\"/\",handler);\n}\n",5),
  ] {
   let fixture=Fixture::new();let path=fixture.0.join("manual.low");fs::write(&path,text).unwrap();let mut loaded=source::load(&path,false).unwrap();let e=check::check(&mut loaded.program).expect_err(text);assert!(e.contains("SF01 migration"),"{e}");let d=loaded.diagnostic(&e);assert!(d.contains(&format!("manual.low:{line}\n")),"{d}");
  }
@@ -378,7 +378,7 @@ class State:
 @rust("native::verify")
 extern async def verify(r: http.Request, s: shared[State]) -> Result[auth.VerifiedIdentity, auth.Failure]
 async def handler(r: http.Request, s: shared[State], a: unit) -> Result[http.Response, Error]:
-    return ok(http.empty(http.Status.OK))
+    return http.empty(http.response_context(view(r)), http.Status.OK)
 def setup() -> Result[http.App[State, Error], Error]:
     app = http.app_default[State](State(value=1))
     return http.route(app, http.Method.GET, "/", http.public_policy[State](), handler)
@@ -452,7 +452,7 @@ fn native_replacements_and_aliases_cannot_downgrade_security_contracts() {
 import std.auth as auth
 from std.auth import AuthScope as Identity
 async def handler(r: http.Request, s: shared[i64], a: unit) -> Result[http.Response, Error]:
-    return ok(http.empty(http.Status.OK))
+    return http.empty(http.response_context(view(r)), http.Status.OK)
 def setup() -> Result[http.App[i64, Error], Error]:
     app = http.app_default[i64](7)
     return http.route(app,http.Method.GET,"/",http.public_policy[i64](),handler)
@@ -475,7 +475,7 @@ async def guarded(value: Identity) -> Result[unit, Error]:
     fs::write(fixture.0.join("saved.low"), saved).unwrap();
     for (replacement_case, (replacement,reason,line)) in [
   ("@replace generated::setup\nfn changed() -> Result[http.App[i64, Error], Error] {\n let app = http.app_default[i64](7);\n return http.route(app,http.Method.GET,\"/\",handler);\n}\n","SF01 migration",4),
-  ("@replace generated::handler\nasync fn changed(r: http.Request, s: shared[i64], a: auth.AuthScope) -> Result[http.Response, Error] { return ok(http.empty(http.Status.OK)); }\n","一致しません",2),
+  ("@replace generated::handler\nasync fn changed(r: http.Request, s: shared[i64], a: auth.AuthScope) -> Result[http.Response, Error] { return http.empty(http.response_context(view(r)), http.Status.OK); }\n","一致しません",2),
   ("@replace generated::guarded\nasync fn changed(value: Identity) -> Result[unit, Error] {\n scope { spawn use_scope(value); }\n return ok(print(0));\n}\n","SameTask",3),
   ("@replace generated::setup\nfn changed() -> Result[http.App[i64, Error], Error] {\n let values = [some(http.public_policy[i64]())];\n let copied = copy(view(values));\n let app = http.app_default[i64](7);\n return http.route(app,http.Method.GET,\"/\",http.public_policy[i64](),handler);\n}\n","非Clone security resource",4),
   ("@replace generated::setup\nfn changed() -> Result[http.App[i64, Error], Error] {\n let invalid = share(some(http.public_policy[i64]()));\n let app = http.app_default[i64](7);\n return http.route(app,http.Method.GET,\"/\",http.public_policy[i64](),handler);\n}\n","非共有 security resource",3),

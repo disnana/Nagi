@@ -39,27 +39,37 @@ def path_id(request: view[http.Request], prefix: view[str]) -> Result[i64, Error
     return parse_i64(try slice(request.path, len(prefix), len(request.path)))
 
 async def lookup(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return http.json[i64](http.Status.OK, try query_id(view(request)))
+    return http.json[i64](http.response_context(view(request)), http.Status.OK, try query_id(view(request)))
 
 async def value(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return http.json[i64](http.Status.OK, try path_id(view(request), view("/values/")))
+    return http.json[i64](http.response_context(view(request)), http.Status.OK, try path_id(view(request), view("/values/")))
 
 async def legacy(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return http.json[i64](http.Status.OK, try path_id(view(request), view("/legacy/")))
+    return http.json[i64](http.response_context(view(request)), http.Status.OK, try path_id(view(request), view("/legacy/")))
 
 async def literal(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return http.json[i64](http.Status.OK, try query_id(view(request)))
+    return http.json[i64](http.response_context(view(request)), http.Status.OK, try query_id(view(request)))
 
 async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, "ok"))
+    return http.text(http.response_context(view(request)), http.Status.OK, "ok")
+
+def attach_test_rate(app: http.App[State, Error], method: http.Method, path: view[str]) -> Result[http.App[State, Error], Error]:
+    # Every call consumes a freshly checked route-only policy.
+    policy = try http.rate_policy(1000, 1000)
+    return http.rate_route(app, method, path, policy)
 
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(ready=true))
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try attach_test_rate(app, http.Method.GET, view("/health"))
     app = try http.route(app, http.Method.GET, "/lookup", http.public_policy[State](), lookup)
+    app = try attach_test_rate(app, http.Method.GET, view("/lookup"))
     app = try http.route(app, http.Method.GET, "/values/{id}", http.public_policy[State](), value)
+    app = try attach_test_rate(app, http.Method.GET, view("/values/{id}"))
     app = try http.route(app, http.Method.GET, "/legacy/{key}", http.public_policy[State](), legacy)
+    app = try attach_test_rate(app, http.Method.GET, view("/legacy/{key}"))
     app = try http.route(app, http.Method.GET, "/literal/%7Bid%7D", http.public_policy[State](), literal)
+    app = try attach_test_rate(app, http.Method.GET, view("/literal/%7Bid%7D"))
     port = try parse_i64(env("NAGI_TEST_PORT", "0"))
     wire_authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8080")
     options = try http.authority(
@@ -69,6 +79,13 @@ async def main() -> Result[unit, Error]:
         1,
         256
     )
+    # Finite test fixture only; this is not a public sizing or SLA recommendation.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    options = try http.with_response_limits(options, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 1, 67108864, 65536)
+    options = try http.with_rate_limits(options, rate_budget)
     return await http.serve(app, port, options)
 ''', encoding="utf-8")
         environment = {**os.environ, "NAGI_NATIVE_TARGET_DIR": str(target)}

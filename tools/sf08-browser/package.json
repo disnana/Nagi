@@ -1,0 +1,12 @@
+{
+  "name": "nagi-sf08-browser-harness",
+  "private": true,
+  "scripts": {
+    "test": "playwright test --forbid-only"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "typescript": "5.9.3",
+    "@types/node": "24.5.2"
+  }
+}

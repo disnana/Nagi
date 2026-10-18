@@ -171,12 +171,14 @@ async fn handler(request: Request, state: Arc<State>, scope: AuthScope) -> Resul
     assert!(!request.headers.contains_key(names::COOKIE));
     assert!(!request.headers.contains_key("x-csrf-token"));
     if state.mode == Mode::Plain {
-        return Ok(text(Status::OK, "owned"));
+        return text(response_context(&request), Status::OK, "owned");
     }
     let intent = session::issue(&state.store, scope)
         .await
         .map_err(|_| Error::internal("owned stage issue refused"))?;
-    let response = session::apply(text(Status::OK, "owned"), intent).unwrap();
+    let response = text(response_context(&request), Status::OK, "owned")?;
+    let response = session::apply(response, intent)
+        .map_err(|_| Error::internal("owned stage session apply refused"))?;
     state.stats.issue_ack.store(true, Ordering::SeqCst);
     // This suspension is reached only after the real Session issue/apply
     // returned. The original prepared_handler future retains the real response.
@@ -235,7 +237,7 @@ fn request() -> Request {
     Request {
         method: Method::POST,
         uri: "/login".parse().unwrap(),
-        headers: headers.into(),
+        headers: response_public::tests::headers_fixture(headers, 256),
         body: Bytes::from_static(b"{}"),
     }
 }
@@ -243,18 +245,19 @@ fn request() -> Request {
 struct StageWitness {
     owner: HttpOwner,
     input: Input<'static, hyper::body::Incoming>,
+    response_context: ResponseContext,
 }
 impl StageWitness {
     async fn claimed(pool: &Pool) -> Self {
         let (owner, context) = pool.claim_stage_for_test().await.unwrap();
         assert!(owner.was_consumed());
         assert!(Arc::ptr_eq(&context.lease(), &owner.lease_owner().lease));
+        let request = request();
+        let response_context = response_context(&request).share();
         Self {
             owner,
-            input: Input::Claimed {
-                request: request(),
-                context,
-            },
+            input: Input::Claimed { request, context },
+            response_context,
         }
     }
     async fn issued(self, prepare: &BrowserPrepare<State>, state: Arc<State>) -> Self {
@@ -291,6 +294,7 @@ impl StageWitness {
         Self {
             owner: self.owner,
             input: Input::Handler(future),
+            response_context: self.response_context,
         }
     }
 }
@@ -329,14 +333,18 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
         AssertUnwindSafe(async {
             // Real owner remains inside the dispatched future, while the SAME
             // production core borrows it; cancellation drops it before SQL reads.
+            let response_context = witness.response_context;
             let owner = witness.owner;
             dispatch_owned(
-                &pool,
-                &prepare,
+                DispatchBorrowed {
+                    response_context: &response_context,
+                    pool: &pool,
+                    prepare: &prepare,
+                    options: &options,
+                    owner: &owner,
+                },
                 Arc::clone(&state),
                 witness.input,
-                &options,
-                &owner,
                 admitted,
             )
             .await

@@ -2,17 +2,68 @@
 //! Inbound/application retention is the existing input boundary, not a new
 //! process-memory guarantee. No response factory or authentication proof lives here.
 use crate::security_sf07_private::quota::Reservation;
-use axum::http::{header::GetAll, HeaderMap, HeaderValue};
+use axum::http::{header::GetAll, Extensions, HeaderMap, HeaderValue};
 use std::sync::Arc;
 
 pub(super) struct ReceivedHeaders {
     // Dispose actual map names/values/container before its original claim.
     map: HeaderMap,
+    // Native metadata shares the same actual Request/header owner. Never clone
+    // Extensions: it must die before the request receipt can be recycled.
+    _extensions: Extensions,
     _prior: Option<Arc<Reservation>>,
+    context: ContextOwner,
+    rate: Option<super::rate_public::RequestRate>,
+    // Last: the actual map, prior response and Context die before this receipt.
+    request_owner: Option<tokio::sync::OwnedSemaphorePermit>,
+}
+enum ContextOwner {
+    Attached(super::ResponseContext),
+    #[cfg(test)]
+    Unattached,
 }
 impl ReceivedHeaders {
+    #[cfg(test)]
+    pub(super) fn configured(
+        map: HeaderMap,
+        prior: Option<Arc<Reservation>>,
+        context: super::ResponseContext,
+    ) -> Arc<Self> {
+        Self::configured_native(map, Extensions::new(), prior, context)
+    }
+    pub(super) fn configured_native(
+        map: HeaderMap,
+        extensions: Extensions,
+        prior: Option<Arc<Reservation>>,
+        context: super::ResponseContext,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            map,
+            _extensions: extensions,
+            _prior: prior,
+            context: ContextOwner::Attached(context),
+            rate: None,
+            request_owner: None,
+        })
+    }
+    #[cfg(test)]
     pub(super) fn new(map: HeaderMap, prior: Option<Arc<Reservation>>) -> Arc<Self> {
-        Arc::new(Self { map, _prior: prior })
+        Self::new_native(map, Extensions::new(), prior)
+    }
+    #[cfg(test)]
+    pub(super) fn new_native(
+        map: HeaderMap,
+        extensions: Extensions,
+        prior: Option<Arc<Reservation>>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            map,
+            _extensions: extensions,
+            _prior: prior,
+            context: ContextOwner::Unattached,
+            rate: None,
+            request_owner: None,
+        })
     }
     #[cfg(test)]
     pub(super) fn value(&self, name: &str) -> Option<&[u8]> {
@@ -43,6 +94,55 @@ pub(super) struct RequestHeaders {
     visibility: Visibility,
 }
 impl RequestHeaders {
+    pub(super) fn rate(
+        &mut self,
+        rate: super::rate_public::RequestRate,
+    ) -> Result<(), crate::Error> {
+        let owner = Arc::get_mut(&mut self.owner)
+            .ok_or_else(|| crate::Error::internal("request owner already shared"))?;
+        if owner.rate.is_some() {
+            return Err(crate::Error::internal("request rate already attached"));
+        }
+        owner.rate = Some(rate);
+        Ok(())
+    }
+    pub(super) fn request_rate(&self) -> Option<&super::rate_public::RequestRate> {
+        self.owner.rate.as_ref()
+    }
+    pub(super) fn profile(
+        &mut self,
+        profile: super::response_public::ResponseProfile,
+    ) -> Result<(), crate::Error> {
+        let owner = Arc::get_mut(&mut self.owner)
+            .ok_or_else(|| crate::Error::internal("request owner already shared"))?;
+        match &mut owner.context {
+            ContextOwner::Attached(context) => context.profile = profile,
+            #[cfg(test)]
+            ContextOwner::Unattached => {
+                return Err(crate::Error::internal("unattached request fixture"))
+            }
+        }
+        Ok(())
+    }
+    pub(super) fn admit(
+        &mut self,
+        permit: tokio::sync::OwnedSemaphorePermit,
+    ) -> Result<(), crate::Error> {
+        let owner = Arc::get_mut(&mut self.owner)
+            .ok_or_else(|| crate::Error::internal("request owner already shared"))?;
+        if owner.request_owner.is_some() {
+            return Err(crate::Error::internal("request owner already admitted"));
+        }
+        owner.request_owner = Some(permit);
+        Ok(())
+    }
+    pub(super) fn response_context(&self) -> &super::ResponseContext {
+        match &self.owner.context {
+            ContextOwner::Attached(context) => context,
+            #[cfg(test)]
+            ContextOwner::Unattached => panic!("unattached header fixture has no response Context"),
+        }
+    }
     pub(super) fn from_received(owner: Arc<ReceivedHeaders>) -> Self {
         Self {
             owner,
@@ -113,6 +213,7 @@ impl RequestHeaders {
         Arc::ptr_eq(&self.owner, &other.owner)
     }
 }
+#[cfg(test)]
 impl From<HeaderMap> for RequestHeaders {
     fn from(map: HeaderMap) -> Self {
         Self::from_received(ReceivedHeaders::new(map, None))
@@ -122,3 +223,50 @@ impl From<HeaderMap> for RequestHeaders {
 #[cfg(test)]
 #[path = "request_headers_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod native_owner_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Clone)]
+    struct NativeProbe {
+        drops: Arc<AtomicUsize>,
+        owners: Arc<tokio::sync::Semaphore>,
+    }
+    impl Drop for NativeProbe {
+        fn drop(&mut self) {
+            assert_eq!(self.owners.available_permits(), 0);
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn native_extensions_follow_last_header_view_and_drop_before_request_receipt() {
+        let fixture = super::super::response_public::tests::headers_fixture(HeaderMap::new(), 256);
+        let context = fixture.response_context().share();
+        drop(fixture);
+        let owners = Arc::new(tokio::sync::Semaphore::new(1));
+        let permit = Arc::clone(&owners).try_acquire_owned().unwrap();
+        let drops = Arc::new(AtomicUsize::new(0));
+        let mut native = axum::http::Request::new(());
+        native
+            .headers_mut()
+            .insert("x-native", HeaderValue::from_static("owned"));
+        native.extensions_mut().insert(NativeProbe {
+            drops: Arc::clone(&drops),
+            owners: Arc::clone(&owners),
+        });
+        let mut incoming = super::super::IncomingRequest::new(native, None, context);
+        incoming.parts.headers.admit(permit).unwrap();
+        let view = incoming.parts.headers.share();
+        assert_eq!(view.get_all("x-native").iter().next().unwrap(), "owned");
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+        drop(incoming);
+        assert_eq!(drops.load(Ordering::SeqCst), 0);
+        assert_eq!(owners.available_permits(), 0);
+        drop(view);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
+        assert_eq!(owners.available_permits(), 1);
+    }
+}

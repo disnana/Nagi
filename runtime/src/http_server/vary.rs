@@ -5,12 +5,16 @@ use super::*;
 pub(super) struct Dependencies(u8);
 impl Dependencies {
     pub(super) const ORIGIN: Self = Self(1 << 5);
+    #[cfg(test)]
     pub(super) const COOKIE: Self = Self(1 << 4);
     pub(super) const AUTH: Self = Self((1 << 2) | (1 << 4));
     pub(super) const LOGIN: Self = Self(Self::AUTH.0 | Self::ORIGIN.0);
     pub(super) const GUARDED: Self = Self(Self::LOGIN.0 | (1 << 6));
     pub(super) const BROWSER: Self = Self(Self::GUARDED.0 | (1 << 3));
     pub(super) const PREFLIGHT: Self = Self((1 << 0) | (1 << 1) | Self::ORIGIN.0);
+    pub(super) fn core(self) -> response_budget::finalize::VarySet {
+        response_budget::finalize::VarySet::from_bits(self.0)
+    }
     pub(super) fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
     }
@@ -31,21 +35,11 @@ impl Dependencies {
         }
     }
 }
-pub(super) fn add(response: &mut axum::http::Response<BufferedBody>, dependencies: Dependencies) {
-    let prior = response
-        .extensions()
-        .get::<Dependencies>()
-        .copied()
-        .unwrap_or_default();
-    response.extensions_mut().insert(prior.union(dependencies));
+pub(super) fn add(response: &mut HttpResponse, dependencies: Dependencies) {
+    response.dependencies = response.dependencies.union(dependencies);
 }
-pub(super) fn finish(
-    mut response: axum::http::Response<BufferedBody>,
-) -> axum::http::Response<BufferedBody> {
-    let dependencies = response
-        .extensions_mut()
-        .remove::<Dependencies>()
-        .unwrap_or_default();
+pub(super) fn finish(mut response: HttpResponse) -> HttpResponse {
+    let dependencies = response.dependencies;
     // Public header setters cannot supply Vary. No untyped header text is reparsed here.
     response.headers_mut().remove(names::VARY);
     let names = [

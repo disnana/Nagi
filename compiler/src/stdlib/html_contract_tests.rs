@@ -161,16 +161,16 @@ fn only_named_function(module: &ModuleId, name: &str) -> super::Operation {
 fn assert_operation(
     operation: super::Operation,
     expected_name: &str,
-    expected_module: &str,
-    expected_module_id: &str,
+    expected_module: (&str, &str),
     expected_signature: &str,
     expected_parameters: &[Passing],
+    expected_borrow_owner: Option<usize>,
     expected_rust_path: &str,
 ) {
     let info = super::operation_info(operation);
     assert_eq!(info.name, expected_name);
-    assert_eq!(super::module_info(info.module).name, expected_module);
-    assert_eq!(super::operation_module(operation).0, expected_module_id);
+    assert_eq!(super::module_info(info.module).name, expected_module.0);
+    assert_eq!(super::operation_module(operation).0, expected_module.1);
     assert_eq!(info.rust_path, expected_rust_path);
     assert_eq!(info.arity, expected_parameters.len());
     assert_eq!(info.parameters, expected_parameters);
@@ -178,7 +178,7 @@ fn assert_operation(
     assert!(info.type_parameters.is_empty());
     assert!(!info.asynchronous);
     assert!(!info.emit_type_arguments);
-    assert_eq!(info.borrow_owner, None);
+    assert_eq!(info.borrow_owner, expected_borrow_owner);
     assert_eq!(info.signature, expected_signature);
 }
 
@@ -294,10 +294,10 @@ fn canonical_html_metadata_matches_the_frozen_contract() {
         assert_operation(
             operation,
             expected.name,
-            "std.html",
-            "stdlib:std.html",
+            ("std.html", "stdlib:std.html"),
             expected.signature,
             expected.parameters,
+            None,
             expected.rust_path,
         );
     }
@@ -322,10 +322,12 @@ fn canonical_html_metadata_matches_the_frozen_contract() {
     assert_operation(
         html_response,
         "html_response",
-        "std.http.server",
-        "stdlib:std.http.server",
-        "(status: Status, document: HtmlDocument) -> Response",
-        &[Passing::Move, Passing::Move],
+        ("std.http.server", "stdlib:std.http.server"),
+        "(context: view[ResponseContext], status: Status, document: HtmlDocument) -> Result[Response, Error]",
+        &[Passing::Reference, Passing::Move, Passing::Move],
+        // borrow_owner tracks returned borrowed views. This factory borrows its
+        // Context input but returns an owned Result[Response, Error].
+        None,
         "::nagi_runtime::http_server::html_response",
     );
 

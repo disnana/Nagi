@@ -17,10 +17,14 @@ async fn verifier(head: Request, state: Arc<State>) -> Result<VerifiedIdentity, 
     }
     VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(1))
 }
-async fn authenticated(_: Request, state: Arc<State>, proof: AuthScope) -> Result<Response, Error> {
+async fn authenticated(
+    request: Request,
+    state: Arc<State>,
+    proof: AuthScope,
+) -> Result<Response, Error> {
     state.calls.fetch_add(1, Ordering::SeqCst);
     *state.proof.lock().unwrap() = Some(proof);
-    Ok(text(Status::OK, "ready"))
+    text(response_context(&request), Status::OK, "ready")
 }
 fn credential_request(method: &str, credentials: &str) -> Vec<u8> {
     format!(
@@ -155,11 +159,11 @@ async fn normal_err_panic_timeout_and_shutdown_invalidate_escaped_rust_scope() {
     for mode in 0..5 {
         let state = State::default();
         let observed = state.clone();
-        let handler = move |_: Request, state: Arc<State>, proof: AuthScope| async move {
+        let handler = move |request: Request, state: Arc<State>, proof: AuthScope| async move {
             state.calls.fetch_add(1, Ordering::SeqCst);
             *state.proof.lock().unwrap() = Some(proof);
             match mode {
-                0 => Ok(text(Status::OK, "ready")),
+                0 => text(response_context(&request), Status::OK, "ready"),
                 1 => Err(Error::internal("hidden fixture")),
                 2 => panic!("hidden fixture"),
                 _ => std::future::pending::<Result<Response, Error>>().await,
@@ -215,7 +219,9 @@ async fn authorizer_timeout_shares_budget_and_invalidates_intermediate_scope() {
         Method::GET,
         "/secure",
         authorized_policy(verifier, pending_authorizer),
-        |_: Request, _: Arc<State>, _: Grant<()>| async { Ok(text(Status::OK, "must not run")) },
+        |request: Request, _: Arc<State>, _: Grant<()>| async move {
+            text(response_context(&request), Status::OK, "must not run")
+        },
     )
     .unwrap();
     let server = Server::new(app, security_timeout(default_options(), 20).unwrap()).await;
@@ -241,10 +247,14 @@ async fn authorizer_cannot_return_a_grant_from_another_request() {
         }
         Grant::from_authorized(scope, 9)
     }
-    async fn retain(_: Request, state: Arc<State>, grant: Grant<()>) -> Result<Response, Error> {
+    async fn retain(
+        request: Request,
+        state: Arc<State>,
+        grant: Grant<()>,
+    ) -> Result<Response, Error> {
         state.calls.fetch_add(1, Ordering::SeqCst);
         *state.grant.lock().unwrap() = Some(grant);
-        Ok(text(Status::OK, "ready"))
+        text(response_context(&request), Status::OK, "ready")
     }
     let state = State::default();
     let app = route(
@@ -376,7 +386,9 @@ async fn verifier_and_authorizer_constructor_and_poll_panics_fail_closed() {
             Method::GET,
             "/secure",
             authorized_policy(verify, authorize),
-            |_: Request, _: Arc<State>, _: Grant<()>| async { Ok(text(Status::OK, "unreachable")) },
+            |request: Request, _: Arc<State>, _: Grant<()>| async move {
+                text(response_context(&request), Status::OK, "unreachable")
+            },
         )
         .unwrap();
         let server = Server::new(app, capacity(default_options(), 2, 1).unwrap()).await;
@@ -445,7 +457,7 @@ async fn mapper_panic_invalidates_the_same_request_proof() {
         *state.proof.lock().unwrap() = Some(scope);
         Err(Error::internal("private"))
     }
-    fn panic_mapper(_: Error) -> Response {
+    fn panic_mapper(_: &ResponseContext, _: Error) -> Result<Response, Error> {
         panic!("private mapper");
     }
     let state = State::default();

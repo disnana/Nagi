@@ -15,8 +15,24 @@ struct Fixture {
     cookie: hyper::HeaderMap,
 }
 fn checked() -> http::Options {
+    let options = http::options(256, 1000, 1000, 1000).unwrap();
+    let limits = http::response_limits(
+        4096,
+        65_536,
+        256,
+        4096,
+        32,
+        131_072,
+        256,
+        16_777_216 + 32_768,
+        1024,
+        285_212_672,
+        4096,
+        32,
+    )
+    .unwrap();
     http::authority(
-        http::options(256, 1000, 1000, 1000).unwrap(),
+        http::with_response_limits(options, limits).unwrap(),
         "https://localhost",
         vec!["localhost".to_owned()],
         1,
@@ -75,7 +91,9 @@ impl Fixture {
         )
         .unwrap();
         let intent = session::issue(&store, scope).await.unwrap();
-        let response = session::apply(http::empty(http::Status::OK), intent).unwrap();
+        let request = http::bounded_response_request_fixture(64);
+        let response = http::empty(http::response_context(&request), http::Status::OK).unwrap();
+        let response = session::apply(response, intent).unwrap();
         let (status, headers) = http::session_delivery_headers_for_test(response, &lease);
         assert!(status.as_u16() == 200);
         let value = headers

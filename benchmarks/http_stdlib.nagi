@@ -12,21 +12,44 @@ class CreateUser:
 class State:
     ready: bool
 
-async def health(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, view("ok")))
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return http.text(http.response_context(view(request)), http.Status.OK, view("ok"))
 
-async def small(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def small(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     user = User(id=1, name="alice", age=18)
-    return http.json[User](http.Status.OK, user)
+    return http.json[User](http.response_context(view(request)), http.Status.OK, user)
 
-async def echo(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
+async def echo(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     user = try json_decode[CreateUser](request.body)
-    return http.json[CreateUser](http.Status.OK, user)
+    return http.json[CreateUser](http.response_context(view(request)), http.Status.OK, user)
 
 async def main() -> Result[unit, Error]:
     server = http.app_default[State](State(ready=True))
-    server = try http.route(server, http.Method.GET, view("/health"), health)
-    server = try http.route(server, http.Method.GET, view("/small"), small)
-    server = try http.route(server, http.Method.POST, view("/echo"), echo)
+    server = try http.route(server, http.Method.GET, view("/health"), http.public_policy[State](), health)
+    health_rate = try http.rate_policy(1000000000, 1)
+    server = try http.rate_route(server, http.Method.GET, view("/health"), health_rate)
+    server = try http.route(server, http.Method.GET, view("/small"), http.public_policy[State](), small)
+    small_rate = try http.rate_policy(1000000000, 1)
+    server = try http.rate_route(server, http.Method.GET, view("/small"), small_rate)
+    server = try http.route(server, http.Method.POST, view("/echo"), http.public_policy[State](), echo)
+    echo_rate = try http.rate_policy(1000000000, 1)
+    server = try http.rate_route(server, http.Method.POST, view("/echo"), echo_rate)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8086"))
-    return await http.serve(server, port, http.default_options())
+    options = try http.authority(
+        http.default_options(),
+        "https://localhost",
+        [env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8086")],
+        1,
+        256
+    )
+    # Finite high-throughput validation profile: one billion initial tokens,
+    # then one token per millisecond. It is neither unlimited nor a production
+    # rate recommendation; traffic beyond the burst can be throttled.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080,
+        1024, 285212672, 8192, 32
+    )
+    options = try http.with_response_limits(options, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    options = try http.with_rate_limits(options, rate_budget)
+    return await http.serve(server, port, options)

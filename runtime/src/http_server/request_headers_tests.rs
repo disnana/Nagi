@@ -253,7 +253,7 @@ async fn extension_handler(
     if state.panic {
         panic!("fixed extension handler panic");
     }
-    Ok(text(Status::OK, "owned"))
+    text(response_context(&request), Status::OK, "owned")
 }
 
 #[tokio::test]
@@ -277,6 +277,15 @@ async fn actual_native_parts_extensions_live_through_handler_and_drop_after_join
         )
         .unwrap();
         let state = Arc::clone(&app.state);
+        let mut app =
+            rate_route(app, Method::GET, "/probe", rate_policy(64, 60000).unwrap()).unwrap();
+        let rates = RuntimeRate::checked(
+            &mut app,
+            &rate_limits(1, 1, 1, 4 * 1024 * 1024, 10000).unwrap(),
+            1,
+            1,
+        )
+        .unwrap();
         let app = Arc::new(app);
         let options = Arc::new(
             authority(
@@ -292,23 +301,55 @@ async fn actual_native_parts_extensions_live_through_handler_and_drop_after_join
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let native_drops = Arc::clone(&drops);
+        let response_request = response_public::tests::request_fixture(256);
+        let context = response_context(&response_request);
+        let producer = Arc::clone(&context.producer);
+        let fallback = Arc::clone(&context.fallback);
+        // Only the configured producer is retained here; the synthetic fixture's
+        // request permit ends before the real Incoming enters the dispatcher.
+        drop(response_request);
         let task = tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
+            let ledger =
+                response_send::SendLedger::new(Arc::clone(&producer), Arc::clone(&fallback));
+            let service_ledger = Arc::clone(&ledger);
             let service = service_fn(move |mut request: hyper::Request<hyper::body::Incoming>| {
                 request
                     .extensions_mut()
                     .insert(ExtensionProbe(Arc::clone(&native_drops)));
-                dispatch(
-                    Arc::clone(&app),
-                    request,
-                    Arc::clone(&options),
-                    Arc::clone(&permits),
-                    std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-                )
+                let head = request.method() == Method::HEAD;
+                let prior = service_ledger.take_prior();
+                let context = ResponseContext {
+                    profile: response_public::ResponseProfile::default(),
+                    producer: Arc::clone(&producer),
+                    fallback: Arc::clone(&fallback),
+                };
+                let app = Arc::clone(&app);
+                let options = Arc::clone(&options);
+                let permits = Arc::clone(&permits);
+                let rates = Arc::clone(&rates);
+                let ledger = Arc::clone(&service_ledger);
+                async move {
+                    let request = IncomingRequest::new(request, prior?, context);
+                    let response = match dispatch(
+                        app,
+                        request,
+                        options,
+                        permits,
+                        rates,
+                        std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+                    )
+                    .await
+                    {
+                        Ok(response) => response,
+                        Err(never) => match never {},
+                    };
+                    response.transfer_native(&ledger, head)
+                }
             });
-            http1::Builder::new()
-                .serve_connection(TokioIo::new(stream), service)
-                .await
+            let permit = Arc::new(Semaphore::new(1)).try_acquire_owned().unwrap();
+            let native = http1::Builder::new().serve_connection(TokioIo::new(stream), service);
+            response_send::NativeDriver::new(native, ledger, permit).await
         });
         let mut client = TcpStream::connect(address).await.unwrap();
         client

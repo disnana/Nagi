@@ -20,4 +20,4 @@ name = "fuzz-smoke"
 path = "../fuzz/smoke.rs"
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nagi_sf01_diagnostic)', 'cfg(nagi_sf01_diag_oracle)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(nagi_sf01_diagnostic)', 'cfg(nagi_sf01_diag_oracle)', 'cfg(nagi_editor_stage_diag)'] }

@@ -23,6 +23,36 @@ impl Server {
             128,
         )
         .unwrap();
+        // Keep this isolated fixture aligned with the existing 16 MiB
+        // test-only stalled-send response profile.
+        let body_bytes = options.body_bytes.max(16 * 1024 * 1024);
+        let retained_bytes = body_bytes
+            .checked_mul(8)
+            .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
+            .expect("test response retained bound fits usize");
+        let fallback_retained_bytes = options
+            .connections
+            .checked_mul(262_144)
+            .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
+            .expect("test fallback retained bound fits usize");
+        let limits = response_limits(
+            i64::try_from(body_bytes).expect("test body bound fits i64"),
+            65_536,
+            256,
+            4096,
+            32,
+            131_072,
+            i64::try_from(options.requests).expect("test request count fits i64"),
+            i64::try_from(retained_bytes).expect("test retained bound fits i64"),
+            i64::try_from(options.connections).expect("test connection count fits i64"),
+            i64::try_from(fallback_retained_bytes).expect("test fallback retained bound fits i64"),
+            4096,
+            32,
+        )
+        .expect("fixed test response limits are valid");
+        let options =
+            with_response_limits(options, limits).expect("fixed test response profile validates");
+        let (app, options) = super::tests::with_rate_fixture(app, options);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stopped, shutdown) = oneshot::channel();
@@ -112,7 +142,7 @@ async fn run(mode: Mode, expected: u16) {
                 _ => {}
             }
             prepared_flag.store(true, Ordering::SeqCst);
-            let handler: PreparedHandler<()> = Box::new(move |_, _| {
+            let handler: PreparedHandler<()> = Box::new(move |request, _| {
                 Box::pin(async move {
                     assert!(prepared_flag.load(Ordering::SeqCst));
                     reached_flag.store(true, Ordering::SeqCst);
@@ -136,7 +166,10 @@ async fn run(mode: Mode, expected: u16) {
                         Mode::Unauthorized401 => Status::UNAUTHORIZED,
                         _ => Status::OK,
                     };
-                    PreparedCompletion::HandlerOk(text(status, "calibration"))
+                    match text(response_context(&request), status, "calibration") {
+                        Ok(response) => PreparedCompletion::HandlerOk(response),
+                        Err(error) => PreparedCompletion::MapperFailure(error),
+                    }
                 })
             });
             Ok(handler)
@@ -151,6 +184,8 @@ async fn run(mode: Mode, expected: u16) {
             method: Method::GET,
             kind: RouteKind::Ordinary(prepare),
             cors: None,
+            rate: None,
+            rate_index: None,
         }],
     );
     // The two original private tests retain their own 2s/20ms options untouched.

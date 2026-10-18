@@ -131,9 +131,9 @@ async fn authority_rejects_before_unknown_route_and_recovers_capacity() {
         Method::GET,
         "/",
         public_policy(),
-        |_, calls, ()| async move {
+        |request, calls, ()| async move {
             calls.fetch_add(1, Ordering::SeqCst);
-            Ok(empty(Status::OK))
+            empty(response_context(&request), Status::OK)
         },
     )
     .unwrap();
@@ -215,9 +215,9 @@ async fn proxy_acl_uses_actual_tcp_peer_and_rejects_forwarded_metadata() {
             Method::GET,
             "/",
             public_policy(),
-            |_, calls, ()| async move {
+            |request, calls, ()| async move {
                 calls.fetch_add(1, Ordering::SeqCst);
-                Ok(empty(Status::OK))
+                empty(response_context(&request), Status::OK)
             },
         )
         .unwrap();
@@ -266,9 +266,9 @@ async fn invalid_authority_never_invokes_bearer_verifier_or_handler() {
         Method::GET,
         "/",
         policy,
-        |_, state, _scope: AuthScope| async move {
+        |request, state, _scope: AuthScope| async move {
             state.handled.fetch_add(1, Ordering::SeqCst);
-            Ok(empty(Status::OK))
+            empty(response_context(&request), Status::OK)
         },
     )
     .unwrap();

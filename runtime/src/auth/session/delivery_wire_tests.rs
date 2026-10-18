@@ -1,5 +1,5 @@
 //! Finite real SQLite/socket one-use delivery; generated cookie bytes stay in RAM.
-use super::super::{self as session, Store};
+use crate::auth::session::{self, Store};
 use crate::{
     auth::{AuthScope, VerifiedIdentity},
     http_server::*,
@@ -18,6 +18,39 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::oneshot,
 };
+
+fn with_test_response_limits(options: Options) -> Options {
+    let limits = response_limits(
+        4096,
+        65_536,
+        256,
+        4096,
+        32,
+        131_072,
+        256,
+        16_777_216 + 32_768,
+        1024,
+        285_212_672,
+        4096,
+        32,
+    )
+    .unwrap();
+    with_response_limits(options, limits).unwrap()
+}
+
+fn response_text(request: &Request, status: Status, body: &str) -> Result<Response, Error> {
+    text(response_context(request), status, body)
+}
+
+fn response_empty(request: &Request, status: Status) -> Result<Response, Error> {
+    empty(response_context(request), status)
+}
+
+fn fixture_response(status: Status, body: &str) -> Response {
+    let request = crate::http_server::bounded_response_request_fixture(body.len());
+    text(response_context(&request), status, body).expect("bounded test response fits fixture")
+}
+
 struct Server {
     address: std::net::SocketAddr,
     stopped: Option<oneshot::Sender<()>>,
@@ -32,13 +65,14 @@ impl Server {
         // Existing lifecycle fixtures explicitly accept their localhost Host;
         // public serve/serve_listener do not supply an authority default.
         let options = authority(
-            options,
+            with_test_response_limits(options),
             "https://localhost",
             vec!["localhost".to_owned()],
             1,
             128,
         )
         .unwrap();
+        let (app, options) = crate::http_server::bounded_rate_app_fixture(app, options);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stopped, shutdown) = oneshot::channel();
@@ -211,9 +245,14 @@ impl Fixture {
 async fn verifier(_: Request, _: Arc<Store>) -> Result<VerifiedIdentity, crate::auth::Failure> {
     VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(60))
 }
-async fn issue_handler(_: Request, store: Arc<Store>, scope: AuthScope) -> Result<Response, Error> {
+async fn issue_handler(
+    request: Request,
+    store: Arc<Store>,
+    scope: AuthScope,
+) -> Result<Response, Error> {
     let intent = session::issue(&store, scope).await.unwrap();
-    Ok(session::apply(text(Status::OK, "owned"), intent).unwrap())
+    let response = response_text(&request, Status::OK, "owned")?;
+    Ok(session::apply(response, intent).unwrap())
 }
 
 // Test-only observation of the four ordinary issue paths that have returned
@@ -314,7 +353,7 @@ fn observed_issue_app(
                 identity
             }
         }),
-        move |_, store, scope| {
+        move |request, store, scope| {
             let observation = Arc::clone(&handled);
             async move {
                 let _drop_observer = IssueHandlerDrop(Arc::clone(&observation));
@@ -324,9 +363,11 @@ fn observed_issue_app(
                 observation.mark(&observation.issue_return_us);
                 let intent = intent.unwrap();
                 let response = match observation.case {
-                    IssueCase::NotModified => empty(crate::http_server::status(304).unwrap()),
-                    _ => text(Status::OK, "owned"),
-                };
+                    IssueCase::NotModified => {
+                        response_empty(&request, crate::http_server::status(304).unwrap())
+                    }
+                    _ => response_text(&request, Status::OK, "owned"),
+                }?;
                 let response = session::apply(response, intent).unwrap();
                 let response = if matches!(observation.case, IssueCase::PrivateCache) {
                     crate::http_server::conflicting_cache_for_test(response)
@@ -438,7 +479,7 @@ async fn real_direct_rotate_logout_finalize_once_and_old_lookup_never_reactivate
     server.stop().await;
     let (owner, scope) = bound_scope(&f.store, &old_cookie).await;
     let intent = session::rotate(&f.store, scope).await.unwrap();
-    let response = session::apply(text(Status::OK, "owned"), intent).unwrap();
+    let response = session::apply(fixture_response(Status::OK, "owned"), intent).unwrap();
     let rotated = direct_delivery(response, &owner);
     assert_eq!(rotated.status, 200);
     assert_cookie_policy(&rotated);
@@ -448,14 +489,14 @@ async fn real_direct_rotate_logout_finalize_once_and_old_lookup_never_reactivate
     assert_eq!(f.count().await, 1);
     // Destructive take is the actual owner's finalizer, not a header clone
     // standing in for a second delivery. Already drained material cannot recur.
-    let empty = direct_delivery(text(Status::OK, "owned"), &owner);
+    let empty = direct_delivery(fixture_response(Status::OK, "owned"), &owner);
     assert!(empty.all("set-cookie").is_empty());
     drop(owner);
     lookup_rejects(&f.store, &old_cookie).await;
     let (owner, scope) = bound_scope(&f.store, &new_cookie).await;
     let intent = session::logout(&f.store, scope).await.unwrap();
     let logged_out = direct_delivery(
-        session::apply(text(Status::OK, "owned"), intent).unwrap(),
+        session::apply(fixture_response(Status::OK, "owned"), intent).unwrap(),
         &owner,
     );
     assert_eq!(logged_out.status, 200);
@@ -474,7 +515,7 @@ async fn real_direct_rotate_logout_finalize_once_and_old_lookup_never_reactivate
             && deletion.domain().is_none()
     );
     assert_eq!(f.count().await, 0);
-    let empty = direct_delivery(text(Status::OK, "owned"), &owner);
+    let empty = direct_delivery(fixture_response(Status::OK, "owned"), &owner);
     assert!(empty.all("set-cookie").is_empty());
     drop(owner);
     lookup_rejects(&f.store, &new_cookie).await;
@@ -489,13 +530,14 @@ async fn real_commit_survives_dropped_intent_mapper_and_panic_without_cookie() {
             Method::POST,
             "/owned",
             authenticated_policy(verifier),
-            move |_, store, scope| async move {
+            move |request, store, scope| async move {
                 let intent = session::issue(&store, scope).await.unwrap();
                 if mode == 0 {
                     drop(intent);
-                    return Ok(text(Status::OK, "owned"));
+                    return response_text(&request, Status::OK, "owned");
                 }
-                let owned = session::apply(text(Status::OK, "owned"), intent).unwrap();
+                let owned =
+                    session::apply(response_text(&request, Status::OK, "owned")?, intent).unwrap();
                 match mode {
                     1 => {
                         drop(owned);
@@ -545,14 +587,15 @@ async fn real_commit_then_controlled_handler_timeout_drops_future_without_cookie
         Method::POST,
         "/owned",
         authenticated_policy(verifier),
-        move |_, store, scope| {
+        move |request, store, scope| {
             let committed = Arc::clone(&committed);
             let dropped = Arc::clone(&dropped);
             let observed = Arc::clone(&observed);
             async move {
                 *observed.lock().unwrap() = Some(Arc::downgrade(&scope.lease));
                 let intent = session::issue(&store, scope).await.unwrap();
-                let owned = session::apply(text(Status::OK, "owned"), intent).unwrap();
+                let owned =
+                    session::apply(response_text(&request, Status::OK, "owned")?, intent).unwrap();
                 let _owned_future_drop = ObservedDrop(dropped);
                 // Public issue returned only after real reply and full finish;
                 // no bool or synthetic SQL result is used as commit proof.
@@ -643,10 +686,11 @@ async fn expiry_after_real_commit_retires_applied_material_without_cookie() {
         Method::POST,
         "/owned",
         authenticated_policy(verifier),
-        |_, store, scope| async move {
+        |request, store, scope| async move {
             let lease = Arc::clone(&scope.lease);
             let intent = session::issue(&store, scope).await.unwrap();
-            let response = session::apply(text(Status::OK, "owned"), intent).unwrap();
+            let response =
+                session::apply(response_text(&request, Status::OK, "owned")?, intent).unwrap();
             // Finite private clock boundary after real commit, no timing race/sleep.
             lease.gate.lock().unwrap().expires_at = Instant::now();
             Ok(response)
@@ -720,11 +764,12 @@ async fn stored_nonsecret_response_seal_is_refused_on_foreign_public_request() {
         authenticated_policy(|_, _| async {
             VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(60))
         }),
-        |_, state, scope| async move {
+        |request, state, scope| async move {
             let intent = session::issue(&state.store, scope).await.unwrap();
-            let response = session::apply(text(Status::OK, "owned"), intent).unwrap();
+            let response =
+                session::apply(response_text(&request, Status::OK, "owned")?, intent).unwrap();
             *state.saved.lock().unwrap() = Some(response);
-            Ok(text(Status::OK, "stored nonsecret seal"))
+            response_text(&request, Status::OK, "stored nonsecret seal")
         },
     )
     .unwrap();
@@ -764,13 +809,17 @@ async fn mapper_identity_of_same_request_seal_never_delivers_cookie() {
         Method::POST,
         "/owned",
         authenticated_policy(verifier),
-        |_, store, scope| async move {
+        |request, store, scope| async move {
             let intent = session::issue(&store, scope).await.unwrap();
-            let applied =
-                session::apply(text(Status::BAD_REQUEST, "owned mapped"), intent).unwrap();
+            let applied = session::apply(
+                response_text(&request, Status::BAD_REQUEST, "owned mapped")
+                    .expect("bounded test response fits fixture"),
+                intent,
+            )
+            .unwrap();
             Err::<Response, Response>(applied)
         },
-        |owned| owned,
+        |_, owned| Ok(owned),
     )
     .unwrap();
     let server = Server::new(app, options(64, 1000, 1000, 1000).unwrap()).await;
@@ -793,13 +842,21 @@ async fn mapper_selecting_saved_same_request_seal_never_delivers_cookie() {
         Method::POST,
         "/owned",
         authenticated_policy(verifier),
-        |_, store, scope| async move {
+        |request, store, scope| async move {
             let intent = session::issue(&store, scope).await.unwrap();
-            let saved =
-                session::apply(text(Status::BAD_REQUEST, "owned replacement"), intent).unwrap();
-            Err::<Response, (Response, Response)>((text(Status::OK, "unused"), saved))
+            let saved = session::apply(
+                response_text(&request, Status::BAD_REQUEST, "owned replacement")
+                    .expect("bounded test response fits fixture"),
+                intent,
+            )
+            .unwrap();
+            Err::<Response, (Response, Response)>((
+                response_text(&request, Status::OK, "unused")
+                    .expect("bounded test response fits fixture"),
+                saved,
+            ))
         },
-        |(_, saved)| saved,
+        |_, (_, saved)| Ok(saved),
     )
     .unwrap();
     let server = Server::new(app, options(64, 1000, 1000, 1000).unwrap()).await;
@@ -830,12 +887,15 @@ async fn mapper_foreign_public_saved_seal_remains_no_store_without_cookie() {
         authenticated_policy(|_, _| async {
             VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(60))
         }),
-        |_, state, scope| async move {
+        |request, state, scope| async move {
             let intent = session::issue(&state.store, scope).await.unwrap();
-            let sealed =
-                session::apply(text(Status::BAD_REQUEST, "saved mapper body"), intent).unwrap();
+            let sealed = session::apply(
+                response_text(&request, Status::BAD_REQUEST, "saved mapper body")?,
+                intent,
+            )
+            .unwrap();
             *state.saved.lock().unwrap() = Some(sealed);
-            Ok(text(Status::OK, "stored nonsecret seal"))
+            response_text(&request, Status::OK, "stored nonsecret seal")
         },
     )
     .unwrap();
@@ -847,7 +907,7 @@ async fn mapper_foreign_public_saved_seal_remains_no_store_without_cookie() {
         |_, state, _| async move {
             Err::<Response, Response>(state.saved.lock().unwrap().take().unwrap())
         },
-        |saved| saved,
+        |_, saved| Ok(saved),
     )
     .unwrap();
     let server = Server::new(app, options(64, 1000, 1000, 1000).unwrap()).await;

@@ -8,7 +8,7 @@ const fixtures = [
     '    optional = try http.header_text(view(request), view("authorization"))\n' +
     '    match optional:\n        case Some(token):\n            print(token)\n        case None:\n            print("missing")\n' +
     '    if request.is_get:\n        print(request.path)\n' +
-    '    return ok(http.text(Code.OK, view("hello")))\n' +
+    '    return http.text(http.response_context(view(request)), Code.OK, view("hello"))\n' +
     'def main():\n    print(label(view("😀"), Code.UNAUTHORIZED))\n'],
   ['low', 'import std.http.server as http;\nfrom std.http.server import Request as Incoming, Status as Code;\n' +
     'fn label(prefix: view[str], status: Code) -> i64 { print(prefix); return status.value; }\n' +
@@ -18,7 +18,7 @@ const fixtures = [
     '    let optional = try http.header_text(view(request), view("authorization"));\n' +
     '    match optional { case Some(token) { print(token); } case None { print("missing"); } }\n' +
     '    if request.is_get { print(request.path); }\n' +
-    '    return ok(http.text(Code.OK, view("hello")));\n}\n' +
+    '    return http.text(http.response_context(view(request)), Code.OK, view("hello"));\n}\n' +
     'fn main() { print(label(view("😀"), Code.UNAUTHORIZED)); }\n'],
 ];
 module.exports = { fixtures };

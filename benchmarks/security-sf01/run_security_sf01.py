@@ -168,6 +168,7 @@ def run_server(
 ) -> dict:
     port = free_port()
     mode_env = dict(env, NAGI_SAMPLE_PORT=str(port))
+    mode_env["NAGI_HTTP_AUTHORITY"] = f"127.0.0.1:{port}"
     log_path = results / mode / "server.log"
     process = subprocess.Popen(
         [str(executable)],

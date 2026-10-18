@@ -107,6 +107,12 @@ impl Origin {
             effective_port: wire.port.unwrap_or(if https { 443 } else { 80 }),
         })
     }
+    pub(super) fn retained_bytes(&self) -> usize {
+        match &self.host {
+            Host::Dns(name) => name.capacity(),
+            Host::Ip(_) => 0,
+        }
+    }
     pub(super) fn is_https(&self) -> bool {
         self.https
     }

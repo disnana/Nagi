@@ -15,20 +15,20 @@ async def read_optional(state: shared[State]) -> Result[Item?, Error]:
 async def read_item(state: shared[State], id: i64) -> Result[Item?, Error]:
     return await storage_read_item(view(state.db), id)
 
-def response_error(status: http.Status, message: str) -> http.Response:
-    match http.json[ErrorBody](status, ErrorBody(error=message)):
+def response_error(context: view[http.ResponseContext], status: http.Status, message: str) -> Result[http.Response, Error]:
+    match http.json[ErrorBody](context, status, ErrorBody(error=message)):
         case Ok(response):
-            return response
+            return ok(response)
         case Err(_):
-            return http.empty(http.Status.INTERNAL_SERVER_ERROR)
+            return http.empty(context, http.Status.INTERNAL_SERVER_ERROR)
 
-def api_error(problem: Error) -> http.Response:
+def api_error(context: view[http.ResponseContext], problem: Error) -> Result[http.Response, Error]:
     kind = error_kind(problem)
     if kind == "invalid":
-        return response_error(http.Status.BAD_REQUEST, error_message(problem))
+        return response_error(context, http.Status.BAD_REQUEST, error_message(problem))
     if kind == "not_found":
-        return response_error(http.Status.NOT_FOUND, error_message(problem))
-    return response_error(http.Status.INTERNAL_SERVER_ERROR, "internal error")
+        return response_error(context, http.Status.NOT_FOUND, error_message(problem))
+    return response_error(context, http.Status.INTERNAL_SERVER_ERROR, "internal error")
 
 def query_value(request: view[http.Request]) -> Result[str, Error]:
     match request.query:
@@ -45,7 +45,7 @@ def item_id(request: view[http.Request]) -> Result[i64, Error]:
     return parse_i64(try slice(request.path, 11, len(request.path)))
 
 async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, "ok"))
+    return http.text(http.response_context(view(request)), http.Status.OK, "ok")
 
 async def double(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     value = try query_value(view(request))
@@ -53,7 +53,7 @@ async def double(request: http.Request, state: shared[State], authority: unit) -
         case Ok(number):
             if number < 0 or number > 1000000:
                 return error("value must be between 0 and 1000000")
-            return http.json[Number](http.Status.OK, Number(value=number * 2))
+            return http.json[Number](http.response_context(view(request)), http.Status.OK, Number(value=number * 2))
         case Err(_):
             return error("value must be an integer")
 
@@ -67,7 +67,7 @@ async def get_item(request: http.Request, state: shared[State], authority: unit)
         case Ok(item):
             match item:
                 case Some(value):
-                    return http.json[Item](http.Status.OK, value)
+                    return http.json[Item](http.response_context(view(request)), http.Status.OK, value)
                 case None:
                     return not_found("not found")
         case Err(problem):
@@ -78,19 +78,19 @@ async def fallback(request: http.Request, state: shared[State], authority: unit)
         case Ok(item):
             match item:
                 case Some(value):
-                    return http.json[Item](http.Status.OK, value)
+                    return http.json[Item](http.response_context(view(request)), http.Status.OK, value)
                 case None:
                     return not_found("not found")
         case Err(problem):
             print(error_kind(problem))
-            return http.json[Item](http.Status.OK, Item(id=0, name="cached item"))
+            return http.json[Item](http.response_context(view(request)), http.Status.OK, Item(id=0, name="cached item"))
 
 async def database_error(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     match await read_optional(state):
         case Ok(item):
             match item:
                 case Some(value):
-                    return http.json[Item](http.Status.OK, value)
+                    return http.json[Item](http.response_context(view(request)), http.Status.OK, value)
                 case None:
                     return not_found("not found")
         case Err(problem):
@@ -109,12 +109,32 @@ async def main() -> Result[unit, Error]:
     try await seed_items(view(db))
     app = http.app[State, Error](State(db=db), api_error)
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    route_policy_1 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/health", route_policy_1)
     app = try http.route(app, http.Method.GET, "/api/double", http.public_policy[State](), double)
+    route_policy_2 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/api/double", route_policy_2)
     app = try http.route(app, http.Method.GET, "/api/items/{id}", http.public_policy[State](), get_item)
+    route_policy_3 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/api/items/{id}", route_policy_3)
     app = try http.route(app, http.Method.GET, "/api/fallback", http.public_policy[State](), fallback)
+    route_policy_4 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/api/fallback", route_policy_4)
     app = try http.route(app, http.Method.GET, "/api/db-error", http.public_policy[State](), database_error)
+    route_policy_5 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/api/db-error", route_policy_5)
     app = try http.route(app, http.Method.GET, "/api/internal-error", http.public_policy[State](), internal_failure)
-    return await http.serve(app, port, http.default_options())
+    route_policy_6 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/api/internal-error", route_policy_6)
+    options = http.default_options()
+    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    options = try http.with_response_limits(options, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    options = try http.with_rate_limits(options, rate_budget)
+    return await http.serve(app, port, options)
 
 # This HTTP-facing projection preserves the primary Error. The SQLite Failure
 # (outcome, cleanup and retired metadata) stays observable in database APIs.

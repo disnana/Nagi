@@ -266,9 +266,11 @@ impl Producer {
             owner: Arc::clone(&self.quota),
         })
     }
+    #[cfg(test)]
     pub(super) fn metadata_bytes(&self) -> usize {
         self.limits.metadata
     }
+    #[cfg(test)]
     pub(super) fn response_charge(&self) -> usize {
         self.limits.charge
     }
@@ -299,6 +301,19 @@ impl Producer {
         }
         data.extend_from_slice(input);
         self.finish(data, charge)
+    }
+    // Unit/native fixture only: transfer prebuilt input into the SAME checked
+    // producer reservation, without a copy inside a stalled-send deadline.
+    // This is not a public response constructor or a production compatibility
+    // path. The owner-bearing Bytes stays inside ChargedBody through transfer.
+    #[cfg(test)]
+    pub(super) fn adopt_fixture_bytes(&self, input: Bytes) -> Result<Produced, Diagnostic> {
+        if input.len() > self.limits.body_bytes {
+            return Err(Diagnostic::BodyLimit);
+        }
+        let mut produced = self.empty()?;
+        produced.body.data = BodyData::Framework(input);
+        Ok(produced)
     }
     pub(super) fn text(&self, input: &str) -> Result<Produced, Diagnostic> {
         self.bytes(input.as_bytes())
@@ -466,6 +481,11 @@ pub(super) struct Produced {
     owner: Arc<Quota>,
 }
 impl Produced {
+    pub(super) fn conflicting_cache(&self) -> bool {
+        self.headers.entries.iter().any(|header| {
+            header.name.eq_ignore_ascii_case(b"cache-control") && header.value != b"no-store"
+        })
+    }
     pub(super) fn body(&self) -> &[u8] {
         self.body.as_ref()
     }

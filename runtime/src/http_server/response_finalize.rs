@@ -13,6 +13,9 @@ pub(in crate::http_server) enum CompletionOrigin {
 #[derive(Clone, Copy)]
 pub(in crate::http_server) struct VarySet(u8);
 impl VarySet {
+    pub(in crate::http_server) fn from_bits(bits: u8) -> Self {
+        Self(bits & 0x7f)
+    }
     pub(in crate::http_server) const EMPTY: Self = Self(0);
     pub(in crate::http_server) const ORIGIN: Self = Self(1 << 5);
     pub(in crate::http_server) const COOKIE: Self = Self(1 << 4);
@@ -20,6 +23,7 @@ impl VarySet {
     pub(in crate::http_server) const LOGIN: Self = Self(Self::AUTH.0 | Self::ORIGIN.0);
     pub(in crate::http_server) const GUARDED: Self = Self(Self::LOGIN.0 | (1 << 6));
     pub(in crate::http_server) const BROWSER: Self = Self(Self::GUARDED.0 | (1 << 3));
+    #[cfg(test)]
     pub(in crate::http_server) const PREFLIGHT: Self = Self((1 << 0) | (1 << 1) | Self::ORIGIN.0);
     pub(in crate::http_server) fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
@@ -271,6 +275,7 @@ impl PreparedResponse {
             expected_body: None,
         })
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn status(&self) -> StatusCode {
         self.status
     }
@@ -291,9 +296,11 @@ impl PreparedResponse {
         self.vary(VarySet::ORIGIN);
         Ok(())
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn allow(&mut self, value: &[u8]) -> Result<(), Diagnostic> {
         self.plan.append(ManagedHeader::Allow, value)
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn preflight(
         &mut self,
         method: &[u8],
@@ -330,9 +337,6 @@ impl PreparedResponse {
     ) -> Result<usize, Diagnostic> {
         self.plan.reserve_cookie(max_bytes)
     }
-    // U2 test-private seam, not yet attached to real Session delivery. U4 must
-    // remove this item allowance and exercise the real one-use issuer path.
-    #[allow(dead_code)]
     pub(in crate::http_server) fn take_session_cookie(
         mut self,
         owner: &crate::auth::LeaseOwner,
@@ -374,6 +378,9 @@ impl PreparedResponse {
         self.plan.fill_cookie(slot, cookie)?;
         self.vary(VarySet::COOKIE);
         Ok(self)
+    }
+    pub(in crate::http_server) fn preflight_terminal(&self) -> Result<(), Diagnostic> {
+        self.plan.preflight_vary()
     }
     pub(in crate::http_server) fn finish(mut self) -> Result<ChargedWire, Diagnostic> {
         if self
@@ -437,7 +444,7 @@ impl PreparedResponse {
             response.cookie(cookie)?;
             response.vary(VarySet::COOKIE);
         }
-        if matches!(intent.reason, FallbackStatus::Unauthorized) {
+        if intent.reason.code() == 401 {
             response.plan.append(
                 ManagedHeader::WwwAuthenticate,
                 if intent.source == PolicySource::Session {
@@ -573,6 +580,7 @@ impl TerminalIntent {
     }
     // The caller supplies an existing deadline/cancellation refusal, preserving
     // its original status instead of replacing it with a later Capacity error.
+    #[cfg(test)]
     pub(in crate::http_server) fn cancellation(mut self, reason: FallbackStatus) -> Self {
         self.reason = reason;
         self
@@ -623,13 +631,26 @@ pub(in crate::http_server) struct FrameworkTicket {
     kind: FrameworkBody,
     cookie: Option<usize>,
 }
-// U2 test-private typed issuer errors. Remove with the take_* item allowances
-// at U4 attachment, after real issuer/failure-path native coverage is required.
-#[allow(dead_code)]
 pub(in crate::http_server) enum FrameworkError {
     Budget(Diagnostic),
     Csrf(crate::auth::csrf::Failure),
     Prelogin(crate::auth::prelogin::Failure),
+}
+impl FrameworkError {
+    pub(in crate::http_server) fn status(&self) -> super::super::Status {
+        match self {
+            Self::Budget(
+                Diagnostic::Capacity
+                | Diagnostic::Allocation
+                | Diagnostic::BodyLimit
+                | Diagnostic::HeaderLimit
+                | Diagnostic::WorkLimit,
+            ) => super::super::Status::SERVICE_UNAVAILABLE,
+            Self::Budget(_) => super::super::Status::INTERNAL_SERVER_ERROR,
+            Self::Csrf(error) => error.http_status(),
+            Self::Prelogin(error) => error.http_status(),
+        }
+    }
 }
 impl FrameworkTicket {
     pub(in crate::http_server) fn reserve(
@@ -698,9 +719,6 @@ impl FrameworkTicket {
         self.prepared.produced.body.data = BodyData::Framework(body);
         Ok(self.prepared)
     }
-    // U4 must remove this test-private allowance and cover real issuer take,
-    // failure classification, one-use delivery, and the final Bytes owner.
-    #[allow(dead_code)]
     pub(in crate::http_server) fn take_csrf(
         self,
         store: &crate::auth::csrf::Inner,
@@ -720,8 +738,6 @@ impl FrameworkTicket {
             .map_err(FrameworkError::Csrf)?;
         self.adopt(body).map_err(FrameworkError::Budget)
     }
-    // Same U4 removal/real-issuer gate as take_csrf; no public cutover yet.
-    #[allow(dead_code)]
     pub(in crate::http_server) fn take_prelogin(
         self,
         pool: &crate::auth::prelogin::Pool,

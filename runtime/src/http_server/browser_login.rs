@@ -19,23 +19,20 @@ macro_rules! observed {
     }};
 }
 
-fn finish(
-    mut wire: axum::http::Response<BufferedBody>,
-    pool: &Pool,
-    owner: &HttpOwner,
-) -> axum::http::Response<BufferedBody> {
+fn finish(mut wire: HttpResponse, pool: &Pool, owner: &HttpOwner) -> HttpResponse {
     wire = finalize_authenticated(wire, PolicySource::BrowserLogin, false);
-    if owner.was_consumed() {
+    if owner.was_consumed() && !wire.has_consumed_deletion() {
         match pool.deletion_cookie() {
-            Ok(cookie) => wire.headers_mut().append(names::SET_COOKIE, cookie),
+            Ok(cookie) => {
+                wire.consumed_deletion(cookie);
+            }
             Err(_) => {
                 crate::auth::session::retire_http_delivery(owner.lease_owner());
                 wire = finalize_authenticated(
-                    transport(Status::INTERNAL_SERVER_ERROR, false, true),
+                    wire.replacement(Status::INTERNAL_SERVER_ERROR, false, true),
                     PolicySource::BrowserLogin,
                     false,
                 );
-                false
             }
         };
     }
@@ -43,17 +40,23 @@ fn finish(
     diag::emit(wire.status().as_u16(), owner.was_consumed());
     wire
 }
-fn terminal(status: Status, pool: &Pool, owner: &HttpOwner) -> axum::http::Response<BufferedBody> {
+fn terminal(
+    context: &ResponseContext,
+    status: Status,
+    pool: &Pool,
+    owner: &HttpOwner,
+) -> HttpResponse {
     crate::auth::session::retire_http_delivery(owner.lease_owner());
-    finish(transport(status, false, true), pool, owner)
+    finish(transport(context, status, false, true), pool, owner)
 }
 fn failure(
+    context: &ResponseContext,
     error: prelogin::Failure,
     pool: &Pool,
     owner: &HttpOwner,
-) -> axum::http::Response<BufferedBody> {
+) -> HttpResponse {
     let challenge = error.login_challenge();
-    let mut wire = terminal(error.login_status(), pool, owner);
+    let mut wire = terminal(context, error.login_status(), pool, owner);
     if let Some(value) = challenge {
         wire.headers_mut().insert(names::WWW_AUTHENTICATE, value);
     }
@@ -72,7 +75,7 @@ fn failure(
 enum Input<'a, B> {
     Wire {
         body: &'a mut Option<B>,
-        parts: &'a mut axum::http::request::Parts,
+        parts: &'a mut RequestParts,
     },
     #[cfg(test)]
     Claimed {
@@ -117,49 +120,69 @@ pub(super) async fn dispatch_browser<S>(
     pool: &Pool,
     prepare: &BrowserPrepare<S>,
     state: Arc<S>,
-    request: axum::http::Request<hyper::body::Incoming>,
+    request: IncomingRequest<hyper::body::Incoming>,
     options: &Options,
     lease: LeaseOwner,
     admitted: Instant,
-) -> axum::http::Response<BufferedBody>
+) -> HttpResponse
 where
     S: Send + Sync + 'static,
 {
+    let context = request.parts.headers.response_context().share();
     let (mut parts, body) = request.into_parts();
     let mut body = Some(body);
     let owner = HttpOwner::new(lease);
     // Keep native remainder/unused body alive past actual owner Drop, exactly
     // as the original wrapper. The shared core only borrows these one-shot parts.
     dispatch_owned(
-        pool,
-        prepare,
+        DispatchBorrowed {
+            response_context: &context,
+            pool,
+            prepare,
+            options,
+            owner: &owner,
+        },
         state,
         Input::Wire {
             parts: &mut parts,
             body: &mut body,
         },
-        options,
-        &owner,
         admitted,
     )
     .await
 }
 
+struct DispatchBorrowed<'a, S> {
+    response_context: &'a ResponseContext,
+    pool: &'a Pool,
+    prepare: &'a BrowserPrepare<S>,
+    options: &'a Options,
+    owner: &'a HttpOwner,
+}
+
 async fn dispatch_owned<S, B>(
-    pool: &Pool,
-    prepare: &BrowserPrepare<S>,
+    borrowed: DispatchBorrowed<'_, S>,
     state: Arc<S>,
     input: Input<'_, B>,
-    options: &Options,
-    owner: &HttpOwner,
     admitted: Instant,
-) -> axum::http::Response<BufferedBody>
+) -> HttpResponse
 where
     S: Send + Sync + 'static,
     B: hyper::body::Body<Data = Bytes> + Unpin,
 {
+    let DispatchBorrowed {
+        response_context,
+        pool,
+        prepare,
+        options,
+        owner,
+    } = borrowed;
     #[cfg(nagi_browser_login_diag)]
     let observer = diag::Observer::new(&owner.lease_owner().lease);
+    let terminal =
+        |status, pool: &Pool, owner: &HttpOwner| terminal(response_context, status, pool, owner);
+    let failure =
+        |error, pool: &Pool, owner: &HttpOwner| failure(response_context, error, pool, owner);
     let dispatch = async {
         let Some(security_until) = admitted.checked_add(options.security_deadline) else {
             return terminal(Status::SERVICE_UNAVAILABLE, pool, owner);
@@ -169,13 +192,13 @@ where
         }
         let stage = match input {
             Input::Wire { parts, body } => {
-                let input = match pool.login_input(&parts.headers) {
+                let input = match pool.login_input(parts.headers.authentication_headers()) {
                     Ok(input) => input,
                     Err(error) => return failure(error, pool, owner),
                 };
                 // Remove client prelogin material before constructing any callback
                 // Request or awaiting body; only digests remain in LoginInput.
-                let mut headers = RequestHeaders::from(std::mem::take(&mut parts.headers));
+                let mut headers = parts.headers.share();
                 headers.sanitize();
                 let mut request = Request {
                     method: std::mem::take(&mut parts.method),
@@ -331,17 +354,36 @@ where
                 terminal(Status::GATEWAY_TIMEOUT, pool, owner)
             }
             Ok(Ok(PreparedCompletion::HandlerOk(response))) => {
-                let wire = finalize_session_response(
+                let deletion = if owner.was_consumed() {
+                    match pool.deletion_cookie() {
+                        Ok(cookie) => Some(cookie),
+                        Err(_) => return terminal(Status::INTERNAL_SERVER_ERROR, pool, owner),
+                    }
+                } else {
+                    None
+                };
+                let wire = finalize_session_response_with_deletion(
+                    response_context,
                     response,
                     owner.lease_owner(),
                     PolicySource::BrowserLogin,
                     false,
+                    deletion,
                 );
                 finish(wire, pool, owner)
             }
             Ok(Ok(PreparedCompletion::Replacement(response))) => {
                 crate::auth::session::retire_http_delivery(owner.lease_owner());
-                finish(response.into_http(false), pool, owner)
+                finish(
+                    response.into_replacement_http(response_context, false),
+                    pool,
+                    owner,
+                )
+            }
+            Ok(Ok(PreparedCompletion::Terminal(response))) => finish(response, pool, owner),
+            Ok(Ok(PreparedCompletion::MapperFailure(error))) => {
+                drop(error);
+                terminal(Status::INTERNAL_SERVER_ERROR, pool, owner)
             }
             Ok(Err(_)) => terminal(Status::INTERNAL_SERVER_ERROR, pool, owner),
             Err(_) => {

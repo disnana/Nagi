@@ -17,6 +17,21 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::oneshot,
 };
+
+fn with_test_rate_limits(options: http::Options) -> http::Options {
+    // Finite test-only route catalogue; no test route uses a subject policy.
+    // The API requires a positive subject capacity even when it stays unused.
+    let limits = http::rate_limits(64, 64, 1, 67_108_864, 65_536).unwrap();
+    http::with_rate_limits(options, limits).unwrap()
+}
+fn attach_test_rate<S, E>(
+    app: http::App<S, E>,
+    method: http::Method,
+    path: &str,
+) -> http::App<S, E> {
+    let policy = http::rate_policy(1000, 1000).unwrap();
+    http::rate_route(app, method, path, policy).unwrap()
+}
 static NEXT: AtomicU64 = AtomicU64::new(1);
 struct Directory(std::path::PathBuf);
 impl Directory {
@@ -228,9 +243,10 @@ async fn published_bearer_issue_wire_and_safe_session_read_after_real_commit() {
         http::Method::POST,
         "/issue",
         http::authenticated_policy(verifier),
-        |_, store, scope| async move {
+        |request, store, scope| async move {
             let intent = session::issue(&store, scope).await.unwrap();
-            Ok::<_, Error>(session::apply(http::empty(http::Status::OK), intent).unwrap())
+            let response = http::empty(http::response_context(&request), http::Status::OK)?;
+            Ok::<_, Error>(session::apply(response, intent).unwrap())
         },
     )
     .unwrap();
@@ -241,9 +257,9 @@ async fn published_bearer_issue_wire_and_safe_session_read_after_real_commit() {
         http::Method::GET,
         "/read",
         http::session_authenticated_policy(session::clone_store(&store)),
-        |_, _, scope| async move {
+        |request, _, scope| async move {
             assert!(scope.subject() == 7);
-            Ok::<_, Error>(http::empty(http::Status::OK))
+            http::empty(http::response_context(&request), http::Status::OK)
         },
     )
     .unwrap();
@@ -264,11 +280,34 @@ async fn published_bearer_issue_wire_and_safe_session_read_after_real_commit() {
         .unwrap(),
     )
     .unwrap();
+    let app = attach_test_rate(app, http::Method::POST, "/issue");
+    let app = attach_test_rate(app, http::Method::GET, "/read");
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     // HTTP-only owned wire test; Secure is serialization, not a browser/TLS proof.
+    let response_limits = http::response_limits(
+        16_777_216,
+        512,
+        16,
+        4096,
+        32,
+        128,
+        256,
+        150_994_944,
+        1024,
+        285_212_672,
+        4096,
+        32,
+    )
+    .unwrap();
     let options = http::authority(
-        http::options(64, 1000, 1000, 1000).unwrap(),
+        with_test_rate_limits(
+            http::with_response_limits(
+                http::options(64, 1000, 1000, 1000).unwrap(),
+                response_limits,
+            )
+            .unwrap(),
+        ),
         "https://localhost",
         vec!["localhost".to_owned()],
         1,
@@ -331,7 +370,7 @@ async fn published_bearer_issue_wire_and_safe_session_read_after_real_commit() {
     closed.unwrap();
 }
 
-fn mapped(_: Error) -> http::Response {
+fn mapped(_: &http::ResponseContext, _: Error) -> Result<http::Response, Error> {
     panic!("registration does not invoke mapper")
 }
 struct Permission;

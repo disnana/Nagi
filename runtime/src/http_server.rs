@@ -167,8 +167,10 @@ pub fn method_name(value: &Method) -> &str {
 pub struct Request {
     pub method: Method,
     uri: Uri,
-    headers: RequestHeaders,
     body: Bytes,
+    // The shared header owner also holds the request receipt and Context. Keep
+    // it last so method/URI/body storage drops before owner credit is returned.
+    headers: RequestHeaders,
 }
 impl Request {
     pub fn path(&self) -> &str {
@@ -217,9 +219,6 @@ impl fmt::Debug for Request {
             .field("body_bytes", &self.body.len())
             .finish_non_exhaustive()
     }
-}
-fn header_name(name: &str) -> Result<HeaderName, Error> {
-    HeaderName::from_bytes(name.as_bytes()).map_err(|_| Error::invalid("invalid HTTP header name"))
 }
 fn validate_lookup_name(name: &str) -> Result<(), Error> {
     // Match native HeaderName's length and RFC token grammar without creating
@@ -369,85 +368,21 @@ impl BodyKind {
 }
 const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'none'; style-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
 
-pub struct Response {
-    session_seal: Option<crate::auth::session::ResponseSeal>,
-    status: Status,
-    headers: HeaderMap,
-    body: Bytes,
-    body_kind: BodyKind,
-}
-impl Response {
-    pub(crate) fn has_session_seal(&self) -> bool {
-        self.session_seal.is_some()
-    }
-    pub(crate) fn with_session_seal(mut self, seal: crate::auth::session::ResponseSeal) -> Self {
-        self.session_seal = Some(seal);
-        self
-    }
-    pub fn status(&self) -> Status {
-        self.status
-    }
-    pub fn body(&self) -> &[u8] {
-        &self.body
-    }
-    fn into_http(mut self, head: bool) -> axum::http::Response<BufferedBody> {
-        // Public appending already rejects this for HTML. Recheck the private
-        // invariant before finalizing; incompatible internal state is a fixed
-        // safe error, never a differently interpreted HTML representation.
-        if self.body_kind == BodyKind::Html && self.headers.contains_key(names::CONTENT_ENCODING) {
-            self = text(Status::INTERNAL_SERVER_ERROR, "internal error");
-        }
-        match self.body_kind.content_type() {
-            Some(value) => {
-                self.headers
-                    .insert(names::CONTENT_TYPE, HeaderValue::from_static(value));
-            }
-            None => {
-                self.headers.remove(names::CONTENT_TYPE);
-            }
-        }
-        self.headers.insert(
-            HeaderName::from_static("content-security-policy"),
-            HeaderValue::from_static(CONTENT_SECURITY_POLICY),
-        );
-        self.headers.insert(
-            HeaderName::from_static("x-content-type-options"),
-            HeaderValue::from_static("nosniff"),
-        );
-        // User framing headers are forbidden. Set framing from the exact
-        // representation we own, preserving duplicate application headers.
-        let code = self.status.0;
-        let no_representation = code == StatusCode::NO_CONTENT || code == StatusCode::RESET_CONTENT;
-        if no_representation || code == StatusCode::NOT_MODIFIED {
-            self.body = Bytes::new();
-            self.headers.remove(names::CONTENT_TYPE);
-            self.headers.remove(names::CONTENT_ENCODING);
-            self.headers.remove(names::CONTENT_LENGTH);
-            self.headers.remove(names::TRANSFER_ENCODING);
-            if code == StatusCode::RESET_CONTENT {
-                self.headers
-                    .insert(names::CONTENT_LENGTH, HeaderValue::from_static("0"));
-            }
-        } else if head {
-            // An integer rendered into HeaderValue cannot contain invalid
-            // octets; this is not an externally supplied header value.
-            // HEAD carries the corresponding representation length while its
-            // body is empty. For other responses Hyper formats its exact Body
-            // size directly into the wire buffer, avoiding a HeaderValue
-            // allocation solely to repeat a length it already knows.
-            let length = HeaderValue::from(self.body.len());
-            self.headers.insert(names::CONTENT_LENGTH, length);
-        }
-        let body = if head { Bytes::new() } else { self.body };
-        let mut response = axum::http::Response::new(BufferedBody {
-            bytes: body,
-            sending: None,
-        });
-        *response.status_mut() = code;
-        *response.headers_mut() = self.headers;
-        response
-    }
-}
+mod rate_public;
+use rate_public::RuntimeRate;
+pub use rate_public::{
+    rate_limits, rate_policy, rate_route, rate_subject, with_rate_limits, RateLimits, RatePolicy,
+};
+mod response_public;
+#[cfg(test)]
+pub(crate) use response_public::tests::request_fixture as bounded_response_request_fixture;
+pub use response_public::{
+    append_header, append_header_text, bytes, empty, html_response, json, response_context,
+    response_limits, text, with_response_limits, Response, ResponseContext, ResponseLimits,
+};
+use response_public::{HttpResponse, RuntimeResponses};
+#[cfg(test)]
+pub(crate) use tests::with_rate_fixture as bounded_rate_app_fixture;
 
 /// This API returns one owned buffered frame. Keeping its concrete native
 /// representation avoids a dynamic body box on every response.
@@ -480,94 +415,10 @@ impl hyper::body::Body for BufferedBody {
         hyper::body::SizeHint::with_exact(self.bytes.len() as u64)
     }
 }
-impl fmt::Debug for Response {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Response")
-            .field("status", &self.status)
-            .field("header_count", &self.headers.len())
-            .field("body_bytes", &self.body.len())
-            .finish_non_exhaustive()
-    }
-}
-pub fn empty(status: Status) -> Response {
-    Response {
-        session_seal: None,
-        status,
-        headers: HeaderMap::new(),
-        body: Bytes::new(),
-        body_kind: BodyKind::Empty,
-    }
-}
-fn representation(status: Status, body_kind: BodyKind, body: Bytes) -> Response {
-    let mut response = empty(status);
-    if let Some(value) = body_kind.content_type() {
-        response
-            .headers
-            .insert(names::CONTENT_TYPE, HeaderValue::from_static(value));
-    }
-    response.body = body;
-    response.body_kind = body_kind;
-    response
-}
-pub fn text(status: Status, body: &str) -> Response {
-    representation(
-        status,
-        BodyKind::Text,
-        Bytes::copy_from_slice(body.as_bytes()),
-    )
-}
-pub fn bytes(status: Status, body: &[u8]) -> Response {
-    representation(status, BodyKind::Binary, Bytes::copy_from_slice(body))
-}
-pub fn json<T: Serialize + ?Sized>(status: Status, body: &T) -> Result<Response, Error> {
-    let body = serde_json::to_vec(body).map_err(|error| Error::internal(error.to_string()))?;
-    Ok(representation(status, BodyKind::Json, Bytes::from(body)))
-}
-pub fn html_response(status: Status, document: crate::html::HtmlDocument) -> Response {
-    representation(status, BodyKind::Html, Bytes::from(document.into_encoded()))
-}
-pub fn append_header(mut response: Response, name: &str, value: &[u8]) -> Result<Response, Error> {
-    let name = header_name(name)?;
-    if response.body_kind == BodyKind::Html && name == names::CONTENT_ENCODING {
-        return Err(Error::invalid(
-            "HTML representation encoding is managed by the server",
-        ));
-    }
-    if matches!(
-        name,
-        names::CONTENT_LENGTH
-            | names::TRANSFER_ENCODING
-            | names::CONTENT_TYPE
-            | names::SET_COOKIE
-            | names::CACHE_CONTROL
-            | names::VARY
-            | names::WWW_AUTHENTICATE
-    ) || name.as_str().starts_with("access-control-")
-        || matches!(
-            name.as_str(),
-            "content-security-policy"
-                | "content-security-policy-report-only"
-                | "x-content-type-options"
-                | "x-frame-options"
-                | "strict-transport-security"
-                | "clear-site-data"
-        )
-    {
-        return Err(Error::invalid(
-            "response framing and security headers are managed by the server",
-        ));
-    }
-    let value =
-        HeaderValue::from_bytes(value).map_err(|_| Error::invalid("invalid HTTP header value"))?;
-    response.headers.append(name, value);
-    Ok(response)
-}
-pub fn append_header_text(response: Response, name: &str, value: &str) -> Result<Response, Error> {
-    append_header(response, name, value.as_bytes())
-}
-
 #[derive(Debug)]
 pub struct Options {
+    response_limits: Option<ResponseLimits>,
+    rate_limits: Option<RateLimits>,
     authority: Option<authority::Config>,
     body_bytes: usize,
     body_deadline: Duration,
@@ -589,6 +440,8 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            response_limits: None,
+            rate_limits: None,
             authority: None,
             body_bytes: 1024 * 1024,
             body_deadline: Duration::from_secs(10),
@@ -645,6 +498,8 @@ pub fn options(
 pub fn capacity(mut options: Options, connections: i64, requests: i64) -> Result<Options, Error> {
     options.connections = positive_size(connections, Semaphore::MAX_PERMITS, "connections")?;
     options.requests = positive_size(requests, Semaphore::MAX_PERMITS, "requests")?;
+    response_public::validate_options(&options)?;
+    rate_public::validate_options(&options)?;
     Ok(options)
 }
 pub fn header_timeout(mut options: Options, milliseconds_value: i64) -> Result<Options, Error> {
@@ -661,6 +516,8 @@ pub fn header_limits(mut options: Options, bytes: i64, count: i64) -> Result<Opt
     let count = positive_size(count, (bytes / 4).min(8192), "header count")?;
     options.header_bytes = bytes;
     options.header_count = count;
+    response_public::validate_options(&options)?;
+    rate_public::validate_options(&options)?;
     Ok(options)
 }
 pub fn send_timeout(mut options: Options, milliseconds_value: i64) -> Result<Options, Error> {
@@ -673,11 +530,15 @@ pub fn send_timeout(mut options: Options, milliseconds_value: i64) -> Result<Opt
 enum PreparedCompletion {
     HandlerOk(Response),
     Replacement(Response),
+    Terminal(HttpResponse),
+    MapperFailure(Error),
 }
 impl PreparedCompletion {
     fn is_success(&self) -> bool {
         match self {
             Self::HandlerOk(response) | Self::Replacement(response) => response.status.is_success(),
+            Self::Terminal(response) => response.status().is_success(),
+            Self::MapperFailure(_) => false,
         }
     }
 }
@@ -745,27 +606,16 @@ pub fn public_policy<S: Send + Sync + 'static>() -> Policy<S, ()> {
         kind: PolicyKind::Ordinary(Arc::new(|_, _, _| Box::pin(async { Ok(()) }))),
     }
 }
-fn security_response(failure: Failure, source: PolicySource) -> Response {
-    let status = match failure.kind() {
-        FailureKind::InvalidCredential | FailureKind::Expired => Status::UNAUTHORIZED,
-        FailureKind::Denied => Status::FORBIDDEN,
-        FailureKind::InvalidRequest => Status::BAD_REQUEST,
-        FailureKind::Unavailable => Status::SERVICE_UNAVAILABLE,
-        FailureKind::Internal => Status::INTERNAL_SERVER_ERROR,
-    };
-    let mut response = text(status, failure.message());
-    if status == Status::UNAUTHORIZED {
-        response.headers.insert(
-            names::WWW_AUTHENTICATE,
-            HeaderValue::from_static(match source {
-                PolicySource::Session => "Session",
-                _ => "Bearer",
-            }),
-        );
-    }
-    response
+fn security_response(
+    context: &ResponseContext,
+    failure: Failure,
+    source: PolicySource,
+    head: bool,
+) -> HttpResponse {
+    HttpResponse::security_refusal(context, failure.kind(), source, head).established_refusal()
 }
-fn bearer_headers(request: &Request) -> Result<(), Failure> {
+
+pub(crate) fn bearer_token(request: &Request) -> Result<&str, Failure> {
     let mut credentials = request.headers.get_all(names::AUTHORIZATION).iter();
     let value = credentials.next().ok_or_else(Failure::invalid_credential)?;
     if credentials.next().is_some() || request.headers.contains_key(names::COOKIE) {
@@ -781,7 +631,71 @@ fn bearer_headers(request: &Request) -> Result<(), Failure> {
     {
         return Err(Failure::invalid_credential());
     }
-    Ok(())
+    Ok(token)
+}
+fn bearer_headers(request: &Request) -> Result<(), Failure> {
+    bearer_token(request).map(|_| ())
+}
+
+#[cfg(test)]
+mod g3_bearer_tests {
+    use super::*;
+    fn request() -> Request {
+        Request {
+            method: Method::GET,
+            uri: "/".parse().unwrap(),
+            headers: response_public::tests::headers_fixture(HeaderMap::new(), 256),
+            body: Bytes::new(),
+        }
+    }
+    fn remove_header(request: &mut Request, name: &'static str) {
+        let mut headers = request.headers.authentication_headers().clone();
+        headers.remove(name);
+        request.headers = response_public::tests::headers_fixture(headers, 256);
+    }
+    #[test]
+    fn borrowed_token_preserves_existing_credential_precedence() {
+        let mut r = request();
+        assert_eq!(
+            bearer_token(&r).unwrap_err().kind(),
+            FailureKind::InvalidCredential
+        );
+        // Existing source checks missing Authorization before Cookie; keep that order.
+        r.headers
+            .insert(names::COOKIE, HeaderValue::from_static("unrelated=owned"));
+        assert_eq!(
+            bearer_token(&r).unwrap_err().kind(),
+            FailureKind::InvalidCredential
+        );
+        r.headers.insert(
+            names::AUTHORIZATION,
+            HeaderValue::from_static("Bearer owned-fixture"),
+        );
+        assert_eq!(
+            bearer_token(&r).unwrap_err().kind(),
+            FailureKind::InvalidRequest
+        );
+        remove_header(&mut r, "cookie");
+        assert_eq!(bearer_token(&r).unwrap(), "owned-fixture");
+        assert!(bearer_headers(&r).is_ok());
+        r.headers.append(
+            names::AUTHORIZATION,
+            HeaderValue::from_static("Bearer second"),
+        );
+        assert_eq!(
+            bearer_token(&r).unwrap_err().kind(),
+            FailureKind::InvalidRequest
+        );
+        for value in ["Basic owned", "Bearer", "Bearer ", "Bearer two words"] {
+            remove_header(&mut r, "authorization");
+            r.headers
+                .insert(names::AUTHORIZATION, HeaderValue::from_str(value).unwrap());
+            assert_eq!(
+                bearer_token(&r).unwrap_err().kind(),
+                FailureKind::InvalidCredential
+            );
+        }
+    }
 }
 pub fn authenticated_policy<S, H, Fut>(verifier: H) -> Policy<S, AuthScope>
 where
@@ -1036,6 +950,8 @@ enum RouteKind<S> {
     },
 }
 struct Route<S> {
+    rate: Option<RatePolicy>,
+    rate_index: Option<usize>,
     source: PolicySource,
     method: Method,
     kind: RouteKind<S>,
@@ -1043,7 +959,7 @@ struct Route<S> {
 }
 pub struct App<S, E> {
     state: Arc<S>,
-    mapper: fn(E) -> Response,
+    mapper: fn(&ResponseContext, E) -> Result<Response, Error>,
     routes: HashMap<String, Vec<Route<S>>>,
     paths: matchit::Router<String>,
     error: PhantomData<fn(E)>,
@@ -1055,7 +971,10 @@ impl<S, E> fmt::Debug for App<S, E> {
             .finish_non_exhaustive()
     }
 }
-pub fn app<S, E>(state: S, mapper: fn(E) -> Response) -> App<S, E> {
+pub fn app<S, E>(
+    state: S,
+    mapper: fn(&ResponseContext, E) -> Result<Response, Error>,
+) -> App<S, E> {
     App {
         state: Arc::new(state),
         mapper,
@@ -1064,7 +983,7 @@ pub fn app<S, E>(state: S, mapper: fn(E) -> Response) -> App<S, E> {
         error: PhantomData,
     }
 }
-fn default_error(error: Error) -> Response {
+fn default_error(context: &ResponseContext, error: Error) -> Result<Response, Error> {
     let status = match error.kind {
         ErrorKind::Invalid => Status::BAD_REQUEST,
         ErrorKind::NotFound => Status::NOT_FOUND,
@@ -1076,7 +995,7 @@ fn default_error(error: Error) -> Response {
     } else {
         &error.message
     };
-    text(status, message)
+    text(context, status, message)
 }
 pub fn app_default<S>(state: S) -> App<S, Error> {
     app(state, default_error)
@@ -1118,7 +1037,7 @@ pub fn route_mapped<S, E, F, A, H, Fut>(
     path: &str,
     policy: Policy<S, A>,
     handler: H,
-    mapper: fn(F) -> Response,
+    mapper: fn(&ResponseContext, F) -> Result<Response, Error>,
 ) -> Result<App<S, E>, Error>
 where
     S: Send + Sync + 'static,
@@ -1215,6 +1134,8 @@ where
         },
     };
     routes.push(Route {
+        rate: None,
+        rate_index: None,
         cors: None,
         source,
         method,
@@ -1224,7 +1145,7 @@ where
 }
 fn prepared_handler<S, A, H, Fut, F>(
     handler: Arc<H>,
-    mapper: fn(F) -> Response,
+    mapper: fn(&ResponseContext, F) -> Result<Response, Error>,
     authority: A,
     lease: Arc<Lease>,
     source: PolicySource,
@@ -1238,12 +1159,27 @@ where
 {
     Box::new(move |request, state| {
         Box::pin(async move {
-            if let Err(failure) = lease.validate() {
-                return PreparedCompletion::Replacement(security_response(failure, source));
+            let headers = request.headers.share();
+            let context = headers.response_context();
+            let head = request.is_head();
+            if let Some(response) =
+                rate_public::before_handler(context, headers.request_rate(), &lease, source, head)
+                    .await
+            {
+                return PreparedCompletion::Terminal(response);
             }
-            match handler(request, state, authority).await {
+            let completion = handler(request, state, authority);
+            #[cfg(nagi_auth_stage_diag)]
+            let completion = crate::auth::session_deadline_observer::observe_guarded(
+                crate::auth::session_deadline_observer::Phase::GuardedHandler,
+                completion,
+            );
+            match completion.await {
                 Ok(response) => PreparedCompletion::HandlerOk(response),
-                Err(error) => PreparedCompletion::Replacement(mapper(error)),
+                Err(error) => match mapper(context, error) {
+                    Ok(response) => PreparedCompletion::Replacement(response),
+                    Err(error) => PreparedCompletion::MapperFailure(error),
+                },
             }
         })
     })
@@ -1292,32 +1228,19 @@ where
         None => first.unwrap_or_default(),
     })
 }
-fn transport(status: Status, head: bool, close: bool) -> axum::http::Response<BufferedBody> {
-    let mut response = text(status, status.phrase()).into_http(head);
-    response
-        .headers_mut()
-        .insert(names::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    if close {
-        response
-            .headers_mut()
-            .insert(names::CONNECTION, HeaderValue::from_static("close"));
-    }
-    response
+fn transport(context: &ResponseContext, status: Status, head: bool, close: bool) -> HttpResponse {
+    HttpResponse::terminal(Arc::clone(&context.fallback), status, head, close).established_refusal()
 }
-fn authority_rejection(status: Status, head: bool) -> axum::http::Response<BufferedBody> {
-    let mut response = transport(status, head, true);
-    response
-        .headers_mut()
-        .insert(names::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    response
+fn authority_rejection(context: &ResponseContext, status: Status, head: bool) -> HttpResponse {
+    transport(context, status, head, true)
 }
 // Managed authenticated headers are shared by successful delivery and all
 // terminal replacements; secret take is confined to the success boundary below.
 fn finalize_authenticated(
-    mut response: axum::http::Response<BufferedBody>,
+    mut response: HttpResponse,
     source: PolicySource,
     head: bool,
-) -> axum::http::Response<BufferedBody> {
+) -> HttpResponse {
     if source == PolicySource::Public {
         return response;
     }
@@ -1328,8 +1251,9 @@ fn finalize_authenticated(
             .iter()
             .any(|value| value.as_bytes() != b"no-store")
     {
-        response = transport(Status::INTERNAL_SERVER_ERROR, head, true);
+        response = response.replacement(Status::INTERNAL_SERVER_ERROR, head, true);
     }
+    response.source = source;
     response
         .headers_mut()
         .insert(names::CACHE_CONTROL, HeaderValue::from_static("no-store"));
@@ -1340,75 +1264,213 @@ fn finalize_authenticated(
 // the material through the checked, destructive take. No field move from a Drop
 // owner, secret clone, callback or await occurs in this terminal boundary.
 fn finalize_session_response(
+    context: &ResponseContext,
+    response: Response,
+    owner: &LeaseOwner,
+    source: PolicySource,
+    head: bool,
+) -> HttpResponse {
+    finalize_session_response_with_deletion(context, response, owner, source, head, None)
+}
+fn finalize_session_response_with_deletion(
+    context: &ResponseContext,
     mut response: Response,
     owner: &LeaseOwner,
     source: PolicySource,
     head: bool,
-) -> axum::http::Response<BufferedBody> {
+    deletion: Option<HeaderValue>,
+) -> HttpResponse {
+    use response_budget::finalize::{CompletionOrigin, PreparedResponse, ResponseMeta};
     let has_seal = response.session_seal.is_some();
-    let effective_source = if has_seal && source == PolicySource::Public {
+    let source = if has_seal && source == PolicySource::Public {
         PolicySource::Session
     } else {
         source
     };
+    let fail_status = |status| {
+        finalize_authenticated(
+            HttpResponse::terminal(Arc::clone(&context.fallback), status, head, true),
+            source,
+            head,
+        )
+    };
+    let fail = || fail_status(Status::INTERNAL_SERVER_ERROR);
     if has_seal
-        && (response.status.0 == StatusCode::NOT_MODIFIED
-            || response
-                .headers
-                .get_all(names::CACHE_CONTROL)
-                .iter()
-                .any(|value| value.as_bytes() != b"no-store"))
+        && (response.status.0 == StatusCode::NOT_MODIFIED || response.produced.conflicting_cache())
     {
         crate::auth::session::retire_http_delivery(owner);
-        return finalize_authenticated(
-            transport(Status::INTERNAL_SERVER_ERROR, head, true),
-            effective_source,
-            head,
-        );
+        return fail();
     }
-    let cookie = match response.session_seal.take() {
-        Some(seal) => match crate::auth::session::take_http_cookie(owner, seal) {
-            Ok(cookie) => Some(cookie),
-            Err(()) => {
-                crate::auth::session::retire_http_delivery(owner);
-                return finalize_authenticated(
-                    transport(Status::INTERNAL_SERVER_ERROR, head, true),
-                    effective_source,
-                    head,
-                );
-            }
+    let seal = response.session_seal.take();
+    let mut prepared = match PreparedResponse::new(
+        &context.producer,
+        response.produced,
+        ResponseMeta {
+            status: response.status.0,
+            kind: response.body_kind,
+            head,
+            source,
+            origin: CompletionOrigin::HandlerOk,
         },
-        None => {
+    ) {
+        Ok(prepared) => prepared,
+        Err(error) => {
             crate::auth::session::retire_http_delivery(owner);
-            None
+            return fail_status(response_public::refusal_status(response.status, error));
         }
     };
-    let mut wire = finalize_authenticated(response.into_http(head), effective_source, head);
-    if let Some(cookie) = cookie {
-        wire.headers_mut().append(names::SET_COOKIE, cookie);
-        vary::add(&mut wire, vary::Dependencies::COOKIE);
+    prepared = match context.prepare(prepared) {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            crate::auth::session::retire_http_delivery(owner);
+            return fail_status(response_public::refusal_status(response.status, error));
+        }
+    };
+    if let Some(cookie) = &deletion {
+        if let Err(error) = prepared.cookie(cookie.clone()) {
+            crate::auth::session::retire_http_delivery(owner);
+            return fail_status(response_public::refusal_status(response.status, error));
+        }
     }
-    wire
+    if let Some(seal) = seal {
+        // Reserve the existing maximum cookie slot BEFORE the destructive take.
+        let slot = match prepared.reserve_cookie(crate::auth::session::http_cookie_maximum()) {
+            Ok(slot) => slot,
+            Err(error) => {
+                crate::auth::session::retire_http_delivery(owner);
+                return fail_status(response_public::refusal_status(response.status, error));
+            }
+        };
+        prepared = match prepared.take_session_cookie(owner, seal, slot) {
+            Ok(prepared) => prepared,
+            Err(_) => {
+                crate::auth::session::retire_http_delivery(owner);
+                return fail();
+            }
+        };
+    } else {
+        crate::auth::session::retire_http_delivery(owner);
+    }
+    match prepared.finish() {
+        Ok(wire) => {
+            let mut response =
+                HttpResponse::from_wire(response.status.0, wire, Arc::clone(&context.fallback));
+            if let Some(cookie) = deletion {
+                response.remember_deletion(cookie);
+            }
+            finalize_authenticated(response, source, head)
+        }
+        Err(error) => fail_status(response_public::refusal_status(response.status, error)),
+    }
+}
+// The native header owner is created once and shared by both security and
+// handler views. Its request receipt outlives every extracted header view.
+struct RequestParts {
+    method: Method,
+    uri: axum::http::Uri,
+    headers: RequestHeaders,
+}
+struct IncomingRequest<B> {
+    parts: RequestParts,
+    body: B,
+    version: axum::http::Version,
+}
+impl<B> IncomingRequest<B> {
+    fn new(
+        request: axum::http::Request<B>,
+        prior: Option<Arc<crate::security_sf07_private::quota::Reservation>>,
+        context: ResponseContext,
+    ) -> Self {
+        let (parts, body) = request.into_parts();
+        let headers =
+            RequestHeaders::from_received(request_headers::ReceivedHeaders::configured_native(
+                parts.headers,
+                parts.extensions,
+                prior,
+                context,
+            ));
+        Self {
+            parts: RequestParts {
+                method: parts.method,
+                uri: parts.uri,
+                headers,
+            },
+            body,
+            version: parts.version,
+        }
+    }
+    fn method(&self) -> &Method {
+        &self.parts.method
+    }
+    fn uri(&self) -> &axum::http::Uri {
+        &self.parts.uri
+    }
+    fn headers(&self) -> &HeaderMap {
+        self.parts.headers.authentication_headers()
+    }
+    fn body(&self) -> &B {
+        &self.body
+    }
+    fn version(&self) -> axum::http::Version {
+        self.version
+    }
+    fn into_parts(self) -> (RequestParts, B) {
+        (self.parts, self.body)
+    }
+}
+fn response_catalog_bytes<S, E>(app: &App<S, E>) -> Result<usize, Error> {
+    let mut bytes = std::mem::size_of::<App<S, E>>();
+    let mut add = |amount: usize| -> Result<(), Error> {
+        bytes = bytes
+            .checked_add(amount)
+            .filter(|n| *n <= isize::MAX as usize)
+            .ok_or_else(|| Error::invalid("HTTP catalogue metadata overflow"))?;
+        Ok(())
+    };
+    // Extra conservative credit for directly owned Vec/String/CORS capacities.
+    // Preexisting opaque routing containers, handler captures/shared state and
+    // allocator/RSS are outside the new response/rate allocation domains. This
+    // is not a measurement or guarantee of the entire App heap graph.
+    for (path, routes) in &app.routes {
+        add(path.capacity())?;
+        add(routes
+            .capacity()
+            .checked_mul(std::mem::size_of::<Route<S>>())
+            .ok_or_else(|| Error::invalid("HTTP catalogue metadata overflow"))?)?;
+        for route in routes {
+            if let Some(cors) = &route.cors {
+                add(cors.retained_bytes()?)?;
+            }
+        }
+    }
+    Ok(bytes)
 }
 async fn dispatch<S, E>(
     app: Arc<App<S, E>>,
-    request: axum::http::Request<hyper::body::Incoming>,
+    mut request: IncomingRequest<hyper::body::Incoming>,
     options: Arc<Options>,
     requests: Arc<Semaphore>,
+    rates: Arc<RuntimeRate>,
     peer: std::net::IpAddr,
-) -> Result<axum::http::Response<BufferedBody>, Infallible>
+) -> Result<HttpResponse, Infallible>
 where
     S: Send + Sync + 'static,
     E: 'static,
 {
+    let context = request.parts.headers.response_context().share();
+    let transport = |status, head, close| self::transport(&context, status, head, close);
     let head = request.method() == Method::HEAD;
     let Some(authority) = options.authority.as_ref() else {
-        return Ok(authority_rejection(Status::INTERNAL_SERVER_ERROR, head));
+        return Ok(authority_rejection(
+            &context,
+            Status::INTERNAL_SERVER_ERROR,
+            head,
+        ));
     };
     if let Err(status) = authority.check(request.version(), request.uri(), request.headers(), peer)
     {
         let preflight = cors::candidate(request.method(), request.headers());
-        let response = authority_rejection(status, head);
+        let response = authority_rejection(&context, status, head);
         // Metadata-only failures carry no credential-source dependencies, even
         // when an ordinary authenticated OPTIONS record exists at this path.
         let response = if preflight {
@@ -1452,22 +1514,39 @@ where
             }
         });
     let Some(route) = selected else {
-        let mut allowed = routes
-            .iter()
-            .map(|route| route.method.as_str())
-            .collect::<Vec<_>>();
-        if allowed.contains(&"GET") && !allowed.contains(&"HEAD") {
-            allowed.push("HEAD");
-        }
-        allowed.sort_unstable();
         let mut response = transport(Status::METHOD_NOT_ALLOWED, head, true);
-        if let Ok(value) = HeaderValue::from_str(&allowed.join(", ")) {
-            response.headers_mut().insert(names::ALLOW, value);
+        if response
+            .allow_methods(routes.iter().map(|route| route.method.as_str()))
+            .is_err()
+        {
+            // Preserve the existing 405 refusal; exhausted managed metadata
+            // closes rather than allocating Allow outside the finite claim.
+            response = response.close_before_native();
         }
         return Ok(cors::route_less(response, preflight));
     };
     // Capture immutable CORS metadata before any credential stripping or await.
     let cors_context = cors::Context::new(route, request.headers(), preflight);
+    if request
+        .parts
+        .headers
+        .profile(cors_context.profile())
+        .is_err()
+    {
+        return Ok(cors_context.finish(transport(Status::INTERNAL_SERVER_ERROR, head, true)));
+    }
+    let rate = match route.rate_index.and_then(|index| rates.request(index).ok()) {
+        Some(rate) => rate,
+        None => {
+            return Ok(cors_context.finish(transport(Status::INTERNAL_SERVER_ERROR, head, true)))
+        }
+    };
+    if request.parts.headers.rate(rate).is_err() {
+        return Ok(cors_context.finish(transport(Status::INTERNAL_SERVER_ERROR, head, true)));
+    }
+    let context = request.parts.headers.response_context().share();
+    let transport = |status, head, close| self::transport(&context, status, head, close);
+
     let response = async {
         let finish = |response| {
             if preflight {
@@ -1476,9 +1555,12 @@ where
                 csrf_http::finalize_route(response, route, head)
             }
         };
-        let Ok(_permit) = requests.try_acquire_owned() else {
+        let Ok(permit) = requests.try_acquire_owned() else {
             return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
         };
+        if request.parts.headers.admit(permit).is_err() {
+            return Ok(finish(transport(Status::INTERNAL_SERVER_ERROR, head, true)));
+        }
         if let Some(length) = request.headers().get(names::CONTENT_LENGTH) {
             if length
                 .to_str()
@@ -1496,9 +1578,14 @@ where
                 request.headers(),
                 request.body(),
                 &options,
+                &context,
             ));
         }
-        let (mut parts, body) = request.into_parts();
+        // CORS preflight returned above without touching either rate bucket.
+        let rate=request.parts.headers.request_rate().expect("selected checked route rate");
+        if let Err(reason)=rate.route() { return Ok(finish(HttpResponse::rate_refusal(&context,reason,route.source,head))); }
+        let version = request.version();
+        let (parts, body) = request.into_parts();
         let total = options
             .security_deadline
             .checked_add(options.body_deadline)
@@ -1507,7 +1594,7 @@ where
         let Some(deadline) = total.and_then(|t| admitted.checked_add(t)) else {
             return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
         };
-        let owner = match LeaseOwner::new(deadline) {
+        let owner = match LeaseOwner::new_http(deadline) {
             Ok(owner) => owner,
             Err(_) => return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true))),
         };
@@ -1537,7 +1624,7 @@ where
                     pool,
                     prepare,
                     Arc::clone(&app.state),
-                    axum::http::Request::from_parts(parts, body),
+                    IncomingRequest { parts, body, version },
                     &options,
                     owner,
                     admitted,
@@ -1558,7 +1645,7 @@ where
             crate::auth::session::retire_http_delivery(&owner);
             finalize_authenticated(response, route.source, head)
         };
-        let headers = RequestHeaders::from(std::mem::take(&mut parts.headers));
+        let headers = parts.headers;
         let snapshot = Request {
             method: parts.method.clone(),
             uri: parts.uri.clone(),
@@ -1600,7 +1687,7 @@ where
             }
             Ok(Ok(Ok(prepared))) => prepared,
             Ok(Ok(Err(error))) => {
-                let mut response = security_response(error, route.source).into_http(head);
+                let mut response = security_response(&context, error, route.source, head);
                 response
                     .headers_mut()
                     .insert(names::CONNECTION, HeaderValue::from_static("close"));
@@ -1681,7 +1768,7 @@ where
                 transport(Status::NOT_IMPLEMENTED, head, true)
             }
             Ok(Ok(PreparedCompletion::HandlerOk(response))) => {
-                finalize_session_response(response, &owner, route.source, head)
+                finalize_session_response(&context, response, &owner, route.source, head)
             }
             Ok(Ok(PreparedCompletion::Replacement(response))) => {
                 // Retire before conversion/mapping output reaches any wire path.
@@ -1694,8 +1781,10 @@ where
                 } else {
                     route.source
                 };
-                finalize_authenticated(response.into_http(head), source, head)
+                finalize_authenticated(response.into_replacement_http(&context, head), source, head)
             }
+            Ok(Ok(PreparedCompletion::Terminal(response))) => response,
+            Ok(Ok(PreparedCompletion::MapperFailure(error))) => { drop(error); transport(Status::INTERNAL_SERVER_ERROR, head, true) },
             Ok(Err(_)) => transport(Status::INTERNAL_SERVER_ERROR, head, true),
             Err(_) => {
                 #[cfg(all(test, nagi_auth_stage_diag))]
@@ -1826,7 +1915,7 @@ pub fn prelogin_bootstrap<S, E>(
     )
 }
 
-pub async fn serve<S, E>(app: App<S, E>, port: i64, options: Options) -> Result<(), Error>
+pub async fn serve<S, E>(mut app: App<S, E>, port: i64, options: Options) -> Result<(), Error>
 where
     S: Send + Sync + 'static,
     E: 'static,
@@ -1835,6 +1924,12 @@ where
     require_route_policies(&app)?;
     prelogin_http::check_startup(&app, &options)?;
     csrf_http::check_startup(&app, &options)?;
+    let _ = RuntimeResponses::checked(&options, response_catalog_bytes(&app)?)?;
+    let rate_limits = options
+        .rate_limits
+        .as_ref()
+        .ok_or_else(|| Error::invalid("explicit rate limits are required"))?;
+    let _ = RuntimeRate::checked(&mut app, rate_limits, options.requests, options.connections)?;
     let port = u16::try_from(port)
         .ok()
         .filter(|port| *port != 0)
@@ -1851,7 +1946,7 @@ where
 /// lets a Rust host integrate Nagi with its existing termination signal.
 pub async fn serve_listener<S, E>(
     listener: TcpListener,
-    app: App<S, E>,
+    mut app: App<S, E>,
     options: Options,
     shutdown_signal: impl Future<Output = ()>,
 ) -> Result<(), Error>
@@ -1863,10 +1958,16 @@ where
     require_route_policies(&app)?;
     prelogin_http::check_startup(&app, &options)?;
     csrf_http::check_startup(&app, &options)?;
+    let responses = RuntimeResponses::checked(&options, response_catalog_bytes(&app)?)?;
+    let rate_limits = options
+        .rate_limits
+        .as_ref()
+        .ok_or_else(|| Error::invalid("explicit rate limits are required"))?;
+    let rates = RuntimeRate::checked(&mut app, rate_limits, options.requests, options.connections)?;
     let app = Arc::new(app);
     let options = Arc::new(options);
     let connections = Arc::new(Semaphore::new(options.connections));
-    let requests = Arc::new(Semaphore::new(options.requests));
+    let requests = Arc::clone(&responses.requests);
     let (shutdown, _) = tokio::sync::watch::channel(false);
     let mut tasks = JoinSet::new();
     let mut builder = http1::Builder::new();
@@ -1911,6 +2012,10 @@ where
                 let app = Arc::clone(&app);
                 let options = Arc::clone(&options);
                 let requests = Arc::clone(&requests);
+                let rates = Arc::clone(&rates);
+                let responses = Arc::clone(&responses);
+                let ledger = response_send::SendLedger::new(Arc::clone(&responses.producer), Arc::clone(&responses.fallback));
+                let service_ledger = Arc::clone(&ledger);
                 let (sending, mut sent) = tokio::sync::watch::channel(Sending::default());
                 let send_deadline = options.send_deadline;
                 let close_deadline = options.body_deadline;
@@ -1919,9 +2024,22 @@ where
                 let probe = options.lifecycle_probe.clone();
                 #[cfg(test)]
                 let service_probe = probe.clone();
-                let service = service_fn(move |request| {
+                let service = service_fn(move |request: axum::http::Request<hyper::body::Incoming>| {
+                    let ledger = Arc::clone(&service_ledger);
+                    let head = request.method() == Method::HEAD;
+                    let prior = ledger.take_prior();
+                    let context = responses.context();
                     let may_have_body = !hyper::body::Body::is_end_stream(request.body());
-                    let future = dispatch(Arc::clone(&app), request, Arc::clone(&options), Arc::clone(&requests), peer.ip());
+                    let app = Arc::clone(&app);
+                    let options = Arc::clone(&options);
+                    let requests = Arc::clone(&requests);
+                    let rates = Arc::clone(&rates);
+                    let future = async move {
+                        let prior = prior?;
+                        let request = IncomingRequest::new(request, prior, context);
+                        let response = match dispatch(app, request, options, requests, rates, peer.ip()).await { Ok(response) => response, Err(never) => match never {} };
+                        response.transfer_native(&ledger, head)
+                    };
                     let sending = service_sending.clone();
                     #[cfg(test)]
                     let probe = service_probe.clone();
@@ -1953,9 +2071,9 @@ where
                     windows_stalled_fixture,
                 }, service);
                 let mut stopped = shutdown.subscribe();
+                let connection = response_send::NativeDriver::new(Box::pin(connection), ledger, permit);
                 tasks.spawn(async move {
-                    let _permit = permit;
-                    tokio::pin!(connection);
+                    let mut connection = connection;
                     let mut stopping = false;
                     loop {
                         let deadline = sent.borrow_and_update().deadline;
@@ -1968,7 +2086,7 @@ where
                                 stopping = true;
                                 #[cfg(test)]
                                 if let Some(probe) = &probe { probe.graceful(deadline); }
-                                connection.as_mut().graceful_shutdown();
+                                connection.graceful_shutdown(|connection| connection.get_mut().as_mut().graceful_shutdown());
                             }
                             _ = &mut connection => break,
                             _ = sent.changed() => {}
@@ -2007,6 +2125,7 @@ where
             }
         }
     }
+    rates.close();
     Ok(())
 }
 
@@ -2017,8 +2136,10 @@ mod tests;
 #[cfg(test)]
 pub(crate) fn conflicting_cache_for_test(mut response: Response) -> Response {
     response
+        .produced
         .headers
-        .insert(names::CACHE_CONTROL, HeaderValue::from_static("public"));
+        .append(b"cache-control", b"public")
+        .expect("finite impossible-state fixture");
     response
 }
 
@@ -2039,13 +2160,15 @@ pub(crate) fn session_delivery_headers_for_test(
     response: Response,
     owner: &LeaseOwner,
 ) -> (StatusCode, axum::http::HeaderMap) {
+    let context = response.context();
     let wire = vary::finish(finalize_session_response(
+        &context,
         response,
         owner,
         PolicySource::Session,
         false,
     ));
-    (wire.status(), wire.into_parts().0.headers)
+    (wire.status(), wire.headers().clone())
 }
 
 // Opt-in calibration is separate from the ordinary private Session fixtures.
@@ -2053,8 +2176,8 @@ pub(crate) fn session_delivery_headers_for_test(
 #[path = "http_server/private_deadline_calibration.rs"]
 mod private_deadline_calibration;
 
-// First SF07 bridge checkpoint: production attachment is a separate gate.
+// Finite producer/finalizer and native ownership are used by public dispatch.
 #[cfg(test)]
+mod response_attachment;
 mod response_budget;
-#[cfg(test)]
 mod response_send;

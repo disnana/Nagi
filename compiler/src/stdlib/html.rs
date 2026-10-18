@@ -83,7 +83,7 @@ pub(super) fn operation_info(operation: Operation) -> &'static OperationInfo {
         Operation::HtmlJoin => operation!(Html, "join", "::nagi_runtime::html::join", &[R,M,M], "(policy: view[HtmlPolicy], left: HtmlFragment, right: HtmlFragment) -> Result[HtmlFragment, Error]"),
         Operation::HtmlCopyFragment => operation!(Html, "copy_fragment", "::nagi_runtime::html::copy_fragment", &[R,R], "(policy: view[HtmlPolicy], fragment: view[HtmlFragment]) -> Result[HtmlFragment, Error]"),
         Operation::HtmlDocument => operation!(Html, "document", "::nagi_runtime::html::document", &[R,R,M], "(policy: view[HtmlPolicy], title: view[str], body: HtmlFragment) -> Result[HtmlDocument, Error]"),
-        Operation::HttpHtmlResponse => operation!(HttpServer, "html_response", "::nagi_runtime::http_server::html_response", &[M,M], "(status: Status, document: HtmlDocument) -> Response"),
+        Operation::HttpHtmlResponse => operation!(HttpServer, "html_response", "::nagi_runtime::http_server::html_response", &[R,M,M], "(context: view[ResponseContext], status: Status, document: HtmlDocument) -> Result[Response, Error]"),
         _ => unreachable!("non-HTML operation dispatched to HTML contract"),
     }
 }

@@ -43,6 +43,68 @@ fn fallback_limits(responses: usize) -> FallbackLimits {
         managed_header_count: 16,
     }
 }
+
+#[test]
+fn security_fallback_catalog_and_last_body_view_keep_finite_credit() {
+    use crate::auth::FailureKind;
+    let cases = [
+        (
+            FailureKind::InvalidCredential,
+            401,
+            b"invalid credential".as_slice(),
+        ),
+        (FailureKind::Denied, 403, b"permission denied".as_slice()),
+        (FailureKind::Expired, 401, b"authority expired".as_slice()),
+        (
+            FailureKind::InvalidRequest,
+            400,
+            b"invalid security request".as_slice(),
+        ),
+        (
+            FailureKind::Unavailable,
+            503,
+            b"security service unavailable".as_slice(),
+        ),
+        (
+            FailureKind::Internal,
+            500,
+            b"security service failure".as_slice(),
+        ),
+    ];
+    assert_eq!(FallbackStatus::all().len(), 23);
+    for (kind, code, body) in cases {
+        assert!(FallbackStatus::all()
+            .iter()
+            .any(|r| matches!(r, FallbackStatus::Security(k) if *k == kind)));
+        let reason = FallbackStatus::Security(kind);
+        assert_eq!(reason.code(), code);
+        assert_eq!(reason.body(), body);
+        let planning = FallbackLedger::checked(fallback_limits(1), 1).unwrap();
+        let (metadata, charge) = planning.accounting();
+        drop(planning);
+        let mut config = fallback_limits(1);
+        config.retained_bytes = metadata + charge;
+        let fallback = FallbackLedger::checked(config, 1).unwrap();
+        let (status, wire) = fallback.produce(reason).into_response().unwrap();
+        assert_eq!(status, code);
+        let (headers, original) = wire.into_parts();
+        assert_eq!(original.as_ref(), body);
+        let last_view = original.clone();
+        drop(headers);
+        drop(original);
+        let before = fallback.allocation_attempts();
+        let (closed, meter) = crate::metrics::measure(|| fallback.produce(reason));
+        assert!(closed.is_close());
+        assert_eq!(meter.allocations, 0);
+        assert_eq!(before, fallback.allocation_attempts());
+        drop(last_view);
+        let (_, wire) = fallback.produce(reason).into_response().unwrap();
+        assert_eq!(wire.into_parts().1.as_ref(), body);
+        let mut too_small = fallback_limits(1);
+        too_small.retained_bytes = metadata + charge - 1;
+        assert!(FallbackLedger::checked(too_small, 1).is_err());
+    }
+}
 fn held(p: &Producer) {
     assert_eq!(p.empty().err(), Some(Diagnostic::Capacity));
 }

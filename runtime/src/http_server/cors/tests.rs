@@ -137,7 +137,7 @@ fn app() -> App<(), Error> {
         Method::GET,
         "/items/{id}",
         public_policy(),
-        |_, _, _| async { Ok(empty(Status::OK)) },
+        |request, _, _| async move { empty(response_context(&request), Status::OK) },
     )
     .unwrap()
 }
@@ -210,6 +210,8 @@ fn preflight_method_and_header_lists_have_correct_error_stage() {
 fn actual_grants_preserve_underlying_status_and_typed_dependency_union() {
     let configured = cors_route(app(), Method::GET, "/items/{id}", policy()).unwrap();
     let route = &configured.routes["/items/{id}"][0];
+    let response_request = super::super::response_public::tests::request_fixture(16);
+    let response_context = response_context(&response_request);
     for status in [
         Status::OK,
         Status::UNAUTHORIZED,
@@ -221,7 +223,7 @@ fn actual_grants_preserve_underlying_status_and_typed_dependency_union() {
         Status::NOT_MODIFIED,
     ] {
         let wire = Context::new(route, &headers("https://APP.example.invalid:443"), false)
-            .finish(empty(status).into_http(false));
+            .finish(empty(response_context, status).unwrap().into_http(false));
         assert_eq!(wire.status(), status.0);
         assert_eq!(
             wire.headers()[names::ACCESS_CONTROL_ALLOW_ORIGIN],
@@ -238,15 +240,18 @@ fn actual_grants_preserve_underlying_status_and_typed_dependency_union() {
         "https://other.invalid",
         "http://app.example.invalid",
     ] {
-        let wire = Context::new(route, &headers(origin), false)
-            .finish(text(Status::OK, "unchanged").into_http(false));
+        let wire = Context::new(route, &headers(origin), false).finish(
+            text(response_context, Status::OK, "unchanged")
+                .unwrap()
+                .into_http(false),
+        );
         assert_eq!(wire.status(), StatusCode::OK);
         assert!(!wire
             .headers()
             .contains_key(names::ACCESS_CONTROL_ALLOW_ORIGIN));
         assert_eq!(wire.headers()[names::VARY], "Origin");
     }
-    let mut wire = transport(Status::INTERNAL_SERVER_ERROR, false, true);
+    let mut wire = transport(response_context, Status::INTERNAL_SERVER_ERROR, false, true);
     vary::add(&mut wire, vary::Dependencies::GUARDED);
     vary::add(&mut wire, vary::Dependencies::COOKIE);
     let wire = Context::new(route, &headers("https://app.example.invalid"), false).finish(wire);
@@ -260,10 +265,12 @@ fn actual_grants_preserve_underlying_status_and_typed_dependency_union() {
 }
 #[test]
 fn preflight_context_has_only_metadata_dependencies_and_reserved_headers_stay_owned() {
+    let response_request = super::super::response_public::tests::request_fixture(64);
+    let response_context = response_context(&response_request);
     let configured = cors_route(app(), Method::GET, "/items/{id}", policy()).unwrap();
     let route = &configured.routes["/items/{id}"][0];
     let wire = Context::new(route, &headers("https://app.example.invalid"), true)
-        .finish(transport(Status::FORBIDDEN, false, true));
+        .finish(transport(response_context, Status::FORBIDDEN, false, true));
     assert_eq!(
         wire.headers()[names::VARY],
         "Access-Control-Request-Headers, Access-Control-Request-Method, Origin"
@@ -279,6 +286,7 @@ fn preflight_context_has_only_metadata_dependencies_and_reserved_headers_stay_ow
         "Set-Cookie",
         "Cache-Control",
     ] {
-        assert!(append_header_text(empty(Status::OK), name, "owned").is_err());
+        let response = empty(response_context, Status::OK).unwrap();
+        assert!(append_header_text(response, name, "owned").is_err());
     }
 }

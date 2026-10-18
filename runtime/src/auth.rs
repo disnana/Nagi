@@ -2,6 +2,8 @@
 //! Verifier assertions remain trusted; only the dispatcher creates leases.
 #[path = "auth/csrf.rs"]
 pub mod csrf;
+#[path = "auth/ed25519.rs"]
+pub mod ed25519;
 #[path = "auth/session.rs"]
 pub mod session;
 #[cfg(nagi_auth_stage_diag)]
@@ -57,6 +59,16 @@ impl FailureKind {
     pub const INVALID_REQUEST: Self = Self::InvalidRequest;
     pub const UNAVAILABLE: Self = Self::Unavailable;
     pub const INTERNAL: Self = Self::Internal;
+    pub(crate) const fn message(self) -> &'static str {
+        match self {
+            Self::InvalidCredential => "invalid credential",
+            Self::Denied => "permission denied",
+            Self::Expired => "authority expired",
+            Self::InvalidRequest => "invalid security request",
+            Self::Unavailable => "security service unavailable",
+            Self::Internal => "security service failure",
+        }
+    }
 }
 /// Stable public codes/messages, without credentials or internal causes.
 #[derive(Debug)]
@@ -68,14 +80,7 @@ impl Failure {
         self.kind
     }
     pub fn message(&self) -> &str {
-        match self.kind {
-            FailureKind::InvalidCredential => "invalid credential",
-            FailureKind::Denied => "permission denied",
-            FailureKind::Expired => "authority expired",
-            FailureKind::InvalidRequest => "invalid security request",
-            FailureKind::Unavailable => "security service unavailable",
-            FailureKind::Internal => "security service failure",
-        }
+        self.kind.message()
     }
     pub fn invalid_credential() -> Self {
         Self {
@@ -142,6 +147,7 @@ impl CredentialMetadata {
 
 /// Trusted verifier output, not an authorization proof. No Nagi factory.
 pub struct VerifiedIdentity {
+    pending_http_touch: Option<session::HttpTouch>,
     subject: i64,
     expires_at: Instant,
     credential: CredentialMetadata,
@@ -154,6 +160,7 @@ impl VerifiedIdentity {
             return Err(Failure::expired());
         }
         Ok(Self {
+            pending_http_touch: None,
             subject,
             expires_at,
             credential: CredentialMetadata {
@@ -164,6 +171,11 @@ impl VerifiedIdentity {
     }
 }
 struct Gate {
+    // None belongs to existing trusted non-HTTP admission. Only the HTTP
+    // dispatcher can create Pending; only its post-body rate gate admits it.
+    http_admitted: Option<bool>,
+    subject: Option<i64>,
+    http_touch: Option<session::HttpTouch>,
     active: bool,
     expires_at: Instant,
 }
@@ -197,6 +209,9 @@ impl LeaseOwner {
         Ok(Self {
             lease: Arc::new(Lease {
                 gate: Mutex::new(Gate {
+                    http_admitted: None,
+                    subject: None,
+                    http_touch: None,
                     active: true,
                     expires_at,
                 }),
@@ -205,6 +220,11 @@ impl LeaseOwner {
             }),
             delivery,
         })
+    }
+    pub(crate) fn new_http(expires_at: Instant) -> Result<Self, Failure> {
+        let owner = Self::new(expires_at)?;
+        owner.lease.checked_gate()?.http_admitted = Some(false);
+        Ok(owner)
     }
     // Closed synchronous operations only; this is not a host callback gateway.
     fn checked_delivery<'a>(
@@ -221,11 +241,44 @@ impl Drop for LeaseOwner {
             Err(error) => error.into_inner(),
         };
         gate.active = false;
+        let pending_touch = gate.http_touch.take();
         // Keep the gate held through secret disposal: gate -> cell, no await.
         self.delivery.clear();
+        drop(gate);
+        drop(pending_touch);
     }
 }
 impl Lease {
+    pub(crate) fn rate_subject(&self) -> Result<i64, Failure> {
+        self.checked_gate()?.subject.ok_or_else(Failure::internal)
+    }
+    // Called only after the request's rate/CSRF/body gates have succeeded. No
+    // callback or await holds Gate; HttpTouch rechecks after native capacity.
+    pub(crate) async fn finish_http_auth(self: &Arc<Self>) -> Result<(), Failure> {
+        let touch = { self.checked_gate()?.http_touch.take() };
+        if let Some(touch) = touch {
+            touch.apply(Arc::clone(self)).await?;
+        }
+        // Recheck original expiry/active owner under the same gate that guards
+        // actual Session delivery. A late DB reply cannot resurrect admission.
+        let mut gate = self.checked_gate()?;
+        if gate.http_admitted == Some(true) {
+            return Err(Failure::invalid_request());
+        }
+        if gate.http_admitted == Some(false) {
+            gate.http_admitted = Some(true);
+        }
+        Ok(())
+    }
+
+    fn checked_session_gate(&self) -> Result<std::sync::MutexGuard<'_, Gate>, Failure> {
+        let gate = self.checked_gate()?;
+        if gate.http_admitted == Some(false) {
+            return Err(Failure::denied());
+        }
+        Ok(gate)
+    }
+
     pub(crate) fn validate(&self) -> Result<(), Failure> {
         drop(self.checked_gate()?);
         Ok(())
@@ -238,6 +291,17 @@ impl Lease {
         Ok(gate)
     }
 }
+// Conservative credit for actual per-request lease layout/control, including
+// new subject/deferred-touch state. Existing host-captured heap is not measured.
+pub(crate) fn rate_metadata_bytes(requests: usize) -> Option<usize> {
+    std::mem::size_of::<Lease>()
+        // The verified output temporarily owns deferred metadata before bind
+        // moves it into Gate. Credit both complete actual layouts conservatively.
+        .checked_add(std::mem::size_of::<VerifiedIdentity>())?
+        .checked_add(2 * std::mem::size_of::<usize>())?
+        .checked_mul(requests)
+        .filter(|n| *n <= isize::MAX as usize)
+}
 /// Same-task, non-cloneable identity bound to a live dispatcher-owned request.
 ///
 /// ```compile_fail
@@ -249,14 +313,24 @@ pub struct AuthScope {
     credential: CredentialMetadata,
 }
 impl AuthScope {
-    pub(crate) fn bind(identity: VerifiedIdentity, lease: Arc<Lease>) -> Result<Self, Failure> {
-        {
+    pub(crate) fn bind(mut identity: VerifiedIdentity, lease: Arc<Lease>) -> Result<Self, Failure> {
+        let retired_touch = {
             let mut gate = lease.checked_gate()?;
             if identity.expires_at <= Instant::now() {
                 return Err(Failure::expired());
             }
+            if gate.http_admitted.is_some() && gate.subject.is_some() {
+                return Err(Failure::invalid_request());
+            }
             gate.expires_at = gate.expires_at.min(identity.expires_at);
-        }
+            gate.subject = Some(identity.subject);
+            let retired = gate.http_touch.take();
+            gate.http_touch = identity.pending_http_touch.take();
+            retired
+        };
+        // Existing trusted non-HTTP rebinding remains available; any old Store
+        // owner must be disposed after the short authority lock is released.
+        drop(retired_touch);
         Ok(Self {
             subject: identity.subject,
             lease,
@@ -293,6 +367,7 @@ struct ExecutionPermit<P, R> {
     subject: i64,
     resource: i64,
     reservation: R,
+    end: Instant,
     permission: PhantomData<fn() -> P>,
 }
 impl<P> Grant<P> {
@@ -315,6 +390,36 @@ impl<P> Grant<P> {
         let _gate = self.lease.checked_gate()?;
         self.credential.validate()
     }
+    // Both public submit and the private client path issue through this same
+    // lease gate. The private path fixes the original absolute ceiling while
+    // the gate is held; capacity reservation alone grants no authority.
+    fn issue_permit<R>(
+        self,
+        reservation: R,
+        whole_end: Option<Instant>,
+    ) -> Result<ExecutionPermit<P, R>, Failure> {
+        let gate = self.lease.checked_gate()?;
+        self.credential.validate()?;
+        let mut end = gate.expires_at.min(self.credential.original_expires_at);
+        if let Some(whole_end) = whole_end {
+            end = end.min(whole_end);
+            // The private absolute ceiling must still be live at the
+            // issuance point, not merely when capacity was reserved.
+            if end <= Instant::now() {
+                return Err(Failure::expired());
+            }
+        }
+        // Construct the one-use permit while the same lease guard is held.
+        // Revocation after this point cannot turn the accepted command into
+        // a pre-admission failure, matching public submit's existing ordering.
+        Ok(ExecutionPermit {
+            subject: self.subject,
+            resource: self.resource,
+            reservation,
+            end,
+            permission: PhantomData,
+        })
+    }
     /// Call AFTER awaiting bounded native capacity. Issuance under the lease gate
     /// is admission; merely reserving a slot is not. The reservation is consumed.
     /// The trusted callback synchronously submits the bound operation to that
@@ -326,23 +431,36 @@ impl<P> Grant<P> {
         reservation: R,
         submit: impl FnOnce(i64, i64, R) -> T,
     ) -> Result<T, Failure> {
-        let permit = {
-            let _gate = self.lease.checked_gate()?;
-            self.credential.validate()?;
-            ExecutionPermit::<P, R> {
-                subject: self.subject,
-                resource: self.resource,
-                reservation,
-                permission: PhantomData,
-            }
-        };
+        let permit = self.issue_permit(reservation, None)?;
         let ExecutionPermit {
             subject,
             resource,
             reservation,
+            end: _,
             permission: _,
         } = permit;
         Ok(submit(subject, resource, reservation))
+    }
+
+    // Only the trusted client adapter may call this while holding its short
+    // admission gate and immediately enqueueing the already reserved command.
+    // A returned Future or delayed callback is not protected by this method.
+    #[allow(dead_code)] // The private client adapter is a later integration slice.
+    pub(crate) fn submit_private<R, T>(
+        self,
+        reservation: R,
+        whole_end: Instant,
+        submit: impl FnOnce(i64, i64, Instant, R) -> T,
+    ) -> Result<T, Failure> {
+        let permit = self.issue_permit(reservation, Some(whole_end))?;
+        let ExecutionPermit {
+            subject,
+            resource,
+            reservation,
+            end,
+            permission: _,
+        } = permit;
+        Ok(submit(subject, resource, end, reservation))
     }
 }
 pub fn subject(scope: &AuthScope) -> i64 {
@@ -520,6 +638,10 @@ mod tests {
 #[cfg(test)]
 #[path = "auth/credential_metadata_tests.rs"]
 mod credential_metadata_tests;
+
+#[cfg(test)]
+#[path = "auth/admission_bridge_tests.rs"]
+mod admission_bridge_tests;
 
 // Checked startup/bootstrap; BrowserLogin/CSRF/compiler remain deferred.
 pub mod prelogin;
