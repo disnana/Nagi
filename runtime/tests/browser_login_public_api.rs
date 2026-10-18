@@ -269,7 +269,7 @@ impl Fixture {
             prelogin::clone_pool(&self.pool),
         )
         .unwrap();
-        http::route(
+        let app = http::route(
             app,
             http::Method::POST,
             "/login",
