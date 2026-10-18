@@ -25,6 +25,8 @@ use std::{
 use std::{future::Future, pin::Pin};
 use tokio::sync::{mpsc, oneshot, Notify};
 const WATCHDOG: Duration = Duration::from_secs(10);
+#[cfg(nagi_auth_stage_diag)]
+use crate::auth::session_deadline_observer::{self as deadline_observer, Db, Observer};
 
 pub(super) use super::{Failure, FailureKind as Kind, Outcome};
 #[derive(Clone, Copy)]
@@ -286,6 +288,8 @@ pub(super) struct BeginRequest {
     reply: oneshot::Sender<Result<Tx, Failure>>,
     // lexical native cleanupが返るまで保持。session senderの強参照は入れない。
     _owner: Option<Box<dyn Send>>,
+    #[cfg(nagi_auth_stage_diag)]
+    diagnostic: Option<Observer>,
 }
 impl BeginRequest {
     pub(super) fn owned(reply: oneshot::Sender<Result<Tx, Failure>>, owner: Box<dyn Send>) -> Self {
@@ -293,6 +297,8 @@ impl BeginRequest {
             mode: super::BeginMode::Deferred,
             reply,
             _owner: Some(owner),
+            #[cfg(nagi_auth_stage_diag)]
+            diagnostic: deadline_observer::current(),
         }
     }
 }
@@ -341,6 +347,8 @@ impl Driver {
                 mode: super::BeginMode::Deferred,
                 reply,
                 _owner: None,
+                #[cfg(nagi_auth_stage_diag)]
+                diagnostic: deadline_observer::current(),
             })
             .await
             .map_err(|_| self.state.worker_error())?;
@@ -522,6 +530,7 @@ enum Command {
 pub struct Tx {
     // Native main database metadata, not a path/identity/durability proof.
     persistent_main: bool,
+    main_source: Option<super::MainSource>,
     sender: mpsc::Sender<Command>,
     #[cfg(test)]
     enqueues: Arc<std::sync::atomic::AtomicUsize>,
@@ -568,6 +577,9 @@ impl ExecReservation<'_> {
 impl Tx {
     // Internal Store prerequisite only. No filename or borrowed Connection
     // escapes; the actual native transaction's main DB supplied this value.
+    pub(crate) fn checked_main_source(&self) -> Option<super::MainSource> {
+        self.main_source.clone()
+    }
     pub(crate) fn has_persistent_main(&self) -> bool {
         self.persistent_main
     }
@@ -641,6 +653,8 @@ impl Tx {
         first: bool,
     ) -> Result<Vec<T>, Failure> {
         let (reply, receiver) = oneshot::channel();
+        #[cfg(nagi_auth_stage_diag)]
+        let observer = deadline_observer::current();
         let command = Command::Read(Box::new(move |native| {
             let result = read_rows::<T>(native, sql_ref(&sql), values, first);
             let retired = result
@@ -648,6 +662,10 @@ impl Tx {
                 .err()
                 .filter(|error| error.retired)
                 .map(Failure::duplicate);
+            #[cfg(nagi_auth_stage_diag)]
+            if let Some(observer) = &observer {
+                observer.db(Db::ReadReply);
+            }
             let _ = reply.send(result);
             retired
         }));
@@ -834,6 +852,10 @@ fn run_session(
     config: &Config,
     state: &Arc<State>,
 ) -> bool {
+    #[cfg(nagi_auth_stage_diag)]
+    let observer = request.diagnostic.clone();
+    #[cfg(nagi_auth_stage_diag)]
+    let native_finish = observer.as_ref().map(Observer::native_finish);
     let mode = Arc::clone(&state.mode);
     let (result, mut outcome, terminal_reply) = {
         let begun = {
@@ -847,6 +869,14 @@ fn run_session(
         let mut native = match begun {
             Ok(native) => native,
             Err(error) => {
+                #[cfg(nagi_auth_stage_diag)]
+                if let Some(observer) = &observer {
+                    observer.db(Db::BeginReply);
+                }
+                #[cfg(nagi_auth_stage_diag)]
+                if let Some(finish) = &native_finish {
+                    finish.begin_failed();
+                }
                 let _ = request.reply.send(Err(Failure::primary_error(
                     Kind::Sql,
                     Outcome::NotApplicable,
@@ -864,8 +894,13 @@ fn run_session(
         if let Some(gate) = &config.begin_gate {
             gate.block_once();
         }
+        #[cfg(nagi_auth_stage_diag)]
+        if let Some(observer) = &observer {
+            observer.db(Db::BeginReply);
+        }
         let _ = request.reply.send(Ok(Tx {
             persistent_main: native.path().is_some_and(|name| !name.is_empty()),
+            main_source: super::main_source::MainSource::capture_native(&native),
             sender,
             #[cfg(test)]
             enqueues: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
@@ -879,7 +914,15 @@ fn run_session(
                         if let Some(gate) = &config.command_gate {
                             gate.block_once();
                         }
+                        #[cfg(nagi_auth_stage_diag)]
+                        if let Some(observer) = &observer {
+                            observer.db(Db::ExecRunning);
+                        }
                         let result = execute(&native, sql_ref(&sql), values);
+                        #[cfg(nagi_auth_stage_diag)]
+                        if let Some(observer) = &observer {
+                            observer.db(Db::ExecReply);
+                        }
                         state.update(|stats| stats.executed += usize::from(result.is_ok()));
                         let retired = result
                             .as_ref()
@@ -892,7 +935,12 @@ fn run_session(
                         }
                     }
                     Command::Read(read) => {
-                        if let Some(error) = read(&native) {
+                        #[cfg(nagi_auth_stage_diag)]
+                        if let Some(observer) = &observer {
+                            observer.db(Db::ReadRunning);
+                        }
+                        let error = read(&native);
+                        if let Some(error) = error {
                             return Err(error);
                         }
                     }
@@ -912,12 +960,37 @@ fn run_session(
                         let result = {
                             let _management = Management::enter(&mode);
                             assert!(!config.panic_management, "private management panic seam");
+                            #[cfg(nagi_auth_stage_diag)]
+                            if let Some(observer) = &observer {
+                                observer.db(match operation {
+                                    Finish::Commit => Db::CommitRunning,
+                                    Finish::Rollback => Db::RollbackRunning,
+                                });
+                            }
                             match operation {
-                                Finish::Commit => native.commit(),
+                                Finish::Commit => {
+                                    #[cfg(nagi_auth_stage_diag)]
+                                    if let Some(finish) = &native_finish {
+                                        finish.commit_enter();
+                                    }
+                                    let result = native.commit();
+                                    #[cfg(nagi_auth_stage_diag)]
+                                    if let Some(finish) = &native_finish {
+                                        finish.commit_return(result.is_ok());
+                                    }
+                                    result
+                                }
                                 Finish::Rollback => native.rollback(),
                             }
                         };
                         if result.is_ok() {
+                            #[cfg(nagi_auth_stage_diag)]
+                            if let Some(observer) = &observer {
+                                observer.db(match operation {
+                                    Finish::Commit => Db::CommitDone,
+                                    Finish::Rollback => Db::RollbackDone,
+                                });
+                            }
                             outcome = match operation {
                                 Finish::Commit => Outcome::Committed,
                                 Finish::Rollback => Outcome::RolledBack,
@@ -953,7 +1026,16 @@ fn run_session(
             }
             let result = {
                 let _management = Management::enter(&mode);
-                native.rollback()
+                #[cfg(nagi_auth_stage_diag)]
+                if let Some(finish) = &native_finish {
+                    finish.cleanup_eof_enter();
+                }
+                let result = native.rollback();
+                #[cfg(nagi_auth_stage_diag)]
+                if let Some(finish) = &native_finish {
+                    finish.cleanup_return(result.is_ok());
+                }
+                result
             };
             if result.is_ok() {
                 outcome = Outcome::RolledBack;
@@ -983,7 +1065,16 @@ fn run_session(
     } else if !matches!(&result, Err(error) if error.kind == Kind::Cleanup) {
         let cleanup = {
             let _management = Management::enter(&mode);
-            conn.execute_batch("ROLLBACK")
+            #[cfg(nagi_auth_stage_diag)]
+            if let Some(finish) = &native_finish {
+                finish.cleanup_after_finish_enter();
+            }
+            let result = conn.execute_batch("ROLLBACK");
+            #[cfg(nagi_auth_stage_diag)]
+            if let Some(finish) = &native_finish {
+                finish.cleanup_return(result.is_ok());
+            }
+            result
         };
         match cleanup {
             Ok(()) => outcome = Outcome::RolledBack,
@@ -1018,8 +1109,20 @@ fn run_session(
     // Return the cleaned native checkout and logical permit before completing
     // finish. An immediate next begin must not race the request's lexical Drop.
     drop(request._owner.take());
+    #[cfg(nagi_auth_stage_diag)]
+    if let Some(finish) = &native_finish {
+        finish.checkout_returned();
+    }
+    #[cfg(nagi_auth_stage_diag)]
+    if let Some(observer) = &observer {
+        observer.db(Db::Settled);
+    }
     if let Some(reply) = terminal_reply {
         let _ = reply.send(result);
     }
     reusable
 }
+
+#[cfg(all(test, nagi_auth_stage_diag))]
+#[path = "session_native_finish_tests.rs"]
+mod native_finish_tests;

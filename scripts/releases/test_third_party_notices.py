@@ -340,6 +340,11 @@ class ThirdPartyNoticeTests(NoticeGraphFixture):
                        "text_path": notices.TEXT_ROOT + hashlib.sha256(nested_text).hexdigest() + ".txt"},
                       row["notice_texts"])
 
+    def test_cdla_permissive_spdx_identifier_is_supported(self):
+        self.assertEqual(
+            notices.parse_spdx_expression("CDLA-Permissive-2.0"),
+            (["CDLA-Permissive-2.0"], []))
+
     def test_unknown_spdx_blocks_only_when_in_selected_graph(self):
         self.assertNotIn(("dev-only", "4.0.0"), {
             (row["name"], row["version"]) for row in notices.validate_notice_payload(

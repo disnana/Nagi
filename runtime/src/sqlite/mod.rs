@@ -6,11 +6,13 @@ mod adapter;
 mod adapter_tests;
 #[cfg(test)]
 mod comparison;
+mod main_source;
 #[cfg(test)]
 mod public_tests;
 #[cfg(test)]
 mod security_sf05_tests;
 mod session;
+pub(crate) use main_source::MainSource;
 #[cfg(test)]
 mod tests;
 use crate::{Error, ErrorKind, FromRow};
@@ -223,6 +225,43 @@ pub fn open(
             ),
             acquire: options.acquire,
         })
+    }
+}
+// Closed startup fork: independent manager/ledger/permits, same attested main.
+pub(crate) fn fork_same_main(
+    pool: &Pool,
+    source: &MainSource,
+    options: Options,
+) -> Result<Pool, Failure> {
+    if pool.adapter.is_closing() || !source.still_same() {
+        return Err(Failure::primary(
+            FailureKind::Closed,
+            Outcome::NotApplicable,
+            "checked source unavailable",
+        ));
+    }
+    if !pool.adapter.matches_main_source(source) {
+        return Err(Failure::primary(
+            FailureKind::Invalid,
+            Outcome::NotApplicable,
+            "checked source mismatch",
+        ));
+    }
+    let config = session::Config {
+        path: Some(source.canonical_path()),
+        queue_capacity: Some(options.queue_capacity),
+        busy: options.busy,
+        ..Default::default()
+    };
+    Ok(Pool {
+        adapter: adapter::Adapter::with_capacity(config, Default::default(), options.connections),
+        acquire: options.acquire,
+    })
+}
+#[cfg(test)]
+impl Pool {
+    pub(crate) fn same_private_queue(&self, other: &Self) -> bool {
+        self.adapter.same_handle(&other.adapter)
     }
 }
 pub fn clone_pool(pool: &Pool) -> Pool {

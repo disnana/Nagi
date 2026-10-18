@@ -5,33 +5,143 @@ mod native_triple;
 use nagic::{check, emit, source};
 use std::fs;
 
+const NATIVE_HTTP_ADAPTER: &str = r#"
+mod native_http_adapter {
+    use nagi_runtime::{http_server as http, Error};
+
+    pub fn get(response: fn(http::Request) -> Result<http::Response, Error>) -> (u16, Vec<u8>) {
+        ::tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async move {
+                let app = http::route(
+                    http::app_default(()),
+                    http::Method::GET,
+                    "/",
+                    http::public_policy(),
+                    move |request, _state, _authority| {
+                        let response = response;
+                        async move { response(request) }
+                    },
+                )
+                .unwrap();
+                let app = http::rate_route(
+                    app,
+                    http::Method::GET,
+                    "/",
+                    http::rate_policy(1_000_000, 1000).unwrap(),
+                )
+                .unwrap();
+                let listener = ::tokio::net::TcpListener::bind("127.0.0.1:0")
+                    .await
+                    .unwrap();
+                let address = listener.local_addr().unwrap();
+                let response_limits = http::response_limits(
+                    1_048_576,
+                    8192,
+                    32,
+                    8192,
+                    32,
+                    65_536,
+                    256,
+                    83_886_080,
+                    1024,
+                    285_212_672,
+                    8192,
+                    32,
+                )
+                .unwrap();
+                let options =
+                    http::with_response_limits(http::default_options(), response_limits).unwrap();
+                let rate_limits = http::rate_limits(64, 64, 4096, 4_194_304, 65_536).unwrap();
+                let options = http::with_rate_limits(options, rate_limits).unwrap();
+                let options = http::authority(
+                    options,
+                    "https://localhost",
+                    vec!["localhost".to_owned()],
+                    1,
+                    128,
+                )
+                .unwrap();
+                let (stop, shutdown) = ::tokio::sync::oneshot::channel();
+                let task = ::tokio::spawn(http::serve_listener(listener, app, options, async {
+                    let _ = shutdown.await;
+                }));
+                let received = ::tokio::task::spawn_blocking(move || {
+                    use ::std::io::{Read, Write};
+                    let mut stream = ::std::net::TcpStream::connect_timeout(
+                        &address,
+                        ::std::time::Duration::from_secs(3),
+                    )
+                    .unwrap();
+                    stream
+                        .set_read_timeout(Some(::std::time::Duration::from_secs(3)))
+                        .unwrap();
+                    stream
+                        .set_write_timeout(Some(::std::time::Duration::from_secs(3)))
+                        .unwrap();
+                    stream
+                        .write_all(
+                            b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                        )
+                        .unwrap();
+                    let mut raw = Vec::new();
+                    stream.take(65537).read_to_end(&mut raw).unwrap();
+                    assert!(raw.len() <= 65536, "bounded native HTTP fixture response");
+                    let separator = raw
+                        .windows(4)
+                        .position(|window| window == b"\r\n\r\n")
+                        .expect("HTTP response headers");
+                    let head = ::std::str::from_utf8(&raw[..separator]).unwrap();
+                    let status = head
+                        .lines()
+                        .next()
+                        .unwrap()
+                        .split_whitespace()
+                        .nth(1)
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    (status, raw[separator + 4..].to_vec())
+                })
+                .await
+                .unwrap();
+                stop.send(()).unwrap();
+                ::tokio::time::timeout(::std::time::Duration::from_secs(3), task)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap();
+                received
+            })
+    }
+}
+"#;
+
 #[test]
 fn list_detail_body_is_exact_in_three_source_forms() {
-    let assertion = format!(
-        "#[test] fn native_body() {{ let response = build_page().unwrap(); assert_eq!(response.status().value(), 200); assert_eq!(response.body(), {:?}.as_bytes()); }}",
-        include_str!("fixtures/security-sf04/expected-list-detail.html")
-    );
     native_triple::Fixture::new().run_three(
         "sf04-list-detail",
         include_str!("fixtures/security-sf04/list-detail.nagi"),
         include_str!("fixtures/security-sf04/list-detail-manual.low"),
-        "",
-        &assertion,
+        NATIVE_HTTP_ADAPTER,
+        &format!(
+            "#[test] fn native_body() {{ let (status, body) = native_http_adapter::get(build_page); assert_eq!(status, 200); assert_eq!(body, {:?}.as_bytes()); }}",
+            include_str!("fixtures/security-sf04/expected-list-detail.html")
+        ),
     );
 }
 
 #[test]
 fn renamed_imports_build_the_page_and_keep_user_type_in_three_source_forms() {
-    let assertion = format!(
-        "#[test] fn native_body() {{ let response = build_page().unwrap(); assert_eq!(response.status().value(), 201); assert_eq!(response.body(), {:?}.as_bytes()); assert_eq!(user_value(), 7); }}",
-        include_str!("fixtures/security-sf04/expected-renamed.html")
-    );
     native_triple::Fixture::new().run_three(
         "sf04-renamed",
         include_str!("fixtures/security-sf04/renamed-page.nagi"),
         include_str!("fixtures/security-sf04/renamed-page-manual.low"),
-        "",
-        &assertion,
+        NATIVE_HTTP_ADAPTER,
+        &format!(
+            "#[test] fn native_body() {{ let (status, body) = native_http_adapter::get(build_page); assert_eq!(status, 201); assert_eq!(body, {:?}.as_bytes()); assert_eq!(user_value(), 7); }}",
+            include_str!("fixtures/security-sf04/expected-renamed.html")
+        ),
     );
 }
 
@@ -41,8 +151,8 @@ fn http_only_plain_response_keeps_user_type_in_three_source_forms() {
         "sf04-http-only",
         include_str!("fixtures/security-sf04/http-only.nagi"),
         include_str!("fixtures/security-sf04/http-only-manual.low"),
-        "",
-        "#[test] fn native_body() { let response = plain(); assert_eq!(response.status().value(), 200); assert_eq!(response.body(), b\"plain\"); assert_eq!(user_value(), 9); }",
+        NATIVE_HTTP_ADAPTER,
+        "#[test] fn native_body() { let (status, body) = native_http_adapter::get(plain); assert_eq!(status, 200); assert_eq!(body, b\"plain\"); assert_eq!(user_value(), 9); }",
     );
 }
 

@@ -423,5 +423,53 @@
       "--test",
       "security_sf01"
     ]
+  },
+  {
+    "name": "CORS_native_three_forms",
+    "contract": "Exact typed CORS metadata; source-only registration is not execution",
+    "files": [
+      "compiler/tests/security_sf03_cors.rs"
+    ],
+    "test_names": [
+      "cors_dynamic_registration_and_owned_socket_are_native_in_three_forms",
+      "aliases_and_user_shadow_type_keep_canonical_identity_in_three_forms",
+      "wrong_credentials_opacity_and_nonclone_reject_at_checker_original_lines",
+      "wrong_policy_nominal_shadow_and_reuse_reject_at_checker_original_lines",
+      "user_named_cors_functions_do_not_gain_standard_call_paths"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagic",
+      "--test",
+      "security_sf03_cors"
+    ]
+  },
+  {
+    "name": "CORS_owned_socket_and_preflight",
+    "contract": "Exact typed CORS metadata; source-only registration is not execution",
+    "files": [
+      "runtime/tests/cors_public_api.rs"
+    ],
+    "test_names": [
+      "actual_allow_deny_omit_and_head_record_selection_preserve_execution",
+      "successful_preflight_is_metadata_only_and_ordinary_options_remains_distinct",
+      "preflight_grammar_denials_and_lookup_status_are_exact",
+      "selected_early_auth_handler_replacements_and_public304_keep_cors",
+      "preflight_body_and_admission_errors_do_not_create_proof_or_run_handler",
+      "pending_timeout_and_cancel_release_capacity_without_delay_masking",
+      "authority_and_route_less_errors_never_borrow_another_records_grant"
+    ],
+    "command": [
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "nagi-runtime",
+      "--test",
+      "cors_public_api"
+    ]
   }
 ]

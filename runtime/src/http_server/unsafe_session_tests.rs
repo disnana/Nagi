@@ -4,7 +4,9 @@ use super::*;
 fn session_source() -> Policy<(), ()> {
     Policy {
         source: PolicySource::Session,
-        factory: Arc::new(|_, _, _| panic!("registration must not invoke policy")),
+        kind: PolicyKind::Ordinary(Arc::new(|_, _, _| {
+            panic!("registration must not invoke policy")
+        })),
     }
 }
 

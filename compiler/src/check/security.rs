@@ -127,9 +127,69 @@ impl Checker {
             self.valid(&output, line)?;
             return Ok(output);
         }
+        if matches!(op, O::SessionCsrfTokens | O::SessionCsrfPolicy) {
+            let output = if op == O::SessionCsrfTokens {
+                crate::stdlib::resource_type(R::App, vec![types[0].clone(), types[1].clone()])
+            } else {
+                policy(types[0].clone(), types[1].clone())
+            };
+            self.valid(&output, line)?;
+            let hints = if op == O::SessionCsrfTokens {
+                vec![
+                    output.clone(),
+                    Type::generic("view", vec![Type::named("str")]),
+                    resource(R::CsrfStore),
+                ]
+            } else {
+                vec![output.clone(), resource(R::CsrfStore)]
+            };
+            for (i, arg) in args.iter_mut().enumerate() {
+                let ty = self.expr(arg, Some(&hints[i]))?;
+                if info.parameters[i] == Passing::Reference {
+                    self.reference(&ty, &hints[i], arg.line)?;
+                    self.available(arg, false)?;
+                } else {
+                    self.demand(&ty, &hints[i], arg.line)?;
+                    self.consume(arg)?;
+                }
+                self.hold_value(arg, info.parameters[i] == Passing::Reference);
+            }
+            return Ok(Type::generic("Result", vec![output, Type::named("Error")]));
+        }
         let session_result = |ty| Type::generic("Result", vec![ty, resource(R::SessionFailure)]);
         let view = |ty| Type::generic("view", vec![ty]);
         let (hints, output) = match op {
+            O::CsrfOptions => (
+                vec![Type::named("i64"); 5],
+                Type::generic(
+                    "Result",
+                    vec![resource(R::CsrfOptions), resource(R::CsrfFailure)],
+                ),
+            ),
+            O::CsrfOpen => (
+                vec![
+                    view(resource(R::SessionStore)),
+                    resource(R::CsrfOptions),
+                    view(resource(R::Options)),
+                ],
+                Type::generic(
+                    "Result",
+                    vec![resource(R::CsrfStore), resource(R::CsrfFailure)],
+                ),
+            ),
+            O::CsrfCloneStore => (vec![view(resource(R::CsrfStore))], resource(R::CsrfStore)),
+            O::CsrfKind => (
+                vec![view(resource(R::CsrfFailure))],
+                resource(R::AuthFailureKind),
+            ),
+            O::CsrfMessage => (
+                vec![view(resource(R::CsrfFailure))],
+                view(Type::named("str")),
+            ),
+            O::CsrfOutcome => (
+                vec![view(resource(R::CsrfFailure))],
+                resource(R::SqliteOutcome),
+            ),
             O::SessionOptions => (
                 vec![Type::named("i64"); 8],
                 session_result(resource(R::SessionOptions)),

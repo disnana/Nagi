@@ -5,6 +5,8 @@ pub mod checked;
 mod constant_eval;
 pub mod diagnostics;
 pub(crate) mod editor;
+#[cfg(nagi_editor_stage_diag)]
+mod editor_stage_diag;
 pub mod emit;
 mod generation;
 pub mod graph;

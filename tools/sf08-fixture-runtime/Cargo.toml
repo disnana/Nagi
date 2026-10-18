@@ -1,0 +1,11 @@
+[package]
+name = "nagi-sf08-fixture-runtime"
+publish = false
+edition = "2021"
+
+# Explicit standalone tool: root `cargo test --workspace` never runs a browser-waiting binary.
+[workspace]
+
+[dependencies]
+nagi-runtime = { path = "../../runtime" }
+tokio = { version = "=1.53.1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util", "io-std", "test-util"] }

@@ -122,7 +122,10 @@ pub(super) struct LeaseDelivery<'a> {
 }
 impl<'a> LeaseDelivery<'a> {
     pub(super) fn for_lease(lease: &'a crate::auth::Lease) -> Result<Self, crate::auth::Failure> {
-        let gate = lease.checked_gate()?;
+        // Session mutation staging/enqueue stays closed while HTTP auth/body/
+        // subject admission is pending. Read/no-touch and trusted deferred touch
+        // use their existing separate paths, without blocking general SQLite.
+        let gate = lease.checked_session_gate()?;
         let cell = lease
             .delivery
             .0

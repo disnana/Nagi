@@ -750,6 +750,22 @@ impl Adapter {
             seams,
         }))
     }
+    pub(super) fn matches_main_source(&self, source: &super::MainSource) -> bool {
+        let path = self
+            .0
+            .pool
+            .0
+            .manager
+            .config
+            .path
+            .as_ref()
+            .and_then(|p| p.to_str());
+        super::main_source::MainSource::capture(path).is_some_and(|v| v == *source)
+    }
+    #[cfg(test)]
+    pub(super) fn same_handle(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
     pub fn is_closing(&self) -> bool {
         self.0.ledger.snapshot().closing
     }
@@ -797,7 +813,17 @@ impl Adapter {
         if let Some(error) = self.0.ledger.error() {
             return Err(error);
         }
+        #[cfg(nagi_auth_stage_diag)]
+        let observer = crate::auth::session_deadline_observer::current();
+        #[cfg(nagi_auth_stage_diag)]
+        if let Some(observer) = &observer {
+            observer.db(crate::auth::session_deadline_observer::Db::LogicalCheckout);
+        }
         let object = self.0.pool.get(budget).await?;
+        #[cfg(nagi_auth_stage_diag)]
+        if let Some(observer) = &observer {
+            observer.db(crate::auth::session_deadline_observer::Db::CheckoutReady);
+        }
         if self.0.seams.applies(object.ordinal) {
             if let Some(gate) = &self.0.seams.checkout {
                 gate.pause().await;
@@ -815,6 +841,10 @@ impl Adapter {
         };
         let mut request = Some(BeginRequest::owned(reply, Box::new(owner)));
         request.as_mut().unwrap().mode = mode;
+        #[cfg(nagi_auth_stage_diag)]
+        if let Some(observer) = &observer {
+            observer.db(crate::auth::session_deadline_observer::Db::BeginEnqueue);
+        }
         // admissionとclosingは同じledgerで直列化。try_sendはworker inboxのみで、
         // slot待機/queue fairnessはTokio Semaphoreへ委譲する。
         let mut rejected = None;

@@ -1,6 +1,6 @@
 # Authentication and authorization (unreleased 0.2.0 SF01)
 
-Authentication verifies who a caller is; authorization checks whether that caller may perform a particular operation on its actual target. SF01 provides explicit standard HTTP Policy, request-bound proofs and invalidation at request end. SF02 durable Sessions and Cookie issuance are partially implemented; CSRF/CORS, cryptographic verifiers, typed HTML and outbound HTTP remain later steps. This does not establish completion of Security Foundation or retroactively change published 0.1.x.
+Authentication verifies who a caller is; authorization checks whether that caller may perform a particular operation on its actual target. SF01 provides explicit standard HTTP Policy, request-bound proofs and invalidation at request end. The integrated development-source candidate includes SF02 Sessions/Cookies and B1 Session CSRF, SF03 CORS, an Ed25519 verifier, a typed HTML subset, and SF06 outbound HTTP. Final runtime/native/browser/TLS/four-OS acceptance for the complete Session flows, including public login, and for Security Foundation remains pending. Arbitrary active HTML is unsupported. Formal 0.2.0 is unreleased and does not retroactively change published 0.1.x.
 
 ## Choose a policy for every route
 
@@ -15,17 +15,13 @@ import std.http.server as http
 class State:
     greeting: str
 async def hello(request: http.Request, state: shared[State], access: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, view(state.greeting)))
-async def main() -> Result[unit, Error]:
-    app = http.app_default[State](State(greeting="Hello, Nagi!"))
-    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
-    limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
-    return await http.serve(app, 8080, limits)
+    context = http.response_context(view(request))
+    return http.text(context, http.Status.OK, view(state.greeting))
 ```
 
-Save this as `server.nagi` in your working directory and run `nagic run server.nagi` there with the development compiler. In another terminal, `curl http://127.0.0.1:8080/` returns `Hello, Nagi!`. Stop with Ctrl+C. Choose another port if occupied. See [setup](getting-started.md) and the [HTTP reference](http-server.md) for installation, limits and diagnostics.
+This shows the handler shape only; it is not a runnable server by itself. The 0.2.0 candidate requires explicit response and rate budgets plus a rate policy for every route before startup. No unverified values are recommended here. See the [HTTP API reference](http-server.md#explicit-sf07-budgets-and-rate-policy-development-candidate) for the requirements; runtime acceptance remains pending.
 
-This checks a public response over plaintext loopback HTTP. An HTTPS origin setting does not add TLS or complete browser authentication, Secure Cookies or Origin/CSRF. Migrate TLS frontend and actual peer/proxy deployment through [authority configuration](http-server.md#limits-and-shutdown).
+A complete loopback server still needs a TLS frontend for HTTPS; an HTTPS origin setting does not add TLS or complete browser authentication, Secure Cookies or Origin/CSRF. See [authority configuration](http-server.md#limits-and-shutdown) for peer and proxy deployment.
 
 Policy is nonCopy/nonshared configuration moved into a route; create another policy for another registration. The checker matches Policy state/output against the three handler arguments. Public policy cannot connect a proof-requiring handler. It does not prove that choosing public is appropriate for the business or that verifier/authorizer logic is correct.
 
@@ -58,9 +54,9 @@ A protected adapter first obtains bounded native capacity. Reserving capacity is
 | `UNAVAILABLE` | 503 | `security service unavailable` |
 | `INTERNAL` | 500 | `security service failure` |
 
-Read failures with `auth.kind(view(failure))` and `auth.message(view(failure))`; the message view borrows its Failure. An exhausted security budget returns 504, and an unwinding panic returns a generic 500. Business Result Err is handled by the app/route mapper and is not flattened into security Failure.
+Read failures with `auth.kind(view(failure))` and `auth.message(view(failure))`; the message view borrows its Failure. An exhausted security budget returns 504, and an unwinding panic returns a generic 500. Business Result Err is handled by the app/route mapper and is not flattened into security Failure. A mapper receives a request-borrowed `ResponseContext` and returns `Result[http.Response, Error]`; response-factory errors propagate as that Error.
 
-`security_timeout(options, positive_ms)` sets one absolute budget shared by verification and authorization. It is not reset at each wait. HEAD fallback inherits GET policy; explicit HEAD and OPTIONS also require Policy. 404/405 issue no proof and invoke no handler. CORS preflight remains unimplemented until SF03.
+`security_timeout(options, positive_ms)` sets one absolute budget shared by verification and authorization. It is not reset at each wait. HEAD fallback inherits GET policy; explicit HEAD and OPTIONS also require Policy. 404/405 issue no proof and invoke no handler. The integrated candidate CORS layer adds metadata-only preflight; see [HTTP CORS](http-server.md#explicit-cors-route-metadata-unreleased-sf03-candidate). It does not waive authentication or CSRF; final browser/proxy acceptance remains pending.
 
 The finalizer owns Content-Type, nosniff and reserved framing/security headers. Raw HTML, Set-Cookie, CORS/CSP, arbitrary cache and authentication-challenge headers cannot bypass this boundary. There is no guarantee of recovery from panic=abort, OOM, forced stopping of non-yielding work, arbitrary Rust double panic, or rollback of external side effects. Custom Rust HTTP hosts outside standard HTTP remain an explicit trusted boundary and do not inherit Policy guarantees automatically.
 
@@ -70,7 +66,7 @@ The finalizer owns Content-Type, nosniff and reserved framing/security headers. 
 
 Unreleased SF05 unifies the standard entry point around Query from a direct literal and actual values bound through Parameters. Query restricts the origin of SQL structure; it contains no Grant or tenant predicate.
 
-A reviewed trusted adapter holds fixed SQL and ownership predicates. Bind the **actual subject and target** supplied by `Grant.submit` into a predicate such as `WHERE owner=? AND id=?`. Adding a Grant to an arbitrary query cannot prove target isolation. Mutable session/owner conditions need a predicate or recheck in the same Tx. Durable Session and generation management remain SF02 work and are not counted as SF05 guarantees.
+A reviewed trusted adapter holds fixed SQL and ownership predicates. Bind the **actual subject and target** supplied by `Grant.submit` into a predicate such as `WHERE owner=? AND id=?`. Adding a Grant to an arbitrary query cannot prove target isolation. Mutable session/owner conditions need a predicate or recheck in the same Tx. Durable Session and generation-management source is included in the integrated SF02 candidate, but it is not an SF05 guarantee and does not imply atomic business commits.
 
 A trusted Rust host waits for bounded queue capacity using Tx's opaque `reserve_exec`, then invokes `reservation.enqueue(Query, Parameters)` inside `Grant.submit`'s synchronous callback. Capacity reservation is not admission. Admission linearizes at single-use permit issuance under the gate. Revocation before issuance means zero native enqueues; invalidation after issuance leaves the operation admitted even before the callback synchronously enqueues. Later revocation or HTTP cancellation does not promise cancellation or rollback. The callback must synchronously send to the actual queue rather than return a Future that enqueues later.
 
@@ -80,6 +76,6 @@ DDL/bootstrap belongs to trusted management code separate from requests. Fixed R
 
 The standard runtime rejects registration of unsafe methods using `session_authenticated_policy` or `session_authorized_policy` without a CSRF guard. Only GET, HEAD and OPTIONS are accepted. POST, PUT, PATCH, DELETE and every other method are rejected with an Invalid `Error`. This applies to both `route` and `route_mapped`; `serve` and `serve_listener` also recheck every route before binding or accepting connections. Ordinary Bearer policies continue to reject every Cookie. There is no exemption boolean or authentication-source fallback.
 
-This is an interim restriction that closes unsafe Session routes. The authenticated CSRF token endpoint/guard (B1), successful guarded POST rotate/logout, CORS and actual TLS/browser validation remain pending. The checker does not prove that GET/HEAD/OPTIONS handlers have no side effects. Do not move mutations to GET to bypass the restriction.
+The unreleased B1 development source adds `std.auth.csrf` (`Options`, `CsrfStore`, `Failure`; `options`, async `open`, explicit `clone_store`, `kind`, `message`, `outcome`) and `std.http.server.session_csrf_tokens[S, E]` / `session_csrf_policy[S, A]`. `open` borrows the actual Session store and checked HTTP options. Both HTTP operations move the CSRF handle; `session_csrf_policy` seals only an unguarded policy for the same actual Session store. The runtime checks that identity and rejects a mismatched store or a second guard. The compiler checks nominal types, move/borrow and opaque construction, but does not statically prove store identity. Plain unsafe Session registration remains rejected; the authenticated token endpoint and guarded unsafe route are separate closed paths.
 
-The Session issue/rotate/logout/apply APIs remain. This restriction changes route registration conditions and does not remove native DB mutations or the delivery protocol. Internal direct tests do not establish successful guarded Session HTTP. Cancellation does not guarantee rollback of admitted DB operations.
+B1 guards unsafe ambient-cookie requests with exact configured Origin, a bounded token ledger and a Session-generation checkpoint after the body. Token delivery uses authenticated GET or explicit HEAD with no-store finalization. The scope is Session-backed CSRF. The integrated candidate also includes CORS policy/preflight; final acceptance for the complete Session flows, including public login, and actual TLS/browser/proxy validation remains pending. The checker does not prove that GET/HEAD/OPTIONS handlers have no side effects. Do not move mutations to GET to bypass the restriction. Cancellation does not guarantee rollback of admitted DB operations or the later business commit.

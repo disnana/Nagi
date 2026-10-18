@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const compiler = require('../src/compiler');
+const observation = require('./editor-stage-observation');
 const features = require('../src/features');
 const { fixtures } = require('./actor-fixtures');
 const root = path.resolve(__dirname, '../../..');
@@ -16,8 +17,8 @@ function fixture(t, suffix, text) {
   fs.writeFileSync(path.join(folder, `main.${suffix}`), text);
   return folder;
 }
-async function symbols(folder, file, overlays = []) {
-  const result = await new Promise(resolve => compiler.runCheck(compiler.compilerPath('', root, root),
+async function symbols(folder, file, overlays = [], observationId) {
+  const result = await new Promise(resolve => observation.runCheck(observationId, compiler, compiler.compilerPath('', root, root),
     ['symbols', file, '--editor-input'], folder, 10000, resolve, 16 * 1024 * 1024,
     JSON.stringify({ files: overlays })));
   assert.equal(result.error, null, result.output);
@@ -30,7 +31,7 @@ function targetAt(index, text, file, offset, folder) {
 for (const [suffix, text] of fixtures) {
   test(`real ${suffix} actor symbols separate modules and preserve three-parameter handles`, async t => {
     const folder = fixture(t, suffix, text), file = path.join(folder, `main.${suffix}`), source = { file };
-    const index = await symbols(folder, `main.${suffix}`);
+    const index = await symbols(folder, `main.${suffix}`, [], suffix === 'low' ? 'actor_low' : undefined);
     assert.deepEqual(index.standard_sources.map(item => item.file).sort(), [actorSource, httpSource].sort());
     const actor = index.definitions.find(item => item.id?.module === actorSource && item.name === 'Actor');
     const turn = index.definitions.find(item => item.id?.module === actorSource && item.name === 'Turn');

@@ -10,10 +10,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MAIN_REF = "refs/heads/main"
 COMPONENTS = ("nagi", "vscode", "jetbrains")
-JOBS = ("linux", "release-plan", "jetbrains", "vscode-package", "nagi-package")
+JOBS = ("linux", "rust-1-88", "release-plan", "jetbrains", "vscode-package", "nagi-package")
 ALLOWED_NAMES = {
     "github.event_name", "github.ref",
-    "needs.linux.result", "needs.release-plan.result",
+    "needs.linux.result", "needs.rust-1-88.result", "needs.release-plan.result",
     "needs.release-plan.outputs.release_nagi",
     "needs.release-plan.outputs.release_vscode",
     "needs.release-plan.outputs.release_jetbrains",
@@ -151,6 +151,7 @@ def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None):
     release_set = set(releases)
     needs = {
         "linux": {"result": results.get("linux", "success")},
+        "rust-1-88": {"result": results.get("rust-1-88", results.get("linux", "success"))},
         "release-plan": {
             "result": results.get("release-plan", "success"),
             "outputs": {
@@ -176,6 +177,8 @@ class PublishConditionTests(unittest.TestCase):
             "__import__('os')",
             "github.ref; system('anything')",
             "contains(github.ref, 'main')",
+            "needs.unlisted.result == 'success'",
+            "needs.rust-1-89.result == 'success'",
         ):
             with self.subTest(expression=expression), self.assertRaises(ValueError):
                 evaluate(expression, fixture())
@@ -365,6 +368,30 @@ class PublishConditionTests(unittest.TestCase):
             "vscode-package": "failure", "nagi-package": "success",
         })
         self.assertFalse(evaluate(self.expression, unrelated_failure))
+
+    def test_rust_profile_result_is_required_independently_of_linux(self):
+        for component in COMPONENTS:
+            for status in ("failure", "cancelled", "skipped", "", None):
+                with self.subTest(component=component, status=status):
+                    context = fixture(releases=(component,), results={"rust-1-88": status})
+                    self.assertFalse(evaluate(self.expression, context))
+        context = fixture(releases=COMPONENTS)
+        del context["needs"]["rust-1-88"]
+        with self.assertRaisesRegex(ValueError, "Unknown fixture name"):
+            evaluate(self.expression, context)
+
+    def test_jetbrains_skip_exception_requires_both_analysis_jobs_skipped(self):
+        for linux_status in ("success", "skipped"):
+            for rust_status in ("success", "skipped", "failure", "cancelled", "", None):
+                with self.subTest(linux=linux_status, rust=rust_status):
+                    context = fixture(releases=("jetbrains",), results={
+                        "linux": linux_status, "rust-1-88": rust_status,
+                        "vscode-package": "skipped", "nagi-package": "skipped",
+                    })
+                    expected = ((linux_status, rust_status) in (
+                        ("success", "success"), ("skipped", "skipped"),
+                    ))
+                    self.assertEqual(evaluate(self.expression, context), expected)
 
     def test_release_plan_must_succeed_even_if_required_packages_succeeded(self):
         for status in ("skipped", "failure", "cancelled"):

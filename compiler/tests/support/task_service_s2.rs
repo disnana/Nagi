@@ -199,27 +199,63 @@ mod native {
                 state.stopped.take().unwrap(), state.events.clone())
         };
         let _guard=HttpGuard(events.clone());
-        let app=web::route(web::app_default(counter), web::Method::GET, "/counter", web::public_policy(), |_, counter, ()| async move {
-            Ok(match actor::call(&counter, 0, 0, 1000).await {
-                Ok(Ok(value))=>web::text(web::Status::OK, &value.to_string()),
-                _=>web::text(web::Status::SERVICE_UNAVAILABLE, "stopped"),
-            })
+        let app=web::route(web::app_default(counter), web::Method::GET, "/counter", web::public_policy(), |request, counter, ()| async move {
+            match actor::call(&counter, 0, 0, 1000).await {
+                Ok(Ok(value))=>web::text(
+                    web::response_context(&request),
+                    web::Status::OK,
+                    &value.to_string(),
+                ),
+                _=>web::text(
+                    web::response_context(&request),
+                    web::Status::SERVICE_UNAVAILABLE,
+                    "stopped",
+                ),
+            }
         }).unwrap();
-        let app=web::route(app, web::Method::GET, "/business", web::public_policy(), |_, counter, ()| async move {
+        let app=web::rate_route(
+            app,
+            web::Method::GET,
+            "/counter",
+            web::rate_policy(1_000_000, 1000)?,
+        )?;
+        let app=web::route(app, web::Method::GET, "/business", web::public_policy(), |request, counter, ()| async move {
             let reply=actor::call(&counter, -1, 0, 1000).await.unwrap();
             assert_eq!(reply, Err("business sentinel".to_owned()));
-            Ok(web::text(web::Status::CONFLICT, "business sentinel"))
+            web::text(
+                web::response_context(&request),
+                web::Status::CONFLICT,
+                "business sentinel",
+            )
         }).unwrap();
+        let app=web::rate_route(
+            app,
+            web::Method::GET,
+            "/business",
+            web::rate_policy(1_000_000, 1000)?,
+        )?;
         let held=events.clone();
         let app=web::route(app, web::Method::GET, "/hold", web::public_policy(), move |_, _, ()| {
             let held=held.clone(); async move {
                 let _guard=HandlerGuard(held.clone());
                 held.handler_started.store(true, Ordering::Release); held.changed.notify_waiters();
                 std::future::pending::<()>().await;
-                Ok(web::empty(web::Status::NO_CONTENT))
+                Err(Error::internal("pending HTTP handler resumed unexpectedly"))
             }
         }).unwrap();
-        let options=web::authority(web::default_options(), "https://localhost", vec!["localhost".to_owned()], 1, 128)?;
+        let app=web::rate_route(
+            app,
+            web::Method::GET,
+            "/hold",
+            web::rate_policy(1_000_000, 1000)?,
+        )?;
+        let response_limits = web::response_limits(
+            1_048_576, 8192, 32, 8192, 32, 65_536, 256, 83_886_080, 1024, 285_212_672, 8192, 32,
+        )?;
+        let options = web::with_response_limits(web::default_options(), response_limits)?;
+        let rate_limits = web::rate_limits(64, 64, 4096, 4_194_304, 65_536)?;
+        let options = web::with_rate_limits(options, rate_limits)?;
+        let options=web::authority(options, "https://localhost", vec!["localhost".to_owned()], 1, 128)?;
         web::serve_listener(listener, app, options, async { let _=stopped.await; }).await?;
         events.http_returned.store(true, Ordering::Release); events.changed.notify_waiters();
         if events.case == Case::HttpError { Err(Error::invalid("HTTP outer error sentinel")) } else { Ok(()) }

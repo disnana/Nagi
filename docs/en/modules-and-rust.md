@@ -83,16 +83,18 @@ The limits are 128 files, depth 64, 8 MB total, and 2 MB per file. Type-checking
 
 ## Import the standard HTTP library
 
-`std.http.server` and `std.actor` are standard libraries available from Nagi 0.1.8.
+`std.http.server` and `std.actor` are standard libraries available from Nagi 0.1.8. The response-factory example below uses the unreleased 0.2.0 Context-first API.
 
 ```nagi
 import std.http.server as http
 from std.http.server import Request, Response, Status as Code
 
-def main():
-    response = http.text(Code.OK, "Hello, Nagi!")
-    print(response.status.value)
+def greeting(request: Request) -> Result[Response, Error]:
+    context = http.response_context(view(request))
+    return http.text(context, Code.OK, "Hello, Nagi!")
 ```
+
+This is a request-context response-factory fragment, not a server startup. See the [HTTP API reference](http-server.md#explicit-sf07-budgets-and-rate-policy-development-candidate) for response and rate budgets and the required rate policy on every route.
 
 Standard modules are registered libraries provided with the compiler. A same-named file in the current directory or an editor buffer cannot replace them. A module import requires `as`; `from` selects individual definitions. Importing starts no listener or worker. Generated Low retains standard definition IDs, and aliases of a standard type refer to the same native type.
 

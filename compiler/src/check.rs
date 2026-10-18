@@ -1,4 +1,5 @@
 pub(crate) mod checked;
+mod client;
 mod security;
 mod sqlite;
 
@@ -1322,9 +1323,33 @@ impl Checker {
             self.demand(got, wanted, line)
         }
     }
-    fn mapper(&self, ty: &Type, error_type: &Type, line: usize) -> Result<(), String> {
+    fn http_response_mapper(
+        &self,
+        ty: &Type,
+        error_type: &Type,
+        line: usize,
+        operation: &str,
+    ) -> Result<(), String> {
         let response = crate::stdlib::resource_type(crate::stdlib::Resource::Response, vec![]);
-        let expected = Type::generic("fn", vec![error_type.clone(), response]);
+        let context = Type::generic(
+            "view",
+            vec![crate::stdlib::resource_type(
+                crate::stdlib::Resource::ResponseContext,
+                vec![],
+            )],
+        );
+        let result = Type::generic("Result", vec![response.clone(), Type::named("Error")]);
+        let expected = Type::generic("fn", vec![context, error_type.clone(), result]);
+        // Both former HTTP error mappers accepted one parameter and returned
+        // Response. Diagnose that obsolete shape before the general mismatch.
+        if ty.0 == "fn" && ty.1.len() == 2 && ty.1.first() == Some(error_type) {
+            let guidance = if operation == "App" {
+                "旧App mapperは単一引数のfn[E, ...]形式です。第1引数にview[ResponseContext]を追加し、Result[Response, Error]を返す形へ移行してください"
+            } else {
+                "旧route_mapped mapper fn[F, Response]は使えません。第1引数にview[ResponseContext]を追加し、Result[Response, Error]を返す形へ移行してください"
+            };
+            return Err(error(line, guidance));
+        }
         self.demand(ty, &expected, line)?;
         if error_type.contains_view() {
             return Err(error(line, "HTTP mapperのエラー値にviewは保持できません"));
@@ -1405,7 +1430,9 @@ impl Checker {
         let info = crate::stdlib::operation_info(operation);
         if matches!(
             info.module,
-            crate::stdlib::StandardModule::Auth | crate::stdlib::StandardModule::AuthSession
+            crate::stdlib::StandardModule::Auth
+                | crate::stdlib::StandardModule::AuthSession
+                | crate::stdlib::StandardModule::AuthCsrf
         ) || matches!(
             operation,
             O::PublicPolicy
@@ -1413,6 +1440,8 @@ impl Checker {
                 | O::AuthorizedPolicy
                 | O::SessionAuthenticatedPolicy
                 | O::SessionAuthorizedPolicy
+                | O::SessionCsrfTokens
+                | O::SessionCsrfPolicy
                 | O::SecurityTimeout
         ) {
             return self.security_standard(operation, types, args, line);
@@ -1425,6 +1454,9 @@ impl Checker {
         }
         if info.module == crate::stdlib::StandardModule::Sqlite {
             return self.sqlite_standard(operation, types, args, line);
+        }
+        if info.module == crate::stdlib::StandardModule::HttpClient {
+            return self.client_standard(operation, types, args, line);
         }
         if info.module == crate::stdlib::StandardModule::Task {
             return self.task_operation(operation, types, args, expression);
@@ -1460,6 +1492,27 @@ impl Checker {
             return self.result_standard(types, args, line);
         }
         if args.len() != info.arity {
+            let migration = match (operation, args.len()) {
+                (O::Empty, 1) => Some(
+                    "emptyはContext-firstです。requestからcontextを得てhttp.empty(context, status)を使ってください",
+                ),
+                (O::Text, 2) => Some(
+                    "textはContext-firstです。requestからcontextを得てhttp.text(context, status, body)を使ってください",
+                ),
+                (O::Bytes, 2) => Some(
+                    "bytesはContext-firstです。requestからcontextを得てhttp.bytes(context, status, body)を使ってください",
+                ),
+                (O::Json, 2) => Some(
+                    "jsonはContext-firstです。requestからcontextを得てhttp.json[T](context, status, value)を使ってください",
+                ),
+                (O::HttpHtmlResponse, 2) => Some(
+                    "html_responseはContext-firstです。requestからcontextを得てhttp.html_response(context, status, document)を使い、Result[Response, Error]を処理してください",
+                ),
+                _ => None,
+            };
+            if let Some(migration) = migration {
+                return Err(error(line, migration));
+            }
             return Err(error(
                 line,
                 format!("{}の引数は{}個です", info.name, info.arity),
@@ -1520,26 +1573,55 @@ impl Checker {
                 hints[2] = Some(resource(R::HtmlFragment));
             }
             O::HttpHtmlResponse => {
-                hints[0] = Some(resource(R::Status));
+                hints[0] = Some(view(resource(R::ResponseContext)));
+                hints[1] = Some(resource(R::Status));
                 // Cross-module identity is compiler-owned, independent of the
                 // user's imports or a user declaration named HtmlDocument.
-                hints[1] = Some(resource(R::HtmlDocument));
+                hints[2] = Some(resource(R::HtmlDocument));
+            }
+            O::CorsPolicy => {
+                hints.fill(Some(Type::named("i64")));
+                hints[0] = Some(Type::generic("List", vec![Type::named("str")]));
+                hints[1] = Some(Type::generic("List", vec![Type::named("str")]));
+                hints[2] = Some(resource(R::CorsCredentials));
+            }
+            O::CorsRoute | O::RateRoute => {
+                if types.len() == 2 {
+                    hints[0] = Some(crate::stdlib::resource_type(R::App, types.to_vec()));
+                }
+                hints[1] = Some(resource(R::Method));
+                hints[2] = Some(view(Type::named("str")));
+                hints[3] = Some(resource(if operation == O::CorsRoute {
+                    R::CorsPolicy
+                } else {
+                    R::RatePolicy
+                }));
             }
             O::Status => hints[0] = Some(Type::named("i64")),
             O::Method => hints[0] = Some(view(Type::named("str"))),
             O::MethodName => hints[0] = Some(view(resource(R::Method))),
-            O::Empty => hints[0] = Some(resource(R::Status)),
-            O::Text | O::Html | O::Bytes => {
-                hints[0] = Some(resource(R::Status));
-                hints[1] = Some(view(Type::named(if operation == O::Bytes {
+            O::ResponseContext => hints[0] = Some(view(resource(R::Request))),
+            O::Empty => {
+                hints[0] = Some(view(resource(R::ResponseContext)));
+                hints[1] = Some(resource(R::Status));
+            }
+            O::Text | O::Bytes => {
+                hints[0] = Some(view(resource(R::ResponseContext)));
+                hints[1] = Some(resource(R::Status));
+                hints[2] = Some(view(Type::named(if operation == O::Bytes {
                     "bytes"
                 } else {
                     "str"
                 })));
             }
-            O::Json => {
+            O::Html => {
                 hints[0] = Some(resource(R::Status));
-                hints[1] = types.first().cloned();
+                hints[1] = Some(view(Type::named("str")));
+            }
+            O::Json => {
+                hints[0] = Some(view(resource(R::ResponseContext)));
+                hints[1] = Some(resource(R::Status));
+                hints[2] = types.first().cloned();
             }
             O::AppendHeader | O::AppendHeaderText => {
                 hints[0] = Some(resource(R::Response));
@@ -1556,8 +1638,20 @@ impl Checker {
             }
             O::IsJsonContentType => hints[0] = Some(view(resource(R::Request))),
             O::DefaultOptions => {}
-            O::Options => {
+            O::Options | O::ResponseLimits | O::RateLimits | O::RatePolicy => {
                 hints.fill(Some(Type::named("i64")));
+            }
+            O::WithResponseLimits => {
+                hints[0] = Some(resource(R::Options));
+                hints[1] = Some(resource(R::ResponseLimits));
+            }
+            O::WithRateLimits => {
+                hints[0] = Some(resource(R::Options));
+                hints[1] = Some(resource(R::RateLimits));
+            }
+            O::RateSubject => {
+                hints.fill(Some(Type::named("i64")));
+                hints[0] = Some(resource(R::RatePolicy));
             }
             O::Capacity | O::HeaderTimeout | O::HeaderLimits | O::SendTimeout => {
                 hints.fill(Some(Type::named("i64")));
@@ -1577,10 +1671,6 @@ impl Checker {
             O::App => {
                 if types.len() == 2 {
                     hints[0] = Some(types[0].clone());
-                    hints[1] = Some(Type::generic(
-                        "fn",
-                        vec![types[1].clone(), resource(R::Response)],
-                    ));
                 }
             }
             O::AppDefault => hints[0] = types.first().cloned(),
@@ -1626,13 +1716,30 @@ impl Checker {
             O::HtmlTitle | O::HtmlHref => result(resource(R::HtmlAttributes)),
             O::HtmlNavigation => result(resource(R::NavigationUrl)),
             O::HtmlDocument => result(resource(R::HtmlDocument)),
-            O::HttpHtmlResponse => resource(R::Response),
+            O::HttpHtmlResponse => result(resource(R::Response)),
+            O::CorsPolicy => result(resource(R::CorsPolicy)),
+            O::CorsRoute | O::RateRoute => {
+                let app = &arguments[0];
+                if self.resource(&app.0) != Some(R::App) || app.1.len() != 2 {
+                    return Err(error(
+                        args[0].line,
+                        if operation == O::CorsRoute {
+                            "CORS attachmentには標準App[State,E]が必要です"
+                        } else {
+                            "rate_routeには標準App[State,E]が必要です"
+                        },
+                    ));
+                }
+                result(app.clone())
+            }
             O::Status => result(resource(R::Status)),
             O::Method => result(resource(R::Method)),
             O::MethodName => view(Type::named("str")),
-            O::Empty | O::Text | O::Html | O::Bytes => resource(R::Response),
+            O::ResponseContext => view(resource(R::ResponseContext)),
+            O::Empty | O::Text | O::Bytes => result(resource(R::Response)),
+            O::Html => resource(R::Response),
             O::Json => {
-                if !json_encode_supported(&args[1], &self.classes, &self.enums) {
+                if !json_encode_supported(&args[2], &self.classes, &self.enums) {
                     return Err(error(
                         line,
                         "HTTP JSON builderの値はSerializeに対応していません",
@@ -1652,7 +1759,12 @@ impl Checker {
             O::Headers => result(Type::generic("List", vec![view(Type::named("bytes"))])),
             O::IsJsonContentType => result(Type::named("bool")),
             O::DefaultOptions => resource(R::Options),
+            O::ResponseLimits => result(resource(R::ResponseLimits)),
+            O::RateLimits => result(resource(R::RateLimits)),
+            O::RatePolicy | O::RateSubject => result(resource(R::RatePolicy)),
             O::Options
+            | O::WithResponseLimits
+            | O::WithRateLimits
             | O::Capacity
             | O::HeaderTimeout
             | O::HeaderLimits
@@ -1668,11 +1780,23 @@ impl Checker {
                     Type::named("Error")
                 } else {
                     let mapper = &arguments[1];
-                    if mapper.0 != "fn" || mapper.1.len() != 2 {
-                        return Err(error(line, "Appのmapperは同期fn[E,Response]が必要です"));
+                    if mapper.0 != "fn" {
+                        return Err(error(
+                            line,
+                            "App mapperはfn[view[ResponseContext], E, Result[Response, Error]]が必要です",
+                        ));
                     }
-                    let failure = mapper.1[0].clone();
-                    self.mapper(mapper, &failure, line)?;
+                    let failure = match mapper.1.len() {
+                        2 => mapper.1[0].clone(),
+                        3 => mapper.1[1].clone(),
+                        _ => {
+                            return Err(error(
+                                line,
+                                "App mapperはfn[view[ResponseContext], E, Result[Response, Error]]が必要です",
+                            ));
+                        }
+                    };
+                    self.http_response_mapper(mapper, &failure, line, "App")?;
                     failure
                 };
                 if let Some(expected) = types.get(1) {
@@ -1697,7 +1821,7 @@ impl Checker {
                     if operation == O::Route {
                         self.demand(&failure, &app.1[1], line)?;
                     } else {
-                        self.mapper(&arguments[5], &failure, line)?;
+                        self.http_response_mapper(&arguments[5], &failure, line, "route_mapped")?;
                     }
                     result(app.clone())
                 }
@@ -2291,6 +2415,22 @@ impl Checker {
                         "HTTP Policyの出力型はunit/AuthScope/Grant[P]に限ります",
                     ));
                 }
+            }
+            if resource == crate::stdlib::Resource::ProtectedOperation {
+                self.valid(
+                    &crate::stdlib::resource_type(
+                        crate::stdlib::Resource::Grant,
+                        vec![t.1[1].clone()],
+                    ),
+                    line,
+                )?;
+            }
+            if matches!(
+                resource,
+                crate::stdlib::Resource::ProtectedOperation
+                    | crate::stdlib::Resource::PublicOperation
+            ) {
+                self.client_input(t.1.last().expect("validated client operation arity"), line)?;
             }
             if resource == crate::stdlib::Resource::Grant {
                 let marker = &t.1[0];
@@ -4253,6 +4393,21 @@ impl Checker {
                 Type::generic("List", vec![elem])
             }
             E::Record(n, fields) => {
+                if self.resource(n) == Some(crate::stdlib::Resource::CorsPolicy) {
+                    return Err(error(
+                        line,
+                        "CorsPolicyはopaqueです。cors_policyを使用してください",
+                    ));
+                }
+                if self.resource(n).is_some_and(|r| {
+                    crate::stdlib::resource_info(r).module
+                        == crate::stdlib::StandardModule::AuthCsrf
+                }) {
+                    return Err(error(
+                        line,
+                        "CSRF resourceはopaqueです。checked CSRF操作を使用してください",
+                    ));
+                }
                 if self.resource(n).is_some_and(|r| {
                     crate::stdlib::resource_info(r).module
                         == crate::stdlib::StandardModule::AuthSession
@@ -4398,6 +4553,21 @@ impl Checker {
                         e.ty = Some(ty.clone());
                         return Ok(ty);
                     }
+                }
+                if self.resource(n) == Some(crate::stdlib::Resource::CorsPolicy) {
+                    return Err(error(
+                        line,
+                        "CorsPolicyはopaqueです。cors_policyを使用してください",
+                    ));
+                }
+                if self.resource(n).is_some_and(|r| {
+                    crate::stdlib::resource_info(r).module
+                        == crate::stdlib::StandardModule::AuthCsrf
+                }) {
+                    return Err(error(
+                        line,
+                        "CSRF resourceはopaqueです。checked CSRF操作を使用してください",
+                    ));
                 }
                 if self.resource(n).is_some_and(|r| {
                     crate::stdlib::resource_info(r).module

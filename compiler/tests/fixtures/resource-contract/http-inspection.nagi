@@ -18,11 +18,12 @@ def allowed(request: view[http.Request], state: shared[State]) -> Result[bool, E
         case None:
             return ok(False)
 async def handler(request: http.Request, state: shared[State], access: unit) -> Result[http.Response, Error]:
+    context = http.response_context(view(request))
     accepted = try allowed(view(request), state)
     if accepted:
-        return ok(http.empty(http.Status.OK))
+        return http.empty(context, http.Status.OK)
     else:
-        return ok(http.empty(http.Status.UNAUTHORIZED))
+        return http.empty(context, http.Status.UNAUTHORIZED)
 def register(state: State) -> Result[http.App[State, Error], Error]:
     app = http.app_default[State](state)
     app = try http.route(app, http.Method.GET, view("/probe"), http.public_policy[State](), handler)

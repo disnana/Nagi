@@ -43,47 +43,55 @@ async def update_counter(state: CounterState, message: Message) -> Result[actor.
             next = CounterState(value=value, label=state.label)
             return ok(actor.turn[CounterState, i64, CounterError](next, ok(value)))
 
-def number_response(value: i64) -> http.Response:
-    match http.json[i64](http.Status.OK, value):
+def number_response(context: view[http.ResponseContext], value: i64) -> Result[http.Response, Error]:
+    match http.json[i64](context, http.Status.OK, value):
         case Ok(response):
-            return response
+            return ok(response)
         case Err(_):
-            return http.empty(http.Status.INTERNAL_SERVER_ERROR)
+            return http.empty(context, http.Status.INTERNAL_SERVER_ERROR)
 
-def web_error(problem: WebError) -> http.Response:
+def web_error(context: view[http.ResponseContext], problem: WebError) -> Result[http.Response, Error]:
     match problem:
         case WebError.InvalidInput:
-            return http.text(http.Status.BAD_REQUEST, "send a JSON integer")
+            return http.text(context, http.Status.BAD_REQUEST, "send a JSON integer")
         case WebError.Rejected:
-            return http.text(http.Status.CONFLICT, "increment must be 1..1000 and total at most 1000000")
+            return http.text(context, http.Status.CONFLICT, "increment must be 1..1000 and total at most 1000000")
         case WebError.Unavailable:
-            return http.text(http.Status.SERVICE_UNAVAILABLE, "counter unavailable")
+            return http.text(context, http.Status.SERVICE_UNAVAILABLE, "counter unavailable")
 
-async def execute(counter: view[actor.Actor[Message, i64, CounterError]], message: Message) -> Result[http.Response, WebError]:
+async def execute(context: view[http.ResponseContext], counter: view[actor.Actor[Message, i64, CounterError]], message: Message) -> Result[http.Response, WebError]:
     match await actor.call(counter, message, 0, 1000):
         case Ok(reply):
             match reply:
                 case Ok(value):
-                    return ok(number_response(value))
+                    match number_response(context, value):
+                        case Ok(response):
+                            return ok(response)
+                        case Err(_):
+                            return fail(WebError.Unavailable)
                 case Err(_):
                     return fail(WebError.Rejected)
         case Err(_):
             return fail(WebError.Unavailable)
 
 async def read_counter(request: http.Request, state: shared[WebState], authority: unit) -> Result[http.Response, WebError]:
-    return await execute(view(state.counter), Message.Read)
+    return await execute(http.response_context(view(request)), view(state.counter), Message.Read)
 
 async def increment(request: http.Request, state: shared[WebState], authority: unit) -> Result[http.Response, WebError]:
     match json_decode[i64](request.body):
         case Ok(amount):
-            return await execute(view(state.counter), Message.Add(amount))
+            return await execute(http.response_context(view(request)), view(state.counter), Message.Add(amount))
         case Err(_):
             return fail(WebError.InvalidInput)
 
 async def stop_counter(request: http.Request, state: shared[WebState], authority: unit) -> Result[http.Response, WebError]:
     match await actor.shutdown(view(state.control)):
         case Ok(_):
-            return ok(http.empty(http.Status.NO_CONTENT))
+            match http.empty(http.response_context(view(request)), http.Status.NO_CONTENT):
+                case Ok(response):
+                    return ok(response)
+                case Err(_):
+                    return fail(WebError.Unavailable)
         case Err(_):
             return fail(WebError.Unavailable)
 
@@ -111,6 +119,13 @@ async def main() -> Result[unit, Error]:
         1,
         256
     )
+    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    options = try http.with_response_limits(options, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    options = try http.with_rate_limits(options, rate_budget)
     group = actor.supervisor[Context](Context(initial=0), actor.default_options())
     counter = try actor.register[CounterState, Message, i64, CounterError](view(group), "counter", create_counter, update_counter, actor.default_actor_options())
     ready = actor.clone_actor(view(counter))
@@ -118,8 +133,14 @@ async def main() -> Result[unit, Error]:
     server_control = actor.clone_control(view(control))
     app = http.app[WebState, WebError](WebState(counter=counter, control=control), web_error)
     app = try http.route(app, http.Method.GET, "/counter", http.public_policy[WebState](), read_counter)
+    route_policy_1 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/counter", route_policy_1)
     app = try http.route(app, http.Method.POST, "/counter", http.public_policy[WebState](), increment)
+    route_policy_2 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.POST, "/counter", route_policy_2)
     app = try http.route(app, http.Method.POST, "/shutdown", http.public_policy[WebState](), stop_counter)
+    route_policy_3 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.POST, "/shutdown", route_policy_3)
     async with scope:
         monitor_task = spawn monitor(group)
         spawn serve_web(app, ready, server_control, port, options)

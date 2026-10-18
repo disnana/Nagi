@@ -55,11 +55,11 @@ Only HtmlTag has native Copy/Clone. The other types have no public Clone/Default
 | `html.join(policy: view[HtmlPolicy], left: HtmlFragment, right: HtmlFragment) -> Result[HtmlFragment, Error]` | Reference, Move, Move |
 | `html.copy_fragment(policy: view[HtmlPolicy], fragment: view[HtmlFragment]) -> Result[HtmlFragment, Error]` | Reference, Reference |
 | `html.document(policy: view[HtmlPolicy], title: view[str], body: HtmlFragment) -> Result[HtmlDocument, Error]` | Reference, Reference, Move |
-| `http.html_response(status: http.Status, document: html.HtmlDocument) -> http.Response` | Move, Move |
+| `http.html_response(context: view[http.ResponseContext], status: http.Status, document: html.HtmlDocument) -> Result[http.Response, Error]` | Reference, Move, Move |
 
 Every operation is synchronous, generic arity zero, `emit_type_args=false`, `borrow_owner=None`. Results own their data; no view result is returned. Explicit `view[...]` inputs use existing Passing::Reference; owned/scalar inputs use Move (HtmlTag is itself Copy). Caller views are retained only for the call. Internal immutable profile ownership does not extend a Reference input lifetime.
 
-Standard Rust public signatures use the same types/order/results, mapping `view[T]` to `&T`, str to `&str`, i64 to i64 and Error to existing runtime Error. `http_server::html_response(Status, html::HtmlDocument) -> Response` is the sole contracted HTML response entry. Standard Rust also has no unchecked constructor, public fields/body-kind setter, unsafe conversion trait, or ambient string/bytes HTML response factory. Arbitrary active delivery from custom native Rust/unsafe extern belongs to a separate trusted-host author boundary; it is not documented as a standard-API workaround.
+Standard Rust public signatures use the same types/order/results, mapping `view[T]` to `&T`, str to `&str`, i64 to i64 and Error to existing runtime Error. `http_server::html_response(&ResponseContext, Status, html::HtmlDocument) -> Result<Response, Error>` is the sole contracted HTML response entry. The context is borrowed from the current Request, and the returned Response is owned. Standard Rust also has no unchecked constructor, public fields/body-kind setter, unsafe conversion trait, or ambient string/bytes HTML response factory. Arbitrary active delivery from custom native Rust/unsafe extern belongs to a separate trusted-host author boundary; it is not documented as a standard-API workaround.
 
 ## Subset and structure — SF04-C02
 

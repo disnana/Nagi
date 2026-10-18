@@ -1066,28 +1066,25 @@ fn imported_async_ffi_send_failure_maps_the_cause_note_in_high_and_saved_low() {
     f.write("runtime/src/lib.rs", r#"
 #[derive(Debug)]
 pub struct Error;
+impl Error { pub fn invalid(_: impl Into<String>) -> Self { Error } }
 pub mod http_server {
     use std::{future::Future, marker::PhantomData, sync::Arc};
     pub struct Request;
     pub struct Response;
-    #[derive(Clone, Copy)]
-    pub struct Status;
-    impl Status { pub const OK: Self = Self; pub const BAD_REQUEST: Self = Self; }
     pub struct Method;
     impl Method { pub const GET: Self = Self; }
     pub struct App<S, E>(PhantomData<(S, E)>);
     pub struct Policy<S, A>(PhantomData<(S, A)>);
     pub fn public_policy<S>() -> Policy<S, ()> { Policy(PhantomData) }
-    pub fn empty(_: Status) -> Response { Response }
-    pub fn app<S, E>(_: S, _: fn(E) -> Response) -> App<S, E> { App(PhantomData) }
+    pub fn app_default<S>(_: S) -> App<S, super::Error> { App(PhantomData) }
     pub fn route<S, E, H, F>(app: App<S, E>, _: Method, _: &str, _: Policy<S, ()>, _: H) -> Result<App<S, E>, super::Error>
     where S: Send + Sync + 'static, E: Send + 'static,
           H: Fn(Request, Arc<S>, ()) -> F + Send + Sync + 'static,
           F: Future<Output = Result<Response, E>> + Send + 'static { Ok(app) }
 }
 "#);
-    f.write("main.nagi", "from std.http.server import Response, Status, Method, app, empty, route, public_policy\nimport \"lib/handler.nagi\" as handlers\n\ndef error_response(problem: i64) -> Response:\n    return empty(Status.BAD_REQUEST)\n\ndef main():\n    current = app[i64, i64](0, error_response)\n    registered = route(current, Method.GET, \"/\", public_policy[i64](), handlers.handle)\n");
-    f.write("lib/handler.nagi", "from std.http.server import Request, Response, Status, empty\n\n@rust(\"native::non_send\")\nextern async def suspend() -> unit\n\nasync def handle(request: Request, state: shared[i64], authority: unit) -> Result[Response, i64]:\n    await suspend()\n    return ok(empty(Status.OK))\n");
+    f.write("main.nagi", "from std.http.server import Method, app_default, route, public_policy\nimport \"lib/handler.nagi\" as handlers\n\ndef main():\n    current = app_default[i64](0)\n    registered = route(current, Method.GET, \"/\", public_policy[i64](), handlers.handle)\n");
+    f.write("lib/handler.nagi", "from std.http.server import Request, Response\n\n@rust(\"native::non_send\")\nextern async def suspend() -> unit\n\nasync def handle(request: Request, state: shared[i64], authority: unit) -> Result[Response, Error]:\n    await suspend()\n    return error(\"unreachable Send-bound diagnostic\")\n");
     f.write(
         "bridge.rs",
         r#"
@@ -1125,7 +1122,7 @@ pub fn non_send() -> NonSendFuture { NonSendFuture(Rc::new(1)) }
         );
         if file.ends_with(".nagi") {
             assert!(
-                prefix.contains("main.nagi:9") && prefix.contains("handler.nagi:4"),
+                prefix.contains("main.nagi:6") && prefix.contains("handler.nagi:4"),
                 "{text}"
             );
             assert!(

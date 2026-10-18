@@ -1,0 +1,1315 @@
+//! External normal-library BrowserLogin tests: owned SQLite and loopback only.
+//! Raw cookie/token values stay in RAM; assertions never format material.
+use nagi_runtime::{
+    auth::{self, prelogin, session, AuthScope, VerifiedIdentity},
+    http_server as http, sqlite, Error, FromRow,
+};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        Arc,
+    },
+    time::{Duration, Instant},
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+    sync::oneshot,
+};
+static NEXT: AtomicU64 = AtomicU64::new(0);
+struct Directory(PathBuf);
+impl Directory {
+    fn new() -> Self {
+        loop {
+            let p = std::env::temp_dir().join(format!(
+                "sf03-login-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::create_dir(&p) {
+                Ok(()) => return Self(p),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(_) => panic!("owned directory unavailable"),
+            }
+        }
+    }
+}
+impl Drop for Directory {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+struct Number(i64);
+impl FromRow for Number {
+    fn columns() -> &'static [&'static str] {
+        &["n"]
+    }
+    fn read(
+        r: &nagi_runtime::rusqlite::Row<'_>,
+        i: &[usize],
+    ) -> nagi_runtime::rusqlite::Result<Self> {
+        Ok(Self(r.get(i[0])?))
+    }
+}
+async fn number(pool: &sqlite::Pool, q: &'static str) -> i64 {
+    let tx = sqlite::begin(pool, sqlite::BeginMode::Immediate)
+        .await
+        .unwrap();
+    let n = sqlite::query::<Number>(&tx, sqlite::literal(q), sqlite::parameters())
+        .await
+        .unwrap()
+        .unwrap()
+        .0;
+    sqlite::rollback(tx).await.unwrap();
+    n
+}
+#[derive(Default)]
+struct Counters {
+    verifier: AtomicUsize,
+    handler: AtomicUsize,
+    mode: AtomicUsize,
+    entered: tokio::sync::Notify,
+    cancelled: AtomicUsize,
+    sanitized: AtomicBool,
+    claim_committed: AtomicBool,
+    issue_committed: AtomicBool,
+}
+struct CancelSeen(Arc<Counters>);
+impl Drop for CancelSeen {
+    fn drop(&mut self) {
+        self.0.cancelled.fetch_add(1, Ordering::SeqCst);
+    }
+}
+struct State {
+    store: session::Store,
+    auth: sqlite::Pool,
+    stats: Arc<Counters>,
+    original: Instant,
+}
+async fn named_trusted_bearer(
+    request: http::Request,
+    state: Arc<State>,
+) -> Result<VerifiedIdentity, auth::Failure> {
+    state.stats.verifier.fetch_add(1, Ordering::SeqCst);
+    state.stats.sanitized.store(
+        http::header(&request, "cookie").unwrap().is_none()
+            && http::header(&request, "x-csrf-token").unwrap().is_none()
+            && request.body().is_empty(),
+        Ordering::SeqCst,
+    );
+    // Acquire auth's independent manager after claim: no PreLogin Tx writer lock
+    // crosses this trusted await, and the consumed row is already absent.
+    state.stats.claim_committed.store(
+        number(
+            &state.auth,
+            "SELECT count(*) AS n FROM __nagi_prelogin_ready",
+        )
+        .await
+            == 0,
+        Ordering::SeqCst,
+    );
+    match state.stats.mode.load(Ordering::SeqCst) {
+        1 => return Err(auth::invalid_credential()),
+        2 => panic!("owned verifier panic"),
+        3 => tokio::time::sleep(Duration::from_millis(400)).await,
+        4 => std::thread::sleep(Duration::from_millis(400)),
+        5 => return Err(auth::expired()),
+        6 => {
+            let _seen = CancelSeen(Arc::clone(&state.stats));
+            state.stats.entered.notify_one();
+            std::future::pending::<()>().await;
+        }
+        _ => {}
+    }
+    VerifiedIdentity::from_verified(7, state.original)
+}
+async fn login_handler(
+    request: http::Request,
+    state: Arc<State>,
+    scope: AuthScope,
+) -> Result<http::Response, Error> {
+    state.stats.handler.fetch_add(1, Ordering::SeqCst);
+    assert!(
+        http::header(&request, "cookie").unwrap().is_none()
+            && http::header(&request, "x-csrf-token").unwrap().is_none()
+    );
+    let response = http::bytes(
+        http::response_context(&request),
+        http::Status::OK,
+        request.body(),
+    )?;
+    let intent = session::issue(&state.store, scope).await.map_err(|error| {
+        if session::kind(&error) == auth::FailureKind::Unavailable {
+            Error {
+                kind: nagi_runtime::ErrorKind::Busy,
+                message: "session unavailable".to_owned(),
+            }
+        } else {
+            Error::internal("session issue refused")
+        }
+    })?;
+    state.stats.issue_committed.store(true, Ordering::SeqCst);
+    let response = session::apply(response, intent).unwrap();
+    match state.stats.mode.load(Ordering::SeqCst) {
+        10 => Err(Error::internal("owned handler Err")),
+        11 => panic!("owned handler panic"),
+        12 => {
+            tokio::time::sleep(Duration::from_millis(400)).await;
+            Ok(response)
+        }
+        _ => Ok(response),
+    }
+}
+fn checked(body: i64, security: i64) -> http::Options {
+    checked_phases(body, security, 1000, 1000)
+}
+fn with_test_rate_limits(options: http::Options) -> http::Options {
+    // Finite test-only route catalogue; no test route uses a subject policy.
+    // The API requires a positive subject capacity even when it stays unused.
+    let limits = http::rate_limits(64, 64, 1, 67_108_864, 65_536).unwrap();
+    http::with_rate_limits(options, limits).unwrap()
+}
+fn attach_test_rate<S, E>(
+    app: http::App<S, E>,
+    method: http::Method,
+    path: &str,
+) -> http::App<S, E> {
+    let policy = http::rate_policy(1000, 1000).unwrap();
+    http::rate_route(app, method, path, policy).unwrap()
+}
+fn response_limits(body_bytes: i64) -> http::ResponseLimits {
+    let response_body_bytes = body_bytes.max(16_777_216);
+    let retained_bytes = response_body_bytes
+        .checked_mul(8)
+        .and_then(|bytes| bytes.checked_add(16_777_216))
+        .expect("bounded test response profile");
+    http::response_limits(
+        response_body_bytes,
+        1024,
+        16,
+        4096,
+        32,
+        128,
+        256,
+        retained_bytes,
+        1024,
+        285_212_672,
+        4096,
+        32,
+    )
+    .unwrap()
+}
+fn checked_phases(body: i64, security: i64, body_ms: i64, shutdown_ms: i64) -> http::Options {
+    let options = http::with_response_limits(
+        http::options(body, body_ms, 1000, shutdown_ms).unwrap(),
+        response_limits(body),
+    )
+    .unwrap();
+    let options = with_test_rate_limits(options);
+    http::authority(
+        http::security_timeout(options, security).unwrap(),
+        "https://localhost",
+        vec!["localhost".to_owned()],
+        1,
+        128,
+    )
+    .unwrap()
+}
+struct Fixture {
+    _dir: Directory,
+    auth: sqlite::Pool,
+    store: session::Store,
+    pool: prelogin::PreLoginPool,
+    stats: Arc<Counters>,
+}
+impl Fixture {
+    async fn new(ttl: i64, quota: i64) -> Self {
+        let dir = Directory::new();
+        let auth = sqlite::open(
+            dir.0.join("owned.sqlite").to_str().unwrap(),
+            sqlite::options(2, 4, 1000, 1000).unwrap(),
+        )
+        .await
+        .unwrap();
+        let store = session::open(
+            &auth,
+            session::options(4, 5, 72, 1, 10000, 100000, 5000, 2).unwrap(),
+            session::cookie_options("__Host-auth", session::SameSite::Strict).unwrap(),
+        )
+        .await
+        .unwrap();
+        let pool = prelogin::open(
+            &store,
+            sqlite::options(1, 2, 1000, 1000).unwrap(),
+            prelogin::options(2, 3, quota, 1, ttl, 2, 16, 10000, 4, 16).unwrap(),
+            prelogin::cookie_options("__Host-prelogin", session::SameSite::Strict).unwrap(),
+            &checked(256, 1000),
+        )
+        .await
+        .unwrap();
+        Self {
+            _dir: dir,
+            auth,
+            store,
+            pool,
+            stats: Arc::new(Counters::default()),
+        }
+    }
+    fn app(&self) -> http::App<State, Error> {
+        let state = State {
+            store: session::clone_store(&self.store),
+            auth: sqlite::clone_pool(&self.auth),
+            stats: Arc::clone(&self.stats),
+            original: Instant::now() + Duration::from_secs(60),
+        };
+        let app = http::prelogin_bootstrap(
+            http::app_default(state),
+            "/bootstrap",
+            prelogin::clone_pool(&self.pool),
+        )
+        .unwrap();
+        let app = http::route(
+            app,
+            http::Method::POST,
+            "/login",
+            http::browser_login_policy(prelogin::clone_pool(&self.pool), named_trusted_bearer),
+            login_handler,
+        )
+        .unwrap();
+        let app = attach_test_rate(app, http::Method::GET, "/bootstrap");
+        let app = attach_test_rate(app, http::Method::HEAD, "/bootstrap");
+        attach_test_rate(app, http::Method::POST, "/login")
+    }
+    async fn rows(&self) -> i64 {
+        number(
+            &self.auth,
+            "SELECT count(*) AS n FROM __nagi_prelogin_ready",
+        )
+        .await
+    }
+    async fn stop(self) {
+        prelogin::close(&self.pool, 2000).await.unwrap();
+        sqlite::close(&self.auth, 2000).await.unwrap();
+    }
+}
+struct Server {
+    address: std::net::SocketAddr,
+    stop: Option<oneshot::Sender<()>>,
+    task: tokio::task::JoinHandle<Result<(), Error>>,
+}
+impl Server {
+    async fn new(f: &Fixture, body: i64, security: i64) -> Self {
+        Self::with_options(f, checked(body, security)).await
+    }
+    async fn with_options(f: &Fixture, options: http::Options) -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (stop, until) = oneshot::channel();
+        let task = tokio::spawn(http::serve_listener(listener, f.app(), options, async {
+            let _ = until.await;
+        }));
+        Self {
+            address,
+            stop: Some(stop),
+            task,
+        }
+    }
+    async fn stop(mut self) {
+        self.stop.take().unwrap().send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(3), &mut self.task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
+}
+impl Drop for Server {
+    fn drop(&mut self) {
+        if let Some(s) = self.stop.take() {
+            let _ = s.send(());
+        }
+        self.task.abort();
+    }
+}
+struct Reply {
+    status: u16,
+    headers: Vec<(String, String)>,
+    body: Vec<u8>,
+}
+impl Reply {
+    fn values(&self, name: &str) -> Vec<&str> {
+        self.headers
+            .iter()
+            .filter(|(n, _)| n.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+            .collect()
+    }
+    fn guarded(&self) {
+        assert!(self.values("cache-control") == vec!["no-store"]);
+        assert!(
+            self.values("vary")
+                == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"]
+        );
+    }
+    fn material(&self) -> (String, String) {
+        if self.status != 200 {
+            let class = match self.status {
+                400 => "request",
+                401 | 403 => "refusal",
+                500 => "internal",
+                503 => "unavailable",
+                504 => "deadline",
+                _ => "other",
+            };
+            eprintln!(
+                "browser_login_bootstrap_diag check=material status={} class={} set_cookie_count={} body_bytes={} auth_cookie={} deletion={}",
+                self.status, class, self.values("set-cookie").len().min(65),
+                self.body.len().min(8193), self.auth_cookie(), self.deletion(),
+            );
+        }
+        assert!(self.status == 200);
+        let c = self.values("set-cookie");
+        assert!(c.len() == 1);
+        let cookie = c[0].split(';').next().unwrap().to_owned();
+        let json: nagi_runtime::serde_json::Value =
+            nagi_runtime::serde_json::from_slice(&self.body).unwrap();
+        let token = json
+            .get("csrf_token")
+            .and_then(|v| v.as_str())
+            .unwrap()
+            .to_owned();
+        (cookie, token)
+    }
+    fn deletion(&self) -> bool {
+        self.values("set-cookie").iter().any(|v| {
+            v.starts_with("__Host-prelogin=;")
+                && v.contains("Max-Age=0")
+                && v.contains("Secure")
+                && v.contains("HttpOnly")
+                && v.contains("Path=/")
+        })
+    }
+    fn auth_cookie(&self) -> bool {
+        self.values("set-cookie")
+            .iter()
+            .any(|v| v.starts_with("__Host-auth="))
+    }
+}
+async fn request(
+    address: std::net::SocketAddr,
+    method: &str,
+    path: &str,
+    headers: &str,
+    body: &[u8],
+) -> Reply {
+    tokio::time::timeout(Duration::from_secs(3),async { let mut s=TcpStream::connect(address).await.unwrap(); let h=format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: {}\r\n{headers}\r\n",body.len()); s.write_all(h.as_bytes()).await.unwrap(); s.write_all(body).await.unwrap(); let mut raw=Vec::new(); s.take(8193).read_to_end(&mut raw).await.unwrap(); assert!(raw.len()<=8192); parse_reply(raw) }).await.unwrap()
+}
+fn parse_reply(raw: Vec<u8>) -> Reply {
+    let split = raw.windows(4).position(|v| v == b"\r\n\r\n").unwrap();
+    let head = std::str::from_utf8(&raw[..split]).unwrap();
+    let mut lines = head.split("\r\n");
+    let status = lines
+        .next()
+        .unwrap()
+        .split_whitespace()
+        .nth(1)
+        .unwrap()
+        .parse()
+        .unwrap();
+    let headers = lines
+        .map(|v| {
+            let (n, v) = v.split_once(':').unwrap();
+            (n.to_owned(), v.trim().to_owned())
+        })
+        .collect();
+    Reply {
+        status,
+        headers,
+        body: raw[split + 4..].to_vec(),
+    }
+}
+async fn bootstrap(s: &Server) -> (String, String) {
+    request(s.address, "GET", "/bootstrap", "", b"")
+        .await
+        .material()
+}
+fn login_headers(cookie: &str, token: &str) -> String {
+    format!("Origin: https://localhost\r\nAuthorization: Bearer owned\r\nCookie: {cookie}\r\nX-CSRF-Token: {token}\r\nContent-Type: application/json\r\n")
+}
+fn assertion_bool(value: Option<bool>) -> &'static str {
+    match value {
+        Some(true) => "true",
+        Some(false) => "false",
+        None => "unobserved",
+    }
+}
+fn assertion_diag(
+    case: &str,
+    mode: usize,
+    stage: &str,
+    expected_status: u16,
+    status: u16,
+    facts: &str,
+) {
+    eprintln!(
+        "browser_login_assertion_diag case={case} mode={mode} stage={stage} expected_status={expected_status} status={status} {facts}"
+    );
+}
+
+#[tokio::test]
+async fn public_login_claims_once_then_named_verifier_issue_and_appended_cookies() {
+    let f = Fixture::new(1000, 144).await;
+    let s = Server::new(&f, 256, 1000).await;
+    let (c, t) = bootstrap(&s).await;
+    let h = login_headers(&c, &t);
+    let (a, b) = tokio::join!(
+        request(s.address, "POST", "/login", &h, b"{}"),
+        request(s.address, "POST", "/login", &h, b"{}")
+    );
+    // Reuse the frozen closed concurrent witness, retaining the exact assertion.
+    if !((a.status == 200 && b.status == 403) || (a.status == 403 && b.status == 200)) {
+        eprintln!(
+            "browser_login_stock_cause case=concurrent_once a_status={} b_status={} a_auth_cookie={} b_auth_cookie={} a_deletion={} b_deletion={} verifier_calls={} handler_calls={} claim_committed={}",
+            a.status, b.status, a.auth_cookie(), b.auth_cookie(), a.deletion(), b.deletion(),
+            f.stats.verifier.load(Ordering::SeqCst).min(1023),
+            f.stats.handler.load(Ordering::SeqCst).min(1023),
+            f.stats.claim_committed.load(Ordering::SeqCst),
+        );
+    }
+    assert!((a.status == 200 && b.status == 403) || (a.status == 403 && b.status == 200));
+    let win = if a.status == 200 { &a } else { &b };
+    win.guarded();
+    assert!(
+        win.auth_cookie()
+            && win.deletion()
+            && win.values("set-cookie").len() == 2
+            && win.body == b"{}"
+    );
+    assert!(
+        f.rows().await == 0
+            && f.stats.verifier.load(Ordering::SeqCst) == 1
+            && f.stats.handler.load(Ordering::SeqCst) == 1
+            && f.stats.sanitized.load(Ordering::SeqCst)
+            && f.stats.claim_committed.load(Ordering::SeqCst)
+    );
+    let remaining=number(&f.auth,"SELECT (SELECT absolute_ms FROM __nagi_session_rows LIMIT 1)-last_wall AS n FROM __nagi_session_meta").await;
+    assert!(remaining > 30000 && remaining <= 60000);
+    s.stop().await;
+    f.stop().await;
+}
+#[tokio::test]
+async fn input_and_strict_json_rejections_do_not_consume_or_call_verifier() {
+    let f = Fixture::new(10000, 144).await;
+    let s = Server::new(&f, 256, 1000).await;
+    let (c, t) = bootstrap(&s).await;
+    let h = login_headers(&c, &t);
+    let cases = vec![
+        (
+            h.replace("Origin: https://localhost\r\n", ""),
+            b"{}".to_vec(),
+            403,
+        ),
+        (h.replace("https://localhost", "null"), b"{}".to_vec(), 403),
+        (
+            h.replace("https://localhost", "https://other.invalid"),
+            b"{}".to_vec(),
+            403,
+        ),
+        (
+            format!("Origin: https://localhost\r\n{h}"),
+            b"{}".to_vec(),
+            400,
+        ),
+        (
+            h.replace("Authorization: Bearer owned\r\n", ""),
+            b"{}".to_vec(),
+            401,
+        ),
+        (
+            h.replace("Bearer owned", "Basic owned"),
+            b"{}".to_vec(),
+            401,
+        ),
+        (
+            format!("Authorization: Bearer owned\r\n{h}"),
+            b"{}".to_vec(),
+            400,
+        ),
+        (
+            h.replace(&format!("Cookie: {c}\r\n"), ""),
+            b"{}".to_vec(),
+            403,
+        ),
+        (format!("Cookie: {c}\r\n{h}"), b"{}".to_vec(), 400),
+        (
+            format!("Cookie: __Host-auth=owned\r\n{h}"),
+            b"{}".to_vec(),
+            400,
+        ),
+        (
+            h.replace(&format!("X-CSRF-Token: {t}\r\n"), ""),
+            b"{}".to_vec(),
+            403,
+        ),
+        (h.replace(&t, &"A".repeat(43)), b"{}".to_vec(), 403),
+        (format!("X-CSRF-Token: {t}\r\n{h}"), b"{}".to_vec(), 400),
+        (
+            h.replace("application/json", "text/plain"),
+            b"{}".to_vec(),
+            400,
+        ),
+        (h.clone(), vec![255], 400),
+        (h.clone(), br#"{"a":1,"a":2}"#.to_vec(), 400),
+        (h.clone(), br#"{"a":{"b":1,"\u0062":2}}"#.to_vec(), 400),
+        (h.clone(), b"[[[[[0]]]]]".to_vec(), 400),
+        (
+            h.clone(),
+            b"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]".to_vec(),
+            400,
+        ),
+        (h.clone(), b"{} {}".to_vec(), 400),
+    ];
+    for (headers, body, status) in cases {
+        let r = request(s.address, "POST", "/login", &headers, &body).await;
+        assert!(r.status == status && !r.auth_cookie() && !r.deletion());
+        r.guarded();
+        assert!(f.rows().await == 1 && f.stats.verifier.load(Ordering::SeqCst) == 0);
+    }
+    let good = request(
+        s.address,
+        "POST",
+        "/login",
+        &h,
+        br#"{"n":1.25,"a":[true,null]}"#,
+    )
+    .await;
+    if good.status != 200 {
+        let status = good.status;
+        let body_bytes = good.body.len();
+        let set_cookie_count = good.values("set-cookie").len();
+        let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+        let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+        let mode6_cancel_seen = f.stats.cancelled.load(Ordering::SeqCst);
+        eprintln!(
+            "sf03_browser_failure_counters_v1 case=strict_json_valid phase=final_response status={} status_overflow={} body_bytes={} body_bytes_overflow={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} mode6_cancel_seen={} mode6_cancel_seen_overflow={}",
+            status.min(999),
+            status > 999,
+            body_bytes.min(8193),
+            body_bytes > 8193,
+            set_cookie_count.min(1023),
+            set_cookie_count > 1023,
+            good.auth_cookie(),
+            good.deletion(),
+            verifier_calls.min(1023),
+            verifier_calls > 1023,
+            handler_calls.min(1023),
+            handler_calls > 1023,
+            f.stats.claim_committed.load(Ordering::SeqCst),
+            f.stats.issue_committed.load(Ordering::SeqCst),
+            mode6_cancel_seen.min(1023),
+            mode6_cancel_seen > 1023,
+        );
+    }
+    assert!(good.status == 200);
+    s.stop().await;
+    f.stop().await;
+}
+// A socket timeout may precede the callback/issue stage. Prove the exact
+// externally observed state instead of assuming that native SQL fit the budget.
+// The mandatory broad native stage inventory separately exercises the completed
+// claim/verifier/issue faults; an early socket result cannot satisfy that guard.
+async fn assert_browser_deadline_state(f: &Fixture, r: &Reply) -> bool {
+    assert!(r.status == 504 && !r.auth_cookie());
+    r.guarded();
+    let prelogin_rows = f.rows().await;
+    let session_rows = number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
+    let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+    let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+    assert!((0..=1).contains(&prelogin_rows) && (0..=1).contains(&session_rows));
+    assert!(verifier_calls <= 1 && handler_calls <= verifier_calls);
+    if prelogin_rows == 1 {
+        // A cancelled claim may retain its original row. No trusted callback
+        // or Session issue can have run without the one-use claim completing.
+        assert!(verifier_calls == 0 && handler_calls == 0 && session_rows == 0);
+        assert!(!r.deletion());
+    }
+    if verifier_calls == 1 {
+        assert!(prelogin_rows == 0 && r.deletion());
+    }
+    if r.deletion() || f.stats.claim_committed.load(Ordering::SeqCst) {
+        assert!(prelogin_rows == 0);
+    }
+    if handler_calls == 0 {
+        assert!(session_rows == 0);
+    }
+    if session_rows == 1 {
+        assert!(handler_calls == 1 && verifier_calls == 1 && prelogin_rows == 0);
+        assert!(r.deletion());
+    }
+    if f.stats.issue_committed.load(Ordering::SeqCst) {
+        assert!(session_rows == 1 && handler_calls == 1);
+    }
+    prelogin_rows == 0
+}
+
+async fn assert_consumed_browser_replay(f: &Fixture, s: &Server, headers: &str) {
+    let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+    let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+    let session_rows = number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
+    let retry = request(s.address, "POST", "/login", headers, b"{}").await;
+    // A missing-row restoration may itself hit the unchanged security budget.
+    // The live403/expired504 native oracles are both mandatory in broad CI.
+    assert!(retry.status == 403 || retry.status == 504);
+    assert!(!retry.auth_cookie() && !retry.deletion());
+    retry.guarded();
+    assert!(f.rows().await == 0);
+    assert!(f.stats.verifier.load(Ordering::SeqCst) == verifier_calls);
+    assert!(f.stats.handler.load(Ordering::SeqCst) == handler_calls);
+    assert!(number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == session_rows);
+}
+
+#[tokio::test]
+async fn committed_claim_stays_consumed_on_verifier_error_panic_and_deadline() {
+    for (iteration, (mode, status, security)) in [
+        (1, 401, 1000),
+        (2, 500, 1000),
+        (3, 504, 200),
+        (4, 504, 200),
+        (5, 401, 1000),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let f = Fixture::new(1000, 144).await;
+        f.stats.mode.store(mode, Ordering::SeqCst);
+        // Keep bootstrap under the normal profile; only the target login uses
+        // the deliberately short security budget. Join setup before starting it.
+        let setup = Server::new(&f, 256, 1000).await;
+        let (c, t) = bootstrap(&setup).await;
+        let s = if security == 1000 {
+            setup
+        } else {
+            setup.stop().await;
+            Server::new(&f, 256, security).await
+        };
+        let h = login_headers(&c, &t);
+        let r = request(s.address, "POST", "/login", &h, b"{}").await;
+        if r.status == 504 {
+            let row_absent = assert_browser_deadline_state(&f, &r).await;
+            assert!(f.stats.handler.load(Ordering::SeqCst) == 0);
+            if row_absent {
+                assert_consumed_browser_replay(&f, &s, &h).await;
+            }
+            s.stop().await;
+            f.stop().await;
+            continue;
+        }
+        // Failure-only closed numeric/boolean shape; never print response material.
+        if !(r.status == status && !r.auth_cookie() && r.deletion()) {
+            eprintln!(
+                "browser_login_public_api_diag case=committed_claim_initial phase=initial_response iteration={} expected_status={} status={} auth_cookie={} deletion={} verifier_calls={} handler_calls={} claim_committed={}",
+                iteration,
+                status,
+                r.status,
+                r.auth_cookie(),
+                r.deletion(),
+                f.stats.verifier.load(Ordering::SeqCst),
+                f.stats.handler.load(Ordering::SeqCst),
+                f.stats.claim_committed.load(Ordering::SeqCst),
+            );
+        }
+        let response_status_ok = r.status == status;
+        let response_auth_cookie = if response_status_ok {
+            Some(r.auth_cookie())
+        } else {
+            None
+        };
+        let response_deletion = if response_status_ok && response_auth_cookie == Some(false) {
+            Some(r.deletion())
+        } else {
+            None
+        };
+        let response_ok = response_status_ok
+            && response_auth_cookie == Some(false)
+            && response_deletion == Some(true);
+        if !response_ok {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_response",
+                status,
+                r.status,
+                &format!(
+                    "auth_cookie={} deletion={}",
+                    assertion_bool(response_auth_cookie),
+                    assertion_bool(response_deletion),
+                ),
+            );
+        }
+        assert!(response_ok);
+
+        let cache_no_store = r.values("cache-control") == vec!["no-store"];
+        if !cache_no_store {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_headers",
+                status,
+                r.status,
+                "cache_no_store=false vary_match=unobserved",
+            );
+        }
+        assert!(cache_no_store);
+        let vary_match =
+            r.values("vary") == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"];
+        if !vary_match {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_headers",
+                status,
+                r.status,
+                "cache_no_store=true vary_match=false",
+            );
+        }
+        assert!(vary_match);
+        if status == 401 {
+            let bearer_challenge = r.values("www-authenticate") == vec!["Bearer"];
+            if !bearer_challenge {
+                assertion_diag(
+                    "committed_claim",
+                    mode,
+                    "initial_challenge",
+                    status,
+                    r.status,
+                    "bearer_challenge=false",
+                );
+            }
+            assert!(bearer_challenge);
+        }
+        let prelogin_rows_empty = f.rows().await == 0;
+        if !prelogin_rows_empty {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_state",
+                status,
+                r.status,
+                "prelogin_rows_empty=false verifier_calls=unobserved handler_calls=unobserved",
+            );
+        }
+        assert!(prelogin_rows_empty);
+        let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+        if verifier_calls != 1 {
+            assertion_diag(
+                "committed_claim", mode, "initial_state", status, r.status,
+                &format!(
+                    "prelogin_rows_empty=true verifier_calls={verifier_calls} handler_calls=unobserved"
+                ),
+            );
+        }
+        assert!(verifier_calls == 1);
+        let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+        if handler_calls != 0 {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "initial_state",
+                status,
+                r.status,
+                &format!("prelogin_rows_empty=true verifier_calls=1 handler_calls={handler_calls}"),
+            );
+        }
+        assert!(handler_calls == 0);
+        let retry = request(s.address, "POST", "/login", &h, b"{}").await;
+        if retry.status == 504 {
+            assert!(!retry.auth_cookie() && !retry.deletion());
+            retry.guarded();
+            assert!(f.rows().await == 0);
+            assert!(f.stats.verifier.load(Ordering::SeqCst) == 1);
+            assert!(f.stats.handler.load(Ordering::SeqCst) == 0);
+            assert!(number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == 0);
+            s.stop().await;
+            f.stop().await;
+            continue;
+        }
+        // Bounded numeric failure shape only; response material remains unreported.
+        if !(retry.status == 403 && !retry.auth_cookie() && !retry.deletion()) {
+            eprintln!(
+                "browser_login_public_api_diag case=committed_claim_retry phase=retry_response iteration={} status={} body_bytes={} set_cookie_count={} auth_cookie={} deletion={} verifier_calls={} handler_calls={} claim_committed={}",
+                iteration,
+                retry.status,
+                retry.body.len(),
+                retry.values("set-cookie").len(),
+                retry.auth_cookie(),
+                retry.deletion(),
+                f.stats.verifier.load(Ordering::SeqCst),
+                f.stats.handler.load(Ordering::SeqCst),
+                f.stats.claim_committed.load(Ordering::SeqCst),
+            );
+        }
+        // Observe exclusion independently, even when the existing status guard fails.
+        let row_absent = f.rows().await == 0;
+        let verifier_unchanged = f.stats.verifier.load(Ordering::SeqCst) == 1;
+        let handler_unchanged = f.stats.handler.load(Ordering::SeqCst) == 0;
+        if !(retry.status == 403
+            && !retry.auth_cookie()
+            && !retry.deletion()
+            && row_absent
+            && verifier_unchanged
+            && handler_unchanged)
+        {
+            eprintln!(
+                "browser_login_public_api_diag case=committed_claim_replay_proof iteration={} row_absent={} verifier_unchanged={} handler_unchanged={}",
+                iteration, row_absent, verifier_unchanged, handler_unchanged,
+            );
+        }
+        let cache_no_store = retry.values("cache-control") == vec!["no-store"];
+        if !cache_no_store {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "retry_headers",
+                403,
+                retry.status,
+                "cache_no_store=false vary_match=unobserved",
+            );
+        }
+        assert!(cache_no_store);
+        let vary_match = retry.values("vary")
+            == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"];
+        if !vary_match {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "retry_headers",
+                403,
+                retry.status,
+                "cache_no_store=true vary_match=false",
+            );
+        }
+        assert!(vary_match);
+        let replay_proof_ok = row_absent && verifier_unchanged && handler_unchanged;
+        if !replay_proof_ok {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "replay_proof",
+                403,
+                retry.status,
+                &format!(
+                    "row_absent={} verifier_unchanged={} handler_unchanged={}",
+                    row_absent, verifier_unchanged, handler_unchanged,
+                ),
+            );
+        }
+        assert!(replay_proof_ok);
+        let retry_status_ok = retry.status == 403;
+        let retry_auth_cookie = if retry_status_ok {
+            Some(retry.auth_cookie())
+        } else {
+            None
+        };
+        let retry_deletion = if retry_status_ok && retry_auth_cookie == Some(false) {
+            Some(retry.deletion())
+        } else {
+            None
+        };
+        let retry_response_ok =
+            retry_status_ok && retry_auth_cookie == Some(false) && retry_deletion == Some(false);
+        if !retry_response_ok {
+            assertion_diag(
+                "committed_claim",
+                mode,
+                "retry_response",
+                403,
+                retry.status,
+                &format!(
+                    "auth_cookie={} deletion={}",
+                    assertion_bool(retry_auth_cookie),
+                    assertion_bool(retry_deletion),
+                ),
+            );
+        }
+        assert!(retry_response_ok);
+        s.stop().await;
+        f.stop().await;
+    }
+}
+#[tokio::test]
+async fn issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cookie() {
+    for (mode, status, security) in [(10, 500, 1000), (11, 500, 1000), (12, 504, 200)] {
+        let f = Fixture::new(1000, 144).await;
+        f.stats.mode.store(mode, Ordering::SeqCst);
+        // Keep bootstrap under the normal profile; only the target login uses
+        // the deliberately short security budget. Join setup before starting it.
+        let setup = Server::new(&f, 256, 1000).await;
+        let (c, t) = bootstrap(&setup).await;
+        let s = if security == 1000 {
+            setup
+        } else {
+            setup.stop().await;
+            Server::new(&f, 256, security).await
+        };
+        let h = login_headers(&c, &t);
+        let r = request(s.address, "POST", "/login", &h, b"{}").await;
+        if r.status == 504 {
+            let row_absent = assert_browser_deadline_state(&f, &r).await;
+            if row_absent {
+                assert_consumed_browser_replay(&f, &s, &h).await;
+            }
+            s.stop().await;
+            f.stop().await;
+            continue;
+        }
+        let response_status_ok = r.status == status;
+        let response_auth_cookie = if response_status_ok {
+            Some(r.auth_cookie())
+        } else {
+            None
+        };
+        let response_deletion = if response_status_ok && response_auth_cookie == Some(false) {
+            Some(r.deletion())
+        } else {
+            None
+        };
+        let response_ok = response_status_ok
+            && response_auth_cookie == Some(false)
+            && response_deletion == Some(true);
+        if !response_ok {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_response",
+                status,
+                r.status,
+                &format!(
+                    "auth_cookie={} deletion={}",
+                    assertion_bool(response_auth_cookie),
+                    assertion_bool(response_deletion),
+                ),
+            );
+        }
+        assert!(response_ok);
+
+        let cache_no_store = r.values("cache-control") == vec!["no-store"];
+        if !cache_no_store {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_headers",
+                status,
+                r.status,
+                "cache_no_store=false vary_match=unobserved",
+            );
+        }
+        assert!(cache_no_store);
+        let vary_match =
+            r.values("vary") == vec!["Authorization, Content-Type, Cookie, Origin, X-CSRF-Token"];
+        if !vary_match {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_headers",
+                status,
+                r.status,
+                "cache_no_store=true vary_match=false",
+            );
+        }
+        assert!(vary_match);
+
+        let prelogin_rows_empty = f.rows().await == 0;
+        if !prelogin_rows_empty {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_rows",
+                status,
+                r.status,
+                "prelogin_rows_empty=false session_rows=unobserved",
+            );
+        }
+        assert!(prelogin_rows_empty);
+        let session_rows = number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await;
+        if session_rows != 1 {
+            assertion_diag(
+                "issue_commit",
+                mode,
+                "issue_rows",
+                status,
+                r.status,
+                &format!("prelogin_rows_empty=true session_rows={session_rows}"),
+            );
+        }
+        assert!(session_rows == 1);
+        s.stop().await;
+        f.stop().await;
+    }
+}
+#[tokio::test]
+async fn wire_body_cap_is_independent_of_db_quota_and_checked_before_claim() {
+    for (iteration, quota) in [144, 720].into_iter().enumerate() {
+        let f = Fixture::new(1000, quota).await;
+        let s = Server::new(&f, 192, 1000).await;
+        let (c, t) = bootstrap(&s).await;
+        let h = login_headers(&c, &t);
+        let cap = [
+            b"\"".as_slice(),
+            vec![b'x'; 190].as_slice(),
+            b"\"".as_slice(),
+        ]
+        .concat();
+        let over = [
+            b"\"".as_slice(),
+            vec![b'x'; 191].as_slice(),
+            b"\"".as_slice(),
+        ]
+        .concat();
+        let r = request(s.address, "POST", "/login", &h, &over).await;
+        assert!(
+            r.status == 413 && f.rows().await == 1 && f.stats.verifier.load(Ordering::SeqCst) == 0
+        );
+        r.guarded();
+        let r = request(s.address, "POST", "/login", &h, &cap).await;
+        // Bounded numeric failure shape only; response body and cookie values stay private.
+        if !(r.status == 200 && r.body == cap && r.auth_cookie() && r.deletion()) {
+            let status = r.status;
+            let body_bytes = r.body.len();
+            let expected_body_bytes = cap.len();
+            let set_cookie_count = r.values("set-cookie").len();
+            let verifier_calls = f.stats.verifier.load(Ordering::SeqCst);
+            let handler_calls = f.stats.handler.load(Ordering::SeqCst);
+            let mode6_cancel_seen = f.stats.cancelled.load(Ordering::SeqCst);
+            eprintln!(
+                "browser_login_public_api_diag case=wire_body_cap phase=exact_body_response iteration={} status={} body_bytes={} expected_body_bytes={} body_matches={} set_cookie_count={} auth_cookie={} deletion={}",
+                iteration,
+                r.status,
+                r.body.len(),
+                cap.len(),
+                r.body == cap,
+                r.values("set-cookie").len(),
+                r.auth_cookie(),
+                r.deletion(),
+            );
+            eprintln!(
+                "sf03_browser_failure_counters_v1 case=wire_body_cap phase=exact_body_response iteration={} status={} status_overflow={} body_bytes={} body_bytes_overflow={} expected_body_bytes={} expected_body_bytes_overflow={} body_matches={} set_cookie_count={} set_cookie_count_overflow={} auth_cookie={} deletion={} verifier_calls={} verifier_calls_overflow={} handler_calls={} handler_calls_overflow={} claim_committed={} issue_committed={} mode6_cancel_seen={} mode6_cancel_seen_overflow={}",
+                iteration,
+                status.min(999),
+                status > 999,
+                body_bytes.min(8193),
+                body_bytes > 8193,
+                expected_body_bytes.min(8193),
+                expected_body_bytes > 8193,
+                r.body == cap,
+                set_cookie_count.min(1023),
+                set_cookie_count > 1023,
+                r.auth_cookie(),
+                r.deletion(),
+                verifier_calls.min(1023),
+                verifier_calls > 1023,
+                handler_calls.min(1023),
+                handler_calls > 1023,
+                f.stats.claim_committed.load(Ordering::SeqCst),
+                f.stats.issue_committed.load(Ordering::SeqCst),
+                mode6_cancel_seen.min(1023),
+                mode6_cancel_seen > 1023,
+            );
+        }
+        assert!(r.status == 200 && r.body == cap && r.auth_cookie() && r.deletion());
+        s.stop().await;
+        f.stop().await;
+    }
+}
+#[tokio::test]
+async fn browser_profile_refuses_non_post_and_wrong_startup_origin() {
+    let f = Fixture::new(1000, 144).await;
+    for method in [
+        http::Method::GET,
+        http::Method::HEAD,
+        http::Method::PUT,
+        http::Method::DELETE,
+    ] {
+        let app = http::app_default(State {
+            store: session::clone_store(&f.store),
+            auth: sqlite::clone_pool(&f.auth),
+            stats: Arc::clone(&f.stats),
+            original: Instant::now() + Duration::from_secs(60),
+        });
+        assert!(http::route(
+            app,
+            method,
+            "/login",
+            http::browser_login_policy(prelogin::clone_pool(&f.pool), named_trusted_bearer),
+            login_handler
+        )
+        .is_err());
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let app = http::route(
+        http::app_default(State {
+            store: session::clone_store(&f.store),
+            auth: sqlite::clone_pool(&f.auth),
+            stats: Arc::clone(&f.stats),
+            original: Instant::now() + Duration::from_secs(60),
+        }),
+        http::Method::POST,
+        "/login",
+        http::browser_login_policy(prelogin::clone_pool(&f.pool), named_trusted_bearer),
+        login_handler,
+    )
+    .unwrap();
+    let app = attach_test_rate(app, http::Method::POST, "/login");
+    let other = http::authority(
+        http::with_response_limits(
+            with_test_rate_limits(http::options(256, 1000, 1000, 1000).unwrap()),
+            response_limits(256),
+        )
+        .unwrap(),
+        "https://other.invalid",
+        vec!["localhost".to_owned()],
+        1,
+        128,
+    )
+    .unwrap();
+    assert!(http::serve_listener(listener, app, other, async {})
+        .await
+        .is_err());
+    assert!(f.rows().await == 0 && f.stats.verifier.load(Ordering::SeqCst) == 0);
+    f.stop().await;
+}
+
+#[tokio::test]
+async fn body_own_deadline_408_security_earlier_or_equal_504_before_claim() {
+    for (body_ms, security, status) in [(80, 240, 408), (240, 80, 504), (100, 100, 504)] {
+        let f = Fixture::new(10000, 144).await;
+        // Bootstrap setup has its normal finite budget; only the incomplete
+        // login upload under test uses these deliberately short deadlines.
+        let setup = Server::new(&f, 256, 1000).await;
+        let (c, t) = bootstrap(&setup).await;
+        setup.stop().await;
+        let s = Server::with_options(&f, checked_phases(256, security, body_ms, 1000)).await;
+        let mut stream = TcpStream::connect(s.address).await.unwrap();
+        let headers=format!("POST /login HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 2\r\n{}\r\n",login_headers(&c,&t));
+        stream.write_all(headers.as_bytes()).await.unwrap();
+        stream.write_all(b"{").await.unwrap();
+        let mut raw = Vec::new();
+        tokio::time::timeout(
+            Duration::from_secs(3),
+            stream.take(8193).read_to_end(&mut raw),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        assert!(raw.len() <= 8192);
+        let r = parse_reply(raw);
+        assert!(r.status == status && !r.deletion() && !r.auth_cookie());
+        r.guarded();
+        assert!(f.rows().await == 1 && f.stats.verifier.load(Ordering::SeqCst) == 0);
+        s.stop().await;
+        f.stop().await;
+    }
+}
+#[tokio::test]
+async fn shutdown_cancels_actual_request_and_committed_token_cannot_return() {
+    let f = Fixture::new(10000, 144).await;
+    f.stats.mode.store(6, Ordering::SeqCst);
+    let s = Server::with_options(&f, checked_phases(256, 1000, 1000, 20)).await;
+    let (c, t) = bootstrap(&s).await;
+    let mut stream = TcpStream::connect(s.address).await.unwrap();
+    let headers=format!("POST /login HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 2\r\n{}\r\n{{}}",login_headers(&c,&t));
+    stream.write_all(headers.as_bytes()).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(2), f.stats.entered.notified())
+        .await
+        .unwrap();
+    assert!(f.rows().await == 0);
+    s.stop().await;
+    drop(stream);
+    assert!(
+        f.stats.cancelled.load(Ordering::SeqCst) == 1
+            && f.stats.handler.load(Ordering::SeqCst) == 0
+    );
+    f.stats.mode.store(0, Ordering::SeqCst);
+    let next = Server::new(&f, 256, 1000).await;
+    let retry = request(
+        next.address,
+        "POST",
+        "/login",
+        &login_headers(&c, &t),
+        b"{}",
+    )
+    .await;
+    assert!(
+        retry.status == 403 && !retry.auth_cookie() && f.stats.verifier.load(Ordering::SeqCst) == 1
+    );
+    next.stop().await;
+    f.stop().await;
+}
+#[tokio::test]
+async fn closed_native_pool_refuses_before_verifier_and_session_capacity_never_redelivers() {
+    let f = Fixture::new(10000, 144).await;
+    let s = Server::new(&f, 256, 1000).await;
+    for _ in 0..4 {
+        let (c, t) = bootstrap(&s).await;
+        let r = request(s.address, "POST", "/login", &login_headers(&c, &t), b"{}").await;
+        assert!(r.status == 200);
+    }
+    let (c, t) = bootstrap(&s).await;
+    let r = request(s.address, "POST", "/login", &login_headers(&c, &t), b"{}").await;
+    assert!(r.status == 503 && r.deletion() && !r.auth_cookie());
+    assert!(
+        f.rows().await == 0
+            && number(&f.auth, "SELECT count(*) AS n FROM __nagi_session_rows").await == 4
+    );
+    let (c, t) = bootstrap(&s).await;
+    prelogin::close(&f.pool, 2000).await.unwrap();
+    let before = f.stats.verifier.load(Ordering::SeqCst);
+    let r = request(s.address, "POST", "/login", &login_headers(&c, &t), b"{}").await;
+    assert!(
+        r.status == 503
+            && !r.deletion()
+            && !r.auth_cookie()
+            && f.stats.verifier.load(Ordering::SeqCst) == before
+    );
+    assert!(f.rows().await == 1);
+    s.stop().await;
+    f.stop().await;
+}
+
+#[tokio::test]
+async fn json_value_nodes_and_container_depth_accept_exact_bounds() {
+    let f = Fixture::new(10000, 144).await;
+    let s = Server::new(&f, 256, 1000).await;
+    for (over, exact) in [
+        (b"[[[[[0]]]]]".as_slice(), b"[[[[0]]]]".as_slice()),
+        (
+            b"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]".as_slice(),
+            b"[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]".as_slice(),
+        ),
+    ] {
+        let (c, t) = bootstrap(&s).await;
+        let h = login_headers(&c, &t);
+        let before = f.stats.verifier.load(Ordering::SeqCst);
+        let r = request(s.address, "POST", "/login", &h, over).await;
+        assert!(
+            r.status == 400
+                && f.rows().await == 1
+                && f.stats.verifier.load(Ordering::SeqCst) == before
+        );
+        let r = request(s.address, "POST", "/login", &h, exact).await;
+        // Keep the original short-circuit row observation and failure gate.
+        let exact_ok = r.status == 200 && r.body == exact && f.rows().await == 0;
+        if !exact_ok {
+            eprintln!(
+                "browser_login_json_bound_diag phase=exact_bounds status={} body_bytes={} expected_body_bytes={} body_matches={} verifier_calls={} handler_calls={} claim_committed={}",
+                r.status, r.body.len().min(8193), exact.len().min(8193), r.body == exact,
+                f.stats.verifier.load(Ordering::SeqCst).min(1023),
+                f.stats.handler.load(Ordering::SeqCst).min(1023),
+                f.stats.claim_committed.load(Ordering::SeqCst),
+            );
+        }
+        assert!(exact_ok);
+    }
+    s.stop().await;
+    f.stop().await;
+}

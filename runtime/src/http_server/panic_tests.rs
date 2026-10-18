@@ -1,7 +1,7 @@
 use super::*;
 
-async fn healthy(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-    Ok(text(Status::OK, "still serving"))
+async fn healthy(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+    text(response_context(&request), Status::OK, "still serving")
 }
 
 async fn assert_failed_request_isolated(app: App<(), Error>, head: bool) {
@@ -53,11 +53,11 @@ async fn http_handler_out_of_bounds_returns_500_and_server_keeps_serving() {
         Method::GET,
         "/panic",
         public_policy(),
-        |_, _, _| async {
+        |request, _, _| async move {
             let values = [1_i64];
             let index = std::hint::black_box(4_usize);
             let _ = values[index];
-            Ok(text(Status::OK, "unreachable"))
+            text(response_context(&request), Status::OK, "unreachable")
         },
     )
     .unwrap();
@@ -71,10 +71,10 @@ async fn http_handler_division_by_zero_returns_500_and_server_keeps_serving() {
         Method::GET,
         "/panic",
         public_policy(),
-        |_, _, _| async {
+        |request, _, _| async move {
             let zero = std::hint::black_box(0_i64);
             let _ = 10_i64 / zero;
-            Ok(text(Status::OK, "unreachable"))
+            text(response_context(&request), Status::OK, "unreachable")
         },
     )
     .unwrap();
@@ -113,7 +113,7 @@ async fn http_handler_constructor_panic_returns_500() {
     assert_failed_request_isolated(app, false).await;
 }
 
-fn failing_mapper(_: Error) -> Response {
+fn failing_mapper(_: &ResponseContext, _: Error) -> Result<Response, Error> {
     panic!("private error-mapper crash")
 }
 

@@ -15,9 +15,10 @@ def errors(needs: dict) -> list[str]:
         failures.append("linux: missing or invalid check plan")
     else:
         expected = "success" if full == "true" else "skipped"
-        actual = needs.get("linux", {}).get("result", "missing")
-        if actual != expected:
-            failures.append(f"linux: {actual}, expected {expected}")
+        for job in ("linux", "rust-1-88"):
+            actual = needs.get(job, {}).get("result", "missing")
+            if actual != expected:
+                failures.append(f"{job}: {actual}, expected {expected}")
     jetbrains = needs.get("changes", {}).get("outputs", {}).get("jetbrains_checks")
     if jetbrains not in ("true", "false"):
         failures.append("jetbrains: missing or invalid check plan")

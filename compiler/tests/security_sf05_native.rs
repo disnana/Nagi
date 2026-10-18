@@ -21,12 +21,15 @@ extern async def authorize(scope: auth.AuthScope, request: http.Request, state: 
 @rust("native::protected_update")
 extern async def protected_update(pool: view[sqlite.Pool], grant: auth.Grant[Edit], value: i64) -> Result[i64, Error]
 async def handler(request: http.Request, state: shared[State], grant: auth.Grant[Edit]) -> Result[http.Response, Error]:
+    context = http.response_context(view(request))
     changed = try await protected_update(view(state.pool), grant, 101)
-    return http.json[i64](http.Status.OK, changed)
+    return http.json[i64](context, http.Status.OK, changed)
 def setup(pool: sqlite.Pool, subject: i64, target: i64) -> Result[http.App[State, Error], Error]:
     app = http.app_default[State](State(pool=pool, subject=subject, target=target))
     policy = http.authorized_policy[State, Edit](verify, authorize)
-    return http.route(app, http.Method.POST, "/update", policy, handler)
+    app = try http.route(app, http.Method.POST, "/update", policy, handler)
+    rate = try http.rate_policy(10, 1000)
+    return http.rate_route(app, http.Method.POST, "/update", rate)
 def selected_query(id: i64) -> sqlite.Query:
     if id == 9:
         return sqlite.literal("SELECT value FROM protected WHERE id=?")
@@ -51,13 +54,16 @@ extern async fn authorize(scope: auth.AuthScope, request: http.Request, state: s
 @rust("native::protected_update")
 extern async fn protected_update(pool: view[sqlite.Pool], grant: auth.Grant[Edit], value: i64) -> Result[i64, Error];
 async fn handler(request: http.Request, state: shared[State], grant: auth.Grant[Edit]) -> Result[http.Response, Error] {
+    let context = http.response_context(view(request));
     let changed = try await protected_update(view(state.pool), grant, 101);
-    return http.json[i64](http.Status.OK, changed);
+    return http.json[i64](context, http.Status.OK, changed);
 }
 fn setup(pool: sqlite.Pool, subject: i64, target: i64) -> Result[http.App[State, Error], Error] {
     let app = http.app_default[State](State(pool=pool, subject=subject, target=target));
     let policy = http.authorized_policy[State, Edit](verify, authorize);
-    return http.route(app, http.Method.POST, "/update", policy, handler);
+    app = try http.route(app, http.Method.POST, "/update", policy, handler);
+    let rate = try http.rate_policy(10, 1000);
+    return http.rate_route(app, http.Method.POST, "/update", rate);
 }
 fn selected_query(id: i64) -> sqlite.Query {
     if id == 9 { return sqlite.literal("SELECT value FROM protected WHERE id=?"); }
@@ -126,7 +132,12 @@ fn real_sqlite_and_request_bound_predicate() {
             let app=setup(sqlite::clone_pool(&pool),subject,target).unwrap();
             let listener=TcpListener::bind("127.0.0.1:0").await.unwrap();let address=listener.local_addr().unwrap();
             let (stop,done)=oneshot::channel();
-            let options=http::authority(http::default_options(),"https://localhost",vec!["localhost".into()],1,256).unwrap();
+            let options=http::capacity(http::default_options(),2,2).unwrap();
+            let response_limits=http::response_limits(1024,128,4,512,12,128,2,262144,2,262144,512,12).unwrap();
+            let options=http::with_response_limits(options,response_limits).unwrap();
+            let rate_limits=http::rate_limits(4,1,2,131072,256).unwrap();
+            let options=http::with_rate_limits(options,rate_limits).unwrap();
+            let options=http::authority(options,"https://localhost",vec!["localhost".into()],1,256).unwrap();
             let task=tokio::spawn(http::serve_listener(listener,app,options,async{let _=done.await;}));
             for (credentials,status,expected) in [("Authorization: Bearer fixture\r\n",200,body),("",401,"invalid credential")] {
                 let mut stream=TcpStream::connect(address).await.unwrap();

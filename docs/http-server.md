@@ -1,6 +1,6 @@
 # HTTP APIリファレンス
 
-未リリース0.2.0 SF01のAPIです。[移行](migration-0.2.0.md)と[認証・認可](security.md)も参照してください。
+未リリース0.2.0の開発APIです。[移行](migration-0.2.0.md)と[認証・認可](security.md)も参照してください。
 
 ```nagi
 import std.http.server as http
@@ -51,39 +51,93 @@ Statusは数値を保持するコピー可能な値です。文字列への変�
 
 | 関数 | 戻り値 |
 |---|---|
-| `empty(status)` | `Response` |
-| `text(status, text)` | `Response` |
-| `bytes(status, body)` | `Response` |
-| `json[T](status, value)` | `Result[Response, Error]` |
+| `response_context(view(request))` | `view[ResponseContext]` |
+| `empty(context, status)` | `Result[Response, Error]` |
+| `text(context, status, text)` | `Result[Response, Error]` |
+| `bytes(context, status, body)` | `Result[Response, Error]` |
+| `json[T](context, status, value)` | `Result[Response, Error]` |
+| `html_response(context, status, document)` | `Result[Response, Error]` |
 | `append_header(response, name, value: view[bytes])` | `Result[Response, Error]` |
 | `append_header_text(response, name, value: view[str])` | `Result[Response, Error]` |
 
+`context`は現在のRequestから`response_context`で借ります。応答予算のための不透明な値で、認証proofではありません。Requestより長く保持できず、defaultから作れません。factoryは予算の保持責任を持つ所有Responseを返し、明示した確保・直列化の上限を超えると`Err`になります。`try`で処理するかfactoryのResultを直接返し、handlerの業務エラーと予算・確保失敗を区別してください。
+
+開発候補ではcompilerとruntimeのAPIを接続しています。限定native検証は最終受入を意味しません。最終統合HEADの4 OS・資源検証を含む必須条件は未完で、公開済み機能の保証ではありません。
+
 `text`、`bytes`は借りた入力をコピーして、Responseが所有するbodyを作ります。`json`は値を借用してJSONを作るため、元の値をmoveしません。文字列リテラルはview引数へ直接渡せます。変数から借りる場合は`view(value)`を使います。
 
-ヘッダー追加は応答を受け取り、新しい応答を返します。非reservedの同名ヘッダー（X-Traceなど）は重複を保持します。Content-Length/Transfer-Encoding/Content-Type/Set-Cookie/WWW-Authenticate/Cache-Control/Vary、CORS/CSP/nosniff等のsecurity-managedヘッダーは拒否します。Cookie/Session発行はSF02まで未実装です。HEADではbodyを送らず、GET相当の長さを保持します。204・205・304ではbodyを送信しません。authority-form CONNECTは起動設定節のgateで400になります。origin-form CONNECTのhandlerが成功応答を返した場合もtunnelは未対応で、501で接続を閉じます。
+ヘッダー追加は応答を受け取り、新しい応答を返します。非reservedの同名ヘッダー（X-Traceなど）は重複を保持します。Content-Length/Transfer-Encoding/Content-Type/Set-Cookie/WWW-Authenticate/Cache-Control/Vary、CORS/CSP/nosniff等のsecurity-managedヘッダーは拒否します。Cookie/Sessionの発行は専用Session APIを使い、ヘッダー追加で迂回できません。HEADではbodyを送らず、GET相当の長さを保持します。204・205・304ではbodyを送信しません。authority-form CONNECTは起動設定節のgateで400になります。origin-form CONNECTのhandlerが成功応答を返した場合もtunnelは未対応で、501で接続を閉じます。
 
 ## Appとroute
+
+以下はroute登録部分の断片です。SF07の起動全体を表していません。下記の応答・rate予算と全routeのrate policy設定を加えてください。
 
 ```nagi
 app = http.app[State, AuthError](state, map_error)
 app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), handle)
-app = try http.route_mapped(app, http.Method.POST, "/login", http.public_policy[State](), login, map_login_error)
-limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
-return await http.serve(app, 8080, limits)
+app = try http.route_mapped(app, http.Method.POST, "/submit", http.public_policy[State](), submit, map_submit_error)
 ```
 
-- `app[S, E](state, mapper)`は状態を所有し、`fn(E) -> Response`を既定のエラー処理にします。
+- `app[S, E](state, mapper)`は状態を所有し、`fn(view[ResponseContext], E) -> Result[Response, Error]`を既定のエラー処理にします。
 - `app_default[S](state)`は`Error`用の既定処理を使います。
 - Policyは`public_policy[S]()`、`authenticated_policy[S](verifier)`、`authorized_policy[S,P](verifier, authorizer)`から作ります。Aは順にunit、AuthScope、Grant[P]です。旧arityにはmigration診断が出ます。
 - handlerは`async def handle(request: Request, state: shared[S], access: A) -> Result[Response, E]`です。状態そのものはリクエストごとにコピーしません。Rust側では状態に`Send + Sync`、handlerのFutureに`Send`などが必要で、最終的な適合はbuildで検証します。
 - `route_mapped`はhandlerの独自エラー型と、それに合うmapperを指定できます。
 - 登録済みGETにHEADを自動で対応させます。HEADの明示登録を優先します。既存パスでmethodが違う場合は405とAllowを返します。
 
+mapperは借用Contextを明示的に受け取り、アプリのエラーを処理します。mapper自身の`Err`は有限の組込fallbackへ進み、その独立予算まで不足した場合は再確保を繰り返さず接続を閉じます。応答できる場合はCORS／managed headersを維持します。常に応答できることや、OOMからの普遍的回復は保証しません。
+
 mapperはアプリのエラーを処理します。不正なHTTP、制限超過、タイムアウトはサーバー側で処理します。データベースのエラー詳細や認証情報は応答へ直接出さないでください。
 
 Nagi 0.1.10以降では、応答開始前のhandlerやmapperでunwindするpanicが起きた場合、詳細を含まない500を返し、その接続を閉じます。これはpanicの検出であり、共有状態やDBの更新を巻き戻す仕組みではありません。通常の失敗はResultで返してください。`panic=abort`、OOMなどによるプロセス終了、unwind中の二重panic、独自Rustの解放処理、応答開始後の障害は回復を保証しません。
 
 エラー応答にリクエストIDなどが必要なら、handlerで検証した値を保持し、失敗時に独自エラー型へmoveできます。[見積APIの例](../test-nagi-code/application-examples/quote-api/README.md)では、この方法で共通mapperへIDを渡しています。
+
+## SF07の明示予算とrate policy（開発候補）
+
+応答・rateの新予算に暗黙defaultはありません。`default_options()`は従来のtransport設定を持ちますが、新予算を補いません。両方の予算と全routeの認証前rate policyを明示してから起動します。未設定や不整合はlisten前に拒否します。最終統合HEADのnative・4 OS受入は未完です。
+
+| 設定API | 契約 |
+|---|---|
+| `response_limits(body_bytes, user_header_bytes, user_header_count, managed_header_bytes, managed_header_count, serialization_writes, live_responses, retained_bytes, fallback_responses, fallback_retained_bytes, fallback_managed_header_bytes, fallback_managed_header_count)` | 12個の`i64`を明示し、`Result[ResponseLimits, Error]`を返す。通常応答とfallbackは別予算 |
+| `with_response_limits(options, limits)` | OptionsとResponseLimitsをmoveし、`Result[Options, Error]`を返す |
+| `rate_limits(rules, domains, subject_slots, retained_bytes, request_work)` | 5個の`i64`を明示し、`Result[RateLimits, Error]`を返す。有限の件数・保持量・探索workを検査し、4096を固定の公開上限にしない |
+| `with_rate_limits(options, limits)` | OptionsとRateLimitsをmoveし、`Result[Options, Error]`を返す |
+| `rate_policy(burst, refill_ms)` | 認証前route bucketの`Result[RatePolicy, Error]`を返す |
+| `rate_subject(policy, burst, refill_ms, subject_slots, idle_ms)` | policyを消費して有限の認証済みsubject枠を追加し、`Result[RatePolicy, Error]`を返す |
+| `rate_route(app, method, path, policy)` | Appとpolicyをmoveし、state／業務エラーの型を保った`Result[App[S, E], Error]`を返す |
+
+`burst`は最初に使えるtoken数と貯められる最大数、`refill_ms`はtokenを1個補充する間隔です。例えば`rate_policy(10, 1000)`は最初の10件を受け入れ、その後は1秒ごとに1個を補充します。1秒ごとに10個を補充する設定ではありません。subject bucketも同じ規則です。subject枠の回収は全tokenの補充と明示idle条件の両方を満たした場合に限ります。サンプルの数値は有限な説明用設定で、実運用の推奨値や遅延SLAではありません。
+
+採用した消費順序は入口検査→route枠→認証・CSRF・body検査→認証済みsubject枠→handler／Session発行・更新です。routeの429が401／403より先になる場合があります。Errや取消で返金しません。正常preflightはroute tokenを消費しませんが、入口のcapacity・同時実行数・期限の保護は受けます。subject枠は認証済み主体を得られるprofileだけで使います。同一route・同一process内の制限で、別route・別process・複数台を通じた全体制限ではありません。
+
+token不足は429、table／quota容量不足やClosing／ClockFaultは503、内部故障やmapper自身の失敗は500です。既に成立した認証・期限等の拒否を上書きしません。独立した有限fallback枠まで不足した場合は接続を閉じます。
+
+算術的に受理できる設定でも、全processメモリや遅延SLAの保証ではありません。起動catalogue保持量の正確な計上、小規模設定の実測、native並行動作、最終4 OS検証はリリース阻害要因として残っています。
+
+## 小規模構成の実測（候補の限定検証）
+
+公開APIのfixture [sf07_small_profile.rs](../runtime/tests/sf07_small_profile.rs)は接続・リクエスト各8枠、4 routeと、次の明示予算を使います。検証した構成例であり、暗黙defaultや実運用の推奨値ではありません。
+
+| 予算 | 明示値 |
+|---|---|
+| 応答 | body 4096 bytes、user header 4096 bytes／16件、managed header 4096 bytes／32件、直列化work 4096、同時応答8、通常保持枠2 MiB |
+| fallback | 応答8、独立保持枠2 MiB、managed header 4096 bytes／32件 |
+| rate | rule 8、domain 8、subject枠1、保持枠1 MiB、request work 65536 |
+| route | `/ordinary`・`/headers`・`/healthy`はburst 1000／refill 1000 ms、`/limited`はburst 1／refill 86400000 ms |
+
+GitHub-hosted runnerでRust 1.99.1・固定した依存を使い、未最適化のtest profileで4回warmup後、loopback HTTP/1の32リクエストを逐次実行しました。時間にはclient・通信・解析・current-thread Tokio taskを含みます。CPU型番は記録しておらず、条件を揃えたOS間比較ではありません。
+
+| runner／architecture | 中央値（ms） | p95（ms） | 32リクエスト中の呼出しthreadの累積確保bytes |
+|---|---:|---:|---:|
+| Linux x86_64 | 0.450 | 0.489 | 1627520 |
+| Windows x86_64 | 0.681 | 0.737 | 1641088 |
+| macOS ARM64 | 0.183 | 0.212 | 1657152 |
+| macOS x86_64 | 0.487 | 0.553 | 1657216 |
+
+根拠は`2b1563d`の[Linux/macOS run](https://github.com/disnana/Nagi/actions/runs/39137680565)と、`967ad48e`の[Windows followup](https://github.com/disnana/Nagi/actions/runs/39138107960)です。両snapshotでRust fixtureとproduction codeは同一です。followupはCLIテストの改行期待2箇所を修正し、最初のWindows runはnative実行前にそのテストで失敗しました。4構成ともheaderを多く持つ応答、rate 429後の正常route、停止後joinも確認しました。最終統合HEADの検証の代替ではありません。
+
+allocation counterはloopback clientを含む呼出しthreadの累積eventで、解放数には測定前の確保を含む場合があります。物理的な保持量の最大値やprocess RSSの測定ではありません。論理的な課金境界と最後の所有者による解放は、既存のquota・native ownerの決定的テストで別に確認します。この測定や論理予算の受理から遅延SLAや普遍的なOOM回復を保証しません。
 
 ## 制限と停止
 
@@ -100,7 +154,7 @@ authorityの再設定やproxy ACLの上書きはErrです。setterはOptionsをm
 
 全route・404/405・body受信・verifier・proof発行より前に、HTTP/1.1のorigin-formと一個の非空Hostを検査します。不正・欠落・重複・非allowlist、absolute-form/authority-form/`*`、ForwardedまたはX-Forwarded-*のpresenceは400、HTTP/1.0は505です。これらruntime拒否はno-storeとcloseです。Hyper自身がservice前に拒否する不正HTTP構文・HTTP/2 prefaceは公式parserへ委譲し、handler/proofには届きません。標準listenerはHTTP/1のみです。
 
-direct/proxyのprofileは起動時に固定します。proxyでもForwarded系はbackendへ送る前に除去し、Hostは登録済み内部値または登録済みpass-through値にします。ACLは`accept`が返す実peerだけで判定し、headerからtrustやoriginを選びません。loopback ACLは同hostの別processを認証しません。Host一致はOrigin/CSRF/CORSを免除せず、それらのSF03機能はこのHost sliceでは未実装です。
+direct/proxyのprofileは起動時に固定します。proxyでもForwarded系はbackendへ送る前に除去し、Hostは登録済み内部値または登録済みpass-through値にします。ACLは`accept`が返す実peerだけで判定し、headerからtrustやoriginを選びません。loopback ACLは同hostの別processを認証しません。Host一致はOrigin/CSRF/CORSを免除せず、未リリースSF03候補では下記の別契約として扱います。
 
 `serve`はloopbackの平文HTTPで、origin設定はTLSを実装しません。ローカルのpublic応答確認とbrowser認証を区別してください。browser用は信頼された証明書のTLS frontendを置き、たとえばexternal origin `https://localhost:8443`、backend wire `localhost:8080`、peer `127.0.0.1`を明示します。HTTP/2 frontendもHTTP/1.1へ終端します。Secure Cookieにlocalhost例外はありません。実TLS/browser・4 OSの検証は別の受入条件です。
 
@@ -124,13 +178,21 @@ Nagi 0.1.10以降では、handlerの応答生成が正常に完了した時点�
 
 本文上限を超えると、handlerを呼ばずに413と`Connection: close`で拒否します。0.2.0開発版では応答の送信後、最大8 KiB・100 msと本文期限の短い方まで残りの入力を読み捨て、書込み側を閉じます。この間は接続枠を保持し、読み捨てた入力をhandlerへ渡しません。通常応答やidle Keep-Aliveではこの後片付けを行いません。残りの本文を最後まで読み捨てる実装ではなく、期限・上限・取消で切断します。未読本文を残した切断ではTCP resetが起こり得るため、すべてのOS・client・送信条件で413を受信できることは保証していません。
 
-設定例：
+次の起動部分は、前の例で登録した2つのroute（`/`と`/submit`）へ続けます。必須のSF07予算と両routeのrate policyを含めています。数値は有限な設定方法の例で、実測済みの推奨値ではありません。handler・state・mapperの定義は別途必要です。全体をbuildできる例は[HTTP認証サンプル](../test-nagi-code/library-examples/http-auth/README.md)を参照してください。
 
 ```nagi
+route_budget = try http.rate_policy(10, 1000)
+app = try http.rate_route(app, http.Method.GET, "/", route_budget)
+submit_budget = try http.rate_policy(10, 1000)
+app = try http.rate_route(app, http.Method.POST, "/submit", submit_budget)
 limits = try http.options(1048576, 10000, 2000, 10000)
-limits = try http.capacity(limits, 2048, 512)
+limits = try http.capacity(limits, 8, 8)
 limits = try http.header_limits(limits, 32768, 100)
 limits = try http.authority(limits, "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+response_budget = try http.response_limits(4096, 4096, 16, 4096, 32, 4096, 8, 2097152, 8, 2097152, 4096, 32)
+limits = try http.with_response_limits(limits, response_budget)
+rate_budget = try http.rate_limits(8, 8, 1, 1048576, 65536)
+limits = try http.with_rate_limits(limits, rate_budget)
 return await http.serve(app, 8080, limits)
 ```
 
@@ -139,3 +201,20 @@ return await http.serve(app, 8080, limits)
 NagiのAPIは[標準moduleの登録](../compiler/src/stdlib.rs)と[HTTP runtime](../runtime/src/http_server.rs)で実装しています。通信はHyperのHTTP/1、実行と接続taskの管理はTokio、pathの照合はmatchit、JSON変換はSerdeです。AxumのHTTP型も使いますが、このAPIのroute処理はAxum Routerではありません。
 
 [HTTP runtimeのテスト](../runtime/src/http_server/tests.rs)には、実際のsocketを使う応答、制限、タイムアウト、接続終了の確認があります。[Rust連携](modules-and-rust.md)では独自のサーバーを作れますが、同じ制限や障害処理が自動で付くわけではありません。
+
+## 明示CORS route metadata（未リリースSF03候補）
+
+`CorsPolicy`は所有するopaque設定で、認証proofではありません。`CorsCredentials.OMIT`はAllow-Credentialsを省略し、`ALLOW`は`true`を出します。credentialの除去やPolicy/CSRFの免除はしません。`cors_policy(origins: List[str], request_headers: List[str], credentials: CorsCredentials, max_age_seconds: i64, max_origins: i64, max_origin_bytes: i64, max_headers: i64, max_header_bytes: i64) -> Result[CorsPolicy, Error]`で作成します。count/bytes上限は正のnative size、listは空も可能です。max-ageは明示した0..4294967295秒で、0はpositive lifetimeなしです。server側preflight cacheはありません。
+
+`cors_route[S,E](app: App[S,E], method: Method, registered_path: view[str], cors: CorsPolicy) -> Result[App[S,E], Error]`はapp/configを消費し、既存の正確なmethod/登録patternへ一度だけ設定します。未知record・二重付与は失敗します。GET fallbackのHEADは継承し、明示HEAD/OPTIONSは別recordです。省略はcross-origin読取denyです。origin/header wildcardとCORS methodの`*`・CONNECT・TRACE・TRACKは拒否します。通常routeとframework管理routeで同じ設定操作を使います。
+
+```nagi
+cors = try http.cors_policy(["https://app.example.invalid"], ["content-type"], http.CorsCredentials.ALLOW, 0, 2, 128, 2, 64)
+app = try http.cors_route[State, Error](app, http.Method.GET, "/items/{id}", cors)
+```
+
+originはhttp/https scheme・ASCII host・effective portのcanonical exact一致です。DNS case/default port/IP表記は正規化します。null・wildcard・userinfo・Unicode・末尾DNS dot・空白・percent・path/query/fragment・複数Originは不可です。既存security用ExternalOriginはHTTPS専用のままです。返すgrantは設定済canonical値です。
+
+OPTIONSにAccess-Control-Request-MethodまたはAccess-Control-Request-Headersがあればtarget routeのmetadataだけを使います。成功は空204と要求method/header・明示Max-Age・no-storeで、verifier/handler/proof/Session/DB処理なしです。通常OPTIONSは独自Policyが必要です。未知path/methodは404/405とgrantなしを保持します。重複/不正metadataは400、valid未許可origin/header・既定denyは403です。admission・宣言bodyの503/413を優先し、preflight bodyは400とcloseです。
+
+actualの未許可/不正/欠落OriginはCORS grantなしで、通常認証・CSRF・status・handler動作を変えません。許可cross-origin preflightでもunsafe Session POSTの外部HTTPS Origin/token条件は免除されません。外側finalizerはCookie一回配送・no-store・CSP・nosniff・challenge・framingを保持し、選択済early errorでも有限typed Vary依存をunionします。認証/Sessionの304は秘密なし500、公的DTOの304は既存statusを保持します。source APIだけでnative/4OSや実TLS/browser受理を主張しません。この候補は未リリースでB1へ依存します。

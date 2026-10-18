@@ -1,9 +1,11 @@
 //! Private, bounded NoWait quota core for SF07.
 //!
-//! This file is deliberately unregistered and exposes no public Nagi API.
+//! The production HTTP producer uses the private retained catalogue and atomic
+//! reservation path. No public Nagi quota API is exposed.
 
+use super::OwnedStateLock as Mutex;
 use std::mem::size_of;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 const MAX_CLAIMS: usize = 8;
 const MAX_CATALOG_ITEMS: usize = (u16::MAX as usize) + 1;
@@ -124,6 +126,70 @@ impl Quota {
         }
     }
 }
+
+// SF07_U2_RETAINED_CATALOG_BEGIN
+// One checked receipt for the existing Quota allocation. No second quota.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct CatalogRetention {
+    bytes: usize,
+}
+impl CatalogRetention {
+    pub(crate) fn bytes(self) -> usize {
+        self.bytes
+    }
+}
+impl Quota {
+    pub(crate) fn retained_catalog_minimum(count: usize) -> Result<usize, StartupError> {
+        if count == 0 || count > MAX_CATALOG_ITEMS {
+            return Err(StartupError::Invalid);
+        }
+        let payload = checked_catalog_bytes(count, size_of::<ResourceState>())?;
+        size_of::<Self>()
+            .checked_add(2 * size_of::<usize>()) // Arc control block
+            .and_then(|fixed| fixed.checked_add(payload))
+            .filter(|bytes| *bytes <= isize::MAX as usize)
+            .ok_or(StartupError::Invalid)
+    }
+    pub(crate) fn checked_catalog_retained(
+        limits: &[ResourceLimit],
+        max_catalog: usize,
+        retained_limit: usize,
+    ) -> Result<(Arc<Self>, CatalogRetention), StartupError> {
+        // Reject impossible retention before the existing constructor allocates.
+        let minimum = Self::retained_catalog_minimum(limits.len())?;
+        if minimum > retained_limit {
+            return Err(StartupError::Invalid);
+        }
+        let owner = Self::checked_catalog(limits, max_catalog)?;
+        // Observe actual Vec capacity before this owner can be published.
+        let receipt = owner.catalog_retention(limits.len(), retained_limit)?;
+        Ok((owner, receipt))
+    }
+    fn catalog_retention(
+        &self,
+        planned_count: usize,
+        retained_limit: usize,
+    ) -> Result<CatalogRetention, StartupError> {
+        let state = self.state.lock().map_err(|_| StartupError::Invalid)?;
+        if state.resources.len() != planned_count || planned_count == 0 {
+            return Err(StartupError::Invalid);
+        }
+        let capacity = state.resources.capacity();
+        // try_reserve_exact is not assumed to report exactly the request.
+        if capacity > planned_count {
+            return Err(StartupError::Allocation);
+        }
+        let bytes = Self::retained_catalog_minimum(capacity)?;
+        if bytes > retained_limit {
+            return Err(StartupError::Invalid);
+        }
+        Ok(CatalogRetention { bytes })
+    }
+}
+#[cfg(test)]
+#[path = "quota_retention_tests.rs"]
+mod retained_catalog_tests;
+// SF07_U2_RETAINED_CATALOG_END
 
 fn checked_catalog_bytes(count: usize, item_size: usize) -> Result<usize, StartupError> {
     count

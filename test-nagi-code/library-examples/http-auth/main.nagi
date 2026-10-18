@@ -8,23 +8,34 @@ class State:
 
 enum AuthError:
     Denied
+    Internal
 
 @rust("native::verify")
 extern async def verify(request: http.Request, state: shared[State]) -> Result[auth.VerifiedIdentity, auth.Failure]
 
-def auth_error(problem: AuthError) -> http.Response:
+def auth_error(context: view[http.ResponseContext], problem: AuthError) -> Result[http.Response, Error]:
     match problem:
         case AuthError.Denied:
-            return http.text(http.Status.FORBIDDEN, "access denied")
+            return http.text(context, http.Status.FORBIDDEN, "access denied")
+        case AuthError.Internal:
+            return http.text(context, http.Status.INTERNAL_SERVER_ERROR, "internal error")
 
 async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
-    return ok(http.text(http.Status.OK, "ok"))
+    match http.text(http.response_context(view(request)), http.Status.OK, "ok"):
+        case Ok(response):
+            return ok(response)
+        case Err(_):
+            return fail(AuthError.Internal)
 
 async def profile(request: http.Request, state: shared[State], scope: auth.AuthScope) -> Result[http.Response, AuthError]:
     if auth.subject(view(scope)) != state.subject:
         return fail(AuthError.Denied)
     await sleep(1)
-    return ok(http.text(http.Status.OK, view(state.greeting)))
+    match http.text(http.response_context(view(request)), http.Status.OK, view(state.greeting)):
+        case Ok(response):
+            return ok(response)
+        case Err(_):
+            return fail(AuthError.Internal)
 
 async def restricted(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     return fail(AuthError.Denied)
@@ -36,8 +47,14 @@ async def main() -> Result[unit, Error]:
     state = State(authorization=authorization, greeting="Hello, Nagi!", subject=1)
     app = http.app[State, AuthError](state, auth_error)
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    route_policy_1 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/health", route_policy_1)
     app = try http.route(app, http.Method.GET, "/me", http.authenticated_policy[State](verify), profile)
+    route_policy_2 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/me", route_policy_2)
     app = try http.route(app, http.Method.GET, "/restricted", http.public_policy[State](), restricted)
+    route_policy_3 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/restricted", route_policy_3)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8089"))
     wire_authority = env("NAGI_HTTP_AUTHORITY", "localhost:8089")
     options = try http.authority(
@@ -47,4 +64,11 @@ async def main() -> Result[unit, Error]:
         1,
         256
     )
+    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    options = try http.with_response_limits(options, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    options = try http.with_rate_limits(options, rate_budget)
     return await http.serve(app, port, options)
