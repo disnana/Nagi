@@ -389,7 +389,7 @@ async fn authorize(
     auth::Grant::from_authorized(scope, 91)
 }
 async fn handler(
-    _: http::Request,
+    request: http::Request,
     state: Arc<AppState>,
     grant: auth::Grant<()>,
 ) -> Result<http::Response, crate::Error> {
@@ -404,10 +404,10 @@ async fn handler(
     .await
     .map_err(|_| crate::Error::internal("outbound operation failed"))?;
     inspect_response(response, 403);
-    Ok(http::text(http::Status::OK, "bound"))
+    http::text(http::response_context(&request), http::Status::OK, "bound")
 }
 async fn conflicting_target(
-    _: http::Request,
+    request: http::Request,
     state: Arc<AppState>,
     grant: auth::Grant<()>,
 ) -> Result<http::Response, crate::Error> {
@@ -427,7 +427,11 @@ async fn conflicting_target(
         client::outcome(&failure),
         client::Outcome::RequestNotStarted
     );
-    Ok(http::text(http::Status::BAD_REQUEST, "refused"))
+    http::text(
+        http::response_context(&request),
+        http::Status::BAD_REQUEST,
+        "refused",
+    )
 }
 async fn incoming(endpoint: std::net::SocketAddr, wire: &[u8]) -> Vec<u8> {
     let mut stream = TcpStream::connect(endpoint).await.unwrap();
@@ -482,6 +486,26 @@ async fn protected_registered_operation_preserves_actual_request_grant_target_an
         conflicting_target,
     )
     .unwrap();
+    let app = http::rate_route(
+        app,
+        http::Method::GET,
+        "/",
+        http::rate_policy(10, 1000).unwrap(),
+    )
+    .unwrap();
+    let app = http::rate_route(
+        app,
+        http::Method::GET,
+        "/conflict",
+        http::rate_policy(10, 1000).unwrap(),
+    )
+    .unwrap();
+    let options = http::capacity(http::default_options(), 3, 3).unwrap();
+    let limits =
+        http::response_limits(1024, 128, 4, 512, 12, 128, 3, 393216, 3, 393216, 512, 12).unwrap();
+    let options = http::with_response_limits(options, limits).unwrap();
+    let rates = http::rate_limits(4, 1, 2, 131072, 256).unwrap();
+    let options = http::with_rate_limits(options, rates).unwrap();
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
     let endpoint = listener.local_addr().unwrap();
     let (stop, stopped) = oneshot::channel();
@@ -489,7 +513,7 @@ async fn protected_registered_operation_preserves_actual_request_grant_target_an
         listener,
         app,
         http::authority(
-            http::default_options(),
+            options,
             "https://localhost",
             vec!["localhost".into()],
             1,
