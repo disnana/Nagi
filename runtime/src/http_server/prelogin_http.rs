@@ -69,7 +69,7 @@ pub(super) fn check_startup<S, E>(app: &App<S, E>, options: &Options) -> Result<
 }
 fn terminal(
     context: &ResponseContext,
-    pool: &Pool,
+    _pool: &Pool,
     owner: &HttpOwner,
     status: Status,
     head: bool,

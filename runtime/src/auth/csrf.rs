@@ -20,7 +20,6 @@ use same_queue_probe::Phase as CheckpointPhase;
 
 #[path = "csrf/fixed_body.rs"]
 pub(super) mod fixed_body;
-#[cfg(test)]
 pub(crate) const FIXED_TOKEN_BODY_BYTES: usize = fixed_body::BODY_BYTES;
 
 const ROW_BYTES: i64 = 88;

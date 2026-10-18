@@ -11,9 +11,7 @@ pub(crate) struct OwnedStateLock<T> {
 }
 
 impl<T> OwnedStateLock<T> {
-    // The existing private Quota constructors and other owners are test-only
-    // until public admission is attached; promote this with those constructors.
-    #[cfg(test)]
+    // Inline construction is shared by the attached private Quota/send owners.
     pub(crate) const fn new(value: T) -> Self {
         Self {
             inner: RwLock::new(value),

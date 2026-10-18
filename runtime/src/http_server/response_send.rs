@@ -2,7 +2,9 @@
 //! Backend encoded buffers/RSS and inbound parser allocation are separate budgets.
 //! A response claim follows Hyper's cached map into the next request owner.
 pub(super) use super::request_headers::ReceivedHeaders;
-use super::response_budget::{wire::*, Diagnostic, Producer};
+#[cfg(test)]
+use super::response_budget::Diagnostic;
+use super::response_budget::{wire::*, Producer};
 #[cfg(test)]
 use super::{ClosingIo, Sending, TimedIo};
 use crate::security_sf07_private::{quota::Reservation, OwnedStateLock};
@@ -12,15 +14,15 @@ use axum::http::{Method, StatusCode, Uri};
 use hyper::{body::Incoming, server::conn::http1, service::service_fn};
 #[cfg(test)]
 use hyper_util::rt::{TokioIo, TokioTimer};
-#[cfg(test)]
-use std::time::Duration;
 use std::{
     fmt,
     future::Future,
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::Arc,
     task::{Context, Poll},
 };
+#[cfg(test)]
+use std::{sync::Mutex, time::Duration};
 #[cfg(test)]
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::OwnedSemaphorePermit;
