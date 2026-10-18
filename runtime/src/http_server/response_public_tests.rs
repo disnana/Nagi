@@ -37,11 +37,11 @@ pub(in crate::http_server) fn headers_fixture(map: HeaderMap, body_bound: usize)
     )
     .unwrap();
     let runtime = RuntimeResponses::checked(&options, 0).unwrap();
+    let context = runtime.context();
     let mut headers = RequestHeaders::from_received(request_headers::ReceivedHeaders::configured(
-        map,
-        None,
-        runtime.context(),
+        map, None, context,
     ));
+    headers.rate(rate_public::fixture_request_rate()).unwrap();
     headers
         .admit(Arc::clone(&runtime.requests).try_acquire_owned().unwrap())
         .unwrap();
@@ -252,10 +252,16 @@ async fn public_first_request_header_owner_survives_native_join_and_permit_reuse
         },
     )
     .unwrap();
+    let app = rate_route(app, Method::GET, "/", rate_policy(64, 60_000).unwrap()).unwrap();
     let probe = Arc::new(lifecycle_probe::Probe::default());
     let mut options = with_response_limits(
         capacity(default_options(), 1, 1).unwrap(),
         limits_fixture(256, 1),
+    )
+    .unwrap();
+    options = with_rate_limits(
+        options,
+        rate_limits(1, 1, 1, 4 * 1024 * 1024, 10_000).unwrap(),
     )
     .unwrap();
     options = authority(
@@ -570,9 +576,19 @@ async fn retained_same_producer_response_uses_current_request_cors_on_real_wire(
         policy("https://c.example", CorsCredentials::Omit),
     )
     .unwrap();
+    for routes in app.routes.values_mut() {
+        for route in routes {
+            route.rate = Some(rate_policy(64, 60_000).unwrap());
+        }
+    }
     let mut options = with_response_limits(
         capacity(default_options(), 1, 1).unwrap(),
         limits_fixture(256, 4),
+    )
+    .unwrap();
+    options = with_rate_limits(
+        options,
+        rate_limits(4, 1, 1, 4 * 1024 * 1024, 10_000).unwrap(),
     )
     .unwrap();
     options = authority(

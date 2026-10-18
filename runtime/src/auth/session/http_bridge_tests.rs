@@ -56,6 +56,7 @@ impl Server {
             128,
         )
         .unwrap();
+        let (app, options) = crate::http_server::bounded_rate_app_fixture(app, options);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stopped, shutdown) = oneshot::channel();

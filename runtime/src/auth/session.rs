@@ -528,6 +528,7 @@ impl Foundation {
     }
     // Typed ID/digest connection into the existing private lookup primitive.
     // Request lease/admission and delivery are deliberately not claimed here.
+    #[cfg(test)]
     pub(super) async fn lookup_cookie(
         &self,
         cookie_headers: &[&str],
@@ -738,6 +739,7 @@ impl Foundation {
         })
     }
 
+    #[cfg(test)]
     pub(super) async fn lookup(&self, digest: [u8; 32]) -> Result<Snapshot, Failure> {
         self.lookup_mode(digest, true).await
     }

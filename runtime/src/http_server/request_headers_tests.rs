@@ -277,6 +277,15 @@ async fn actual_native_parts_extensions_live_through_handler_and_drop_after_join
         )
         .unwrap();
         let state = Arc::clone(&app.state);
+        let mut app =
+            rate_route(app, Method::GET, "/probe", rate_policy(64, 60000).unwrap()).unwrap();
+        let rates = RuntimeRate::checked(
+            &mut app,
+            &rate_limits(1, 1, 1, 4 * 1024 * 1024, 10000).unwrap(),
+            1,
+            1,
+        )
+        .unwrap();
         let app = Arc::new(app);
         let options = Arc::new(
             authority(
@@ -318,6 +327,7 @@ async fn actual_native_parts_extensions_live_through_handler_and_drop_after_join
                 let app = Arc::clone(&app);
                 let options = Arc::clone(&options);
                 let permits = Arc::clone(&permits);
+                let rates = Arc::clone(&rates);
                 let ledger = Arc::clone(&service_ledger);
                 async move {
                     let request = IncomingRequest::new(request, prior?, context);
@@ -326,6 +336,7 @@ async fn actual_native_parts_extensions_live_through_handler_and_drop_after_join
                         request,
                         options,
                         permits,
+                        rates,
                         std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
                     )
                     .await

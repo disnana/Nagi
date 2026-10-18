@@ -36,14 +36,28 @@ fn cors(mode: http::CorsCredentials) -> http::CorsPolicy {
     )
     .unwrap()
 }
-fn mapped(_: Error) -> http::Response {
-    http::text(http::Status::INTERNAL_SERVER_ERROR, "mapped")
+fn mapped(context: &http::ResponseContext, _: Error) -> Result<http::Response, Error> {
+    http::text(context, http::Status::INTERNAL_SERVER_ERROR, "mapped")
 }
 struct Server {
     address: std::net::SocketAddr,
     state: Arc<State>,
     stop: Option<oneshot::Sender<()>>,
     task: tokio::task::JoinHandle<Result<(), Error>>,
+}
+fn with_test_rate_limits(options: http::Options) -> http::Options {
+    // Finite test-only route catalogue; no test route uses a subject policy.
+    // The API requires a positive subject capacity even when it stays unused.
+    let limits = http::rate_limits(64, 64, 1, 67_108_864, 65_536).unwrap();
+    http::with_rate_limits(options, limits).unwrap()
+}
+fn attach_test_rate<S, E>(
+    app: http::App<S, E>,
+    method: http::Method,
+    path: &str,
+) -> http::App<S, E> {
+    let policy = http::rate_policy(1000, 1000).unwrap();
+    http::rate_route(app, method, path, policy).unwrap()
 }
 impl Server {
     async fn new(capacity: i64, handler_ms: i64) -> Self {
@@ -53,9 +67,9 @@ impl Server {
             http::Method::GET,
             "/items/{id}",
             http::public_policy(),
-            |_, s: Arc<Arc<State>>, _| async move {
+            |request, s: Arc<Arc<State>>, _| async move {
                 s.calls.fetch_add(1, Ordering::SeqCst);
-                Ok(http::text(http::Status::OK, "owned"))
+                http::text(http::response_context(&request), http::Status::OK, "owned")
             },
         )
         .unwrap();
@@ -71,7 +85,13 @@ impl Server {
             http::Method::HEAD,
             "/explicit",
             http::public_policy(),
-            |_, _, _| async { Ok(http::text(http::Status::OK, "explicit")) },
+            |request, _, _| async move {
+                http::text(
+                    http::response_context(&request),
+                    http::Status::OK,
+                    "explicit",
+                )
+            },
         )
         .unwrap();
         app = http::route(
@@ -79,7 +99,13 @@ impl Server {
             http::Method::GET,
             "/explicit",
             http::public_policy(),
-            |_, _, _| async { Ok(http::text(http::Status::OK, "fallback")) },
+            |request, _, _| async move {
+                http::text(
+                    http::response_context(&request),
+                    http::Status::OK,
+                    "fallback",
+                )
+            },
         )
         .unwrap();
         app = http::cors_route(
@@ -94,7 +120,9 @@ impl Server {
             http::Method::GET,
             "/omit",
             http::public_policy(),
-            |_, _, _| async { Ok(http::empty(http::Status::OK)) },
+            |request, _, _| async move {
+                http::empty(http::response_context(&request), http::Status::OK)
+            },
         )
         .unwrap();
         app = http::cors_route(
@@ -109,9 +137,9 @@ impl Server {
             http::Method::POST,
             "/write",
             http::public_policy(),
-            |_, s: Arc<Arc<State>>, _| async move {
+            |request, s: Arc<Arc<State>>, _| async move {
                 s.calls.fetch_add(1, Ordering::SeqCst);
-                Ok(http::empty(http::Status::OK))
+                http::empty(http::response_context(&request), http::Status::OK)
             },
         )
         .unwrap();
@@ -127,9 +155,9 @@ impl Server {
             http::Method::OPTIONS,
             "/write",
             http::public_policy(),
-            |_, s: Arc<Arc<State>>, _| async move {
+            |request, s: Arc<Arc<State>>, _| async move {
                 s.calls.fetch_add(1, Ordering::SeqCst);
-                Ok(http::empty(http::Status::OK))
+                http::empty(http::response_context(&request), http::Status::OK)
             },
         )
         .unwrap();
@@ -141,7 +169,9 @@ impl Server {
                 s.verifier.fetch_add(1, Ordering::SeqCst);
                 Err::<auth::VerifiedIdentity, _>(auth::Failure::invalid_credential())
             }),
-            |_, _, _| async { Ok(http::empty(http::Status::OK)) },
+            |request, _, _| async move {
+                http::empty(http::response_context(&request), http::Status::OK)
+            },
         )
         .unwrap();
         app = http::cors_route(
@@ -159,7 +189,9 @@ impl Server {
                 s.verifier.fetch_add(1, Ordering::SeqCst);
                 Err::<auth::VerifiedIdentity, _>(auth::Failure::invalid_credential())
             }),
-            |_, _, _| async { Ok(http::empty(http::Status::OK)) },
+            |request, _, _| async move {
+                http::empty(http::response_context(&request), http::Status::OK)
+            },
         )
         .unwrap();
         app = http::route(
@@ -167,10 +199,10 @@ impl Server {
             http::Method::GET,
             "/panic",
             http::public_policy(),
-            |_, _, _| async {
+            |request, _, _| async move {
                 panic!("owned panic");
                 #[allow(unreachable_code)]
-                Ok::<_, Error>(http::empty(http::Status::OK))
+                http::empty(http::response_context(&request), http::Status::OK)
             },
         )
         .unwrap();
@@ -204,7 +236,9 @@ impl Server {
             http::Method::GET,
             "/304",
             http::public_policy(),
-            |_, _, _| async { Ok(http::empty(http::Status::NOT_MODIFIED)) },
+            |request, _, _| async move {
+                http::empty(http::response_context(&request), http::Status::NOT_MODIFIED)
+            },
         )
         .unwrap();
         app = http::cors_route(
@@ -219,7 +253,7 @@ impl Server {
             http::Method::GET,
             "/pending",
             http::public_policy(),
-            |_, s: Arc<Arc<State>>, _| async move {
+            |request, s: Arc<Arc<State>>, _| async move {
                 struct Cancel(Arc<State>);
                 impl Drop for Cancel {
                     fn drop(&mut self) {
@@ -230,7 +264,7 @@ impl Server {
                 let _cancel = Cancel(Arc::clone(s.as_ref()));
                 s.entered.notify_one();
                 s.release.notified().await;
-                Ok(http::empty(http::Status::OK))
+                http::empty(http::response_context(&request), http::Status::OK)
             },
         )
         .unwrap();
@@ -241,9 +275,46 @@ impl Server {
             cors(http::CorsCredentials::ALLOW),
         )
         .unwrap();
+        for (method, path) in [
+            (http::Method::GET, "/items/{id}"),
+            (http::Method::HEAD, "/explicit"),
+            (http::Method::GET, "/explicit"),
+            (http::Method::GET, "/omit"),
+            (http::Method::POST, "/write"),
+            (http::Method::OPTIONS, "/write"),
+            (http::Method::GET, "/auth"),
+            (http::Method::OPTIONS, "/auth"),
+            (http::Method::GET, "/panic"),
+            (http::Method::GET, "/err"),
+            (http::Method::GET, "/304"),
+            (http::Method::GET, "/pending"),
+        ] {
+            app = attach_test_rate(app, method, path);
+        }
+        let response_limits = http::response_limits(
+            16_777_216,
+            128,
+            4,
+            4096,
+            32,
+            128,
+            capacity,
+            150_994_944,
+            8,
+            18_874_368,
+            4096,
+            32,
+        )
+        .unwrap();
         let options = http::authority(
             http::capacity(
-                http::options(32, 1000, handler_ms, 1000).unwrap(),
+                with_test_rate_limits(
+                    http::with_response_limits(
+                        http::options(32, 1000, handler_ms, 1000).unwrap(),
+                        response_limits,
+                    )
+                    .unwrap(),
+                ),
                 8,
                 capacity,
             )

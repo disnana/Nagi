@@ -167,6 +167,7 @@ pub(in crate::http_server) struct ChargedNativeHeaders {
     fault: Option<Diagnostic>,
 }
 impl ChargedNativeHeaders {
+    #[cfg(test)]
     pub(in crate::http_server) fn append_managed(
         &mut self,
         name: ManagedHeader,
@@ -327,6 +328,7 @@ impl ChargedNativeHeaders {
     pub(in crate::http_server) fn inject_fault(&mut self, error: Diagnostic) {
         self.fault = Some(error);
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn value(&self, name: &str) -> Option<&[u8]> {
         self.map.get(name).map(HeaderValue::as_bytes)
     }
@@ -523,6 +525,7 @@ impl FallbackOutcome {
     pub(in crate::http_server) fn close() -> Self {
         Self { response: None }
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn is_close(&self) -> bool {
         self.response.is_none()
     }
@@ -537,6 +540,7 @@ impl FallbackLedger {
             .allocation_attempts
             .load(std::sync::atomic::Ordering::Relaxed)
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn accounting(&self) -> (usize, usize) {
         (
             self.producer.metadata_bytes(),
@@ -614,6 +618,7 @@ impl FallbackLedger {
                 .expect("checked fallback wire profile"),
         )
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn produce(&self, status: FallbackStatus) -> FallbackOutcome {
         self.terminal(super::finalize::TerminalIntent::plain(status))
     }

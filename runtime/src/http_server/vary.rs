@@ -5,6 +5,7 @@ use super::*;
 pub(super) struct Dependencies(u8);
 impl Dependencies {
     pub(super) const ORIGIN: Self = Self(1 << 5);
+    #[cfg(test)]
     pub(super) const COOKIE: Self = Self(1 << 4);
     pub(super) const AUTH: Self = Self((1 << 2) | (1 << 4));
     pub(super) const LOGIN: Self = Self(Self::AUTH.0 | Self::ORIGIN.0);

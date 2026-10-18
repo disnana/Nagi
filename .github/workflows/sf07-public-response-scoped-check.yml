@@ -1,4 +1,4 @@
-name: SF07 public response scoped production check
+name: SF07 exact ClockFault contract RED
 on:
   push:
     branches:
@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  production:
+  contract-red:
     if: github.ref == 'refs/heads/test/sf07-u4-production-20261018'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -19,24 +19,129 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - name: Verify parent and reviewed production source identities
+      - name: Verify parent and frozen identities; exercise closed guards
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "1945b38d222eb06ef9d9fd8fff09648832337f98"
+          test "$(git rev-parse HEAD^)" = "ede330cb7df252045c592126418d1ae849a22733"
+          test -z "${RUST_TEST_THREADS+x}"
           sha256sum --check <<'HASHES'
-          b2fc31b270e0a3ed2cfb3e142156365750298527d31e9f54da735af664f531a8  runtime/src/auth.rs
-          8eb9c7e34e272d28c63cceec50bcc6526ecd6d518721df2a4c2f239b8bf678c8  runtime/src/auth/session.rs
-          f7a5f17425aa65e6344b5452e246c97e26fc66af8bbbfceecdc7e12c99fc0b83  runtime/src/auth/session/delivery.rs
-          048dcbad80abb4ba296cd9a47beb5b3adba3f42fc6a0f0df64e8f287c408f316  runtime/src/auth/session/http_bridge.rs
-          c30bf5287f448b9b0214d47dc29a0a4c50c6f3e611028352de3967ec9587817d  runtime/src/http_server.rs
-          9947895cc5a1eeb461e3b327ab9b9df1231b37281ecc0d6b448d12752ab08313  runtime/src/http_server/csrf_http.rs
-          7ecdfabaecfc784104cea86b9640cb48d284b0a73882699bc821da7f1793fbc4  runtime/src/http_server/prelogin_http.rs
-          b56eacba20d855fe40faf918c5021d6859b630a0531e54040c62a8ce0c53f8ca  runtime/src/http_server/rate_public.rs
-          b8cf36a9bf90ec9a3a49dc0f792e63ac6b913e37e675da6eb5ee9cf2a27168b1  runtime/src/http_server/request_headers.rs
-          a2274938a3609be2a09062464f37ad9ea1b87ac3eef97f3b381fe8812dddada7  runtime/src/http_server/response_public.rs
-          fa17657956dc38b2994cb2803d4146759097cd92299c9a56751c407347a721b1  runtime/src/security_sf07_private/mod.rs
-          f4222ed85eb95309d86fce2da71271a31d5cc549d7e99137d98432ee7ab672b6  runtime/src/security_sf07_private/startup_rate.rs
+          29abe918f3567626736e473c2ce33ad8ab545e0a06e88c47617682a31debfe21  runtime/src/auth/session.rs
+          7ee13a01436dadb5b0102e8993ee544d123d19212a1e1fc8ca0168cbe7339b5f  runtime/src/auth/session/delivery_wire_tests.rs
+          9bccff7c72af7ff4c3f345eab88d222fc4e7b30a89f51c8006987f9c38775685  runtime/src/auth/session/http_bridge_tests.rs
+          9717d4ccc2353ed96cd3e76344e5705761069854f972bb57303904dc441b5ea8  runtime/src/auth/session/http_rate_tests.rs
+          c3ba60b361b25ed3cb29f12eb7f9b8396cfdb3a7651f712242bc63d722f213d3  runtime/src/http_server.rs
+          d473d56ed6ccda073a06c63ec5ecb42d0e4d7149208f766fb3f0c61f00bdaa80  runtime/src/http_server/prelogin_tests.rs
+          46c19926ec6fd5c22751b3d6dd7a07fe608c373ffd3320433a79ad47e842fd53  runtime/src/http_server/private_deadline_calibration.rs
+          1bcba7ff1ff3afc84c9b8b54a275ba1ad703b686337108eae9b8f8230b3f2741  runtime/src/http_server/rate_public_tests.rs
+          1a993e32549d5d60b647427b99892528085b54ccac697fa0d632defa40f6b4cc  runtime/src/http_server/request_headers_tests.rs
+          d40afa116be878bca501ba1ecee8c4998573eb27cdba74a0dd5bd26c09230d0b  runtime/src/http_server/response_budget.rs
+          036c841558e1afc9709f68b61bc733ebcd0cec58c77d4107c735cb5b3708c3b2  runtime/src/http_server/response_finalize.rs
+          4313083b9bc4d055124cfe7585162bdd5c581ea0f8e27cd8a27f31552e1964b2  runtime/src/http_server/response_public.rs
+          c365844d07b111d546f881c3e32e12a355b05a5903910a4cde1134bf7e89bf79  runtime/src/http_server/response_public_tests.rs
+          7533fa6ff7a570232b6548a1cd21f79a53356ec0bef076cd60b3432a70150664  runtime/src/http_server/response_wire.rs
+          af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584  runtime/src/http_server/tests.rs
+          7ebb60822cb53887299866b0a1ca36e118d5861d4a25c44f7f455b90bc49052c  runtime/src/http_server/vary.rs
+          688771a75ecae967e8d262ddf44f3fd667885d357872c684ec41df15334a1733  runtime/tests/browser_login_public_api.rs
+          a6d070ac9d59f8f3df5d716dfe342e0d03dcb5b48b321a7ddc19a8535237691e  runtime/tests/cors_public_api.rs
+          c2ab019831bd7404330cf671f01294a5aa2a34b780547e8f1835317c71bb3ab7  runtime/tests/html_core_api.rs
+          2f30ebb06c3d4233f4d5bb08aacb74fd69d2f4aaba063a8563a608b0c1fd9602  runtime/tests/prelogin_public_api.rs
+          4db4dfcc03bdd70dbabab183eef23e7e90b93ee4ed06c5560351ac24c788adbf  runtime/tests/security_sf01.rs
+          8f7a3cfe0a18f56d862b88c28dde90a340a197be285c10ea1313f8b0dfe50f96  runtime/tests/session_csrf_public_api.rs
+          793c0f35e2f5b47b26648844abc6df8ce33d1b769632a9101e6db471a450c6a9  runtime/tests/session_public_api.rs
           HASHES
-      - name: Typecheck production library before test consumers
+          cat > "$RUNNER_TEMP/sf07-red-guard.py" <<'PY'
+          """Closed exact-one collection and false-green guards; synthetic controls only."""
+          from pathlib import Path
+          import re
+          import sys
+          
+          CASE = 'http_server::rate_public::tests::retry_after_rounding_and_internal_rate_failures_have_closed_distinct_outcomes'
+          
+          
+          def listing(text):
+              names, totals = [], []
+              for line in text.splitlines():
+                  if not line:
+                      continue
+                  found = re.fullmatch(r'([A-Za-z_][A-Za-z_0-9:]*): test', line)
+                  if found:
+                      names.append(found[1])
+                      continue
+                  footer = re.fullmatch(r'(\d+) tests?, (\d+) benchmarks?', line)
+                  if not footer:
+                      raise ValueError('unrecognized collection shape')
+                  totals.append((int(footer[1]), int(footer[2])))
+              if names != [CASE] or totals != [(1, 0)]:
+                  raise ValueError('exact-one collection mismatch')
+          
+          
+          def result(text, code=0):
+              if code != 0:
+                  raise ValueError('nonzero cargo cannot count as success')
+              starts = re.findall(r'^running (\d+) tests?$', text, re.M)
+              cases = re.findall(r'^test (\S+) \.\.\. (ok|FAILED|ignored[^\n]*)$', text, re.M)
+              totals = re.findall(r'^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored; (\d+) measured; (\d+) filtered out; finished in [^\n]+$', text, re.M)
+              if starts != ['1'] or cases != [(CASE, 'ok')] or len(totals) != 1 or totals[0][:5] != ('ok', '1', '0', '0', '0'):
+                  raise ValueError('zero/ignored/count/name/result mismatch')
+          
+          
+          def selftest():
+              listed = CASE + ': test\n\n1 test, 0 benchmarks\n'
+              good = 'running 1 test\ntest ' + CASE + ' ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 100 filtered out; finished in 0.00s\n'
+              listing(listed)
+              result(good)
+              bad = [
+                  lambda: listing('0 tests, 0 benchmarks\n'),
+                  lambda: listing(listed.replace(CASE, 'unknown_case')),
+                  lambda: listing(CASE + ': test\n' + listed),
+                  lambda: result(good, 101),
+                  lambda: result(good.replace('running 1 test', 'running 0 tests').replace('1 passed', '0 passed')),
+                  lambda: result(good.replace(' ... ok', ' ... ignored').replace('1 passed', '0 passed').replace('0 ignored', '1 ignored')),
+                  lambda: result(good.replace('1 passed', '2 passed')),
+                  lambda: result(good.replace(CASE, 'unknown_case')),
+                  lambda: result(good.replace('\n\ntest result:', '\ntest ' + CASE + ' ... ok\n\ntest result:')),
+                  lambda: result(good.replace(' ... ok', ' ... FAILED')),
+              ]
+              for reject in bad:
+                  try:
+                      reject()
+                  except ValueError:
+                      continue
+                  raise ValueError('negative synthetic control accepted')
+              print('synthetic_controls=10 rejected; positive_shapes=2 passed; native_evidence=none')
+          
+          
+          if __name__ == '__main__':
+              mode = sys.argv[1]
+              if mode == 'selftest':
+                  selftest()
+              elif mode == 'listing':
+                  listing(Path(sys.argv[2]).read_text(encoding='utf-8'))
+                  print('exact_contract_case=1 collected')
+              elif mode == 'reject-green':
+                  result(Path(sys.argv[2]).read_text(encoding='utf-8'))
+                  raise SystemExit('contract oracle unexpectedly passed; no RED established')
+              else:
+                  raise SystemExit('invalid closed guard mode')
+          PY
+          python "$RUNNER_TEMP/sf07-red-guard.py" selftest
+          if bash -c 'set -euo pipefail; false | cat'; then
+            exit 1
+          fi
+      - name: Check production library after private helper classification
         run: cargo check --locked -p nagi-runtime --lib
+      - name: Compile whole library test target before the exact contract case
+        run: cargo test --locked -p nagi-runtime --lib --no-run
+      - name: Collect exact contract case without executing tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib http_server::rate_public::tests::retry_after_rounding_and_internal_rate_failures_have_closed_distinct_outcomes -- --exact --list | tee "$RUNNER_TEMP/sf07-red-list.log"
+          python "$RUNNER_TEMP/sf07-red-guard.py" listing "$RUNNER_TEMP/sf07-red-list.log"
+      - name: Execute corrected contract oracle once; preserve expected RED
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib http_server::rate_public::tests::retry_after_rounding_and_internal_rate_failures_have_closed_distinct_outcomes -- --exact | tee "$RUNNER_TEMP/sf07-red-result.log"
+          python "$RUNNER_TEMP/sf07-red-guard.py" reject-green "$RUNNER_TEMP/sf07-red-result.log"

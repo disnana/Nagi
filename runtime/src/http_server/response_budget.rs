@@ -59,6 +59,7 @@ struct CheckedLimits {
     writes: usize,
     charge: usize,
     wire: Option<wire::WireLayout>,
+    #[cfg(test)]
     metadata: usize,
 }
 pub(super) struct Producer {
@@ -202,6 +203,7 @@ impl Producer {
                 writes: limits.serialization_writes,
                 charge,
                 wire,
+                #[cfg(test)]
                 metadata,
             },
             quota,
@@ -266,9 +268,11 @@ impl Producer {
             owner: Arc::clone(&self.quota),
         })
     }
+    #[cfg(test)]
     pub(super) fn metadata_bytes(&self) -> usize {
         self.limits.metadata
     }
+    #[cfg(test)]
     pub(super) fn response_charge(&self) -> usize {
         self.limits.charge
     }

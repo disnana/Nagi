@@ -91,6 +91,8 @@ impl Server {
             128,
         )
         .unwrap();
+        let config = super::tests::with_response_fixture(config);
+        let (app, config) = super::tests::with_rate_fixture(app, config);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stop, until) = tokio::sync::oneshot::channel();

@@ -52,6 +52,7 @@ impl Server {
         .expect("fixed test response limits are valid");
         let options =
             with_response_limits(options, limits).expect("fixed test response profile validates");
+        let (app, options) = super::tests::with_rate_fixture(app, options);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stopped, shutdown) = oneshot::channel();
@@ -183,6 +184,8 @@ async fn run(mode: Mode, expected: u16) {
             method: Method::GET,
             kind: RouteKind::Ordinary(prepare),
             cors: None,
+            rate: None,
+            rate_index: None,
         }],
     );
     // The two original private tests retain their own 2s/20ms options untouched.

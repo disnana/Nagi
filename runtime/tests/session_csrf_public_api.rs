@@ -65,8 +65,36 @@ async fn number(pool: &sqlite::Pool, query: &'static str) -> i64 {
     n
 }
 fn checked() -> http::Options {
+    let response_limits = http::response_limits(
+        16_777_216,
+        512,
+        16,
+        4096,
+        32,
+        128,
+        256,
+        150_994_944,
+        1024,
+        285_212_672,
+        4096,
+        32,
+    )
+    .unwrap();
+    let rate_limits = http::rate_limits(64, 64, 1, 67_108_864, 65_536).unwrap();
     http::authority(
-        http::security_timeout(http::options(256, 1000, 1000, 1000).unwrap(), 1000).unwrap(),
+        http::security_timeout(
+            http::with_rate_limits(
+                http::with_response_limits(
+                    http::options(256, 1000, 1000, 1000).unwrap(),
+                    response_limits,
+                )
+                .unwrap(),
+                rate_limits,
+            )
+            .unwrap(),
+            1000,
+        )
+        .unwrap(),
         "https://localhost",
         vec!["localhost".to_owned()],
         1,
@@ -99,15 +127,15 @@ async fn verifier(_: http::Request, _: Arc<State>) -> Result<VerifiedIdentity, a
     VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(60))
 }
 async fn issue(
-    _: http::Request,
+    request: http::Request,
     state: Arc<State>,
     scope: AuthScope,
 ) -> Result<http::Response, Error> {
     let intent = session::issue(&state.store, scope)
         .await
         .map_err(|_| Error::internal("issue refused"))?;
-    session::apply(http::text(http::Status::OK, "issued"), intent)
-        .map_err(|_| Error::internal("apply refused"))
+    let response = http::text(http::response_context(&request), http::Status::OK, "issued")?;
+    session::apply(response, intent).map_err(|_| Error::internal("apply refused"))
 }
 async fn write(
     request: http::Request,
@@ -120,29 +148,41 @@ async fn write(
     {
         state.sanitized.fetch_add(1, Ordering::SeqCst);
     }
-    Ok(http::bytes(http::Status::OK, request.body()))
+    http::bytes(
+        http::response_context(&request),
+        http::Status::OK,
+        request.body(),
+    )
 }
 async fn rotate(
-    _: http::Request,
+    request: http::Request,
     state: Arc<State>,
     scope: AuthScope,
 ) -> Result<http::Response, Error> {
     let intent = session::rotate(&state.store, scope)
         .await
         .map_err(|_| Error::internal("rotate refused"))?;
-    session::apply(http::text(http::Status::OK, "rotated"), intent)
-        .map_err(|_| Error::internal("apply refused"))
+    let response = http::text(
+        http::response_context(&request),
+        http::Status::OK,
+        "rotated",
+    )?;
+    session::apply(response, intent).map_err(|_| Error::internal("apply refused"))
 }
 async fn logout(
-    _: http::Request,
+    request: http::Request,
     state: Arc<State>,
     scope: AuthScope,
 ) -> Result<http::Response, Error> {
     let intent = session::logout(&state.store, scope)
         .await
         .map_err(|_| Error::internal("logout refused"))?;
-    session::apply(http::text(http::Status::OK, "logged out"), intent)
-        .map_err(|_| Error::internal("apply refused"))
+    let response = http::text(
+        http::response_context(&request),
+        http::Status::OK,
+        "logged out",
+    )?;
+    session::apply(response, intent).map_err(|_| Error::internal("apply refused"))
 }
 async fn authorize(
     scope: AuthScope,
@@ -286,7 +326,7 @@ impl Server {
             policy,
             |r, s: Arc<State>, _: auth::Grant<()>| async move {
                 s.calls.fetch_add(1, Ordering::SeqCst);
-                Ok(http::bytes(http::Status::OK, r.body()))
+                http::bytes(http::response_context(&r), http::Status::OK, r.body())
             },
         )
         .unwrap();
@@ -300,10 +340,10 @@ impl Server {
             http::Method::POST,
             "/parallel",
             policy,
-            |_, s: Arc<State>, _: AuthScope| async move {
+            |request, s: Arc<State>, _: AuthScope| async move {
                 s.calls.fetch_add(1, Ordering::SeqCst);
                 s.parallel.wait().await;
-                Ok(http::empty(http::Status::OK))
+                http::empty(http::response_context(&request), http::Status::OK)
             },
         )
         .unwrap();
@@ -348,9 +388,9 @@ impl Server {
             http::Method::POST,
             "/deadline",
             policy,
-            |_, s: Arc<State>, _: auth::Grant<()>| async move {
+            |request, s: Arc<State>, _: auth::Grant<()>| async move {
                 s.calls.fetch_add(1, Ordering::SeqCst);
-                Ok(http::empty(http::Status::OK))
+                http::empty(http::response_context(&request), http::Status::OK)
             },
         )
         .unwrap();
@@ -377,6 +417,20 @@ impl Server {
             .unwrap();
             app = http::cors_route(app, method, path, config).unwrap();
         }
+        for (method, path) in [
+            (http::Method::POST, "/issue"),
+            (http::Method::GET, "/csrf"),
+            (http::Method::HEAD, "/csrf"),
+            (http::Method::POST, "/write"),
+            (http::Method::POST, "/rotate"),
+            (http::Method::POST, "/logout"),
+            (http::Method::POST, "/pending"),
+            (http::Method::POST, "/parallel"),
+            (http::Method::POST, "/failed-rotate"),
+            (http::Method::POST, "/deadline"),
+        ] {
+            app = attach_test_rate(app, method, path);
+        }
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let (stop, shutdown) = oneshot::channel();
@@ -398,6 +452,14 @@ impl Server {
             .unwrap()
             .unwrap();
     }
+}
+fn attach_test_rate<S, E>(
+    app: http::App<S, E>,
+    method: http::Method,
+    path: &str,
+) -> http::App<S, E> {
+    let policy = http::rate_policy(1000, 1000).unwrap();
+    http::rate_route(app, method, path, policy).unwrap()
 }
 impl Drop for Server {
     fn drop(&mut self) {
@@ -559,14 +621,18 @@ async fn checked_profiles_reject_unsealed_or_incompatible_policy_sources() {
         csrf::clone_store(&f.csrf)
     )
     .is_err());
-    assert!(http::route(
-        http::app_default(()),
-        http::Method::POST,
-        "/unguarded",
-        http::session_authenticated_policy(session::clone_store(&f.store)),
-        |_, _, _| async { Ok(http::empty(http::Status::OK)) }
-    )
-    .is_err());
+    assert!(
+        http::route(
+            http::app_default(()),
+            http::Method::POST,
+            "/unguarded",
+            http::session_authenticated_policy(session::clone_store(&f.store)),
+            |request, _, _| async move {
+                http::empty(http::response_context(&request), http::Status::OK)
+            }
+        )
+        .is_err()
+    );
     other.stop().await;
     f.stop().await;
 }
@@ -1002,25 +1068,57 @@ async fn mismatched_startup_origin_refuses_token_and_guarded_routes_before_bind(
     let port = i64::from(occupied.local_addr().unwrap().port());
     for token_route in [false, true] {
         let app = if token_route {
-            http::session_csrf_tokens(http::app_default(()), "/csrf", csrf::clone_store(&f.csrf))
-                .unwrap()
+            let app = http::session_csrf_tokens(
+                http::app_default(()),
+                "/csrf",
+                csrf::clone_store(&f.csrf),
+            )
+            .unwrap();
+            let app = attach_test_rate(app, http::Method::GET, "/csrf");
+            attach_test_rate(app, http::Method::HEAD, "/csrf")
         } else {
             let policy = http::session_csrf_policy(
                 http::session_authenticated_policy(session::clone_store(&f.store)),
                 csrf::clone_store(&f.csrf),
             )
             .unwrap();
-            http::route(
+            let app = http::route(
                 http::app_default(()),
                 http::Method::POST,
                 "/guarded",
                 policy,
-                |_, _, _: AuthScope| async { Ok(http::empty(http::Status::OK)) },
+                |request, _, _: AuthScope| async move {
+                    http::empty(http::response_context(&request), http::Status::OK)
+                },
             )
-            .unwrap()
+            .unwrap();
+            attach_test_rate(app, http::Method::POST, "/guarded")
         };
+        let response_limits = http::response_limits(
+            16_777_216,
+            512,
+            16,
+            4096,
+            32,
+            128,
+            256,
+            150_994_944,
+            1024,
+            285_212_672,
+            4096,
+            32,
+        )
+        .unwrap();
         let wrong = http::authority(
-            http::options(256, 1000, 1000, 1000).unwrap(),
+            http::with_rate_limits(
+                http::with_response_limits(
+                    http::options(256, 1000, 1000, 1000).unwrap(),
+                    response_limits,
+                )
+                .unwrap(),
+                http::rate_limits(64, 64, 1, 67_108_864, 65_536).unwrap(),
+            )
+            .unwrap(),
             "https://other.invalid",
             vec!["localhost".to_owned()],
             1,

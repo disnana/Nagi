@@ -551,11 +551,9 @@ impl HttpResponse {
     pub(super) fn headers_mut(&mut self) -> HeadersMut<'_> {
         HeadersMut(self.headers.as_mut())
     }
+    #[cfg(test)]
     pub(super) fn body(&self) -> &BufferedBody {
         &self.body
-    }
-    pub(super) fn body_mut(&mut self) -> &mut BufferedBody {
-        &mut self.body
     }
     // No method-name Vec or joined string exists until the complete serialized
     // Allow length fits this already-reserved charged native map. Repeated

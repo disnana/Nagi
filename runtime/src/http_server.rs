@@ -381,6 +381,8 @@ pub use response_public::{
     response_limits, text, with_response_limits, Response, ResponseContext, ResponseLimits,
 };
 use response_public::{HttpResponse, RuntimeResponses};
+#[cfg(test)]
+pub(crate) use tests::with_rate_fixture as bounded_rate_app_fixture;
 
 /// This API returns one owned buffered frame. Keeping its concrete native
 /// representation avoids a dynamic body box on every response.

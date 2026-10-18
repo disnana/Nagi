@@ -23,6 +23,7 @@ impl VarySet {
     pub(in crate::http_server) const LOGIN: Self = Self(Self::AUTH.0 | Self::ORIGIN.0);
     pub(in crate::http_server) const GUARDED: Self = Self(Self::LOGIN.0 | (1 << 6));
     pub(in crate::http_server) const BROWSER: Self = Self(Self::GUARDED.0 | (1 << 3));
+    #[cfg(test)]
     pub(in crate::http_server) const PREFLIGHT: Self = Self((1 << 0) | (1 << 1) | Self::ORIGIN.0);
     pub(in crate::http_server) fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
@@ -274,6 +275,7 @@ impl PreparedResponse {
             expected_body: None,
         })
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn status(&self) -> StatusCode {
         self.status
     }
@@ -294,9 +296,11 @@ impl PreparedResponse {
         self.vary(VarySet::ORIGIN);
         Ok(())
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn allow(&mut self, value: &[u8]) -> Result<(), Diagnostic> {
         self.plan.append(ManagedHeader::Allow, value)
     }
+    #[cfg(test)]
     pub(in crate::http_server) fn preflight(
         &mut self,
         method: &[u8],
@@ -576,6 +580,7 @@ impl TerminalIntent {
     }
     // The caller supplies an existing deadline/cancellation refusal, preserving
     // its original status instead of replacing it with a later Capacity error.
+    #[cfg(test)]
     pub(in crate::http_server) fn cancellation(mut self, reason: FallbackStatus) -> Self {
         self.reason = reason;
         self

@@ -134,7 +134,11 @@ async fn login_handler(
         http::header(&request, "cookie").unwrap().is_none()
             && http::header(&request, "x-csrf-token").unwrap().is_none()
     );
-    let response = http::bytes(http::Status::OK, request.body());
+    let response = http::bytes(
+        http::response_context(&request),
+        http::Status::OK,
+        request.body(),
+    )?;
     let intent = session::issue(&state.store, scope).await.map_err(|error| {
         if session::kind(&error) == auth::FailureKind::Unavailable {
             Error {
@@ -160,13 +164,51 @@ async fn login_handler(
 fn checked(body: i64, security: i64) -> http::Options {
     checked_phases(body, security, 1000, 1000)
 }
+fn with_test_rate_limits(options: http::Options) -> http::Options {
+    // Finite test-only route catalogue; no test route uses a subject policy.
+    // The API requires a positive subject capacity even when it stays unused.
+    let limits = http::rate_limits(64, 64, 1, 67_108_864, 65_536).unwrap();
+    http::with_rate_limits(options, limits).unwrap()
+}
+fn attach_test_rate<S, E>(
+    app: http::App<S, E>,
+    method: http::Method,
+    path: &str,
+) -> http::App<S, E> {
+    let policy = http::rate_policy(1000, 1000).unwrap();
+    http::rate_route(app, method, path, policy).unwrap()
+}
+fn response_limits(body_bytes: i64) -> http::ResponseLimits {
+    let response_body_bytes = body_bytes.max(16_777_216);
+    let retained_bytes = response_body_bytes
+        .checked_mul(8)
+        .and_then(|bytes| bytes.checked_add(16_777_216))
+        .expect("bounded test response profile");
+    http::response_limits(
+        response_body_bytes,
+        1024,
+        16,
+        4096,
+        32,
+        128,
+        256,
+        retained_bytes,
+        1024,
+        285_212_672,
+        4096,
+        32,
+    )
+    .unwrap()
+}
 fn checked_phases(body: i64, security: i64, body_ms: i64, shutdown_ms: i64) -> http::Options {
+    let options = http::with_response_limits(
+        http::options(body, body_ms, 1000, shutdown_ms).unwrap(),
+        response_limits(body),
+    )
+    .unwrap();
+    let options = with_test_rate_limits(options);
     http::authority(
-        http::security_timeout(
-            http::options(body, body_ms, 1000, shutdown_ms).unwrap(),
-            security,
-        )
-        .unwrap(),
+        http::security_timeout(options, security).unwrap(),
         "https://localhost",
         vec!["localhost".to_owned()],
         1,
@@ -234,7 +276,10 @@ impl Fixture {
             http::browser_login_policy(prelogin::clone_pool(&self.pool), named_trusted_bearer),
             login_handler,
         )
-        .unwrap()
+        .unwrap();
+        let app = attach_test_rate(app, http::Method::GET, "/bootstrap");
+        let app = attach_test_rate(app, http::Method::HEAD, "/bootstrap");
+        attach_test_rate(app, http::Method::POST, "/login")
     }
     async fn rows(&self) -> i64 {
         number(
@@ -1114,8 +1159,13 @@ async fn browser_profile_refuses_non_post_and_wrong_startup_origin() {
         login_handler,
     )
     .unwrap();
+    let app = attach_test_rate(app, http::Method::POST, "/login");
     let other = http::authority(
-        http::options(256, 1000, 1000, 1000).unwrap(),
+        http::with_response_limits(
+            with_test_rate_limits(http::options(256, 1000, 1000, 1000).unwrap()),
+            response_limits(256),
+        )
+        .unwrap(),
         "https://other.invalid",
         vec!["localhost".to_owned()],
         1,

@@ -8,6 +8,64 @@ use tokio::{
     sync::{oneshot, Notify},
 };
 
+pub(super) fn with_response_fixture(options: Options) -> Options {
+    if options.response_limits.is_none() {
+        // Explicit finite test-only response profile: enough for the
+        // existing 16 MiB stalled-send fixture and no production default.
+        let body_bytes = options.body_bytes.max(STALLED_BODY_LENGTH);
+        let retained_bytes = body_bytes
+            .checked_mul(8)
+            .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
+            .expect("test response retained bound fits usize");
+        let fallback_retained_bytes = options
+            .connections
+            .checked_mul(262_144)
+            .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
+            .expect("test fallback retained bound fits usize");
+        let limits = response_limits(
+            i64::try_from(body_bytes).expect("test body bound fits i64"),
+            65_536,
+            256,
+            4096,
+            32,
+            131_072,
+            i64::try_from(options.requests).expect("test request count fits i64"),
+            i64::try_from(retained_bytes).expect("test retained bound fits i64"),
+            i64::try_from(options.connections).expect("test connection count fits i64"),
+            i64::try_from(fallback_retained_bytes).expect("test fallback retained bound fits i64"),
+            4096,
+            32,
+        )
+        .expect("fixed test response limits are valid");
+        with_response_limits(options, limits).expect("fixed test response profile validates")
+    } else {
+        options
+    }
+}
+
+// Explicit finite profile for old lifecycle fixtures only. Startup-refusal and
+// rate tests use the public API directly and never pass through this helper.
+pub(crate) fn with_rate_fixture<S, E>(
+    mut app: App<S, E>,
+    options: Options,
+) -> (App<S, E>, Options) {
+    for route in app.routes.values_mut().flatten() {
+        if route.rate.is_none() {
+            route.rate = Some(rate_policy(1_000_000, 1000).expect("finite test route policy"));
+        }
+    }
+    let options = if options.rate_limits.is_none() {
+        with_rate_limits(
+            options,
+            rate_limits(64, 64, 4096, 4 * 1024 * 1024, 65_536).unwrap(),
+        )
+        .expect("finite test rate metadata fits")
+    } else {
+        options
+    };
+    (app, options)
+}
+
 fn response_fixture_request(body_bound: usize) -> Request {
     super::response_public::tests::request_fixture(body_bound)
 }
@@ -53,39 +111,8 @@ impl Server {
         } else {
             options
         };
-        let options = if options.response_limits.is_none() {
-            // Explicit finite test-only response profile: enough for the
-            // existing 16 MiB stalled-send fixture and no production default.
-            let body_bytes = options.body_bytes.max(STALLED_BODY_LENGTH);
-            let retained_bytes = body_bytes
-                .checked_mul(8)
-                .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
-                .expect("test response retained bound fits usize");
-            let fallback_retained_bytes = options
-                .connections
-                .checked_mul(262_144)
-                .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
-                .expect("test fallback retained bound fits usize");
-            let limits = response_limits(
-                i64::try_from(body_bytes).expect("test body bound fits i64"),
-                65_536,
-                256,
-                4096,
-                32,
-                131_072,
-                i64::try_from(options.requests).expect("test request count fits i64"),
-                i64::try_from(retained_bytes).expect("test retained bound fits i64"),
-                i64::try_from(options.connections).expect("test connection count fits i64"),
-                i64::try_from(fallback_retained_bytes)
-                    .expect("test fallback retained bound fits i64"),
-                4096,
-                32,
-            )
-            .expect("fixed test response limits are valid");
-            with_response_limits(options, limits).expect("fixed test response profile validates")
-        } else {
-            options
-        };
+        let options = with_response_fixture(options);
+        let (app, options) = with_rate_fixture(app, options);
         let listener = if let Some(bytes) = send_buffer_bytes {
             // Only stalled-send fixtures constrain native buffering. The
             // accepted socket inherits this listener setting; actual write
@@ -1717,6 +1744,8 @@ async fn graceful_shutdown_finishes_an_in_flight_handler_and_response() {
     )
     .unwrap();
     config.lifecycle_probe = Some(Arc::clone(&probe));
+    let config = with_response_fixture(config);
+    let (app, config) = with_rate_fixture(app, config);
     let task = tokio::spawn(serve_listener(listener, app, config, async {
         stopping.await.unwrap();
         observed.send(()).unwrap();
