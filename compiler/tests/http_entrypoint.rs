@@ -131,7 +131,7 @@ async def main() -> Result[unit, Error]:
         options = try http.capacity(http.default_options(), 1, 1)
         response_limits = try http.response_limits(1024, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512, 12)
         options = try http.with_response_limits(options, response_limits)
-        rate_limits = try http.rate_limits(4, 1, 2, 131072, 64)
+        rate_limits = try http.rate_limits(4, 1, 2, 131072, 256)
         options = try http.with_rate_limits(options, rate_limits)
         options = try http.authority(options, "https://localhost", ["localhost"], 1, 128)
         match await http.serve(app, -1, options):

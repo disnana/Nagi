@@ -401,8 +401,8 @@ fn u5_explicit_rate_settings_keep_app_generic_identity_in_three_forms() {
     let fixture = Fixture::new();
     let mut failures = Vec::new();
     for (name, high, text) in [
-        ("rate-settings.nagi", true, "import std.http.server as http\ndef settings() -> Result[http.Options, Error]:\n    limits = try http.rate_limits(4, 1, 2, 131072, 64)\n    return http.with_rate_limits(http.default_options(), limits)\ndef bind(app: http.App[i64, Error]) -> Result[http.App[i64, Error], Error]:\n    policy = try http.rate_policy(2, 1000)\n    policy = try http.rate_subject(policy, 2, 1000, 2, 1000)\n    return http.rate_route(app, http.Method.GET, \"/\", policy)\n"),
-        ("rate-settings.low", false, "import std.http.server as http;\nfn settings() -> Result[http.Options, Error] {\n    let limits = try http.rate_limits(4, 1, 2, 131072, 64);\n    return http.with_rate_limits(http.default_options(), limits);\n}\nfn bind(app: http.App[i64, Error]) -> Result[http.App[i64, Error], Error] {\n    let policy = try http.rate_policy(2, 1000);\n    policy = try http.rate_subject(policy, 2, 1000, 2, 1000);\n    return http.rate_route(app, http.Method.GET, \"/\", policy);\n}\n"),
+        ("rate-settings.nagi", true, "import std.http.server as http\ndef settings() -> Result[http.Options, Error]:\n    limits = try http.rate_limits(4, 1, 2, 131072, 4096)\n    return http.with_rate_limits(http.default_options(), limits)\ndef bind(app: http.App[i64, Error]) -> Result[http.App[i64, Error], Error]:\n    policy = try http.rate_policy(2, 1000)\n    policy = try http.rate_subject(policy, 2, 1000, 2, 1000)\n    return http.rate_route(app, http.Method.GET, \"/\", policy)\n"),
+        ("rate-settings.low", false, "import std.http.server as http;\nfn settings() -> Result[http.Options, Error] {\n    let limits = try http.rate_limits(4, 1, 2, 131072, 4096);\n    return http.with_rate_limits(http.default_options(), limits);\n}\nfn bind(app: http.App[i64, Error]) -> Result[http.App[i64, Error], Error] {\n    let policy = try http.rate_policy(2, 1000);\n    policy = try http.rate_subject(policy, 2, 1000, 2, 1000);\n    return http.rate_route(app, http.Method.GET, \"/\", policy);\n}\n"),
     ] {
         parser::parse(text, high).expect("rate configuration wrappers must parse");
         fixture.write(name, text);
@@ -1088,7 +1088,7 @@ fn status_method_and_db_free_app_execute_from_high_and_saved_low() {
     );
     f.write("main.nagi", &source);
     f.roundtrip();
-    f.write("nagi.toml", "[rust.dependencies]\ntokio = { version = \"1.48\", features = [\"net\", \"io-util\", \"sync\", \"time\", \"rt\"] }\n");
+    f.write("nagi.toml", "entry = \"main.nagi\"\n[rust.dependencies]\ntokio = { version = \"1.48\", features = [\"net\", \"io-util\", \"sync\", \"time\", \"rt\"] }\n");
     f.write("native.rs", FACTORY_PROBE_NATIVE);
     for input in ["main.nagi", "saved.low"] {
         let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
@@ -1140,8 +1140,8 @@ const FACTORY_PROBE_NATIVE: &str = r#"
 pub async fn exercise(app: nagi_runtime::http_server::App<super::State, nagi_runtime::Error>) -> Result<(), nagi_runtime::Error> {
     use nagi_runtime::http_server as http;
     use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}, sync::oneshot};
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let address = listener.local_addr()?;
+    let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
+    let address = listener.local_addr().map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
     // The probe retains text, a stored empty response and JSON simultaneously.
     // Keep exactly three finite ordinary slots; one actual socket/request.
     let app = http::rate_route(app, http::Method::GET, "/factory", http::rate_policy(10, 1000)?)?;
@@ -1151,10 +1151,10 @@ pub async fn exercise(app: nagi_runtime::http_server::App<super::State, nagi_run
     let options = http::authority(options, "https://localhost", vec!["localhost".to_owned()], 1, 128)?;
     let (stop, shutdown) = oneshot::channel();
     let task = tokio::spawn(http::serve_listener(listener, app, options, async { let _ = shutdown.await; }));
-    let mut stream = TcpStream::connect(address).await?;
-    stream.write_all(b"GET /factory HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").await?;
+    let mut stream = TcpStream::connect(address).await.map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
+    stream.write_all(b"GET /factory HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").await.map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
     let mut raw = Vec::new();
-    tokio::time::timeout(std::time::Duration::from_secs(3), stream.read_to_end(&mut raw)).await.map_err(|_| nagi_runtime::Error::internal("factory probe timed out"))??;
+    tokio::time::timeout(std::time::Duration::from_secs(3), stream.read_to_end(&mut raw)).await.map_err(|_| nagi_runtime::Error::internal("factory probe timed out"))?.map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
     let separator = raw.windows(4).position(|window| window == b"\r\n\r\n").ok_or_else(|| nagi_runtime::Error::internal("factory probe response missing header separator"))?;
     let head = std::str::from_utf8(&raw[..separator]).map_err(|_| nagi_runtime::Error::internal("factory probe response header invalid"))?;
     assert!(head.starts_with("HTTP/1.1 201 "), "{head}");

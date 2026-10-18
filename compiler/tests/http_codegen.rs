@@ -187,7 +187,7 @@ fn borrow_and_named_mapper_registration_execute_native_adapters() {
     fs::write(fixture.0.join("saved.low"), emit::low(&program)).unwrap();
     fs::write(
         fixture.0.join("nagi.toml"),
-        "[rust.dependencies]\ntokio = { version = \"1.48\", features = [\"net\", \"io-util\", \"sync\", \"time\", \"rt\"] }\n",
+        "entry = \"main.nagi\"\n[rust.dependencies]\ntokio = { version = \"1.48\", features = [\"net\", \"io-util\", \"sync\", \"time\", \"rt\"] }\n",
     )
     .unwrap();
     fs::write(
@@ -203,7 +203,7 @@ pub async fn probe() -> Result<(), nagi_runtime::Error> {
     let options = http::capacity(http::default_options(), 1, 1)?;
     let limits = http::response_limits(1024, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512, 12)?;
     let options = http::with_response_limits(options, limits)?;
-    let rate_limits = http::rate_limits(4, 1, 2, 131072, 64)?;
+    let rate_limits = http::rate_limits(4, 1, 2, 131072, 256)?;
     let options = http::with_rate_limits(options, rate_limits)?;
     let options = http::authority(options, "https://localhost", vec!["localhost".to_owned()], 1, 128)?;
     let (stop, shutdown) = oneshot::channel();

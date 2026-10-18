@@ -135,7 +135,7 @@ fn real_sqlite_and_request_bound_predicate() {
             let options=http::capacity(http::default_options(),2,2).unwrap();
             let response_limits=http::response_limits(1024,128,4,512,12,128,2,262144,2,262144,512,12).unwrap();
             let options=http::with_response_limits(options,response_limits).unwrap();
-            let rate_limits=http::rate_limits(4,1,2,131072,64).unwrap();
+            let rate_limits=http::rate_limits(4,1,2,131072,256).unwrap();
             let options=http::with_rate_limits(options,rate_limits).unwrap();
             let options=http::authority(options,"https://localhost",vec!["localhost".into()],1,256).unwrap();
             let task=tokio::spawn(http::serve_listener(listener,app,options,async{let _=done.await;}));

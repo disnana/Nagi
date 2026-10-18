@@ -118,7 +118,7 @@ pub async fn exercise(app:http::App<super::State,Error>)->Result<(),Error>{
  let options=http::capacity(http::default_options(),3,3).unwrap();
  let response_limits=http::response_limits(1024,128,4,512,12,128,3,393216,3,393216,512,12).unwrap();
  let options=http::with_response_limits(options,response_limits).unwrap();
- let rate_limits=http::rate_limits(4,1,2,131072,64).unwrap();
+ let rate_limits=http::rate_limits(4,1,2,131072,256).unwrap();
  let options=http::with_rate_limits(options,rate_limits).unwrap();
  let options=http::authority(options,"https://localhost",vec!["localhost".to_owned()],1,128).unwrap();
  let (stop,done)=oneshot::channel();let task=tokio::spawn(http::serve_listener(listener,app,options,async{let _=done.await;}));

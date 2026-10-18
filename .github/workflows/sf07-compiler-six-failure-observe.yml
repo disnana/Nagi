@@ -42,18 +42,18 @@ jobs:
         import sys
         import threading
         from pathlib import Path
-        
-        PARENT = '0dfda1482390526b135dabe26b9ca4361762b88e'
+
+        PARENT = '5bc182b02dbcccb8b5f48c3936b72260bd1a9a60'
         BRANCH = 'test/sf07-six-failure-observe-20261018'
         WORKFLOW = '.github/workflows/sf07-compiler-six-failure-observe.yml'
-        CHANGED = (WORKFLOW,)
-        SOURCES = {'benchmarks/http_stdlib.nagi': ('f3ecf8fdcb084952515b3f321b18588358ef9e65', 2553, 55), 'benchmarks/security-sf01/fixtures/nagi-policy/main.nagi': ('81fe25486760ac1546b90905504fc8d96e5e368a', 3315, 79), 'benchmarks/security-sf01/fixtures/rust-policy/main.nagi': ('bbff6af727c3f33aed31d655ff62dae2e4511865', 2861, 69), 'benchmarks/security-sf01/run_security_sf01.py': ('d8b4fc83ba93806bdd6904d855dcaf628016e4fc', 17478, 415), 'compiler/src/check.rs': ('0eed4a10c3b700e32b9b5980d6d4b918f3aab674', 237096, 5654), 'compiler/src/stdlib.rs': ('5d2d636ead106a56f41d1d193ab86300121daad4', 94185, 2447), 'compiler/src/stdlib/html.rs': ('3eff60461c11f3ede42d173a5abb8aa9e7bc7dc9', 6011, 139), 'compiler/src/stdlib/html_contract_tests.rs': ('f3a589017e42cdf77cf8722754f6705014057875', 13458, 349), 'compiler/src/stdlib/html_semantic_tests.rs': ('c66ac4494df7d7ab64702560ce80271fda1ce7bb', 11557, 237), 'compiler/tests/auth_boundaries.rs': ('d6f4d248e52d1a5586ed0574a6a21ad970828d11', 12369, 263), 'compiler/tests/build_diagnostics.rs': ('5667269cc6e3e718adb58e2ba55de9d00b43ea93', 48018, 1198), 'compiler/tests/error_routes.rs': ('045b33db5fd5a0d8bb1fdd7b326329846f475789', 11122, 224), 'compiler/tests/fixtures/resource-contract/http-borrow-mappers.low': ('805e08c3adbc766a97901a2ded88da586edd94fa', 38253, 38), 'compiler/tests/fixtures/resource-contract/http-borrow-mappers.nagi': ('f8d178ce5b48ab86968ce660971a8528fb7e12b2', 1118, 20), 'compiler/tests/fixtures/resource-contract/http-borrow-mappers.rs': ('c0847844df6c2c56b1999f5e7833eaeda2e99d64', 13426, 200), 'compiler/tests/fixtures/resource-contract/http-inspection.low': ('7c17cd8d0c6323bd1bc844d7a6cf1bd5a474f95b', 34630, 43), 'compiler/tests/fixtures/resource-contract/http-inspection.nagi': ('6437efe23d67ac8054e8a25944b3fed427d1b4a0', 1345, 30), 'compiler/tests/fixtures/resource-contract/http-inspection.rs': ('3ff3bf9709e79273fd4ea5bf708601b4059cef3c', 11218, 184), 'compiler/tests/fixtures/resource-contract/http-response-context-red.low': ('22db751bfd4fb4ea3b69316b7ade371f1c688977', 617, 18), 'compiler/tests/fixtures/resource-contract/http-response-context-red.nagi': ('b6524625662e0b7b67abd8c3dd924bffa1e7627b', 596, 18), 'compiler/tests/fixtures/security-sf02/reused.low': ('4ebe1e2d5e5292b4180b0b86566ca998e8a2599f', 305, 7), 'compiler/tests/fixtures/security-sf02/reused.nagi': ('4922814c562074edb062083b90fa3c7cede50972', 305, 6), 'compiler/tests/fixtures/security-sf02/startup.low': ('4b35b8817e3c62cba390c08d9a03b5cd2ca59cbb', 1437, 24), 'compiler/tests/fixtures/security-sf02/startup.nagi': ('e5e7ce9123200141856a06ba2f5a7f09c9916243', 1435, 25), 'compiler/tests/fixtures/security-sf03-b1/guarded.low': ('3fd41f6176b75e76e58061547185862821db85b8', 2150, 35), 'compiler/tests/fixtures/security-sf03-b1/guarded.nagi': ('8dd1dce8266a65df9b30cd8799f3f5fbdb7f5dfa', 2161, 34), 'compiler/tests/fixtures/security-sf03-cors/config-manual.low': ('3b9135742988e9860237666d0a101bd105ec9a0a', 881, 14), 'compiler/tests/fixtures/security-sf03-cors/config.nagi': ('16a1197ae0c0754bf8d216df702d571133b3e09c', 897, 18), 'compiler/tests/fixtures/security-sf04/borrowed-document-manual.low': ('b9be56bed859825813d9374a0735d6915169f5b3', 276, 6), 'compiler/tests/fixtures/security-sf04/borrowed-document.nagi': ('91ae53947c257557ec5848547a5522dbfe94465c', 266, 5), 'compiler/tests/fixtures/security-sf04/http-only-manual.low': ('530aa80f6d321c2bde160ea788e0bc6573232aff', 348, 8), 'compiler/tests/fixtures/security-sf04/http-only.nagi': ('067eb26d9059128a915b96f8c4da6884aa4e49a8', 334, 9), 'compiler/tests/fixtures/security-sf04/list-detail-manual.low': ('f37f7dce08828332be3bee4384383a70f1290c0c', 2760, 40), 'compiler/tests/fixtures/security-sf04/list-detail.nagi': ('fa9fd15543dfe7e3b6357330d597783b9ed9a6c8', 2608, 39), 'compiler/tests/fixtures/security-sf04/nominal-document-manual.low': ('74faa45527d52432fc3049833680db0a9b4aabfe', 276, 6), 'compiler/tests/fixtures/security-sf04/nominal-document.nagi': ('ae1688355ccb7cebafd84823a47de2bed9024241', 266, 6), 'compiler/tests/fixtures/security-sf04/renamed-page-manual.low': ('fa3de4380ffe2daec4701999b3959117f0dfd600', 705, 14), 'compiler/tests/fixtures/security-sf04/renamed-page.nagi': ('592a90e70c17e167346a78f307f26b7996c0c496', 677, 14), 'compiler/tests/fixtures/security-sf04/shared-document-manual.low': ('897d347461f4fccb5942c97b677690efab8a498a', 278, 6), 'compiler/tests/fixtures/security-sf04/shared-document.nagi': ('d6fece924f491279d3d17c4092b17e20a36fbb9d', 268, 5), 'compiler/tests/graph_relations.rs': ('6ea2ae8e9281b2c1a0ab234cf8feedc172ef6655', 23438, 603), 'compiler/tests/http_codegen.rs': ('164a1befebb4ee18562007429692f542225786d1', 12190, 274), 'compiler/tests/http_entrypoint.rs': ('732749327c5dbee01ba1b6986534e30eed15a7b5', 8406, 187), 'compiler/tests/http_route_conflicts.rs': ('04eb2b22fedec97d8d9dfdfb3002c4b1167760f3', 9399, 253), 'compiler/tests/http_stdlib.rs': ('8b98b6dcffb66c005507255088c2eba63e7bc805', 68100, 1399), 'compiler/tests/resource_contract_characterization.rs': ('196a5a847968412e38678460989c35cfb9db3fa9', 50094, 1137), 'compiler/tests/security_sf01.rs': ('ad578bc5d89ced21ef8cdc9c251d64c35f3748f4', 23518, 563), 'compiler/tests/security_sf01_native.rs': ('9fec55331b22a45ef9523505aeaeaeee551860f6', 8633, 174), 'compiler/tests/security_sf03_cors.rs': ('c13ed56d8b51afe6549834f6ffa500ab4b773a02', 12149, 193), 'compiler/tests/security_sf04.rs': ('02fe07ea9ee22c425b03b9d5653ee85b37c0a462', 10114, 255), 'compiler/tests/security_sf05_native.rs': ('2207cd9a2d17812dfb006877b935ecf5ebf8d7da', 9886, 161), 'compiler/tests/support/task_service.rs': ('c9cfb6b246360e87fd9024b37a0d5f72a4596871', 9426, 211), 'compiler/tests/support/task_service_s2.rs': ('a392405a57c7a625c8e0b78cff3b7cd65f529af5', 21079, 417), 'docs/en/http-server.md': ('63471c64a43ec4625956e3a1635e6a4b42410e37', 20895, 190), 'docs/en/http.md': ('6cf9e73e8bb20a71cbc2051d19983819095c10b8', 3807, 58), 'docs/en/migration-0.2.0.md': ('b1fedb72924fbd9fddddabd0774821fd99d802b6', 8689, 63), 'docs/en/modules-and-rust.md': ('60bbdc81125fe958a24354504be89a274ee0dab9', 12794, 181), 'docs/en/security.md': ('a272007688f472832f700492d852792d02e6bfaa', 11201, 81), 'docs/http-server.md': ('2137912a3cec9d700412b6063e0190ac99ef13e0', 21812, 190), 'docs/http.md': ('a3612bdb34a8d7c80a6272d979f27ac783e76e02', 4144, 58), 'docs/internal/security-foundation/sf04-contract.en.md': ('51a88de76944e82597d6249df35cd2a671cef6fe', 27828, 178), 'docs/internal/security-foundation/sf04-contract.md': ('8c9dda506753c0aff10cf90a277a5325b40383f7', 27951, 178), 'docs/migration-0.2.0.md': ('49a074664bfffb8a2f14b3f05e12260f3df3f5aa', 8670, 63), 'docs/modules-and-rust.md': ('1eb2059c869c59ff407dc25d6d405c53e34602be', 14191, 181), 'docs/security.md': ('09959a4c7953023cd9e44627fc44490a5147863d', 11604, 81), 'examples/crud.nagi': ('736712c8259242623bd7685cbe188174627d0188', 13354, 231), 'examples/tutorial/http.nagi': ('1beed3e1851df1a4dffa5e13a0330976e778cb03', 2528, 47), 'scripts/http_stdlib_bench.py': ('3ceec3166532f98a9557a6f156abd7ddb91b6346', 11608, 242), 'test-nagi-code/application-examples/auth-boundary/main.nagi': ('829ba15edcccc40c8ebee604e5316063f9eda662', 8458, 188), 'test-nagi-code/application-examples/byte-inspector/main.nagi': ('b25e976833115dab55a0dbca5caae05c966e6711', 2157, 46), 'test-nagi-code/application-examples/device-settings/main.nagi': ('f584cf45335ed82095cac1cfa3090b87b1fdbac7', 6754, 132), 'test-nagi-code/application-examples/quote-api/main.nagi': ('384d23b25323736429c3830802d595ef31c09447', 8348, 172), 'test-nagi-code/inventory.nagi': ('c7c8c1e1a18c5db72fe0c27604b34f4b3678f89d', 12346, 220), 'test-nagi-code/library-examples/http-auth/main.nagi': ('f7f6275f94b4daf794c351851dae04bedf31afa2', 3430, 74), 'test-nagi-code/library-examples/supervised-service/main.low': ('307334e86252ce6fe11dfa2a441de9a21acccde1', 8202, 202), 'test-nagi-code/library-examples/supervised-service/main.nagi': ('e9476216c677074ceaf698e1b5cf3b4b566e4b47', 7003, 153), 'test-nagi-code/result-api/server.nagi': ('9e7b8d07a53b38e1dbf813bd57cbaf6872e6155f', 9989, 193), 'test-nagi-code/web-demo/tasks.nagi': ('7256e8fa9479008616f5f46d5e8c927e8eaa286e', 11972, 205), 'tests/http_stdlib_integration.py': ('6ed659e9d34bd47c5faed84b57494b0a094234a8', 27617, 486), 'tests/route_integration.py': ('71176e28d2761f3bd833fa4ee7d3d6e1317399b3', 7879, 152)}
+        CHANGED = ('.github/workflows/sf07-compiler-six-failure-observe.yml', 'compiler/tests/error_routes.rs', 'compiler/tests/http_codegen.rs', 'compiler/tests/http_entrypoint.rs', 'compiler/tests/http_stdlib.rs', 'compiler/tests/security_sf01_native.rs', 'compiler/tests/security_sf05_native.rs')
+        SOURCES = {'benchmarks/http_stdlib.nagi': ('f3ecf8fdcb084952515b3f321b18588358ef9e65', 2553, 55), 'benchmarks/security-sf01/fixtures/nagi-policy/main.nagi': ('81fe25486760ac1546b90905504fc8d96e5e368a', 3315, 79), 'benchmarks/security-sf01/fixtures/rust-policy/main.nagi': ('bbff6af727c3f33aed31d655ff62dae2e4511865', 2861, 69), 'benchmarks/security-sf01/run_security_sf01.py': ('d8b4fc83ba93806bdd6904d855dcaf628016e4fc', 17478, 415), 'compiler/src/check.rs': ('0eed4a10c3b700e32b9b5980d6d4b918f3aab674', 237096, 5654), 'compiler/src/stdlib.rs': ('5d2d636ead106a56f41d1d193ab86300121daad4', 94185, 2447), 'compiler/src/stdlib/html.rs': ('3eff60461c11f3ede42d173a5abb8aa9e7bc7dc9', 6011, 139), 'compiler/src/stdlib/html_contract_tests.rs': ('f3a589017e42cdf77cf8722754f6705014057875', 13458, 349), 'compiler/src/stdlib/html_semantic_tests.rs': ('c66ac4494df7d7ab64702560ce80271fda1ce7bb', 11557, 237), 'compiler/tests/auth_boundaries.rs': ('d6f4d248e52d1a5586ed0574a6a21ad970828d11', 12369, 263), 'compiler/tests/build_diagnostics.rs': ('5667269cc6e3e718adb58e2ba55de9d00b43ea93', 48018, 1198), 'compiler/tests/error_routes.rs': ('4e3554f02998ac6d137227f2071041521e93bdda', 11146, 224), 'compiler/tests/fixtures/resource-contract/http-borrow-mappers.low': ('805e08c3adbc766a97901a2ded88da586edd94fa', 38253, 38), 'compiler/tests/fixtures/resource-contract/http-borrow-mappers.nagi': ('f8d178ce5b48ab86968ce660971a8528fb7e12b2', 1118, 20), 'compiler/tests/fixtures/resource-contract/http-borrow-mappers.rs': ('c0847844df6c2c56b1999f5e7833eaeda2e99d64', 13426, 200), 'compiler/tests/fixtures/resource-contract/http-inspection.low': ('7c17cd8d0c6323bd1bc844d7a6cf1bd5a474f95b', 34630, 43), 'compiler/tests/fixtures/resource-contract/http-inspection.nagi': ('6437efe23d67ac8054e8a25944b3fed427d1b4a0', 1345, 30), 'compiler/tests/fixtures/resource-contract/http-inspection.rs': ('3ff3bf9709e79273fd4ea5bf708601b4059cef3c', 11218, 184), 'compiler/tests/fixtures/resource-contract/http-response-context-red.low': ('22db751bfd4fb4ea3b69316b7ade371f1c688977', 617, 18), 'compiler/tests/fixtures/resource-contract/http-response-context-red.nagi': ('b6524625662e0b7b67abd8c3dd924bffa1e7627b', 596, 18), 'compiler/tests/fixtures/security-sf02/reused.low': ('4ebe1e2d5e5292b4180b0b86566ca998e8a2599f', 305, 7), 'compiler/tests/fixtures/security-sf02/reused.nagi': ('4922814c562074edb062083b90fa3c7cede50972', 305, 6), 'compiler/tests/fixtures/security-sf02/startup.low': ('4b35b8817e3c62cba390c08d9a03b5cd2ca59cbb', 1437, 24), 'compiler/tests/fixtures/security-sf02/startup.nagi': ('e5e7ce9123200141856a06ba2f5a7f09c9916243', 1435, 25), 'compiler/tests/fixtures/security-sf03-b1/guarded.low': ('3fd41f6176b75e76e58061547185862821db85b8', 2150, 35), 'compiler/tests/fixtures/security-sf03-b1/guarded.nagi': ('8dd1dce8266a65df9b30cd8799f3f5fbdb7f5dfa', 2161, 34), 'compiler/tests/fixtures/security-sf03-cors/config-manual.low': ('3b9135742988e9860237666d0a101bd105ec9a0a', 881, 14), 'compiler/tests/fixtures/security-sf03-cors/config.nagi': ('16a1197ae0c0754bf8d216df702d571133b3e09c', 897, 18), 'compiler/tests/fixtures/security-sf04/borrowed-document-manual.low': ('b9be56bed859825813d9374a0735d6915169f5b3', 276, 6), 'compiler/tests/fixtures/security-sf04/borrowed-document.nagi': ('91ae53947c257557ec5848547a5522dbfe94465c', 266, 5), 'compiler/tests/fixtures/security-sf04/http-only-manual.low': ('530aa80f6d321c2bde160ea788e0bc6573232aff', 348, 8), 'compiler/tests/fixtures/security-sf04/http-only.nagi': ('067eb26d9059128a915b96f8c4da6884aa4e49a8', 334, 9), 'compiler/tests/fixtures/security-sf04/list-detail-manual.low': ('f37f7dce08828332be3bee4384383a70f1290c0c', 2760, 40), 'compiler/tests/fixtures/security-sf04/list-detail.nagi': ('fa9fd15543dfe7e3b6357330d597783b9ed9a6c8', 2608, 39), 'compiler/tests/fixtures/security-sf04/nominal-document-manual.low': ('74faa45527d52432fc3049833680db0a9b4aabfe', 276, 6), 'compiler/tests/fixtures/security-sf04/nominal-document.nagi': ('ae1688355ccb7cebafd84823a47de2bed9024241', 266, 6), 'compiler/tests/fixtures/security-sf04/renamed-page-manual.low': ('fa3de4380ffe2daec4701999b3959117f0dfd600', 705, 14), 'compiler/tests/fixtures/security-sf04/renamed-page.nagi': ('592a90e70c17e167346a78f307f26b7996c0c496', 677, 14), 'compiler/tests/fixtures/security-sf04/shared-document-manual.low': ('897d347461f4fccb5942c97b677690efab8a498a', 278, 6), 'compiler/tests/fixtures/security-sf04/shared-document.nagi': ('d6fece924f491279d3d17c4092b17e20a36fbb9d', 268, 5), 'compiler/tests/graph_relations.rs': ('6ea2ae8e9281b2c1a0ab234cf8feedc172ef6655', 23438, 603), 'compiler/tests/http_codegen.rs': ('79ffebb1c02272aa9f59e3b231c577293342fd41', 12214, 274), 'compiler/tests/http_entrypoint.rs': ('0e2f6fbc9a932a4a418d00c99e9aba5ef37d5539', 8407, 187), 'compiler/tests/http_route_conflicts.rs': ('04eb2b22fedec97d8d9dfdfb3002c4b1167760f3', 9399, 253), 'compiler/tests/http_stdlib.rs': ('fce9a61cae167331463c38ae713f1c5b53bea535', 68457, 1399), 'compiler/tests/resource_contract_characterization.rs': ('196a5a847968412e38678460989c35cfb9db3fa9', 50094, 1137), 'compiler/tests/security_sf01.rs': ('ad578bc5d89ced21ef8cdc9c251d64c35f3748f4', 23518, 563), 'compiler/tests/security_sf01_native.rs': ('3c80817ba43249be9339e4b58668f09906569d9b', 8634, 174), 'compiler/tests/security_sf03_cors.rs': ('c13ed56d8b51afe6549834f6ffa500ab4b773a02', 12149, 193), 'compiler/tests/security_sf04.rs': ('02fe07ea9ee22c425b03b9d5653ee85b37c0a462', 10114, 255), 'compiler/tests/security_sf05_native.rs': ('8e31d0fcd0d7b82e721bfc2f6c18c34ac5f39ac7', 9887, 161), 'compiler/tests/support/task_service.rs': ('c9cfb6b246360e87fd9024b37a0d5f72a4596871', 9426, 211), 'compiler/tests/support/task_service_s2.rs': ('a392405a57c7a625c8e0b78cff3b7cd65f529af5', 21079, 417), 'docs/en/http-server.md': ('63471c64a43ec4625956e3a1635e6a4b42410e37', 20895, 190), 'docs/en/http.md': ('6cf9e73e8bb20a71cbc2051d19983819095c10b8', 3807, 58), 'docs/en/migration-0.2.0.md': ('b1fedb72924fbd9fddddabd0774821fd99d802b6', 8689, 63), 'docs/en/modules-and-rust.md': ('60bbdc81125fe958a24354504be89a274ee0dab9', 12794, 181), 'docs/en/security.md': ('a272007688f472832f700492d852792d02e6bfaa', 11201, 81), 'docs/http-server.md': ('2137912a3cec9d700412b6063e0190ac99ef13e0', 21812, 190), 'docs/http.md': ('a3612bdb34a8d7c80a6272d979f27ac783e76e02', 4144, 58), 'docs/internal/security-foundation/sf04-contract.en.md': ('51a88de76944e82597d6249df35cd2a671cef6fe', 27828, 178), 'docs/internal/security-foundation/sf04-contract.md': ('8c9dda506753c0aff10cf90a277a5325b40383f7', 27951, 178), 'docs/migration-0.2.0.md': ('49a074664bfffb8a2f14b3f05e12260f3df3f5aa', 8670, 63), 'docs/modules-and-rust.md': ('1eb2059c869c59ff407dc25d6d405c53e34602be', 14191, 181), 'docs/security.md': ('09959a4c7953023cd9e44627fc44490a5147863d', 11604, 81), 'examples/crud.nagi': ('736712c8259242623bd7685cbe188174627d0188', 13354, 231), 'examples/tutorial/http.nagi': ('1beed3e1851df1a4dffa5e13a0330976e778cb03', 2528, 47), 'scripts/http_stdlib_bench.py': ('3ceec3166532f98a9557a6f156abd7ddb91b6346', 11608, 242), 'test-nagi-code/application-examples/auth-boundary/main.nagi': ('829ba15edcccc40c8ebee604e5316063f9eda662', 8458, 188), 'test-nagi-code/application-examples/byte-inspector/main.nagi': ('b25e976833115dab55a0dbca5caae05c966e6711', 2157, 46), 'test-nagi-code/application-examples/device-settings/main.nagi': ('f584cf45335ed82095cac1cfa3090b87b1fdbac7', 6754, 132), 'test-nagi-code/application-examples/quote-api/main.nagi': ('384d23b25323736429c3830802d595ef31c09447', 8348, 172), 'test-nagi-code/inventory.nagi': ('c7c8c1e1a18c5db72fe0c27604b34f4b3678f89d', 12346, 220), 'test-nagi-code/library-examples/http-auth/main.nagi': ('f7f6275f94b4daf794c351851dae04bedf31afa2', 3430, 74), 'test-nagi-code/library-examples/supervised-service/main.low': ('307334e86252ce6fe11dfa2a441de9a21acccde1', 8202, 202), 'test-nagi-code/library-examples/supervised-service/main.nagi': ('e9476216c677074ceaf698e1b5cf3b4b566e4b47', 7003, 153), 'test-nagi-code/result-api/server.nagi': ('9e7b8d07a53b38e1dbf813bd57cbaf6872e6155f', 9989, 193), 'test-nagi-code/web-demo/tasks.nagi': ('7256e8fa9479008616f5f46d5e8c927e8eaa286e', 11972, 205), 'tests/http_stdlib_integration.py': ('6ed659e9d34bd47c5faed84b57494b0a094234a8', 27617, 486), 'tests/route_integration.py': ('71176e28d2761f3bd833fa4ee7d3d6e1317399b3', 7879, 152)}
         CAP = 2 * 1024 * 1024
         CASE_CAP = 64 * 1024
-        
+
         class Invalid(Exception):
             pass
-        
+
         def source_guard():
             if os.environ.get('GITHUB_REF') != 'refs/heads/' + BRANCH:
                 raise Invalid('wrong branch')
@@ -84,7 +84,7 @@ jobs:
                 if blob != expected:
                     raise Invalid('source identity mismatch')
             print('compiler_source_guard=pass exact_parent=1 sources=' + str(len(SOURCES)) + ' changed_paths=' + str(len(CHANGED)) + ' line_endings=LF_or_CRLF')
-        
+
         def capture(argv, limit=CAP):
             try:
                 process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
@@ -110,13 +110,13 @@ jobs:
             for reader in readers:
                 reader.join()
             return code, bytes(outputs['out']), bytes(outputs['err']), overflow
-        
+
         def decode(raw):
             text = raw.decode('utf-8', errors='strict').replace('\r\n', '\n')
             if '\r' in text:
                 raise Invalid('bare output carriage return')
             return text
-        
+
         def parse_list(raw, expected):
             text = decode(raw)
             names, footers = [], []
@@ -137,7 +137,7 @@ jobs:
             if footers != [len(expected)]:
                 raise Invalid('list footer count')
             return len(names)
-        
+
         def parse_result(raw, expected, filtered=0):
             text = decode(raw)
             lines = text.splitlines()
@@ -151,7 +151,7 @@ jobs:
             summary_index, outcome, got_passed, got_failed, got_ignored, measured, got_filtered = summary_rows[0]
             if any(line for line in lines[summary_index + 1:]):
                 raise Invalid('trailing result output')
-        
+
             statuses, running, progress, markers = [], [], [], []
             initial_failure_header = False
             failure_body_boundary = False
@@ -184,12 +184,12 @@ jobs:
                     progress.append(notice.group(1))
                     continue
                 raise Invalid('result prefix grammar')
-        
+
             for line in lines[first_output:summary_index]:
                 marker = re.fullmatch(r'---- ([A-Za-z0-9_:]+) stdout ----', line)
                 if marker:
                     markers.append(marker.group(1))
-        
+
             if len(running) != 1 or running[0] != len(expected) or len(statuses) != len(expected):
                 raise Invalid('result row count')
             names = [name for name, _ in statuses]
@@ -206,7 +206,7 @@ jobs:
                 raise Invalid('progress or output identity')
             if len(markers) != len(set(markers)):
                 raise Invalid('duplicate failure output')
-        
+
             trailer = lines[:summary_index]
             while trailer and not trailer[-1]:
                 trailer.pop()
@@ -227,7 +227,7 @@ jobs:
                     raise Invalid('failure inventory')
             elif markers or any(line == 'failures:' for line in trailer):
                 raise Invalid('unexpected failure footer')
-        
+
             passed = sum(state == 'ok' for _, state in statuses)
             failed = sum(state == 'FAILED' for _, state in statuses)
             ignored = sum(state == 'ignored' for _, state in statuses)
@@ -236,7 +236,7 @@ jobs:
             if (outcome == 'ok') != (failed == 0):
                 raise Invalid('result outcome')
             return passed, failed, ignored, measured, got_filtered, tuple(sorted(name for name, state in statuses if state == 'FAILED'))
-        
+
         CASES = (
             ('http_stdlib', 'status_method_and_db_free_app_execute_from_high_and_saved_low', 32),
             ('http_codegen', 'borrow_and_named_mapper_registration_execute_native_adapters', 4),
@@ -247,8 +247,8 @@ jobs:
         )
         DISPLAY_CAP = CASE_CAP
         TOKEN_RE = re.compile(r'(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]+')
-        
-        
+
+
         def _visible_text(raw):
             text = raw.decode('utf-8', errors='backslashreplace').replace('\r\n', '\n')
             text = TOKEN_RE.sub(r'\1[STATIC_TEST_TOKEN_REDACTED]', text)
@@ -266,8 +266,8 @@ jobs:
                 else:
                     out.append(f'\\u{code:04x}')
             return ''.join(out)
-        
-        
+
+
         def diagnostic_lines(stream, raw, overflow):
             text = _visible_text(raw)
             result = []
@@ -290,15 +290,15 @@ jobs:
                 result.append(rendered)
                 used += len(encoded)
             return result
-        
+
         def _overflowed(overflow):
             return any(overflow.values()) if isinstance(overflow, dict) else bool(overflow)
-        
-        
+
+
         def _stream_overflow(overflow, key):
             return bool(overflow.get(key, False)) if isinstance(overflow, dict) else bool(overflow)
-        
-        
+
+
         def emit_diagnostics(case, stdout, stderr, overflow):
             for key, raw in (('out', stdout), ('err', stderr)):
                 stream = 'stdout' if key == 'out' else 'stderr'
@@ -307,17 +307,29 @@ jobs:
                       ' overflow=' + str(int(_stream_overflow(overflow, key))))
                 for line in diagnostic_lines(stream, raw, _stream_overflow(overflow, key)):
                     print(line)
-        
-        
+
+
         def _reject(call, expected_message):
             try:
                 call()
             except Invalid:
                 return
             raise Invalid(expected_message)
-        
-        
+
+
         def selftest():
+            assert mock_send_filtered('win32') == 28
+            assert mock_send_filtered('linux') == mock_send_filtered('darwin') == 29
+            for platform in ('win32', 'linux', 'darwin'):
+                expected = mock_send_filtered(platform)
+                wire = ('running 1 test\ntest case_one ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; ' + str(expected) + ' filtered out; finished in 0.01s\n').encode()
+                assert parse_result(wire, ['case_one'], expected)[:5] == (1, 0, 0, 0, expected)
+                try:
+                    parse_result(wire, ['case_one'], 29 if expected == 28 else 28)
+                except Invalid:
+                    pass
+                else:
+                    raise AssertionError('wrong-platform inventory accepted')
             global capture
             if parse_list(b'case_one: test\n\n1 test, 0 benchmarks\n', ['case_one']) != 1:
                 raise Invalid('exact list positive')
@@ -364,17 +376,17 @@ jobs:
             if (probe_code, probe_out, probe_err, probe_overflow) != (0, b'X' * 8, b'Y', {'out': True, 'err': False}):
                 raise Invalid('independent per-stream capture limit')
             print('six_failure_guard_synthetic_controls=pass list=exact_one result=pass_and_named_fail filters=target_specific diagnostic=bounded_prefixed_redacted invalid_zero_exit=nonzero_with_both_streams per_stream_cap=pass')
-        
-        
+
+
         def cargo(args):
             return ['cargo', *args]
-        
-        
+
+
         def _show_failure(label, code, stdout, stderr, overflow):
             print(label + '=fail cargo_exit=' + str(code) + ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
             emit_diagnostics(label, stdout, stderr, overflow)
-        
-        
+
+
         def compile_targets():
             code, stdout, stderr, overflow = capture(cargo(['fetch', '--locked']))
             print('locked_dependency_fetch=' + ('pass' if code == 0 and not _overflowed(overflow) else 'fail') +
@@ -393,8 +405,8 @@ jobs:
             if not good:
                 emit_diagnostics('six_target_compile', stdout, stderr, overflow)
             return 0 if good else 1
-        
-        
+
+
         def inventories():
             failed = False
             for target, case, _ in CASES:
@@ -413,8 +425,8 @@ jobs:
                     emit_diagnostics(target + '_list', stdout, stderr, overflow)
                     failed = True
             return int(failed)
-        
-        
+
+
         def execute_cases():
             failed = False
             for target, case, filtered in CASES:
@@ -448,11 +460,20 @@ jobs:
                 emit_diagnostics(case, stdout, stderr, overflow)
                 failed = True
             return int(failed)
-        
-        
-        MOCK_SEND = ('build_diagnostics', 'imported_async_ffi_send_failure_maps_the_cause_note_in_high_and_saved_low', 29)
-        
-        
+
+
+        def mock_send_filtered(platform):
+            # One source-bound #[cfg(unix)] test is absent on Windows.
+            if platform == 'win32':
+                return 28
+            if platform in ('linux', 'darwin'):
+                return 29
+            raise Invalid('unsupported mock Send target platform')
+
+
+        MOCK_SEND = ('build_diagnostics', 'imported_async_ffi_send_failure_maps_the_cause_note_in_high_and_saved_low', mock_send_filtered(sys.platform))
+
+
         def _run_named(target, case, filtered, profile):
             argv = cargo(['test', '--locked', '-p', 'nagic', '--test', target,
                           case, '--', '--exact'])
@@ -476,8 +497,8 @@ jobs:
                   ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
             emit_diagnostics(case, stdout, stderr, overflow)
             return 1
-        
-        
+
+
         def compile_mock_send():
             code, stdout, stderr, overflow = capture(cargo(['fetch', '--locked']))
             print('windows_mock_send_dependency_fetch=' + ('pass' if code == 0 and not _overflowed(overflow) else 'fail') +
@@ -492,8 +513,8 @@ jobs:
             if not good:
                 emit_diagnostics('windows_mock_send_compile', stdout, stderr, overflow)
             return 0 if good else 1
-        
-        
+
+
         def list_mock_send():
             target, case, _ = MOCK_SEND
             code, stdout, stderr, overflow = capture(cargo(['test', '--locked', '-p', 'nagic', '--test', target,
@@ -509,15 +530,15 @@ jobs:
                       ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
                 emit_diagnostics(case + '_list', stdout, stderr, overflow)
                 return 1
-        
-        
+
+
         def run_mock_send():
             target, case, filtered = MOCK_SEND
             # Invalid output grammar is surfaced even when Cargo exits zero. The strict
             # parser remains the gate, so a shape mismatch can never become a pass.
             return _run_named(target, case, filtered, 'windows_mock_send_observation')
-        
-        
+
+
         def main():
             try:
                 if len(sys.argv) != 2:
@@ -545,8 +566,8 @@ jobs:
             except Exception:
                 print('six_failure_guard=unavailable reason=closed_validation_failure')
                 return 2
-        
-        
+
+
         if __name__ == '__main__':
             raise SystemExit(main())
         PY
