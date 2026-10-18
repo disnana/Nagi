@@ -1,0 +1,558 @@
+name: SF07 Windows B1 short TTL causal observation
+permissions:
+  contents: read
+'on':
+  push:
+    branches:
+      - test/nagi020-b1-ttl-20261018
+jobs:
+  observe-b1:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/test/nagi020-b1-ttl-20261018'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: never
+      NAGI_ROOT: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact B1 parent and source identities
+        shell: bash
+        env:
+          RUNNER_OS: ${{ runner.os }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/b1-source-guard.py" <<'PY'
+          from __future__ import annotations
+          import hashlib
+          import os
+          import platform
+          import subprocess
+          from pathlib import Path
+          
+          PARENT = "4337422f5f632fe73e65d512a9ea170001301952"
+          BASE_TREE = "34072c578aedda250123489c6bd273f4cb133ea8"
+          BRANCH = "test/nagi020-b1-ttl-20261018"
+          WORKFLOW = ".github/workflows/sf07-b1-short-ttl-causal.yml"
+          CHANGED = (
+              WORKFLOW,
+              "runtime/src/auth/csrf.rs",
+              "runtime/src/auth/csrf/tests.rs",
+          )
+          SOURCES = {
+              "runtime/src/auth/csrf.rs": {
+                  "parent_blob": "e5a9d1d751c5c50300f3252d6468806263e77e8a",
+                  "blob": "b53b60ff468b10e0d409053d5089207ed6210eac",
+                  "size": 47112,
+                  "lines": 1213,
+                  "sha256": "2f4719cd26d0f71fd44e5feba35228b0647f82567233c4fc5b47d3e9625541bc",
+              },
+              "runtime/src/auth/csrf/tests.rs": {
+                  "parent_blob": "131dbf27f945ea34facec6360c9ddc78fba89d2e",
+                  "blob": "07e7b1b7cd9aa5d98db7ac4c50726eda16cb7d62",
+                  "size": 35997,
+                  "lines": 927,
+                  "sha256": "10b47a6741a605f0787b44f38d9cb53446ca74ab1289b30dbd6fa3026b5c910d",
+              },
+          }
+          PARSER = "scripts/ci/auth_stage_diagnostic.py"
+          PARSER_BLOB = "970c1d99d70f5901bda28b7a7c0dc18db62de0e9"
+          NEW_CASE = "auth::csrf::tests::pending_ready_refuses_expired_monotonic_deadline_even_with_live_wall"
+          TARGET_CASE = "auth::csrf::tests::nondecreasing_clock_refusal_preserves_live_row_and_never_delivers"
+          
+          class GuardFailure(Exception):
+              pass
+          
+          
+          def git(root: Path, *args: str) -> str:
+              try:
+                  result = subprocess.run(
+                      ["git", *args], cwd=root, stdout=subprocess.PIPE,
+                      stderr=subprocess.DEVNULL, check=False,
+                  )
+              except OSError as error:
+                  raise GuardFailure("git unavailable") from error
+              if result.returncode:
+                  raise GuardFailure("git identity unavailable")
+              try:
+                  return result.stdout.decode("ascii", errors="strict").strip()
+              except UnicodeError as error:
+                  raise GuardFailure("git identity encoding") from error
+          
+          
+          def verify(root_value: str | None = None) -> None:
+              if os.environ.get("GITHUB_EVENT_NAME") != "push":
+                  raise GuardFailure("wrong event")
+              if os.environ.get("GITHUB_REF") != "refs/heads/" + BRANCH:
+                  raise GuardFailure("wrong branch")
+              if os.environ.get("RUNNER_OS") != "Windows" or platform.system() != "Windows":
+                  raise GuardFailure("windows-only profile")
+              if any(name in os.environ for name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "RUST_TEST_THREADS")):
+                  raise GuardFailure("diagnostic flag or thread override present")
+              root = Path(root_value or os.environ.get("NAGI_ROOT", os.environ.get("GITHUB_WORKSPACE", "."))).resolve(strict=True)
+              if git(root, "rev-parse", "HEAD^") != PARENT:
+                  raise GuardFailure("parent mismatch")
+              if git(root, "rev-parse", "HEAD^^{tree}") != BASE_TREE:
+                  raise GuardFailure("parent tree mismatch")
+              names = git(root, "diff", "--no-renames", "--name-only", "HEAD^", "HEAD").splitlines()
+              if tuple(names) != CHANGED:
+                  raise GuardFailure("changed path set mismatch")
+              for name, item in SOURCES.items():
+                  if git(root, "rev-parse", "HEAD^:" + name) != item["parent_blob"]:
+                      raise GuardFailure("source base blob mismatch")
+                  row = git(root, "ls-tree", "--full-tree", "HEAD", "--", name)
+                  if row != "100644 blob " + item["blob"] + "\t" + name:
+                      raise GuardFailure("source tree identity mismatch")
+                  path = root / name
+                  if path.is_symlink() or not path.is_file():
+                      raise GuardFailure("source file type mismatch")
+                  with path.open("rb") as stream:
+                      raw = stream.read(item["size"] + item["lines"] + 1)
+                  if len(raw) > item["size"] + item["lines"]:
+                      raise GuardFailure("source read bound")
+                  canonical = raw.replace(b"\r\n", b"\n")
+                  if b"\r" in canonical or len(canonical) != item["size"] or len(canonical.splitlines()) != item["lines"]:
+                      raise GuardFailure("source line ending or size")
+                  canonical.decode("utf-8", errors="strict")
+                  if hashlib.sha256(canonical).hexdigest() != item["sha256"]:
+                      raise GuardFailure("source content identity mismatch")
+                  committed = subprocess.run(
+                      ["git", "cat-file", "blob", "HEAD:" + name], cwd=root,
+                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False,
+                  )
+                  if committed.returncode or committed.stdout != canonical:
+                      raise GuardFailure("source worktree differs from commit")
+              if git(root, "rev-parse", "HEAD:" + PARSER) != PARSER_BLOB:
+                  raise GuardFailure("auth-stage parser identity mismatch")
+              test_source = (root / "runtime/src/auth/csrf/tests.rs").read_bytes()
+              if test_source.count(b"fn pending_ready_refuses_expired_monotonic_deadline_even_with_live_wall()") != 1:
+                  raise GuardFailure("new test source identity mismatch")
+              if test_source.count(b"async fn nondecreasing_clock_refusal_preserves_live_row_and_never_delivers()") != 1:
+                  raise GuardFailure("B1 target source identity mismatch")
+          
+          
+          def main() -> int:
+              try:
+                  verify()
+              except (GuardFailure, OSError, UnicodeError, ValueError):
+                  print("source_guard=fail reason=closed_check")
+                  return 1
+              print("source_guard=pass parent=4337422f tree=34072c57 changed_paths=3 source_files=2 parser=sha_bound")
+              return 0
+          
+          if __name__ == "__main__":
+              raise SystemExit(main())
+          PY
+          python "$RUNNER_TEMP/b1-source-guard.py"
+      - name: Compile once, collect exact inventories, and compare B1 profiles
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/nagi020-b1-target
+          RUSTFLAGS: --cfg nagi_auth_stage_diag
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/b1-observer.py" <<'PY'
+          from __future__ import annotations
+          import hashlib
+          import importlib.util
+          import json
+          import os
+          import pathlib
+          import re
+          import stat
+          import subprocess
+          import sys
+          import tempfile
+          import threading
+          import tomllib
+          
+          NEW_CASE = "auth::csrf::tests::pending_ready_refuses_expired_monotonic_deadline_even_with_live_wall"
+          MODULE_PREFIX = "auth::csrf::tests::"
+          BUILD_LIMIT = 16 * 1024 * 1024
+          LIST_LIMIT = 256 * 1024
+          SUMMARY = re.compile(
+              r"^test result: (ok|FAILED)\. ([0-9]{1,4}) passed; ([0-9]{1,4}) failed; "
+              r"([0-9]{1,4}) ignored; ([0-9]{1,4}) measured; ([0-9]{1,4}) filtered out;$"
+          )
+          ROW = re.compile(r"^test ([A-Za-z_][A-Za-z0-9_:]*) \.\.\. (ok|FAILED|ignored)$")
+          LIST_ROW = re.compile(r"^([A-Za-z_][A-Za-z0-9_:]*): test$")
+          LIST_FOOTER = re.compile(r"^([0-9]{1,4}) tests?, 0 benchmarks$")
+          
+          class Invalid(Exception):
+              pass
+          
+          
+          def _reader(stream, limit: int, destination: bytearray, flags: list[bool]) -> None:
+              while True:
+                  chunk = stream.read(8192)
+                  if not chunk:
+                      return
+                  room = limit - len(destination)
+                  if room > 0:
+                      destination.extend(chunk[:room])
+                  if len(chunk) > room:
+                      flags[0] = True
+          
+          
+          def run_bounded(argv: list[str], *, cwd: pathlib.Path, env: dict[str, str],
+                          limit: int, merge: bool = False):
+              try:
+                  process = subprocess.Popen(
+                      argv, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                      stderr=subprocess.STDOUT if merge else subprocess.PIPE,
+                      bufsize=0,
+                  )
+              except OSError:
+                  return None, b"", b"", True
+              stdout = bytearray()
+              stderr = bytearray()
+              out_flags = [False]
+              err_flags = [False]
+              assert process.stdout is not None
+              threads = [threading.Thread(target=_reader, args=(process.stdout, limit, stdout, out_flags))]
+              if not merge:
+                  assert process.stderr is not None
+                  threads.append(threading.Thread(target=_reader, args=(process.stderr, limit, stderr, err_flags)))
+              for thread in threads:
+                  thread.start()
+              for thread in threads:
+                  thread.join()
+              code = process.wait()
+              return code, bytes(stdout), bytes(stderr), out_flags[0] or err_flags[0]
+          
+          
+          def normalized(raw: bytes) -> str:
+              try:
+                  text = raw.decode("utf-8", errors="strict").replace("\r\n", "\n")
+              except UnicodeError as error:
+                  raise Invalid("output encoding") from error
+              if "\r" in text:
+                  raise Invalid("bare carriage return")
+              return text
+          
+          
+          def strict_listing(raw: bytes) -> tuple[str, ...]:
+              if len(raw) > LIST_LIMIT or not raw.endswith(b"\n"):
+                  raise Invalid("listing bounds")
+              lines = normalized(raw).splitlines()
+              footer_at = [index for index, line in enumerate(lines) if LIST_FOOTER.fullmatch(line)]
+              if len(footer_at) != 1:
+                  raise Invalid("listing footer")
+              footer_index = footer_at[0]
+              rows = lines[:footer_index]
+              blank_count = 0
+              while rows and rows[-1] == "":
+                  rows.pop()
+                  blank_count += 1
+              if blank_count > 2 or not rows or any(not line for line in rows):
+                  raise Invalid("listing separator")
+              if any(line for line in lines[footer_index + 1:]):
+                  raise Invalid("listing trailing data")
+              names = []
+              for line in rows:
+                  match = LIST_ROW.fullmatch(line)
+                  if match is None:
+                      raise Invalid("listing row")
+                  names.append(match.group(1))
+              footer = LIST_FOOTER.fullmatch(lines[footer_index])
+              assert footer is not None
+              count = int(footer.group(1))
+              if not 1 <= count <= 1024 or count != len(names) or len(names) != len(set(names)):
+                  raise Invalid("listing count or identity")
+              return tuple(names)
+          
+          
+          def strict_summary(raw: bytes, expected_names: set[str], total_cases: int):
+              if len(raw) > LIST_LIMIT:
+                  raise Invalid("test output bounds")
+              lines = normalized(raw).splitlines()
+              summaries = [(i, SUMMARY.fullmatch(line)) for i, line in enumerate(lines) if line.startswith("test result:")]
+              if len(summaries) != 1 or summaries[0][1] is None:
+                  raise Invalid("test summary")
+              summary_index, matched = summaries[0]
+              assert matched is not None
+              outcome, passed_s, failed_s, ignored_s, measured_s, filtered_s = matched.groups()
+              passed, failed, ignored, measured, filtered = map(
+                  int, (passed_s, failed_s, ignored_s, measured_s, filtered_s)
+              )
+              rows = []
+              for line in lines[:summary_index]:
+                  match = ROW.fullmatch(line)
+                  if match:
+                      rows.append((match.group(1), match.group(2)))
+              names = [name for name, _ in rows]
+              if len(names) != len(set(names)) or set(names) != expected_names:
+                  raise Invalid("test row inventory")
+              if passed + failed + ignored != len(expected_names) or measured != 0 or filtered != total_cases - len(expected_names):
+                  raise Invalid("test summary counts")
+              if (outcome == "ok") != (failed == 0) or (failed == 0 and outcome != "ok"):
+                  raise Invalid("test summary result")
+              row_passed = sum(status == "ok" for _, status in rows)
+              row_failed = sum(status == "FAILED" for _, status in rows)
+              row_ignored = sum(status == "ignored" for _, status in rows)
+              if (row_passed, row_failed, row_ignored) != (passed, failed, ignored):
+                  raise Invalid("test row counts")
+              return {
+                  "outcome": outcome,
+                  "passed": passed,
+                  "failed": failed,
+                  "ignored": ignored,
+                  "measured": measured,
+                  "filtered": filtered,
+              }
+          
+          
+          def runtime_identity(root: pathlib.Path):
+              root_manifest = root / "Cargo.toml"
+              package_manifest = root / "runtime" / "Cargo.toml"
+              if root_manifest.stat().st_size > 65536 or package_manifest.stat().st_size > 65536:
+                  raise Invalid("manifest bound")
+              workspace = tomllib.loads(root_manifest.read_text(encoding="utf-8"))
+              package_data = tomllib.loads(package_manifest.read_text(encoding="utf-8"))
+              package = package_data.get("package")
+              if not isinstance(package, dict) or not isinstance(package.get("name"), str):
+                  raise Invalid("package identity")
+              version_value = package.get("version")
+              if isinstance(version_value, str):
+                  version = version_value
+              elif isinstance(version_value, dict) and version_value.get("workspace") is True:
+                  version = workspace.get("workspace", {}).get("package", {}).get("version")
+              else:
+                  raise Invalid("package version")
+              if not isinstance(version, str) or not version:
+                  raise Invalid("package version")
+              return package["name"], version, package_manifest.resolve(strict=True)
+          
+          
+          def artifact_from_json(raw: bytes, root: pathlib.Path, target_root: pathlib.Path):
+              if len(raw) > BUILD_LIMIT or not raw.endswith(b"\n"):
+                  raise Invalid("cargo output bounds")
+              name, version, manifest = runtime_identity(root)
+              target_real = target_root.resolve(strict=True)
+              found: list[pathlib.Path] = []
+              build_finished: list[bool] = []
+              last_reason = None
+              for line in raw.decode("utf-8", errors="strict").splitlines():
+                  if not line:
+                      raise Invalid("cargo json blank line")
+                  item = json.loads(line)
+                  if not isinstance(item, dict) or not isinstance(item.get("reason"), str):
+                      raise Invalid("cargo json shape")
+                  reason = item["reason"]
+                  last_reason = reason
+                  if reason == "build-finished":
+                      build_finished.append(item.get("success") is True)
+                  if reason != "compiler-artifact":
+                      continue
+                  target = item.get("target")
+                  profile = item.get("profile")
+                  package_id = item.get("package_id")
+                  manifest_path = item.get("manifest_path")
+                  executable = item.get("executable")
+                  if not (
+                      isinstance(target, dict) and target.get("name") == name.replace("-", "_")
+                      and target.get("kind") == ["lib"] and target.get("test") is True
+                      and isinstance(profile, dict) and profile.get("test") is True
+                      and isinstance(package_id, str) and package_id.rsplit("#", 1)[-1] == f"{name}@{version}"
+                      and isinstance(manifest_path, str)
+                      and pathlib.Path(manifest_path).resolve(strict=True) == manifest
+                      and isinstance(executable, str) and executable
+                  ):
+                      continue
+                  exe_path = pathlib.Path(executable)
+                  if not exe_path.is_absolute():
+                      exe_path = root / exe_path
+                  if exe_path.is_symlink() or not exe_path.is_file() or exe_path.suffix.lower() != ".exe":
+                      raise Invalid("test executable type")
+                  exe_real = exe_path.resolve(strict=True)
+                  try:
+                      exe_real.relative_to(target_real)
+                  except ValueError as error:
+                      raise Invalid("test executable outside target") from error
+                  if not stat.S_ISREG(exe_real.stat().st_mode):
+                      raise Invalid("test executable type")
+                  found.append(exe_real)
+              if len(found) != 1 or build_finished != [True] or last_reason != "build-finished":
+                  raise Invalid("cargo artifact not unique/successful")
+              return found[0]
+          
+          
+          def file_sha256(path: pathlib.Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as stream:
+                  while True:
+                      chunk = stream.read(1024 * 1024)
+                      if not chunk:
+                          break
+                      digest.update(chunk)
+              return digest.hexdigest()
+          
+          
+          def load_parser(root: pathlib.Path):
+              path = root / "scripts/ci/auth_stage_diagnostic.py"
+              if path.is_symlink() or not path.is_file():
+                  raise Invalid("auth-stage parser missing")
+              spec = importlib.util.spec_from_file_location("auth_stage_diagnostic", path)
+              if spec is None or spec.loader is None:
+                  raise Invalid("auth-stage parser load")
+              module = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(module)
+              return module
+          
+          
+          def main() -> int:
+              root = pathlib.Path(os.environ.get("NAGI_ROOT", ".")).resolve(strict=True)
+              runtime = root / "runtime"
+              runner_temp = pathlib.Path(os.environ.get("RUNNER_TEMP", tempfile.gettempdir())).resolve(strict=True)
+              target = pathlib.Path(os.environ.get("CARGO_TARGET_DIR", ""))
+              if not target.is_absolute():
+                  raise Invalid("target path not absolute")
+              if os.environ.get("RUSTFLAGS") != "--cfg nagi_auth_stage_diag":
+                  raise Invalid("expected diagnostic cfg absent")
+              if any(name in os.environ for name in ("CARGO_ENCODED_RUSTFLAGS", "RUST_TEST_THREADS")):
+                  raise Invalid("encoded flags or thread override")
+              if os.environ.get("CARGO_TERM_COLOR") != "never":
+                  raise Invalid("cargo color setting")
+          
+              build_env = os.environ.copy()
+              build_env["RUSTFLAGS"] = "--cfg nagi_auth_stage_diag"
+              build_env["CARGO_TERM_COLOR"] = "never"
+              command = ["cargo", "test", "--locked", "-p", "nagi-runtime", "--lib", "--no-run", "--message-format=json"]
+              code, stdout, _stderr, overflow = run_bounded(command, cwd=root, env=build_env, limit=BUILD_LIMIT)
+              if code != 0 or overflow:
+                  print(f"compile=fail exit={code if code is not None else 'unavailable'} overflow={str(overflow).lower()}")
+                  return 1
+              try:
+                  exe = artifact_from_json(stdout, root, target)
+                  exe_hash = file_sha256(exe)
+                  parser = load_parser(root)
+              except (Invalid, OSError, UnicodeError, ValueError, json.JSONDecodeError, tomllib.TOMLDecodeError):
+                  print("compile=fail artifact=unavailable")
+                  return 1
+              print(f"compile=pass artifact=libtest sha256={exe_hash}")
+              test_env = os.environ.copy()
+              test_env.pop("RUSTFLAGS", None)
+          
+              def list_profile(arguments: list[str], label: str):
+                  before = file_sha256(exe)
+                  if before != exe_hash:
+                      raise Invalid("executable identity before listing")
+                  result, out, err, too_large = run_bounded([str(exe), *arguments], cwd=runtime, env=test_env, limit=LIST_LIMIT + 1)
+                  after = file_sha256(exe)
+                  if after != exe_hash or result != 0 or too_large or err:
+                      raise Invalid("list execution or executable identity")
+                  names = strict_listing(out)
+                  with tempfile.TemporaryDirectory(prefix="b1-list-", dir=runner_temp) as temp:
+                      root_dir = pathlib.Path(temp)
+                      (root_dir / "auth-stage-cases.raw").write_bytes(out)
+                      loaded = parser.load_cases(root_dir, result)
+                      if loaded is None or set(loaded) != set(names) or len(loaded) != len(names):
+                          raise Invalid("auth-stage parser list mismatch")
+                  print(f"inventory_{label}=pass tests={len(names)} sha256={after}")
+                  return names, out, loaded
+          
+              try:
+                  all_names, full_listing, full_cases = list_profile(["--list"], "full")
+                  module_names, _module_listing, _module_cases = list_profile([MODULE_PREFIX, "--list"], "csrf")
+                  expected_module = {name for name in all_names if name.startswith(MODULE_PREFIX)}
+                  if set(module_names) != expected_module or len(module_names) != len(expected_module):
+                      raise Invalid("filtered inventory differs from full inventory")
+                  if NEW_CASE not in expected_module or module_names.count(NEW_CASE) != 1:
+                      raise Invalid("new case inventory")
+                  if "auth::csrf::tests::nondecreasing_clock_refusal_preserves_live_row_and_never_delivers" not in expected_module:
+                      raise Invalid("B1 target inventory")
+              except (Invalid, OSError):
+                  print("collection=fail reason=closed_check")
+                  return 1
+          
+              total = len(all_names)
+              exact_ok = False
+              exact_before = file_sha256(exe)
+              exact_exit, exact_out, exact_err, exact_overflow = run_bounded(
+                  [str(exe), NEW_CASE, "--exact", "--nocapture"], cwd=runtime,
+                  env=test_env, limit=LIST_LIMIT + 1,
+              )
+              exact_after = file_sha256(exe)
+              try:
+                  if exact_overflow or exact_err or exact_before != exe_hash or exact_after != exe_hash:
+                      raise Invalid("exact profile bound or executable identity")
+                  summary = strict_summary(exact_out, {NEW_CASE}, total)
+                  exact_ok = exact_exit == 0 and summary == {
+                      "outcome": "ok", "passed": 1, "failed": 0, "ignored": 0,
+                      "measured": 0, "filtered": total - 1,
+                  }
+              except Invalid:
+                  exact_ok = False
+              print(f"new_negative={'pass' if exact_ok else 'fail'} exit={exact_exit if exact_exit is not None else 'unavailable'}")
+          
+              original_names = sorted(expected_module - {NEW_CASE})
+              if not original_names or sum(len(name) + 1 for name in original_names) > 12000:
+                  print("b1_parallel=fail reason=empty_or_oversized_filter")
+                  return 1
+              module_before = file_sha256(exe)
+              module_exit, module_raw, _module_stderr, module_overflow = run_bounded(
+                  [str(exe), *original_names, "--exact", "--nocapture"], cwd=runtime,
+                  env=test_env, limit=parser.RAW_LIMIT + 1, merge=True,
+              )
+              module_after = file_sha256(exe)
+              summary_ok = False
+              try:
+                  if module_overflow or module_before != exe_hash or module_after != exe_hash:
+                      raise Invalid("parallel profile bound or executable identity")
+                  summary = strict_summary(module_raw, set(original_names), total)
+                  summary_ok = (
+                      module_exit == 0 and summary["outcome"] == "ok"
+                      and summary["failed"] == 0
+                      and summary["passed"] + summary["ignored"] == len(original_names)
+                  )
+              except Invalid:
+                  summary = None
+              parser_ok = False
+              with tempfile.TemporaryDirectory(prefix="b1-auth-stage-", dir=runner_temp) as temp:
+                  raw_root = pathlib.Path(temp)
+                  (raw_root / "auth-stage-cases.raw").write_bytes(full_listing)
+                  (raw_root / "auth-stage-broad.raw").write_bytes(module_raw)
+                  cases = parser.load_cases(raw_root, 0)
+                  if cases is None or set(cases) != set(all_names) or len(cases) != len(full_cases):
+                      parser_ok = False
+                  class Sink:
+                      def __init__(self):
+                          import io
+                          self.buffer = io.BytesIO()
+                  previous_stdout = sys.stdout
+                  sink = Sink()
+                  sys.stdout = sink
+                  try:
+                      parser_ok = parser.capture("broad", raw_root, module_exit if module_exit is not None else 127, cases) if cases is not None else False
+                  finally:
+                      sys.stdout = previous_stdout
+                  closed = sink.buffer.getvalue()
+                  if len(closed) > parser.OUTPUT_LIMIT["broad"] or not closed.isascii():
+                      parser_ok = False
+                      closed = b"test=broad cargo_exit=unavailable inventory=fail\n"
+                  sys.stdout.buffer.write(closed)
+                  sys.stdout.flush()
+              profile_ok = bool(summary_ok and parser_ok and not module_overflow and module_before == exe_hash and module_after == exe_hash)
+              counts = summary if summary is not None else {"passed": 0, "failed": 0, "ignored": 0, "filtered": 0}
+              print(
+                  f"b1_parallel={'pass' if profile_ok else 'fail'} exit={module_exit if module_exit is not None else 'unavailable'} "
+                  f"passed={counts['passed']} failed={counts['failed']} ignored={counts['ignored']} "
+                  f"filtered={counts['filtered']} auth_stage={'valid' if parser_ok else 'invalid'} sha256={module_after}"
+              )
+              return 0 if exact_ok and profile_ok else 1
+          
+          if __name__ == "__main__":
+              try:
+                  raise SystemExit(main())
+              except Exception:
+                  print("diagnostic=fail reason=closed_check")
+                  raise SystemExit(1)
+          PY
+          python "$RUNNER_TEMP/b1-observer.py"

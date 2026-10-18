@@ -887,6 +887,10 @@ async fn issuance_caps_original_absolute_and_checkpoint_keeps_original_idle_boun
 #[tokio::test]
 async fn nondecreasing_clock_refusal_preserves_live_row_and_never_delivers() {
     let mut f = Fixture::new(2, 176).await;
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    let observer = crate::auth::stage_observer::Guard::new(2);
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    observer.attach(&f.inner.stage_slot);
     let (o, b, _, _) = f.issue().await;
     let wall = o.cell.lock().unwrap().wall.unwrap();
     let seal = o.seal().unwrap();
@@ -900,6 +904,23 @@ async fn nondecreasing_clock_refusal_preserves_live_row_and_never_delivers() {
     assert!(o.cell.lock().unwrap().token.is_none() && f.count().await == 1);
     drop(o);
     f.stop().await;
+}
+
+#[test]
+fn pending_ready_refuses_expired_monotonic_deadline_even_with_live_wall() {
+    let token = TokenOwner::new(owner());
+    token.stage("A".repeat(43)).unwrap();
+    let deadline = Instant::now().checked_sub(Duration::from_nanos(1)).unwrap();
+    let result = token.ready([0; 32], 2, deadline, 1);
+    assert!(result.is_err_and(|error| kind(&error) == FailureKind::Denied));
+    {
+        let cell = token.cell.lock().unwrap();
+        assert!(matches!(cell.phase, Phase::Pending));
+        assert!(cell.context.is_none() && cell.expiry.is_none() && cell.deadline.is_none());
+    }
+    assert!(token.seal().is_err());
+    token.retire();
+    assert!(token.cell.lock().unwrap().token.is_none());
 }
 
 #[path = "fixed_wire_owner_tests.rs"]

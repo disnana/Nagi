@@ -888,12 +888,24 @@ impl Inner {
                 Some((deadline, c.monotonic)),
             );
             binding?;
-            owner.ready(
+            let ready = owner.ready(
                 self.incarnation,
                 expiry,
                 deadline,
                 wall.ok_or_else(Failure::unavailable)?,
-            )
+            );
+            #[cfg(all(test, nagi_auth_stage_diag))]
+            trace.record(
+                Stage::Gate,
+                if ready.is_ok() {
+                    Event::Passed
+                } else {
+                    Event::Refused
+                },
+                wall.map(|wall| (expiry, wall)),
+                Some((deadline, Instant::now())),
+            );
+            ready
         }
         .await;
         let final_result = final_result.map_err(|mut e| {
