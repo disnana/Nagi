@@ -1,0 +1,90 @@
+name: SF07 private attachment scoped native checks
+
+on:
+  create:
+
+permissions:
+  contents: read
+
+jobs:
+  attachment:
+    if: >-
+      github.event.ref_type == 'branch' &&
+      github.event.ref == 'test/sf07-native-attachment-20261018' &&
+      github.ref == 'refs/heads/test/sf07-native-attachment-20261018'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify the parent and four source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "553fd56ea67b6cff8b76ae65fc81a2e9e12ce8d2"
+          sha256sum --check <<'HASHES'
+          e2f5ffea10ec6542209b51d6881b86b4867c2dc34660bff3c51bfabb1cdd8c55  runtime/src/http_server.rs
+          e7f3e747613b61086650628fa3e3ae6b2e327c8d3177525f34a1015c654f318a  runtime/src/http_server/response_send.rs
+          37d46e5fe086229e415ac834a5db974e27ec17d83119fef2a69da45902b1aa59  runtime/src/http_server/response_attachment.rs
+          a0e4b4419914f2a52a8ceabfd1fb5b312c705bd4a5d272973a7ea2c4ff0cac04  runtime/src/http_server/response_attachment_tests.rs
+          HASHES
+      - name: Compile the runtime library tests before executing cases
+        run: |
+          cargo test --locked -p nagi-runtime --lib --no-run
+      - name: Collect and verify the exact new and affected cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib http_server::response_attachment:: -- --list > "$RUNNER_TEMP/attachment.list"
+          cargo test --locked -p nagi-runtime --lib http_server::response_send:: -- --list > "$RUNNER_TEMP/send.list"
+          python - "$RUNNER_TEMP/attachment.list" "$RUNNER_TEMP/send.list" <<'PY'
+          import pathlib
+          import sys
+          expected = {
+              "http_server::response_attachment::tests::" + name for name in (
+                  "explicit_attachment_inputs_reject_invalid_profiles",
+                  "context_factories_keep_original_charge_and_enforce_serialized_limits",
+                  "actual_native_context_empty_body_and_head_retain_charge_through_join",
+                  "received_request_owner_keeps_prior_charge_after_native_close_and_join",
+                  "exhausted_independent_fallback_closes_actual_native_before_permit_release",
+              )
+          }
+          send_expected = {
+              "http_server::response_send::tests::" + name for name in (
+                  "head_and_empty_keep_native_cache_charge_at_ready_until_driver_drop",
+                  "keep_alive_cache_moves_to_same_shared_request_owner_past_native_shutdown",
+                  "pipelined_requests_keep_one_cache_slot_and_multiple_prior_map_owners",
+                  "fallback_is_independent_then_exhaustion_closes_real_transport_without_reallocation",
+                  "foreign_wire_fails_closed_and_native_connection_actually_ends",
+                  "parse_failure_does_not_release_pending_claim_at_ready",
+                  "abort_before_actual_join_and_handler_panic_release_only_on_native_destruction",
+                  "unpolled_and_ready_native_io_drop_before_cache_guard_and_connection_permit",
+                  "prepared_managed_head_and_empty_use_existing_native_drop_chain",
+              )
+          }
+          send_expected.add("http_server::response_send::owned_state_lock_tests::poisoned_ledger_disposal_keeps_native_cache_and_permit_release_order")
+          for filename, wanted in zip(sys.argv[1:], (expected, send_expected), strict=True):
+              actual = {
+                  line.removesuffix(": test")
+                  for line in pathlib.Path(filename).read_text(encoding="utf-8").splitlines()
+                  if line.endswith(": test")
+              }
+              if actual != wanted:
+                  raise SystemExit("test inventory mismatch")
+          print("attachment_cases=5 send_cases=10 inventory=passed")
+          PY
+      - name: Execute new attachment contracts once
+        run: |
+          cargo test --locked -p nagi-runtime --lib http_server::response_attachment::
+      - name: Execute affected native send regressions once
+        run: |
+          cargo test --locked -p nagi-runtime --lib http_server::response_send::

@@ -92,9 +92,9 @@ impl SendLedger {
     }
 }
 
-struct ReceivedRequest {
-    method: Method,
-    uri: Uri,
+pub(super) struct ReceivedRequest {
+    pub(super) method: Method,
+    pub(super) uri: Uri,
     headers: Arc<ReceivedHeaders>,
     _body: Incoming,
 }
@@ -122,7 +122,7 @@ impl Drop for AfterNative {
         drop(cached);
     }
 }
-struct NativeDriver<F> {
+pub(super) struct NativeDriver<F> {
     // Never extract native, complete into_parts, or detach. Ready explicitly
     // destroys native; the cache guard survives until this owner is dropped.
     // Rust drops native state/I/O, then ledger cache, THEN connection permit.
@@ -149,6 +149,47 @@ impl<F: Future + Unpin> Future for NativeDriver<F> {
 // dispatcher, absolute timeout/select loop and actual joins remain untouched.
 // The connection permit bounds this checkpoint's fixed per-connection owner.
 // Public inbound/request metadata admission is NOT established by this adapter.
+/// Explicit private driver inputs. No Default and no implicit operational values.
+#[derive(Clone, Copy)]
+pub(super) struct DriverConfig {
+    headers: usize,
+    header_bytes: usize,
+    header_deadline: Duration,
+    send_deadline: Duration,
+    close_deadline: Duration,
+    keep_alive: bool,
+}
+impl DriverConfig {
+    pub(super) fn checked(
+        headers: usize,
+        header_bytes: usize,
+        header_deadline: Duration,
+        send_deadline: Duration,
+        close_deadline: Duration,
+        keep_alive: bool,
+    ) -> Result<Self, Diagnostic> {
+        if header_bytes < 8192
+            || header_bytes > isize::MAX as usize
+            || headers == 0
+            || headers > header_bytes / 4
+            || [header_deadline, send_deadline, close_deadline]
+                .into_iter()
+                .any(|d| d.is_zero() || std::time::Instant::now().checked_add(d).is_none())
+        {
+            return Err(Diagnostic::InvalidLimits);
+        }
+        Ok(Self {
+            headers,
+            header_bytes,
+            header_deadline,
+            send_deadline,
+            close_deadline,
+            keep_alive,
+        })
+    }
+}
+
+// Existing unit profile only; not used by the attachment entry/configuration.
 fn connection<T, H, F>(
     io: T,
     ordinary: Arc<Producer>,
@@ -156,7 +197,41 @@ fn connection<T, H, F>(
     permit: OwnedSemaphorePermit,
     handler: H,
 ) -> (
-    NativeDriver<impl Future<Output = Result<(), hyper::Error>> + Unpin>,
+    NativeDriver<impl Future<Output = Result<(), SendFault>> + Unpin>,
+    Arc<SendLedger>,
+)
+where
+    T: AsyncRead + AsyncWrite + Unpin,
+    H: Fn(ReceivedRequest) -> F,
+    F: Future<Output = Result<(StatusCode, ChargedWire), FallbackStatus>>,
+{
+    configured_connection(
+        io,
+        ordinary,
+        fallback,
+        permit,
+        DriverConfig::checked(
+            16,
+            8192,
+            Duration::from_secs(2),
+            Duration::from_secs(2),
+            Duration::from_secs(2),
+            true,
+        )
+        .unwrap(),
+        handler,
+    )
+}
+
+pub(super) fn configured_connection<T, H, F>(
+    io: T,
+    ordinary: Arc<Producer>,
+    fallback: Arc<FallbackLedger>,
+    permit: OwnedSemaphorePermit,
+    config: DriverConfig,
+    handler: H,
+) -> (
+    NativeDriver<impl Future<Output = Result<(), SendFault>> + Unpin>,
     Arc<SendLedger>,
 )
 where
@@ -206,7 +281,11 @@ where
                 response.body_mut().sending = Some(sending.clone());
             }
             sending.send_replace(Sending {
-                deadline: Some(tokio::time::Instant::now() + Duration::from_secs(2)),
+                deadline: Some(
+                    tokio::time::Instant::now()
+                        .checked_add(config.send_deadline)
+                        .ok_or(SendFault::Closed)?,
+                ),
                 discard_remaining: false,
                 body_transferred,
             });
@@ -216,12 +295,13 @@ where
     let mut builder = http1::Builder::new();
     builder
         .timer(TokioTimer::new())
-        .keep_alive(true)
-        .max_headers(16)
-        .max_buf_size(8192);
+        .keep_alive(config.keep_alive)
+        .header_read_timeout(config.header_deadline)
+        .max_headers(config.headers)
+        .max_buf_size(config.header_bytes);
     let native = builder.serve_connection(
         TimedIo {
-            inner: ClosingIo::new(TokioIo::new(io), Duration::from_secs(2), sent),
+            inner: ClosingIo::new(TokioIo::new(io), config.close_deadline, sent.clone()),
             sending,
             probe: None,
             #[cfg(windows)]
@@ -229,6 +309,29 @@ where
         },
         service,
     );
+    // Keep the native future inside the same destruction guard while applying
+    // the existing absolute send-watch semantics; flush only disarms the timer.
+    let native = Box::pin(async move {
+        tokio::pin!(native);
+        let mut sent = sent;
+        loop {
+            let deadline = sent.borrow_and_update().deadline;
+            let expires = async {
+                match deadline {
+                    Some(at) => tokio::time::sleep_until(at).await,
+                    None => std::future::pending::<()>().await,
+                }
+            };
+            tokio::select! {
+                biased;
+                result = &mut native => return result.map_err(|_| SendFault::Closed),
+                changed = sent.changed() => {
+                    if changed.is_err() { return Err(SendFault::Closed); }
+                }
+                _ = expires => return Err(SendFault::Closed),
+            }
+        }
+    });
     (
         NativeDriver {
             native: Some(native),
