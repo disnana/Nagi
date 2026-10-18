@@ -30,12 +30,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "b18018779cc7a3469f2ccd8ea6472c251d59e030"
+          test "$(git rev-parse HEAD^)" = "58457b57a0d675c27cb87dd9f81434be2bd6d454"
           sha256sum --check <<'HASHES'
           e2f5ffea10ec6542209b51d6881b86b4867c2dc34660bff3c51bfabb1cdd8c55  runtime/src/http_server.rs
           e7f3e747613b61086650628fa3e3ae6b2e327c8d3177525f34a1015c654f318a  runtime/src/http_server/response_send.rs
-          37d46e5fe086229e415ac834a5db974e27ec17d83119fef2a69da45902b1aa59  runtime/src/http_server/response_attachment.rs
-          a92ae798fd698f8e26c407f1c1416f415f3a5c61104210d802f313c899ca17ec  runtime/src/http_server/response_attachment_tests.rs
+          d14c51b4db6e74c144a1361914e8996a85bfff065ac9758c7b5c1e912870d8e7  runtime/src/http_server/response_attachment.rs
+          92b5688470c0a1558d9a365490cf7d6cfe635b8e30dd1dbabf0e02889bcb53db  runtime/src/http_server/response_attachment_tests.rs
           HASHES
       - name: Compile the runtime library tests before executing cases
         run: |
@@ -56,6 +56,7 @@ jobs:
                   "actual_native_context_empty_body_and_head_retain_charge_through_join",
                   "received_request_owner_keeps_prior_charge_after_native_close_and_join",
                   "exhausted_independent_fallback_closes_actual_native_before_permit_release",
+                  "first_request_owner_limits_survive_native_join_and_connection_reuse",
               )
           }
           send_expected = {
@@ -80,7 +81,7 @@ jobs:
               }
               if actual != wanted:
                   raise SystemExit("test inventory mismatch")
-          print("attachment_cases=5 send_cases=10 inventory=passed")
+          print("attachment_cases=6 send_cases=10 inventory=passed")
           PY
       - name: Execute new attachment contracts once
         run: |

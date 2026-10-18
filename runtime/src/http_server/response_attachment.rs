@@ -15,13 +15,14 @@ use serde::Serialize;
 use std::{future::Future, mem::size_of, sync::Arc};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    sync::Semaphore,
+    sync::{OwnedSemaphorePermit, Semaphore},
 };
 
 pub(super) struct Options {
     producer: Arc<Producer>,
     fallback: Arc<FallbackLedger>,
     connections: Arc<Semaphore>,
+    requests: Arc<Semaphore>,
     driver: DriverConfig,
 }
 fn add(a: usize, b: usize) -> Result<usize, Diagnostic> {
@@ -34,24 +35,31 @@ impl Options {
         ordinary: Limits,
         fallback: FallbackLimits,
         connections: usize,
+        requests: usize,
         external_catalog_bytes: usize,
         driver: DriverConfig,
     ) -> Result<Self, Diagnostic> {
-        if connections == 0 || connections > Semaphore::MAX_PERMITS || external_catalog_bytes == 0 {
+        if connections == 0
+            || connections > Semaphore::MAX_PERMITS
+            || requests == 0
+            || requests > Semaphore::MAX_PERMITS
+            || external_catalog_bytes == 0
+        {
             return Err(Diagnostic::InvalidLimits);
         }
-        // Retained wrapper/connection metadata is admitted in addition to the
-        // core's existing native-map/cache and ordinary/fallback receipts.
-        let requests = connections
+        // Explicit request-owner count corresponds to public Options.requests,
+        // independently of recycled connection permits. Retained wrappers keep
+        // their own permit; startup metadata covers every permitted live owner.
+        let request_metadata = requests
             .checked_mul(size_of::<Request>())
             .ok_or(Diagnostic::InvalidLimits)?;
         let metadata = add(
             external_catalog_bytes,
             add(
-                requests,
+                request_metadata,
                 add(
                     size_of::<Self>(),
-                    add(size_of::<Semaphore>(), 4 * size_of::<usize>())?,
+                    add(2 * size_of::<Semaphore>(), 6 * size_of::<usize>())?,
                 )?,
             )?,
         )?;
@@ -61,6 +69,7 @@ impl Options {
             producer,
             fallback,
             connections: Arc::new(Semaphore::new(connections)),
+            requests: Arc::new(Semaphore::new(requests)),
             driver,
         })
     }
@@ -84,6 +93,7 @@ impl Options {
             .try_acquire_owned()
             .map_err(|_| Diagnostic::Capacity)?;
         let ordinary = Arc::clone(&self.producer);
+        let requests = Arc::clone(&self.requests);
         Ok(response_send::configured_connection(
             io,
             Arc::clone(&ordinary),
@@ -92,15 +102,21 @@ impl Options {
             self.driver,
             move |received| {
                 let head = received.method == axum::http::Method::HEAD;
-                let request = Request {
-                    received,
-                    context: ResponseContext {
-                        producer: Arc::clone(&ordinary),
-                    },
-                };
-                let future = handler(request);
+                // Admit before Context construction or invoking user code. A
+                // retained first request may own no prior response claim at all.
+                let prepared = Arc::clone(&requests).try_acquire_owned().map(|owner| {
+                    let request = Request {
+                        received,
+                        context: ResponseContext {
+                            producer: Arc::clone(&ordinary),
+                        },
+                        _owner: owner,
+                    };
+                    handler(request)
+                });
                 let ordinary = Arc::clone(&ordinary);
                 async move {
+                    let future = prepared.map_err(|_| FallbackStatus::Capacity)?;
                     let response = future.await.map_err(fallback_status)?;
                     let status = response.status.0;
                     let wire = PreparedResponse::new(
@@ -133,6 +149,9 @@ fn fallback_status(error: Diagnostic) -> FallbackStatus {
 pub(super) struct Request {
     received: ReceivedRequest,
     context: ResponseContext,
+    // Field order destroys received/context before releasing owner admission.
+    // No private API extracts/clones received headers or this permit.
+    _owner: OwnedSemaphorePermit,
 }
 impl Request {
     pub(super) fn path(&self) -> &str {

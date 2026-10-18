@@ -1,5 +1,11 @@
 use super::*;
-use std::{sync::Mutex, time::Duration};
+use std::{
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Mutex,
+    },
+    time::Duration,
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -31,7 +37,7 @@ fn driver() -> DriverConfig {
     DriverConfig::checked(16, 8192, TEST_WAIT, TEST_WAIT, TEST_WAIT, true).unwrap()
 }
 fn options() -> Arc<Options> {
-    Arc::new(Options::checked(limits(), fallback(), 1, 256, driver()).unwrap())
+    Arc::new(Options::checked(limits(), fallback(), 1, 1, 256, driver()).unwrap())
 }
 fn blocked(options: &Options) {
     assert_eq!(options.producer.empty().err(), Some(Diagnostic::Capacity));
@@ -104,12 +110,31 @@ async fn eof(client: &mut TcpStream) {
 }
 #[test]
 fn explicit_attachment_inputs_reject_invalid_profiles() {
-    assert!(Options::checked(limits(), fallback(), 0, 256, driver()).is_err());
-    assert!(Options::checked(limits(), fallback(), 1, 0, driver()).is_err());
+    assert!(Options::checked(limits(), fallback(), 0, 1, 256, driver()).is_err());
+    assert!(Options::checked(limits(), fallback(), 1, 1, 0, driver()).is_err());
+    assert!(Options::checked(limits(), fallback(), 1, 0, 256, driver()).is_err());
+    assert!(Options::checked(
+        limits(),
+        fallback(),
+        1,
+        Semaphore::MAX_PERMITS + 1,
+        256,
+        driver()
+    )
+    .is_err());
+    assert!(Options::checked(
+        limits(),
+        fallback(),
+        1,
+        Semaphore::MAX_PERMITS,
+        256,
+        driver()
+    )
+    .is_err());
     let mut invalid = limits();
     invalid.body_bytes = 0;
-    assert!(Options::checked(invalid, fallback(), 1, 256, driver()).is_err());
-    assert!(Options::checked(limits(), fallback(), 1, usize::MAX, driver()).is_err());
+    assert!(Options::checked(invalid, fallback(), 1, 1, 256, driver()).is_err());
+    assert!(Options::checked(limits(), fallback(), 1, 1, usize::MAX, driver()).is_err());
     assert!(DriverConfig::checked(0, 8192, TEST_WAIT, TEST_WAIT, TEST_WAIT, true).is_err());
     assert!(DriverConfig::checked(16, 8191, TEST_WAIT, TEST_WAIT, TEST_WAIT, true).is_err());
     assert!(DriverConfig::checked(16, 8192, Duration::ZERO, TEST_WAIT, TEST_WAIT, true).is_err());
@@ -296,4 +321,80 @@ async fn exhausted_independent_fallback_closes_actual_native_before_permit_relea
     blocked(&options);
     drop(ordinary_held);
     assert!(options.producer.empty().is_ok());
+}
+
+#[tokio::test]
+async fn first_request_owner_limits_survive_native_join_and_connection_reuse() {
+    let options = options();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let (held_tx, held_rx) = oneshot::channel();
+    let held_tx = Arc::new(Mutex::new(Some(held_tx)));
+    let mut held_rx = Some(held_rx);
+    let mut oldest = None;
+    for turn in 0..3 {
+        if turn == 2 {
+            drop(oldest.take());
+            assert_eq!(options.requests.available_permits(), 1);
+        }
+        let (mut client, server) = sockets().await;
+        let called = Arc::clone(&calls);
+        let held_tx = Arc::clone(&held_tx);
+        let (mut native, _) = options
+            .connection(server, move |request| {
+                called.fetch_add(1, Ordering::SeqCst);
+                let output = if turn == 0 {
+                    empty(response_context(&request), Status::OK)
+                } else {
+                    text(response_context(&request), Status::OK, "admitted")
+                };
+                if turn == 0 {
+                    // First request on a fresh native ledger has no prior response
+                    // claim. Keep the actual received/Context owner, not its body.
+                    assert!(held_tx
+                        .lock()
+                        .unwrap()
+                        .take()
+                        .unwrap()
+                        .send(request)
+                        .is_ok());
+                }
+                async move { output }
+            })
+            .unwrap();
+        let task = tokio::spawn(async move {
+            let result = (&mut native).await;
+            (native, result)
+        });
+        send(&mut client, false, false).await;
+        let (status, body) = read_response(&mut client, false).await;
+        assert_eq!(status, if turn == 1 { 503 } else { 200 });
+        if turn == 2 {
+            assert_eq!(body, b"admitted");
+        }
+        if turn == 0 {
+            oldest = Some(
+                tokio::time::timeout(TEST_WAIT, held_rx.take().unwrap())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            );
+        }
+        client.shutdown().await.unwrap();
+        let (native, result) = tokio::time::timeout(TEST_WAIT, task)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(result.is_ok());
+        assert_eq!(options.connections.available_permits(), 0);
+        drop(native);
+        assert_eq!(options.connections.available_permits(), 1);
+        // No response quota is retained; only the independent Request receipt
+        // can explain the rejected middle handler across fresh connections.
+        assert!(options.producer.empty().is_ok());
+        assert_eq!(calls.load(Ordering::SeqCst), if turn < 2 { 1 } else { 2 });
+        assert_eq!(
+            options.requests.available_permits(),
+            if turn < 2 { 0 } else { 1 }
+        );
+    }
 }
