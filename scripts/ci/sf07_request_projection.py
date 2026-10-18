@@ -265,7 +265,30 @@ def inverse_private_pair_control(source):
     return source.replace(PRIVATE_PAIR_CONTROL_AFTER, PRIVATE_PAIR_CONTROL_BEFORE, 1)
 
 
+# Diagnostic-only assertion/selector delta: remove exactly the reviewed bytes,
+# then retain all historical paired-control, native-finish and U1 inverses.
+PRIVATE_ASSERTION_HELPER_SHA256 = 'a5be529565662e407ecba943696268adcc0b4b6f935f7c7f04132515f47b4be5'
+PRIVATE_ASSERTION_INVERSE = (('    if bad and case == "head_finalizer" and block_start >= 0:\n        result["assertions"] = _head_finalizer_assertion(lines, block_start, block_end)\n    for index, line in enumerate(lines):\n        # Prefix embedded', '    for index, line in enumerate(lines):\n        # Prefix embedded'), ('        calibration = (root / "runtime/src/http_server/private_deadline_calibration.rs").read_text()\n        if hashlib.sha256(private.encode()).hexdigest() != (\n                "46c1ec095b7cf7e3879ce5a0cde4511192d7550ac0d31e5ec3747b63f3012cd1"):\n            return False\n', '        calibration = (root / "runtime/src/http_server/private_deadline_calibration.rs").read_text()\n'), ('    focused = sys.argv[1:] == ["--run-case", "head_finalizer"]\n    if not focused and sys.argv[1:] != ["--run"]:\n', '    if sys.argv[1:] != ["--run"]:\n'), ('    selected = {"head_finalizer": CASES["head_finalizer"]} if focused else CASES\n    for case, (name, _) in selected.items():\n', '    for case, (name, _) in CASES.items():\n'), ('    if focused:\n        return int(failed)\n    if calibration_passed:\n        try:\n', '    if calibration_passed:\n        try:\n'))
+
+
+def inverse_private_assertion(source):
+    start_marker = "\ndef _head_finalizer_assertion("
+    end_marker = "\ndef collect("
+    if source.count(start_marker) != 1 or source.count(end_marker) != 1:
+        raise ValueError("private assertion helper registration mismatch")
+    start, end = source.index(start_marker), source.index(end_marker)
+    if hashlib.sha256(source[start:end].encode()).hexdigest() != PRIVATE_ASSERTION_HELPER_SHA256:
+        raise ValueError("private assertion helper digest mismatch")
+    source = source[:start] + source[end:]
+    for added, inherited in PRIVATE_ASSERTION_INVERSE:
+        if source.count(added) != 1:
+            raise ValueError("private assertion inverse mismatch")
+        source = source.replace(added, inherited, 1)
+    return source
+
+
 def inverse_collector(source):
+    source = inverse_private_assertion(source)
     source = inverse_private_pair_control(source)
     for added, inherited in SESSION_NATIVE_COLLECTOR_INVERSE:
         if source.count(added) != 1:

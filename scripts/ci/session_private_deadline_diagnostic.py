@@ -73,6 +73,37 @@ def marker(line: str) -> dict | None:
     return {"status": 504, **values}
 
 
+def _head_finalizer_assertion(lines: list[str], start: int, end: int) -> list[dict]:
+    # Only an actual failed libtest block may use this projection. Neither the
+    # expected handler panic nor arbitrary panic/error text proves a failure.
+    panic = re.compile(
+        r"thread '" + re.escape(CASES["head_finalizer"][0])
+        + r"'(?: \([1-9][0-9]{0,9}\))? panicked at "
+        + r"(?:[^\r\n]*[/\\])?runtime[/\\]src[/\\]auth[/\\]session[/\\]"
+        + r"http_bridge_tests\.rs:([1-9][0-9]{0,3}):([1-9][0-9]{0,3}):\Z")
+    # Exact reviewed source SHA is checked before native execution below.
+    assertions = {282: 1, 283: 2, 284: 3, 285: 4, 424: 5}
+    projected = []
+    for index in range(start + 1, end):
+        match = panic.fullmatch(lines[index])
+        if match is None:
+            continue
+        line, column = map(int, match.groups())
+        if line not in assertions or column > 4096:
+            continue
+        item = {"source": 1, "line": line, "column": column,
+                "assertion": assertions[line]}
+        # Values are status-only decimal u16 assertions, never header contents.
+        if line == 282 and index + 3 < end and lines[index + 1] == "assertion `left == right` failed":
+            actual = re.fullmatch(r"  left: ([1-5][0-9]{2})", lines[index + 2])
+            expected = re.fullmatch(r" right: (200|400|500|504)", lines[index + 3])
+            if actual is not None and expected is not None:
+                item.update(actual=int(actual[1]), expected=int(expected[1]))
+        projected.append(item)
+    # An exact test cannot have two uncaught failures; ambiguity is unavailable.
+    return projected if len(projected) == 1 else []
+
+
 def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) -> dict:
     # Unknown identity is never echoed. Callers cannot enlarge the native suite.
     if case not in CASES:
@@ -112,6 +143,8 @@ def collect(case: str, raw: bytes, returncode: int, *, oversized: bool = False) 
     block_end = next((index for index in range(block_start + 1, len(lines))
                       if lines[index] in ("successes:", "failures:")
                       or lines[index].startswith("test result:")), len(lines)) if block_start >= 0 else -1
+    if bad and case == "head_finalizer" and block_start >= 0:
+        result["assertions"] = _head_finalizer_assertion(lines, block_start, block_end)
     for index, line in enumerate(lines):
         # Prefix embedded in an arbitrary tail, alternate shape, or truncation
         # is invalid rather than silently ignored or rendered.
@@ -156,6 +189,9 @@ def source_inventory(root: Path) -> bool:
     try:
         private = (root / "runtime/src/auth/session/http_bridge_tests.rs").read_text()
         calibration = (root / "runtime/src/http_server/private_deadline_calibration.rs").read_text()
+        if hashlib.sha256(private.encode()).hexdigest() != (
+                "46c1ec095b7cf7e3879ce5a0cde4511192d7550ac0d31e5ec3747b63f3012cd1"):
+            return False
         for name, _ in CASES.values():
             source = private if name.startswith(PRIVATE) else calibration
             suffix = name.rsplit("::", 1)[1]
@@ -319,7 +355,8 @@ def wiring_controls(root: Path, env: dict) -> bool:
 
 
 def main() -> int:
-    if sys.argv[1:] != ["--run"]:
+    focused = sys.argv[1:] == ["--run-case", "head_finalizer"]
+    if not focused and sys.argv[1:] != ["--run"]:
         print('session_private_deadline_summary {"state":"invalid","reason":9}')
         return 1
     root = Path.cwd()
@@ -332,7 +369,8 @@ def main() -> int:
     env["RUSTFLAGS"] = (env.get("RUSTFLAGS", "") + " --cfg nagi_auth_stage_diag").strip()
     failed = False
     calibration_passed = True
-    for case, (name, _) in CASES.items():
+    selected = {"head_finalizer": CASES["head_finalizer"]} if focused else CASES
+    for case, (name, _) in selected.items():
         try:
             raw, code, oversized = capture(native_command(name), env)
             result = collect(case, raw, code, oversized=oversized)
@@ -343,6 +381,8 @@ def main() -> int:
             calibration_passed &= result["state"] == "passed"
         # Only fixed identities and validated bounded numeric facts reach logs.
         print("session_private_deadline_summary " + json.dumps(result, separators=(",", ":")))
+    if focused:
+        return int(failed)
     if calibration_passed:
         try:
             failed |= not wiring_controls(root, env)

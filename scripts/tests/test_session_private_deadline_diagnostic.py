@@ -273,6 +273,97 @@ class ClosedCollectorTests(unittest.TestCase):
                 self.assertEqual(target.read_bytes(), original)
 
 
+
+class HeadFinalizerObservationTests(unittest.TestCase):
+    @staticmethod
+    def sample(*, line=282, column=5, actual="504", expected="400", thread_id=True,
+               source="D:\\private\\runtime\\src\\auth\\session\\http_bridge_tests.rs"):
+        name = diag.CASES["head_finalizer"][0]
+        thread = " (123)" if thread_id else ""
+        return [f"thread '{name}'{thread} panicked at {source}:{line}:{column}:",
+                "assertion `left == right` failed", f"  left: {actual}", f" right: {expected}"]
+
+    def test_failure_status_and_fixed_source_only_lf_crlf_thread_id(self):
+        for thread_id in (False, True):
+            data = raw("head_finalizer", [witness(3, 1)] + self.sample(thread_id=thread_id), True)
+            for sample in (data, data.replace(b"\n", b"\r\n")):
+                result = diag.collect("head_finalizer", sample, 101)
+                self.assertEqual(result["state"], "tests_failed")
+                self.assertEqual(result["assertions"], [{"source": 1, "line": 282,
+                    "column": 5, "assertion": 1, "actual": 504, "expected": 400}])
+                self.assertNotIn("private", json.dumps(result))
+
+    def test_expected_panic_unknown_source_range_secret_and_duplicate_unavailable(self):
+        variants = [self.sample(line=435), self.sample(line=486), self.sample(column=4097),
+                    self.sample(source="runtime/src/auth/prelogin/http_bridge_tests.rs"),
+                    self.sample() + self.sample()]
+        for markers in variants:
+            result = diag.collect("head_finalizer", raw("head_finalizer", [witness(3, 1)] + markers, True), 101)
+            self.assertEqual(result["state"], "tests_failed")
+            self.assertEqual(result["assertions"], [])
+        for actual, expected in (("SECRET_cookie", "400"), ("504", "SECRET_cookie")):
+            result = diag.collect("head_finalizer", raw("head_finalizer",
+                [witness(3, 1)] + self.sample(actual=actual, expected=expected), True), 101)
+            self.assertEqual(result["assertions"][0], {"source": 1, "line": 282,
+                                                       "column": 5, "assertion": 1})
+            self.assertNotIn("SECRET", json.dumps(result))
+        for line, assertion in ((283, 2), (284, 3), (285, 4), (424, 5)):
+            result = diag.collect("head_finalizer", raw("head_finalizer",
+                [witness(3, 1)] + self.sample(line=line, actual="SECRET_cookie"), True), 101)
+            self.assertEqual(result["assertions"][0], {"source": 1, "line": line,
+                                                       "column": 5, "assertion": assertion})
+
+    def test_position_never_changes_exit_and_requires_own_failed_block(self):
+        markers = [witness(3, 1)] + self.sample()
+        self.assertNotIn("assertions", diag.collect("head_finalizer", raw("head_finalizer", markers), 0))
+        self.assertEqual(diag.collect("head_finalizer", raw("head_finalizer", markers, True), 0)["state"], "invalid")
+        foreign = raw("head_finalizer", markers, True).replace(
+            ("---- " + diag.CASES["head_finalizer"][0]).encode(), b"---- foreign")
+        self.assertNotIn("assertions", diag.collect("head_finalizer", foreign, 101))
+        outside = ("\n".join(self.sample()) + "\n").encode() + raw("head_finalizer", [witness(3, 1)], True)
+        self.assertEqual(diag.collect("head_finalizer", outside, 101)["assertions"], [])
+        malformed = diag.collect("head_finalizer", raw("head_finalizer",
+            [witness(3, 1) + " secret=SECRET_cookie"] + self.sample(), True), 101)
+        self.assertEqual(malformed["state"], "invalid")
+        self.assertEqual(malformed["assertions"][0]["actual"], 504)
+        missing = diag.collect("head_finalizer", raw("head_finalizer", self.sample(), True), 101)
+        self.assertEqual(missing["state"], "unavailable")
+        self.assertEqual(missing["assertions"][0]["expected"], 400)
+
+    def test_exact_only_cli_attempts_once_no_controls_and_preserves_failure(self):
+        for failed in (False, True):
+            output = io.StringIO()
+            data = raw("head_finalizer", [witness(3, 1)] + self.sample(), failed)
+            with mock.patch.object(sys, "argv", ["private", "--run-case", "head_finalizer"]), \
+                    mock.patch.object(diag, "source_inventory", return_value=True), \
+                    mock.patch.object(diag, "capture", return_value=(data, 101 if failed else 0, False)) as capture, \
+                    mock.patch.object(diag, "wiring_controls") as controls, contextlib.redirect_stdout(output):
+                self.assertEqual(diag.main(), int(failed))
+            self.assertEqual(capture.call_count, 1)
+            self.assertEqual(capture.call_args[0][0], diag.native_command(diag.CASES["head_finalizer"][0]))
+            controls.assert_not_called()
+            self.assertEqual(len(output.getvalue().splitlines()), 1)
+            self.assertNotIn("private\\", output.getvalue())
+        with mock.patch.object(sys, "argv", ["private", "--run-case", "prep_timer"]), \
+                mock.patch.object(diag, "capture") as capture, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(diag.main(), 1)
+            capture.assert_not_called()
+
+    def test_exact_source_binding_lf_crlf_and_mutation_rejected(self):
+        self.assertTrue(diag.source_inventory(ROOT))
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory)
+            for path in ("runtime/src/auth/session/http_bridge_tests.rs",
+                         "runtime/src/http_server/private_deadline_calibration.rs"):
+                target = fixture / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((ROOT / path).read_bytes().replace(b"\n", b"\r\n"))
+            self.assertTrue(diag.source_inventory(fixture))
+            target = fixture / "runtime/src/auth/session/http_bridge_tests.rs"
+            target.write_bytes(target.read_bytes() + b" ")
+            self.assertFalse(diag.source_inventory(fixture))
+
+
 class SourceWiringControls(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -323,6 +414,10 @@ class SourceWiringControls(unittest.TestCase):
             source.replace(branch, "", 1),
             source.replace(branch, branch + branch, 1),
             source.replace(branch, branch.replace("_prep_timer_pair_control_passes", "_other_control"), 1),
+            source.replace("\ndef _head_finalizer_assertion(", "\ndef _missing_assertion(", 1),
+            source.replace("assertions = {282: 1", "assertions = {283: 1", 1),
+            source.replace("    if focused:\n        return int(failed)\n", "", 1),
+            source.replace('if bad and case == "head_finalizer"', 'if True', 1),
         )
         for mutant in mutants:
             with self.subTest(mutant_hash=hashlib.sha256(mutant.encode()).hexdigest()):
