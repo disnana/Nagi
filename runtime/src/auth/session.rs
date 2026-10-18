@@ -526,17 +526,6 @@ impl Foundation {
         )
         .await
     }
-    // Typed ID/digest connection into the existing private lookup primitive.
-    // Request lease/admission and delivery are deliberately not claimed here.
-    #[cfg(test)]
-    pub(super) async fn lookup_cookie(
-        &self,
-        cookie_headers: &[&str],
-        authorization_present: bool,
-    ) -> Result<Snapshot, Failure> {
-        self.lookup_cookie_mode(cookie_headers, authorization_present, true)
-            .await
-    }
     async fn lookup_cookie_mode(
         &self,
         cookie_headers: &[&str],

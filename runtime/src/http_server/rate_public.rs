@@ -220,7 +220,9 @@ fn decision(value: RateDecision) -> Result<(), FallbackStatus> {
         RateDecision::Limited { retry_ns } if retry_ns > 0 => Err(FallbackStatus::Limited {
             retry_seconds: retry_ns / 1_000_000_000 + u64::from(retry_ns % 1_000_000_000 != 0),
         }),
-        RateDecision::Capacity | RateDecision::Closing => Err(FallbackStatus::Capacity),
+        RateDecision::Capacity | RateDecision::Closing | RateDecision::ClockFault => {
+            Err(FallbackStatus::Capacity)
+        }
         _ => Err(FallbackStatus::Internal),
     }
 }

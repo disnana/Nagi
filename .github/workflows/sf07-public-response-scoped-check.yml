@@ -1,4 +1,4 @@
-name: SF07 exact ClockFault contract RED
+name: SF07 limited U5 native regression
 on:
   push:
     branches:
@@ -6,9 +6,13 @@ on:
 permissions:
   contents: read
 jobs:
-  contract-red:
+  targeted-native:
     if: github.ref == 'refs/heads/test/sf07-u4-production-20261018'
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     env:
       CARGO_TERM_COLOR: never
@@ -19,129 +23,208 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
-      - name: Verify parent and frozen identities; exercise closed guards
+        with:
+          components: clippy
+      - name: Verify exact parent, frozen source and closed guard controls
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "d1ac39b1c1e062ae8cf047957ecfc2c258f87704"
+          test "$(git rev-parse HEAD^)" = "1e77715d2faf369d8654a22b429561824017ca9b"
           test -z "${RUST_TEST_THREADS+x}"
-          sha256sum --check <<'HASHES'
-          29abe918f3567626736e473c2ce33ad8ab545e0a06e88c47617682a31debfe21  runtime/src/auth/session.rs
-          7ee13a01436dadb5b0102e8993ee544d123d19212a1e1fc8ca0168cbe7339b5f  runtime/src/auth/session/delivery_wire_tests.rs
-          9bccff7c72af7ff4c3f345eab88d222fc4e7b30a89f51c8006987f9c38775685  runtime/src/auth/session/http_bridge_tests.rs
-          9717d4ccc2353ed96cd3e76344e5705761069854f972bb57303904dc441b5ea8  runtime/src/auth/session/http_rate_tests.rs
-          c3ba60b361b25ed3cb29f12eb7f9b8396cfdb3a7651f712242bc63d722f213d3  runtime/src/http_server.rs
-          d473d56ed6ccda073a06c63ec5ecb42d0e4d7149208f766fb3f0c61f00bdaa80  runtime/src/http_server/prelogin_tests.rs
-          46c19926ec6fd5c22751b3d6dd7a07fe608c373ffd3320433a79ad47e842fd53  runtime/src/http_server/private_deadline_calibration.rs
-          1bcba7ff1ff3afc84c9b8b54a275ba1ad703b686337108eae9b8f8230b3f2741  runtime/src/http_server/rate_public_tests.rs
-          1a993e32549d5d60b647427b99892528085b54ccac697fa0d632defa40f6b4cc  runtime/src/http_server/request_headers_tests.rs
-          ba894c38ff30ca09f69a3671c685145d39eb996447a970e0d70a78a027b4f889  runtime/src/http_server/response_budget.rs
-          036c841558e1afc9709f68b61bc733ebcd0cec58c77d4107c735cb5b3708c3b2  runtime/src/http_server/response_finalize.rs
-          4313083b9bc4d055124cfe7585162bdd5c581ea0f8e27cd8a27f31552e1964b2  runtime/src/http_server/response_public.rs
-          c365844d07b111d546f881c3e32e12a355b05a5903910a4cde1134bf7e89bf79  runtime/src/http_server/response_public_tests.rs
-          7533fa6ff7a570232b6548a1cd21f79a53356ec0bef076cd60b3432a70150664  runtime/src/http_server/response_wire.rs
-          af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584  runtime/src/http_server/tests.rs
-          7ebb60822cb53887299866b0a1ca36e118d5861d4a25c44f7f455b90bc49052c  runtime/src/http_server/vary.rs
-          688771a75ecae967e8d262ddf44f3fd667885d357872c684ec41df15334a1733  runtime/tests/browser_login_public_api.rs
-          a6d070ac9d59f8f3df5d716dfe342e0d03dcb5b48b321a7ddc19a8535237691e  runtime/tests/cors_public_api.rs
-          c2ab019831bd7404330cf671f01294a5aa2a34b780547e8f1835317c71bb3ab7  runtime/tests/html_core_api.rs
-          2f30ebb06c3d4233f4d5bb08aacb74fd69d2f4aaba063a8563a608b0c1fd9602  runtime/tests/prelogin_public_api.rs
-          4db4dfcc03bdd70dbabab183eef23e7e90b93ee4ed06c5560351ac24c788adbf  runtime/tests/security_sf01.rs
-          8f7a3cfe0a18f56d862b88c28dde90a340a197be285c10ea1313f8b0dfe50f96  runtime/tests/session_csrf_public_api.rs
-          793c0f35e2f5b47b26648844abc6df8ce33d1b769632a9101e6db471a450c6a9  runtime/tests/session_public_api.rs
-          HASHES
-          cat > "$RUNNER_TEMP/sf07-red-guard.py" <<'PY'
-          """Closed exact-one collection and false-green guards; synthetic controls only."""
+          cat > "$RUNNER_TEMP/sf07-selected-guard.py" <<'PY'
+          """Frozen source and selected libtest result guards; no runtime instrumentation."""
           from pathlib import Path
+          import hashlib
           import re
           import sys
           
-          CASE = 'http_server::rate_public::tests::retry_after_rounding_and_internal_rate_failures_have_closed_distinct_outcomes'
+          GROUPS = {'new_rate': ['http_server::rate_public::tests::checked_public_rate_configuration_rejects_missing_duplicate_and_unsupported_subjects', 'http_server::rate_public::tests::actual_route_vec_capacity_and_retained_boundary_are_charged', 'http_server::rate_public::tests::all_registered_routes_require_explicit_policy_and_capacity_revalidation', 'http_server::rate_public::tests::established_expired_lease_wins_over_an_exhausted_subject_bucket', 'http_server::rate_public::tests::retry_after_rounding_and_internal_rate_failures_have_closed_distinct_outcomes'], 'new_session': ['auth::session::http_bridge::rate_tests::http_subject_denial_and_new_subject_capacity_do_not_refresh_session_idle', 'auth::session::http_bridge::rate_tests::http_authorizers_cannot_stage_issue_rotate_or_logout_before_body_subject_admission', 'auth::session::http_bridge::rate_tests::delayed_deferred_touch_cannot_admit_a_retired_http_lease', 'auth::session::http_bridge::rate_tests::existing_non_http_admission_and_admitted_http_session_delivery_remain_live', 'auth::session::http_bridge::rate_tests::admitted_http_subject_can_issue_once_and_limited_subject_cannot_issue_again', 'auth::session::http_bridge::rate_tests::cors_preflight_uses_finite_entry_without_charging_either_rate_bucket', 'auth::session::http_bridge::rate_tests::body_refusal_after_auth_does_not_charge_subject_or_admit_session_work'], 'old_public': ['http_server::response_public::tests::missing_explicit_response_settings_and_later_incompatible_capacity_reject', 'http_server::response_public::tests::public_context_is_request_owned_and_json_has_distinct_body_and_work_limits', 'http_server::response_public::tests::public_mapper_failure_and_business_error_remain_distinct_completion_kinds', 'http_server::response_public::tests::managed_header_refusal_keeps_denial_and_independent_fallback_exhaustion_closes', 'http_server::response_public::tests::public_first_request_header_owner_survives_native_join_and_permit_reuse', 'http_server::response_public::tests::native_fault_classification_distinguishes_user_status_from_established_refusal', 'http_server::response_public::tests::allow_serialization_preflights_before_allocation_and_keeps_405_close', 'http_server::response_public::tests::retained_response_never_restores_old_cors_when_current_headers_or_fallback_are_full', 'http_server::response_public::tests::prebuilt_fixture_adoption_keeps_same_claim_and_actual_bytes_owner_without_copy', 'http_server::response_public::tests::retained_same_producer_response_uses_current_request_cors_on_real_wire'], 'old_owner': ['http_server::request_headers::native_owner_tests::native_extensions_follow_last_header_view_and_drop_before_request_receipt'], 'old_parts': ['http_server::request_headers::tests::actual_native_parts_extensions_live_through_handler_and_drop_after_join'], 'old_attachment': ['http_server::response_attachment::tests::explicit_attachment_inputs_reject_invalid_profiles', 'http_server::response_attachment::tests::context_factories_keep_original_charge_and_enforce_serialized_limits', 'http_server::response_attachment::tests::actual_native_context_empty_body_and_head_retain_charge_through_join', 'http_server::response_attachment::tests::received_request_owner_keeps_prior_charge_after_native_close_and_join', 'http_server::response_attachment::tests::exhausted_independent_fallback_closes_actual_native_before_permit_release', 'http_server::response_attachment::tests::first_request_owner_limits_survive_native_join_and_connection_reuse'], 'old_send': ['http_server::response_send::tests::head_and_empty_keep_native_cache_charge_at_ready_until_driver_drop', 'http_server::response_send::tests::keep_alive_cache_moves_to_same_shared_request_owner_past_native_shutdown', 'http_server::response_send::tests::pipelined_requests_keep_one_cache_slot_and_multiple_prior_map_owners', 'http_server::response_send::tests::fallback_is_independent_then_exhaustion_closes_real_transport_without_reallocation', 'http_server::response_send::tests::foreign_wire_fails_closed_and_native_connection_actually_ends', 'http_server::response_send::tests::parse_failure_does_not_release_pending_claim_at_ready', 'http_server::response_send::tests::abort_before_actual_join_and_handler_panic_release_only_on_native_destruction', 'http_server::response_send::tests::unpolled_and_ready_native_io_drop_before_cache_guard_and_connection_permit', 'http_server::response_send::tests::prepared_managed_head_and_empty_use_existing_native_drop_chain', 'http_server::response_send::owned_state_lock_tests::poisoned_ledger_disposal_keeps_native_cache_and_permit_release_order'], 'guarded': ['guarded_rotation_and_logout_invalidate_old_generation_tokens']}
+          SOURCES = {'runtime/src/auth/session.rs': ('0e86700c45663421341cf68d05ceb1e0606c1cd09cd21ba5113af4eba8d5b46a', 34396, 908), 'runtime/src/auth/session/delivery_wire_tests.rs': ('7ee13a01436dadb5b0102e8993ee544d123d19212a1e1fc8ca0168cbe7339b5f', 35111, 931), 'runtime/src/auth/session/http_bridge_tests.rs': ('9bccff7c72af7ff4c3f345eab88d222fc4e7b30a89f51c8006987f9c38775685', 17591, 484), 'runtime/src/auth/session/http_rate_tests.rs': ('9717d4ccc2353ed96cd3e76344e5705761069854f972bb57303904dc441b5ea8', 22371, 639), 'runtime/src/http_server.rs': ('c3ba60b361b25ed3cb29f12eb7f9b8396cfdb3a7651f712242bc63d722f213d3', 78879, 2121), 'runtime/src/http_server/prelogin_tests.rs': ('d473d56ed6ccda073a06c63ec5ecb42d0e4d7149208f766fb3f0c61f00bdaa80', 21110, 589), 'runtime/src/http_server/private_deadline_calibration.rs': ('46c19926ec6fd5c22751b3d6dd7a07fe608c373ffd3320433a79ad47e842fd53', 9368, 255), 'runtime/src/http_server/rate_public.rs': ('d8be2c83053c7c75f54322fdccce8129fabc13275ecd2ac3fc2bbcdb9d2609bc', 10989, 303), 'runtime/src/http_server/rate_public_tests.rs': ('1bcba7ff1ff3afc84c9b8b54a275ba1ad703b686337108eae9b8f8230b3f2741', 7404, 211), 'runtime/src/http_server/request_headers_tests.rs': ('1a993e32549d5d60b647427b99892528085b54ccac697fa0d632defa40f6b4cc', 14454, 394), 'runtime/src/http_server/response_budget.rs': ('ba894c38ff30ca09f69a3671c685145d39eb996447a970e0d70a78a027b4f889', 18146, 506), 'runtime/src/http_server/response_finalize.rs': ('036c841558e1afc9709f68b61bc733ebcd0cec58c77d4107c735cb5b3708c3b2', 29812, 852), 'runtime/src/http_server/response_public.rs': ('4313083b9bc4d055124cfe7585162bdd5c581ea0f8e27cd8a27f31552e1964b2', 26298, 708), 'runtime/src/http_server/response_public_tests.rs': ('c365844d07b111d546f881c3e32e12a355b05a5903910a4cde1134bf7e89bf79', 22308, 653), 'runtime/src/http_server/response_wire.rs': ('7533fa6ff7a570232b6548a1cd21f79a53356ec0bef076cd60b3432a70150664', 24136, 676), 'runtime/src/http_server/tests.rs': ('af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584', 78597, 2201), 'runtime/src/http_server/vary.rs': ('7ebb60822cb53887299866b0a1ca36e118d5861d4a25c44f7f455b90bc49052c', 2674, 70), 'runtime/tests/browser_login_public_api.rs': ('688771a75ecae967e8d262ddf44f3fd667885d357872c684ec41df15334a1733', 48444, 1315), 'runtime/tests/cors_public_api.rs': ('a6d070ac9d59f8f3df5d716dfe342e0d03dcb5b48b321a7ddc19a8535237691e', 23092, 686), 'runtime/tests/html_core_api.rs': ('c2ab019831bd7404330cf671f01294a5aa2a34b780547e8f1835317c71bb3ab7', 4463, 130), 'runtime/tests/prelogin_public_api.rs': ('2f30ebb06c3d4233f4d5bb08aacb74fd69d2f4aaba063a8563a608b0c1fd9602', 19366, 538), 'runtime/tests/security_sf01.rs': ('4db4dfcc03bdd70dbabab183eef23e7e90b93ee4ed06c5560351ac24c788adbf', 3275, 103), 'runtime/tests/session_csrf_public_api.rs': ('8f7a3cfe0a18f56d862b88c28dde90a340a197be285c10ea1313f8b0dfe50f96', 43232, 1257), 'runtime/tests/session_public_api.rs': ('793c0f35e2f5b47b26648844abc6df8ce33d1b769632a9101e6db471a450c6a9', 16541, 483)}
           
           
-          def listing(text):
-              names, totals = [], []
+          def source_bytes(raw, size, lines, digest):
+              if len(raw) > size + lines:
+                  raise ValueError('source size mismatch')
+              normalized = raw.replace(b'\r\n', b'\n')
+              if b'\r' in normalized:
+                  raise ValueError('bare source carriage return')
+              normalized.decode('utf-8', errors='strict')
+              if len(normalized) != size or hashlib.sha256(normalized).hexdigest() != digest:
+                  raise ValueError('frozen source mismatch')
+          
+          
+          def sources():
+              for name, (digest, size, lines) in SOURCES.items():
+                  path = Path(name)
+                  if path.is_symlink() or not path.is_file():
+                      raise ValueError('source must be a regular file')
+                  with path.open('rb') as handle:
+                      raw = handle.read(size + lines + 1)
+                  source_bytes(raw, size, lines, digest)
+              print('frozen_sources=24 verified; LF_or_CRLF_only')
+          
+          
+          def list_names(text):
+              names, footers = [], []
               for line in text.splitlines():
                   if not line:
                       continue
-                  found = re.fullmatch(r'([A-Za-z_][A-Za-z_0-9:]*): test', line)
-                  if found:
-                      names.append(found[1])
+                  entry = re.fullmatch(r'(\S+): test', line)
+                  if entry:
+                      names.append(entry[1])
                       continue
                   footer = re.fullmatch(r'(\d+) tests?, (\d+) benchmarks?', line)
                   if not footer:
-                      raise ValueError('unrecognized collection shape')
-                  totals.append((int(footer[1]), int(footer[2])))
-              if names != [CASE] or totals != [(1, 0)]:
-                  raise ValueError('exact-one collection mismatch')
+                      raise ValueError('unknown collection shape')
+                  footers.append((int(footer[1]), int(footer[2])))
+              if len(names) != len(set(names)) or footers != [(len(names), 0)]:
+                  raise ValueError('invalid collection count')
+              return set(names)
           
           
-          def result(text, code=0):
+          def listing(lib, external):
+              library, integration = list_names(lib), list_names(external)
+              prefixes = {
+                  'new_rate': 'http_server::rate_public::tests::',
+                  'new_session': 'auth::session::http_bridge::rate_tests::',
+                  'old_public': 'http_server::response_public::tests::',
+                  'old_owner': 'http_server::request_headers::native_owner_tests::',
+                  'old_attachment': 'http_server::response_attachment::tests::',
+                  'old_send': 'http_server::response_send::',
+              }
+              for key, prefix in prefixes.items():
+                  if {name for name in library if name.startswith(prefix)} != set(GROUPS[key]):
+                      raise ValueError('selected module inventory mismatch')
+              if not set(GROUPS['old_parts']).issubset(library) or not set(GROUPS['guarded']).issubset(integration):
+                  raise ValueError('exact selected case absent')
+          
+          
+          def result(text, expected, code=0):
               if code != 0:
-                  raise ValueError('nonzero cargo cannot count as success')
+                  raise ValueError('nonzero cargo is not success')
               starts = re.findall(r'^running (\d+) tests?$', text, re.M)
               cases = re.findall(r'^test (\S+) \.\.\. (ok|FAILED|ignored[^\n]*)$', text, re.M)
               totals = re.findall(r'^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored; (\d+) measured; (\d+) filtered out; finished in [^\n]+$', text, re.M)
-              if starts != ['1'] or cases != [(CASE, 'ok')] or len(totals) != 1 or totals[0][:5] != ('ok', '1', '0', '0', '0'):
-                  raise ValueError('zero/ignored/count/name/result mismatch')
+              if starts != [str(len(expected))] or len(cases) != len(expected) or len({name for name, _ in cases}) != len(cases):
+                  raise ValueError('execution count mismatch')
+              if {name for name, _ in cases} != set(expected) or any(status != 'ok' for _, status in cases):
+                  raise ValueError('missing/failed/ignored execution')
+              if len(totals) != 1 or totals[0][:5] != ('ok', str(len(expected)), '0', '0', '0'):
+                  raise ValueError('result summary mismatch')
           
           
           def selftest():
-              listed = CASE + ': test\n\n1 test, 0 benchmarks\n'
-              good = 'running 1 test\ntest ' + CASE + ' ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 100 filtered out; finished in 0.00s\n'
-              listing(listed)
-              result(good)
-              bad = [
-                  lambda: listing('0 tests, 0 benchmarks\n'),
-                  lambda: listing(listed.replace(CASE, 'unknown_case')),
-                  lambda: listing(CASE + ': test\n' + listed),
-                  lambda: result(good, 101),
-                  lambda: result(good.replace('running 1 test', 'running 0 tests').replace('1 passed', '0 passed')),
-                  lambda: result(good.replace(' ... ok', ' ... ignored').replace('1 passed', '0 passed').replace('0 ignored', '1 ignored')),
-                  lambda: result(good.replace('1 passed', '2 passed')),
-                  lambda: result(good.replace(CASE, 'unknown_case')),
-                  lambda: result(good.replace('\n\ntest result:', '\ntest ' + CASE + ' ... ok\n\ntest result:')),
-                  lambda: result(good.replace(' ... ok', ' ... FAILED')),
+              case = GROUPS['new_rate'][0]
+              good = 'running 1 test\ntest ' + case + ' ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 99 filtered out; finished in 0.00s\n'
+              result(good, [case])
+              library = [name for key, names in GROUPS.items() if key != 'guarded' for name in names]
+              def listed(names):
+                  return ''.join(name + ': test\n' for name in names) + '\n' + str(len(names)) + ' tests, 0 benchmarks\n'
+              listing(listed(library), listed(GROUPS['guarded']))
+              digest = hashlib.sha256(b'x\n').hexdigest()
+              source_bytes(b'x\n', 2, 1, digest)
+              source_bytes(b'x\r\n', 2, 1, digest)
+              negative = [
+                  lambda: result(good, [case], 101),
+                  lambda: result(good.replace('running 1 test', 'running 0 tests').replace('1 passed', '0 passed'), [case]),
+                  lambda: result(good.replace(' ... ok', ' ... ignored').replace('1 passed', '0 passed').replace('0 ignored', '1 ignored'), [case]),
+                  lambda: result(good.replace(' ... ok', ' ... FAILED'), [case]),
+                  lambda: result(good.replace(case, 'wrong_case'), [case]),
+                  lambda: result(good.replace('1 passed', '2 passed'), [case]),
+                  lambda: result(good.replace('\n\ntest result:', '\ntest ' + case + ' ... ok\n\ntest result:'), [case]),
+                  lambda: listing(listed(library[1:]), listed(GROUPS['guarded'])),
+                  lambda: listing(listed(library), listed([])),
+                  lambda: listing(listed(library + [case]), listed(GROUPS['guarded'])),
+                  lambda: source_bytes(b'y\n', 2, 1, digest),
+                  lambda: source_bytes(b'x\r', 2, 1, digest),
+                  lambda: source_bytes(b'x\nxx', 2, 1, digest),
+                  lambda: source_bytes(b'\xff\n', 2, 1, digest),
               ]
-              for reject in bad:
+              for reject in negative:
                   try:
                       reject()
                   except ValueError:
                       continue
-                  raise ValueError('negative synthetic control accepted')
-              print('synthetic_controls=10 rejected; positive_shapes=2 passed; native_evidence=none')
+                  raise ValueError('negative control accepted')
+              print('synthetic_negative_controls=14 rejected; positive_shapes_and_LF_CRLF=passed; native_evidence=none')
           
           
           if __name__ == '__main__':
-              mode = sys.argv[1]
-              if mode == 'selftest':
-                  selftest()
-              elif mode == 'listing':
-                  listing(Path(sys.argv[2]).read_text(encoding='utf-8'))
-                  print('exact_contract_case=1 collected')
-              elif mode == 'reject-green':
-                  result(Path(sys.argv[2]).read_text(encoding='utf-8'))
-                  raise SystemExit('contract oracle unexpectedly passed; no RED established')
-              else:
-                  raise SystemExit('invalid closed guard mode')
+              try:
+                  mode = sys.argv[1]
+                  if mode == 'selftest':
+                      selftest()
+                  elif mode == 'sources':
+                      sources()
+                  elif mode == 'listing':
+                      listing(Path(sys.argv[2]).read_text(encoding='utf-8'), Path(sys.argv[3]).read_text(encoding='utf-8'))
+                      print('new=12 old=28 guarded=1 actual_collection=passed')
+                  elif mode == 'result':
+                      key = sys.argv[2]
+                      result(Path(sys.argv[3]).read_text(encoding='utf-8'), GROUPS[key])
+                      print('group=' + key + ' executed=' + str(len(GROUPS[key])) + ' failed=0 ignored=0')
+                  else:
+                      raise ValueError('invalid mode')
+              except (ValueError, OSError, KeyError, IndexError):
+                  raise SystemExit('closed source/inventory/result guard failed')
           PY
-          python "$RUNNER_TEMP/sf07-red-guard.py" selftest
+          python "$RUNNER_TEMP/sf07-selected-guard.py" selftest
+          python "$RUNNER_TEMP/sf07-selected-guard.py" sources
           if bash -c 'set -euo pipefail; false | cat'; then
             exit 1
           fi
-      - name: Check production library after private helper classification
-        run: cargo check --locked -p nagi-runtime --lib
-      - name: Compile whole library test target before the exact contract case
-        run: cargo test --locked -p nagi-runtime --lib --no-run
-      - name: Collect exact contract case without executing tests
+      - name: Check production library
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib http_server::rate_public::tests::retry_after_rounding_and_internal_rate_failures_have_closed_distinct_outcomes -- --exact --list | tee "$RUNNER_TEMP/sf07-red-list.log"
-          python "$RUNNER_TEMP/sf07-red-guard.py" listing "$RUNNER_TEMP/sf07-red-list.log"
-      - name: Execute corrected contract oracle once; preserve expected RED
+          cargo check --locked -p nagi-runtime --lib
+      - name: Compile whole library test target before execution
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib http_server::rate_public::tests::retry_after_rounding_and_internal_rate_failures_have_closed_distinct_outcomes -- --exact | tee "$RUNNER_TEMP/sf07-red-result.log"
-          python "$RUNNER_TEMP/sf07-red-guard.py" reject-green "$RUNNER_TEMP/sf07-red-result.log"
+          cargo test --locked -p nagi-runtime --lib --no-run
+      - name: Compile guarded Session public API target before execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api --no-run
+      - name: Collect exact selected inventories without execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib -- --list | tee "$RUNNER_TEMP/sf07-lib-list.log"
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api -- --list | tee "$RUNNER_TEMP/sf07-guarded-list.log"
+          python "$RUNNER_TEMP/sf07-selected-guard.py" listing "$RUNNER_TEMP/sf07-lib-list.log" "$RUNNER_TEMP/sf07-guarded-list.log"
+      - name: Execute twelve new rate and Session contracts first, once
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib http_server::rate_public::tests:: | tee "$RUNNER_TEMP/sf07-new-rate.log"
+          python "$RUNNER_TEMP/sf07-selected-guard.py" result new_rate "$RUNNER_TEMP/sf07-new-rate.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::http_bridge::rate_tests:: | tee "$RUNNER_TEMP/sf07-new-session.log"
+          python "$RUNNER_TEMP/sf07-selected-guard.py" result new_session "$RUNNER_TEMP/sf07-new-session.log"
+      - name: Execute twenty-eight affected existing regressions once
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib http_server::response_public::tests:: | tee "$RUNNER_TEMP/sf07-old-public.log"
+          python "$RUNNER_TEMP/sf07-selected-guard.py" result old_public "$RUNNER_TEMP/sf07-old-public.log"
+          cargo test --locked -p nagi-runtime --lib http_server::request_headers::native_owner_tests::native_extensions_follow_last_header_view_and_drop_before_request_receipt -- --exact | tee "$RUNNER_TEMP/sf07-old-owner.log"
+          python "$RUNNER_TEMP/sf07-selected-guard.py" result old_owner "$RUNNER_TEMP/sf07-old-owner.log"
+          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests::actual_native_parts_extensions_live_through_handler_and_drop_after_join -- --exact | tee "$RUNNER_TEMP/sf07-old-parts.log"
+          python "$RUNNER_TEMP/sf07-selected-guard.py" result old_parts "$RUNNER_TEMP/sf07-old-parts.log"
+          cargo test --locked -p nagi-runtime --lib http_server::response_attachment::tests:: | tee "$RUNNER_TEMP/sf07-old-attachment.log"
+          python "$RUNNER_TEMP/sf07-selected-guard.py" result old_attachment "$RUNNER_TEMP/sf07-old-attachment.log"
+          cargo test --locked -p nagi-runtime --lib http_server::response_send:: | tee "$RUNNER_TEMP/sf07-old-send.log"
+          python "$RUNNER_TEMP/sf07-selected-guard.py" result old_send "$RUNNER_TEMP/sf07-old-send.log"
+      - name: Execute exact guarded rotation regression once
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api guarded_rotation_and_logout_invalidate_old_generation_tokens -- --exact | tee "$RUNNER_TEMP/sf07-guarded.log"
+          python "$RUNNER_TEMP/sf07-selected-guard.py" result guarded "$RUNNER_TEMP/sf07-guarded.log"
+      - name: Check production library Clippy warnings after selected regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo clippy --locked -p nagi-runtime --lib -- -D warnings
