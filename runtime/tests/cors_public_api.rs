@@ -199,10 +199,10 @@ impl Server {
             http::Method::GET,
             "/panic",
             http::public_policy(),
-            |request, _, _| async move {
+            |_, _, _| async move {
                 panic!("owned panic");
                 #[allow(unreachable_code)]
-                http::empty(http::response_context(&request), http::Status::OK)
+                Err::<http::Response, Error>(Error::internal("unreachable panic probe"))
             },
         )
         .unwrap();
