@@ -129,9 +129,18 @@ fn context_factories_keep_original_charge_and_enforce_serialized_limits() {
     );
     drop(response);
     assert!(bytes(&context, Status::OK, &[0; 257]).is_err());
+    // Raw input fits (255 bytes); quotes and one escaped backslash require
+    // 258 serialized bytes, with only a few writer calls, below the work cap.
+    let expanding = format!("{}\\", "x".repeat(254));
+    assert_eq!(expanding.len(), 255);
+    assert_eq!(
+        json(&context, Status::OK, &expanding).err().unwrap(),
+        Diagnostic::BodyLimit
+    );
+    // Keep the original many-escape input as an independent work-limit oracle.
     assert_eq!(
         json(&context, Status::OK, &"\\".repeat(200)).err().unwrap(),
-        Diagnostic::BodyLimit
+        Diagnostic::WorkLimit
     );
     let response = json(&context, Status::OK, &vec![1, 2]).unwrap();
     assert_eq!(response.produced.body(), b"[1,2]");

@@ -1,7 +1,9 @@
 name: SF07 private attachment scoped native checks
 
 on:
-  create:
+  push:
+    branches:
+      - test/sf07-native-attachment-20261018
 
 permissions:
   contents: read
@@ -9,8 +11,6 @@ permissions:
 jobs:
   attachment:
     if: >-
-      github.event.ref_type == 'branch' &&
-      github.event.ref == 'test/sf07-native-attachment-20261018' &&
       github.ref == 'refs/heads/test/sf07-native-attachment-20261018'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -30,12 +30,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "553fd56ea67b6cff8b76ae65fc81a2e9e12ce8d2"
+          test "$(git rev-parse HEAD^)" = "b18018779cc7a3469f2ccd8ea6472c251d59e030"
           sha256sum --check <<'HASHES'
           e2f5ffea10ec6542209b51d6881b86b4867c2dc34660bff3c51bfabb1cdd8c55  runtime/src/http_server.rs
           e7f3e747613b61086650628fa3e3ae6b2e327c8d3177525f34a1015c654f318a  runtime/src/http_server/response_send.rs
           37d46e5fe086229e415ac834a5db974e27ec17d83119fef2a69da45902b1aa59  runtime/src/http_server/response_attachment.rs
-          a0e4b4419914f2a52a8ceabfd1fb5b312c705bd4a5d272973a7ea2c4ff0cac04  runtime/src/http_server/response_attachment_tests.rs
+          a92ae798fd698f8e26c407f1c1416f415f3a5c61104210d802f313c899ca17ec  runtime/src/http_server/response_attachment_tests.rs
           HASHES
       - name: Compile the runtime library tests before executing cases
         run: |
