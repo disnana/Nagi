@@ -75,6 +75,8 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: tests/requirements.txt
+      - name: Check SF06 signature diagnostic fake cases
+        run: python -m unittest discover -s tests -p 'test_sf06_http_client_signature_diagnostic.py'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -122,6 +124,176 @@ jobs:
           set -euo pipefail
           cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
           python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
+      - name: Diagnose G3 generation-token failure before crypto checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api guarded_rotation_and_logout_invalidate_old_generation_tokens -- --exact 2>&1 | tee "$RUNNER_TEMP/g3-generation-target.log"
+          python - <<'PY'
+          import os, pathlib, re
+          text = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "g3-generation-target.log").read_text(encoding="utf-8")
+          summaries = re.findall(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
+          if summaries != [("ok", "1", "0", "0")]:
+              raise AssertionError(f"expected exactly one passing focused test (1 passed, 0 failed, 0 ignored), got {summaries}")
+          PY
+      - name: Check SF06 private native modules before broad runtime checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib http_client::ledger:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-ledger.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-transport.log"
+          cargo test --locked -p nagi-runtime --lib auth::admission_bridge_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-admission.log"
+          cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-auth-core.log"
+          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-credential.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-core.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::hickory::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-hickory.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address::q1_dial::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-q1-pure.log"
+          python - <<'PY_SUMMARY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 82, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          for name, count in expected.items():
+              data = (root / name).read_text(encoding="utf-8")
+              running = re.findall(r"(?m)^running (\d+) tests?$", data)
+              results = re.findall(r"(?m)^test result: ok\. (\d+) passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in .+$", data)
+              if running != [str(count)] or results != [str(count)]:
+                  raise AssertionError(f"{name}: expected exactly {count} real, passing tests")
+          required_parent = {
+              'http_client::ledger::admission::tests::auth_enqueue_winning_entry_retains_record_after_concurrent_stop',
+              'http_client::ledger::admission::tests::branded_driver_history_rejects_second_driver_after_first_actual_join',
+              'http_client::ledger::admission::tests::branded_phase_winner_finishes_once_then_stop_denies_next_entry',
+              'http_client::ledger::admission::tests::branded_runner_rejects_foreign_same_id_at_every_port',
+              'http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock',
+              'http_client::ledger::admission::tests::entry_guard_preserves_stop_after_a_winning_cas',
+              'http_client::ledger::admission::tests::last_sender_drop_does_not_wait_for_watch_value_borrow',
+              'http_client::ledger::admission::tests::old_key_cannot_authorize_reused_numeric_slot',
+              'http_client::ledger::admission::tests::owner_destructor_posts_stop_without_waiting_for_waiter_gate',
+              'http_client::ledger::admission::tests::parent_drop_posts_stop_and_pending_grant_cannot_enqueue',
+              'http_client::ledger::admission::tests::repeated_stop_has_no_self_wake_while_pending_root_is_joined',
+              'http_client::ledger::admission::tests::runner_handle_is_not_counted_and_last_sender_closes_eof',
+              'http_client::ledger::admission::tests::stop_after_consumed_real_auth_permit_refuses_record_publication',
+              'http_client::ledger::admission::tests::unwinding_entry_guard_closes_without_clearing_stop',
+          }
+          ledger_text = (root / "sf06-private-ledger.log").read_text(encoding="utf-8")
+          passed_parent = set(re.findall(
+              r"(?m)^test (http_client::ledger::admission::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          ))
+          if not required_parent.issubset(passed_parent):
+              raise AssertionError("SF06 branded parent test names missing or unsuccessful")
+          required_added = {
+              'http_client::ledger::admission::tests::abandon_popped_unstarted_retires_without_parent_stop',
+              'http_client::ledger::admission::tests::abandon_drop_under_owner_waiter_watch_gates_is_prompt_and_reaped',
+              'http_client::ledger::admission::tests::abandon_unwind_before_root_registration_retires',
+              'http_client::ledger::admission::tests::abandon_cancel_keeps_popped_payload_until_drop',
+              'http_client::ledger::admission::tests::borrowed_root_requires_command_and_keeps_join_distinct_from_payload_drop',
+              'http_client::ledger::admission::tests::rejected_root_future_drops_outside_owner_and_command_remains_armed',
+              'http_client::ledger::admission::tests::rejected_root_future_unwind_leaves_command_abandonment_reapable',
+              'http_client::ledger::admission::tests::successful_root_completion_does_not_report_command_abandonment',
+              'http_client::ledger::admission::tests::unexpected_root_abort_retains_sticky_fault_not_abandonment',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_abort',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_panic',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_foreign_same_numeric_id_must_not_construct',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_stale_phase_fail_must_not_poison_reused_id',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_native_poll_must_hold_busy_entry_through_stop',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_unregistered_root_refuses_then_same_key_starts',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_stop_before_entry_keeps_native_and_fault_zero',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_entry_winner_registers_one_child_after_stop',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_cancelled_root_keeps_ticket_until_receipt_and_join',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_joined_root_refuses_start_but_same_key_receipt_drains',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_deadline_after_entry_skips_native_primitive',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_root_finishes_during_book_wait_skips_io',
+          }
+          required_delivery = {
+              'http_client::ledger::admission::tests::sf06_closed_runtime_child_drop_is_outside_owner_and_entry',
+              'http_client::ledger::admission::tests::sf06_closed_runtime_root_drop_is_outside_owner_and_entry',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_fallback_retains_external_child_and_wakes_after_cancelled_waiter',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_monitor_retains_external_child_paused_delivery',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_poisoned_owner_retains_external_child_until_delivery',
+              'http_client::ledger::tests::sf06_delivery_drop_panic_does_not_acknowledge',
+              'http_client::ledger::tests::sf06_delivery_register_recheck_and_independent_broadcast_wakes',
+              'http_client::ledger::tests::sf06_failed_send_blocking_drop_retains_debt_and_cancelled_bare_drain',
+              'http_client::ledger::tests::sf06_paused_delivery_retains_actual_handle_quota_and_join_bit',
+              'http_client::ledger::tests::sf06_receipt_tracks_exact_reused_task_slot',
+              'http_client::ledger::tests::sf06_stop_expiry_and_fault_cannot_join_before_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_closed_runtime_dns_drop_is_outside_owner_book_and_entry',
+              'http_client::ledger::tracked_dns::tests::sf06_multiple_dns_waiters_and_cancelled_waiter_wake_on_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_paused_dns_delivery_retains_io_ticket_until_failed_send_drop',
+          }
+          passed_ledger = set(re.findall(
+              r"(?m)^test (http_client::ledger::[a-z0-9_:]+) \.\.\. ok$", ledger_text,
+          ))
+          if not required_added.issubset(passed_ledger):
+              raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
+          if not required_delivery.issubset(passed_ledger):
+              raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
+          required_operation = {
+              'http_client::ledger::operation::tests::adapter_panic_remains_fault_after_actual_root_join',
+              'http_client::ledger::operation::tests::dropped_execute_retains_cleanup_until_actual_native_joins',
+              'http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join',
+              'http_client::ledger::operation::tests::owner_close_refuses_publish_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unpolled_execute_starts_no_admission_or_native_resolution',
+              'http_client::ledger::operation::tests::original_deadline_survives_provisional_response_and_join_wait',
+              'http_client::ledger::operation::tests::unreceived_response_keeps_core_budget_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unsupported_encoding_is_unknown_and_never_replayed',
+          }
+          passed_operation = re.findall(
+              r"(?m)^test (http_client::ledger::operation::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_operation) != required_operation or len(passed_operation) != len(required_operation):
+              raise AssertionError("SF06 operation test names missing, duplicated, or unsuccessful")
+          required_h0 = {
+              'http_client::ledger::admission::tests::sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings',
+              'http_client::ledger::admission::tests::sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority',
+              'http_client::ledger::admission::tests::sf06_h0_paused_root_return_preserves_stage_through_stop_expiry_and_poison',
+              'http_client::ledger::admission::tests::sf06_h0_pre_bind_unwind_retains_debt_and_original_payload',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_inner_unwind_retains_debt_and_reaps_known_client_fault',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_outer_unwind_cannot_retire_monitor_record_as_joined',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_unresolved_outer_drains_known_inner_without_retiring',
+              'http_client::ledger::tests::sf06_h0_launch_publication_wakes_independent_waiters_and_retains_receipt',
+              'http_client::ledger::tracked_dns::tests::sf06_h0_paused_dns_root_retains_quota_without_io_authority',
+          }
+          passed_h0 = re.findall(
+              r"(?m)^test ([a-z0-9_:]*::sf06_h0_[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_h0) != required_h0 or len(passed_h0) != len(required_h0):
+              raise AssertionError("SF06 H0 test names missing, duplicated, or unsuccessful")
+          required_q1_native = {
+              'http_client::address::socket_pin::q1_native::tests::q1_native_attempt_cap_prevents_second_connector_and_releases_first_slot',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_closed_plan_starts_no_connector',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_close_during_pending_connect_does_not_attempt_second_address',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_terminal_connect_failure_does_not_try_another_candidate',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_cancelled_caller_is_joined_before_reusing_socket_quota',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_ttl_zero_is_usable_for_one_owned_operation_without_cache',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_refused_first_address_connects_only_checked_second_peer',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_expired_original_connect_end_does_not_reset_budget',
+          }
+          transport_text = (root / "sf06-private-transport.log").read_text(encoding="utf-8")
+          passed_q1_native = re.findall(
+              r"(?m)^test (http_client::address::socket_pin::q1_native::tests::q1_native_[a-z0-9_]+) \.\.\. ok$",
+              transport_text,
+          )
+          if set(passed_q1_native) != required_q1_native or len(passed_q1_native) != len(required_q1_native):
+              raise AssertionError("SF06 Q1 native test names missing, duplicated, unexpected, or unsuccessful")
+          PY_SUMMARY
+      - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib auth::ed25519:: 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-core.log"
+          cargo test --locked -p nagi-runtime --test ed25519_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-public.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf02-ed25519-core.log": 14, "sf02-ed25519-public.log": 1}.items():
+              text = (root / name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;", text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
       - name: Check SF07 charged native wire checkpoint
         shell: bash
         run: |
@@ -468,6 +640,48 @@ jobs:
           path: build/compiler-failures/
           if-no-files-found: ignore
 
+  rust-1-88:
+    name: SF02 runtime Ed25519 profile on Rust 1.88.0 (Linux x86_64)
+    timeout-minutes: 45
+    needs: changes
+    if: needs.changes.outputs.full_checks == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      CARGO_TARGET_DIR: target/sf02-rust-1.88.0-linux-x86_64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Confirm the pinned Linux x86_64 toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = "Linux"
+          test "$(uname -m)" = "x86_64"
+          rustc +1.88.0 -vV
+          cargo +1.88.0 --version
+      - name: Measure the focused SF02 Ed25519 runtime profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo +1.88.0 test --locked -p nagi-runtime --lib auth::ed25519:: 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-core.log"
+          cargo +1.88.0 test --locked -p nagi-runtime --test ed25519_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-public.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf02-ed25519-core.log": 14, "sf02-ed25519-public.log": 1}.items():
+              text = (root / name).read_text(encoding="utf-8")
+              test_lines = re.findall(r"(?m)^test [^\n]+ \.\.\. (ok|FAILED)$", text)
+              if len(test_lines) != count or any(status != "ok" for status in test_lines):
+                  raise AssertionError(f"{name}: expected exactly {count} successful test lines; got {len(test_lines)}")
+              summaries = re.findall(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
+              if summaries != [("ok", str(count), "0", "0")]:
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored; got {summaries}")
+          PY
+
   release-plan:
     runs-on: ubuntu-latest
     outputs:
@@ -582,6 +796,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check SF06 signature diagnostic fake cases
+        run: python -m unittest discover -s tests -p 'test_sf06_http_client_signature_diagnostic.py'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -668,6 +884,489 @@ jobs:
           set -euo pipefail
           cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
           python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
+      - name: Check SF06 public HTTP client across package targets
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/native-target
+          CARGO_PROFILE_DEV_DEBUG: '0'
+          CARGO_PROFILE_TEST_DEBUG: '0'
+          CARGO_INCREMENTAL: '0'
+          NAGI_NATIVE_TARGET_DIR: ${{ github.workspace }}/native-target
+          NAGI_TEST_ARTIFACT_DIR: ${{ runner.temp }}/sf06-http-client-native
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cat > "$RUNNER_TEMP/sf06-http-client-guard.py" <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          RUNTIME_CASES = {
+              "http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join",
+              "http_client::ledger::tracked_dns::hickory::tests::owned_udp_two_families_actual_tracked_resolver_and_join",
+              "http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock",
+              'http_client::address::socket_pin::tls_http1::tests::equal_numeric_service_identity_does_not_union_trust_stores',
+              'http_client::address::socket_pin::tls_http1::tests::native_io_drops_stream_before_the_final_trust_claim',
+              'http_client::address::socket_pin::tls_http1::tests::unpolled_driver_drop_and_abort_actual_join_release_native_trust',
+              'http_client::ledger::operation::startup::retention::tests::all_three_exact_boundaries_aggregate_rollback_and_last_owner',
+              'http_client::ledger::operation::startup::retention::tests::bearer_is_sensitive_budgeted_and_bound_to_catalog_service_and_operation',
+              'http_client::ledger::operation::startup::retention::tests::explicit_positive_limits_and_checked_arithmetic_without_large_allocations',
+              'http_client::ledger::operation::startup::retention::tests::native_header_clone_keeps_measured_capacity_and_claim_after_descriptor_drop',
+              'http_client::ledger::operation::startup::retention::tests::normalized_der_keeps_order_and_some_empty_but_discards_hidden_capacity',
+              'http_client::ledger::operation::startup::retention::tests::oversized_header_and_string_capacity_are_rejected_and_invalid_payloads_refund',
+              'http_client::ledger::operation::startup::retention::tests::parent_no_runtime_refusal_and_cross_catalog_registration_refund_all_partial_config',
+              'http_client::ledger::operation::startup::retention::tests::partial_allocation_failures_refund_after_accepted_partial_data_is_dropped',
+              'http_client::ledger::operation::startup::retention::tests::root_byte_preflight_fails_before_der_copy_and_catalog_drop_closes_authority',
+              'http_client::ledger::operation::startup::retention::tests::same_service_operations_share_one_trust_and_duplicate_registration_refunds',
+              'http_client::ledger::operation::startup::retention::tests::unregistered_header_aggregate_uses_actual_capacity_and_refunds_rejected_constructor',
+              'http_client::ledger::operation::startup::retention::tests::unregistered_services_count_individually_before_root_copy_and_refund_on_drop',
+          }
+          SUITES = {
+              "runtime-http-client": (221, None, RUNTIME_CASES),
+              "production-dns": (1, {
+                  "production_public_handle_rejects_loopback_before_tcp_or_http",
+              }, None),
+              "registry": (3, {
+                  "adopted_client_resource_inventory_has_owned_nonclone_and_distinct_operations",
+                  "adopted_client_passing_and_borrow_inventory",
+                  "adopted_client_failure_constants_keep_business_status_separate",
+              }, None),
+              "contracts": (11, {
+                  "owned_response_body_views_and_transfer_check_in_three_forms",
+                  "actual_grant_protected_operation_checks_in_three_forms",
+                  "explicit_public_operation_checks_without_grant_in_three_forms",
+                  "response_move_while_body_view_lives_rejects_at_checker_in_both_forms",
+                  "owned_response_wrapper_copy_is_rejected_but_shared_handle_copy_remains_valid",
+                  "protected_permission_mismatch_and_public_downgrade_are_checker_errors",
+                  "protocol_view_and_non_nominal_permission_are_rejected_at_declaration",
+                  "returned_header_views_do_not_borrow_lookup_name_in_three_forms",
+                  "security_kind_cross_module_metadata_survives_saved_low_without_auth_alias",
+                  "actual_future_grant_capture_cannot_be_delegated_to_spawn",
+                  "only_context_payload_is_shared_and_permission_is_nominal",
+              }, None),
+              "native": (2, {
+                  "public_signatures_and_failure_projections_build_and_run_in_three_forms",
+                  "generated_operations_execute_real_tls_and_grant_in_three_test_network_paths",
+              }, None),
+          }
+          ROW = re.compile(r"^test ([A-Za-z0-9_:]+) \.\.\. (ok|FAILED|ignored)$", re.M)
+          RUNNING = re.compile(r"^running ([0-9]+) tests?$", re.M)
+          SUMMARY = re.compile(
+              r"^test result: ok\. ([0-9]+) passed; 0 failed; 0 ignored; "
+              r"0 measured; [0-9]+ filtered out; finished in [^\n]+$",
+              re.M,
+          )
+          RESULT = re.compile(
+              r"^test result: (ok|FAILED)\. ([0-9]+) passed; ([0-9]+) failed; "
+              r"([0-9]+) ignored; [0-9]+ measured; [0-9]+ filtered out; finished in [^\n]+$",
+              re.M,
+          )
+          NATIVE_FORM_CASE = re.compile(
+              r"(?m)^test (generated_operation_oracle::real_tls_and_grant) \.\.\. (ok|FAILED|ignored)$"
+          )
+
+          DIAGNOSTIC_RAW_LIMIT = 256 * 1024
+          DIAGNOSTIC_COUNT_LIMIT = 1023
+
+          def bounded_diagnostic_text(path):
+              try:
+                  with path.open("rb") as stream:
+                      raw = stream.read(DIAGNOSTIC_RAW_LIMIT + 1)
+                  if len(raw) > DIAGNOSTIC_RAW_LIMIT:
+                      return "", "oversize"
+                  return raw.decode("utf-8"), "ok"
+              except (OSError, UnicodeError):
+                  return "", "unreadable"
+
+          def marker_in_file(path, marker):
+              text, _ = bounded_diagnostic_text(path)
+              return marker in text
+
+          def record_native_diagnostic(status, text):
+              try:
+                  root = pathlib.Path(os.environ["NAGI_TEST_ARTIFACT_DIR"])
+                  root.mkdir(parents=True, exist_ok=True)
+              except (KeyError, OSError, ValueError):
+                  root = None
+              running = RUNNING.findall(text)
+              results = RESULT.findall(text)
+              rows = ROW.findall(text)
+              expected = SUITES["native"][1]
+              case_status = {}
+              for case in sorted(expected):
+                  seen = [result for name, result in rows if name == case]
+                  case_status[case] = seen[0] if len(seen) == 1 else ("duplicate" if seen else "not_observed")
+              error_codes = sorted(set("E" + code for code in re.findall(r"\berror\[E([0-9]{4})\]", text)))
+              forms = {}
+              for form in ("high", "saved-low", "manual-low"):
+                  stem = f"http-client-{form}"
+                  files = ({
+                      "generated_present": root / f"{stem}-generated.rs",
+                      "wrapper_present": root / f"{stem}-native-wrapper.rs",
+                      "build_stdout_present": root / f"{stem}-build.stdout",
+                      "build_stderr_present": root / f"{stem}-build.stderr",
+                      "native_stdout_present": root / f"{stem}-native.stdout",
+                      "native_stderr_present": root / f"{stem}-native.stderr",
+                  } if root else {})
+                  present = {key: path.is_file() for key, path in files.items()} if root else {
+                      "generated_present": False, "wrapper_present": False,
+                      "build_stdout_present": False, "build_stderr_present": False,
+                      "native_stdout_present": False, "native_stderr_present": False,
+                  }
+                  native_text, read_state = bounded_diagnostic_text(root / f"{stem}-native.stdout") if root else ("", "unreadable")
+                  native_rows = NATIVE_FORM_CASE.findall(native_text)
+                  form_status = (native_rows[0][1] if len(native_rows) == 1 else
+                                 ("duplicate" if native_rows else "not_observed")) if read_state == "ok" else read_state
+                  timeout_states = {}
+                  for stage in ("build", "native"):
+                      marker = f"{form}-{stage}-timeout"
+                      observed = marker in text
+                      if root:
+                          observed = observed or any(
+                              marker_in_file(root / f"{stem}-{stage}.{stream}", marker)
+                              for stream in ("stdout", "stderr")
+                          )
+                      timeout_states[f"{stage}_timeout"] = "observed" if observed else "not_observed"
+                  forms[form] = {**present, "native_test_status": form_status, **timeout_states}
+              result = results[0] if len(results) == 1 else None
+              record = {
+                  "schema": "sf06-http-client-native-diagnostic-v1",
+                  "cargo_exit": status if 0 <= status <= 255 else None,
+                  "running_count": min(DIAGNOSTIC_COUNT_LIMIT, int(running[0])) if len(running) == 1 else None,
+                  "result_kind": result[0] if result else ("multiple" if results else "missing"),
+                  "passed_count": min(DIAGNOSTIC_COUNT_LIMIT, int(result[1])) if result else None,
+                  "failed_count": min(DIAGNOSTIC_COUNT_LIMIT, int(result[2])) if result else None,
+                  "ignored_count": min(DIAGNOSTIC_COUNT_LIMIT, int(result[3])) if result else None,
+                  "rust_error_codes": error_codes[:16],
+                  "rust_error_code_loss": len(error_codes) > 16,
+                  "known_native_cases": case_status,
+                  "unknown_test_row_count": min(DIAGNOSTIC_COUNT_LIMIT, sum(name not in expected for name, _ in rows)),
+                  "forms": forms,
+              }
+              saved = False
+              try:
+                  if root:
+                      temporary = root / "sf06-native-diagnostic.json.tmp"
+                      temporary.write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
+                      temporary.replace(root / "sf06-native-diagnostic.json")
+                      saved = True
+              except OSError:
+                  pass
+              forms_complete = sum(all(values[key] for key in (
+                  "generated_present", "wrapper_present", "build_stdout_present",
+                  "build_stderr_present", "native_stdout_present", "native_stderr_present",
+              )) for values in forms.values())
+              timeout_markers = [
+                  f"{form}-{stage}-timeout"
+                  for form, values in forms.items()
+                  for stage in ("build", "native")
+                  if values[f"{stage}_timeout"] == "observed"
+              ]
+              if status != 0 or timeout_markers or not (running == ["2"] and len(results) == 1 and
+                                     result and result[0] == "ok" and result[2:] == ("0", "0")):
+                  print(
+                      f"sf06_http_client_native_diag=v1 cargo_exit={record['cargo_exit']} "
+                      f"result={record['result_kind']} running={record['running_count']} "
+                      f"passed={record['passed_count']} failed={record['failed_count']} "
+                      f"ignored={record['ignored_count']} rust_error_codes={','.join(error_codes[:16]) or 'none'} "
+                      f"timeout_markers={','.join(timeout_markers) or 'none'} "
+                      f"forms_complete={forms_complete}/3 artifact_saved={'true' if saved else 'false'}"
+                  )
+                  for case, outcome in case_status.items():
+                      if outcome != "ok":
+                          print(f"sf06_http_client_native_case={case} status={outcome}")
+              return record
+
+          def fail(label):
+              print(f"sf06_http_client_check={label} result=failed")
+              raise SystemExit(1)
+
+          def check_suite(label, status, log_path):
+              suite = SUITES.get(label)
+              if suite is None:
+                  fail("unknown")
+              count, exact_names, required_names = suite
+              if status != 0 and label != "native":
+                  fail(label)
+              diagnostic_read_state = "ok"
+              if label == "native":
+                  text, diagnostic_read_state = bounded_diagnostic_text(pathlib.Path(log_path))
+              else:
+                  try:
+                      text = pathlib.Path(log_path).read_text(encoding="utf-8")
+                  except (OSError, UnicodeError):
+                      fail(label)
+              if label == "native":
+                  record_native_diagnostic(status, text)
+                  if diagnostic_read_state != "ok":
+                      print(f"sf06_http_client_native_raw={diagnostic_read_state}")
+                      fail(label)
+              if status != 0:
+                  fail(label)
+              rows = ROW.findall(text)
+              names = [name for name, result in rows]
+              passed = {name for name, result in rows if result == "ok"}
+              summaries = SUMMARY.findall(text)
+              running = RUNNING.findall(text)
+              if (running != [str(count)] or summaries != [str(count)] or
+                      len(rows) != count or len(set(names)) != count or
+                      len(passed) != count or
+                      (exact_names is not None and passed != exact_names) or
+                      (required_names is not None and
+                       not required_names.issubset(passed))):
+                  fail(label)
+              print(f"sf06_http_client_check={label} tests={count} result=ok")
+
+          def check_native_forms():
+              root = pathlib.Path(os.environ["NAGI_TEST_ARTIFACT_DIR"])
+              forms = ("high", "saved-low", "manual-low")
+              for form in forms:
+                  stem = f"http-client-{form}"
+                  generated = root / f"{stem}-generated.rs"
+                  wrapper = root / f"{stem}-native-wrapper.rs"
+                  if (not generated.is_file() or not generated.stat().st_size or
+                          not wrapper.is_file() or not wrapper.stat().st_size):
+                      fail("native-forms")
+                  for stage in ("build", "native"):
+                      for stream in ("stdout", "stderr"):
+                          if not (root / f"{stem}-{stage}.{stream}").is_file():
+                              fail("native-forms")
+                  try:
+                      output = (root / f"{stem}-native.stdout").read_text(encoding="utf-8")
+                  except (OSError, UnicodeError):
+                      fail("native-forms")
+                  rows = re.findall(
+                      r"(?m)^test (generated_operation_oracle::real_tls_and_grant) \.\.\. (ok|FAILED)$",
+                      output,
+                  )
+                  summaries = SUMMARY.findall(output)
+                  if rows != [("generated_operation_oracle::real_tls_and_grant", "ok")] or summaries != ["1"]:
+                      fail("native-forms")
+              print("sf06_http_client_native_forms=3 result=ok")
+
+          if len(sys.argv) != 4:
+              fail("arguments")
+          label, status_text, path = sys.argv[1:]
+          if label == "native-forms":
+              if status_text != "0":
+                  fail("native-forms")
+              check_native_forms()
+          else:
+              try:
+                  status = int(status_text)
+              except ValueError:
+                  fail("arguments")
+              check_suite(label, status, path)
+          PY
+          run_check() {
+            local label="$1"
+            shift
+            local log="$RUNNER_TEMP/sf06-${label}.log"
+            local status=0
+            "$@" > "$log" 2>&1 || status=$?
+            python "$RUNNER_TEMP/sf06-http-client-guard.py" "$label" "$status" "$log"
+          }
+          run_check runtime-http-client cargo test --locked -p nagi-runtime --lib http_client::
+          run_check production-dns cargo test --locked -p nagi-runtime --test http_client_operation_public_api production_public_handle_rejects_loopback_before_tcp_or_http -- --exact
+          run_check registry cargo test --locked -p nagic --test http_client_registry
+          run_check contracts cargo test --locked -p nagic --test http_client_contracts
+          run_check native cargo test --locked -p nagic --test http_client_native
+          python "$RUNNER_TEMP/sf06-http-client-guard.py" native-forms 0 "$NAGI_TEST_ARTIFACT_DIR"
+      - name: Preserve closed SF06 native diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf06-http-client-native-${{ matrix.platform }}
+          path: ${{ runner.temp }}/sf06-http-client-native/sf06-native-diagnostic.json
+          if-no-files-found: ignore
+      - name: Classify SF06 public signature failure from captured output
+        if: always()
+        shell: bash
+        run: |
+          if ! python scripts/ci/sf06_http_client_signature_diagnostic.py \
+            "$RUNNER_TEMP/sf06-native.log" \
+            "$RUNNER_TEMP/sf06-http-client-native" 2>/dev/null; then
+            printf '%s\n' 'sf06_http_client_signature_diag=v1 status=unavailable reason=invocation_error stage=unavailable form=unavailable rust_error_code=none code_status=not_applicable newline=unavailable artifact_saved=false'
+          fi
+      - name: Preserve closed SF06 signature failure diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf06-http-client-signature-${{ matrix.platform }}
+          path: ${{ runner.temp }}/sf06-http-client-native/sf06-signature-diagnostic.json
+          if-no-files-found: ignore
+      - name: Diagnose G3 generation-token failure before crypto checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api guarded_rotation_and_logout_invalidate_old_generation_tokens -- --exact 2>&1 | tee "$RUNNER_TEMP/g3-generation-target.log"
+          python - <<'PY'
+          import os, pathlib, re
+          text = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "g3-generation-target.log").read_text(encoding="utf-8")
+          summaries = re.findall(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
+          if summaries != [("ok", "1", "0", "0")]:
+              raise AssertionError(f"expected exactly one passing focused test (1 passed, 0 failed, 0 ignored), got {summaries}")
+          PY
+      - name: Check SF06 private native modules before broad runtime checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib http_client::ledger:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-ledger.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-transport.log"
+          cargo test --locked -p nagi-runtime --lib auth::admission_bridge_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-admission.log"
+          cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-auth-core.log"
+          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-credential.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-core.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::hickory::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-hickory.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address::q1_dial::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-q1-pure.log"
+          python - <<'PY_SUMMARY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 82, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          for name, count in expected.items():
+              data = (root / name).read_text(encoding="utf-8")
+              running = re.findall(r"(?m)^running (\d+) tests?$", data)
+              results = re.findall(r"(?m)^test result: ok\. (\d+) passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in .+$", data)
+              if running != [str(count)] or results != [str(count)]:
+                  raise AssertionError(f"{name}: expected exactly {count} real, passing tests")
+          required_parent = {
+              'http_client::ledger::admission::tests::auth_enqueue_winning_entry_retains_record_after_concurrent_stop',
+              'http_client::ledger::admission::tests::branded_driver_history_rejects_second_driver_after_first_actual_join',
+              'http_client::ledger::admission::tests::branded_phase_winner_finishes_once_then_stop_denies_next_entry',
+              'http_client::ledger::admission::tests::branded_runner_rejects_foreign_same_id_at_every_port',
+              'http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock',
+              'http_client::ledger::admission::tests::entry_guard_preserves_stop_after_a_winning_cas',
+              'http_client::ledger::admission::tests::last_sender_drop_does_not_wait_for_watch_value_borrow',
+              'http_client::ledger::admission::tests::old_key_cannot_authorize_reused_numeric_slot',
+              'http_client::ledger::admission::tests::owner_destructor_posts_stop_without_waiting_for_waiter_gate',
+              'http_client::ledger::admission::tests::parent_drop_posts_stop_and_pending_grant_cannot_enqueue',
+              'http_client::ledger::admission::tests::repeated_stop_has_no_self_wake_while_pending_root_is_joined',
+              'http_client::ledger::admission::tests::runner_handle_is_not_counted_and_last_sender_closes_eof',
+              'http_client::ledger::admission::tests::stop_after_consumed_real_auth_permit_refuses_record_publication',
+              'http_client::ledger::admission::tests::unwinding_entry_guard_closes_without_clearing_stop',
+          }
+          ledger_text = (root / "sf06-private-ledger.log").read_text(encoding="utf-8")
+          passed_parent = set(re.findall(
+              r"(?m)^test (http_client::ledger::admission::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          ))
+          if not required_parent.issubset(passed_parent):
+              raise AssertionError("SF06 branded parent test names missing or unsuccessful")
+          required_added = {
+              'http_client::ledger::admission::tests::abandon_popped_unstarted_retires_without_parent_stop',
+              'http_client::ledger::admission::tests::abandon_drop_under_owner_waiter_watch_gates_is_prompt_and_reaped',
+              'http_client::ledger::admission::tests::abandon_unwind_before_root_registration_retires',
+              'http_client::ledger::admission::tests::abandon_cancel_keeps_popped_payload_until_drop',
+              'http_client::ledger::admission::tests::borrowed_root_requires_command_and_keeps_join_distinct_from_payload_drop',
+              'http_client::ledger::admission::tests::rejected_root_future_drops_outside_owner_and_command_remains_armed',
+              'http_client::ledger::admission::tests::rejected_root_future_unwind_leaves_command_abandonment_reapable',
+              'http_client::ledger::admission::tests::successful_root_completion_does_not_report_command_abandonment',
+              'http_client::ledger::admission::tests::unexpected_root_abort_retains_sticky_fault_not_abandonment',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_abort',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_panic',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_foreign_same_numeric_id_must_not_construct',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_stale_phase_fail_must_not_poison_reused_id',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_native_poll_must_hold_busy_entry_through_stop',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_unregistered_root_refuses_then_same_key_starts',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_stop_before_entry_keeps_native_and_fault_zero',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_entry_winner_registers_one_child_after_stop',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_cancelled_root_keeps_ticket_until_receipt_and_join',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_joined_root_refuses_start_but_same_key_receipt_drains',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_deadline_after_entry_skips_native_primitive',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_root_finishes_during_book_wait_skips_io',
+          }
+          required_delivery = {
+              'http_client::ledger::admission::tests::sf06_closed_runtime_child_drop_is_outside_owner_and_entry',
+              'http_client::ledger::admission::tests::sf06_closed_runtime_root_drop_is_outside_owner_and_entry',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_fallback_retains_external_child_and_wakes_after_cancelled_waiter',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_monitor_retains_external_child_paused_delivery',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_poisoned_owner_retains_external_child_until_delivery',
+              'http_client::ledger::tests::sf06_delivery_drop_panic_does_not_acknowledge',
+              'http_client::ledger::tests::sf06_delivery_register_recheck_and_independent_broadcast_wakes',
+              'http_client::ledger::tests::sf06_failed_send_blocking_drop_retains_debt_and_cancelled_bare_drain',
+              'http_client::ledger::tests::sf06_paused_delivery_retains_actual_handle_quota_and_join_bit',
+              'http_client::ledger::tests::sf06_receipt_tracks_exact_reused_task_slot',
+              'http_client::ledger::tests::sf06_stop_expiry_and_fault_cannot_join_before_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_closed_runtime_dns_drop_is_outside_owner_book_and_entry',
+              'http_client::ledger::tracked_dns::tests::sf06_multiple_dns_waiters_and_cancelled_waiter_wake_on_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_paused_dns_delivery_retains_io_ticket_until_failed_send_drop',
+          }
+          passed_ledger = set(re.findall(
+              r"(?m)^test (http_client::ledger::[a-z0-9_:]+) \.\.\. ok$", ledger_text,
+          ))
+          if not required_added.issubset(passed_ledger):
+              raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
+          if not required_delivery.issubset(passed_ledger):
+              raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
+          required_operation = {
+              'http_client::ledger::operation::tests::adapter_panic_remains_fault_after_actual_root_join',
+              'http_client::ledger::operation::tests::dropped_execute_retains_cleanup_until_actual_native_joins',
+              'http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join',
+              'http_client::ledger::operation::tests::owner_close_refuses_publish_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unpolled_execute_starts_no_admission_or_native_resolution',
+              'http_client::ledger::operation::tests::original_deadline_survives_provisional_response_and_join_wait',
+              'http_client::ledger::operation::tests::unreceived_response_keeps_core_budget_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unsupported_encoding_is_unknown_and_never_replayed',
+          }
+          passed_operation = re.findall(
+              r"(?m)^test (http_client::ledger::operation::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_operation) != required_operation or len(passed_operation) != len(required_operation):
+              raise AssertionError("SF06 operation test names missing, duplicated, or unsuccessful")
+          required_h0 = {
+              'http_client::ledger::admission::tests::sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings',
+              'http_client::ledger::admission::tests::sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority',
+              'http_client::ledger::admission::tests::sf06_h0_paused_root_return_preserves_stage_through_stop_expiry_and_poison',
+              'http_client::ledger::admission::tests::sf06_h0_pre_bind_unwind_retains_debt_and_original_payload',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_inner_unwind_retains_debt_and_reaps_known_client_fault',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_outer_unwind_cannot_retire_monitor_record_as_joined',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_unresolved_outer_drains_known_inner_without_retiring',
+              'http_client::ledger::tests::sf06_h0_launch_publication_wakes_independent_waiters_and_retains_receipt',
+              'http_client::ledger::tracked_dns::tests::sf06_h0_paused_dns_root_retains_quota_without_io_authority',
+          }
+          passed_h0 = re.findall(
+              r"(?m)^test ([a-z0-9_:]*::sf06_h0_[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_h0) != required_h0 or len(passed_h0) != len(required_h0):
+              raise AssertionError("SF06 H0 test names missing, duplicated, or unsuccessful")
+          required_q1_native = {
+              'http_client::address::socket_pin::q1_native::tests::q1_native_attempt_cap_prevents_second_connector_and_releases_first_slot',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_closed_plan_starts_no_connector',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_close_during_pending_connect_does_not_attempt_second_address',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_terminal_connect_failure_does_not_try_another_candidate',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_cancelled_caller_is_joined_before_reusing_socket_quota',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_ttl_zero_is_usable_for_one_owned_operation_without_cache',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_refused_first_address_connects_only_checked_second_peer',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_expired_original_connect_end_does_not_reset_budget',
+          }
+          transport_text = (root / "sf06-private-transport.log").read_text(encoding="utf-8")
+          passed_q1_native = re.findall(
+              r"(?m)^test (http_client::address::socket_pin::q1_native::tests::q1_native_[a-z0-9_]+) \.\.\. ok$",
+              transport_text,
+          )
+          if set(passed_q1_native) != required_q1_native or len(passed_q1_native) != len(required_q1_native):
+              raise AssertionError("SF06 Q1 native test names missing, duplicated, unexpected, or unsuccessful")
+          PY_SUMMARY
+      - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib auth::ed25519:: 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-core.log"
+          cargo test --locked -p nagi-runtime --test ed25519_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-public.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf02-ed25519-core.log": 14, "sf02-ed25519-public.log": 1}.items():
+              text = (root / name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;", text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
       - name: Check SF07 charged native wire checkpoint
         shell: bash
         run: |
@@ -1256,7 +1955,7 @@ jobs:
   ready:
     name: Ready to merge
     if: github.event_name == 'pull_request' && always()
-    needs: [changes, linux, jetbrains, release-plan, vscode-package, nagi-package]
+    needs: [changes, linux, rust-1-88, jetbrains, release-plan, vscode-package, nagi-package]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -1269,15 +1968,16 @@ jobs:
         run: python scripts/ci/gate.py
 
   publish-release:
-    needs: [linux, release-plan, jetbrains, vscode-package, nagi-package]
+    needs: [linux, rust-1-88, release-plan, jetbrains, vscode-package, nagi-package]
     if: >-
       always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       (
-        needs.linux.result == 'success' ||
+        (needs.linux.result == 'success' && needs.rust-1-88.result == 'success') ||
         (needs.release-plan.outputs.release_jetbrains == 'true' &&
          needs.release-plan.outputs.release_nagi != 'true' &&
          needs.release-plan.outputs.release_vscode != 'true' &&
-         needs.linux.result == 'skipped')
+         needs.linux.result == 'skipped' &&
+         needs.rust-1-88.result == 'skipped')
       ) && needs.release-plan.result == 'success' &&
       (needs.jetbrains.result == 'success' || needs.jetbrains.result == 'skipped') &&
       (needs.vscode-package.result == 'success' || needs.vscode-package.result == 'skipped') &&

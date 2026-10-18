@@ -2,6 +2,16 @@
 
 [RFC](rfc.md) · [English plan](implementation-plan.en.md) · [現行調査](baseline-audit.md)
 
+## 2026-10-18: 統合候補と残る受入条件
+
+**採用済み仕様・候補実装・実行確認・正式公開を分ける。** mainの確認HEADは `7da0068254c1895ed4e6f2c824aab45eb2fbbf2c`。#121・#122・#123・#126・#131・#132はまだDraftであり、以下の専用検証ブランチはマージ済みでも正式配布でもない。
+
+統合候補 `4337422f5f632fe73e65d512a9ea170001301952` は、Session/CSRF/CORS、Ed25519検証専用profile、typed HTML/SQL、用途別外向きHTTP、SF07の借用ResponseContext・Result factory/mapper・明示route rate/予算、SF08のbrowser fixtureを接続している。[限定CI 39126273963](https://github.com/disnana/Nagi/actions/runs/39126273963)でproduction runtime型検査、全runtime test targetコンパイル、protected操作の実HTTP/TLS 1件、Ed25519 core14件/public1件、Cargoが更新した依存graphによるstandalone fixtureの `cargo check --locked`（型検査）を確認した。これは全テスト実行・4 OS・実ブラウザ受入の代替ではない。
+
+残るrelease条件は、最終候補の4 OS/MSRV・High/保存Low/手書きLow native・Session/ログイン/取消/解放の回帰・実ブラウザ/TLS・配布物・性能/資源・日英Docs/移行・最終独立監査である。既知のSession 504とB1短TTLの失敗は、限定実行の非再現だけで解消扱いしない。未確認の範囲を「制約」と呼んで完了条件から外さない。正式0.2.0、版変更、タグ、releaseの承認をこの候補検証は含まない。
+
+以下の2026-10-10の状態・CI記述は当日の履歴であり、上記候補の現在の実装・CI結果を示さない。
+
 2026-10-10 UTC。**計画でありFoundation全体の完了記録ではない。** GitHub main `e609aba158921226a632f16d41eb8b0f4ad5aebd`にはSF00 #100とSF01 #101がmerge済みで、SF05のcanonical Query/Parameters実装とSF07 bounded reader変更も開発sourceに統合済み。SF02/SF03/SF04/SF06は未完了、SF07の横断budget acceptanceとSF08も未完了。正式0.2.0は未リリースで、公開0.1.11は変更されない。統合済みコードだけでは他のacceptance完了を意味しない。SF01[専用契約](sf01-contract.md)と結果、SF05[契約](sf05-contract.md)・[結果](../security-foundation-sf05-results.md)で個別の確認範囲と制限を記録する。最新ユーザー指示に従う[D1–D3判断・移行](decisions-and-migration.md)を基準とし、旧資料の互換性保留を再承認待ちにしない。各featureの公開signature/contractはRED追加前に固定する。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
 
 2026-10-10 14:04 UTCのGitHub readbackでは、main checks `38055073417` のLinux、4 OS package、4つのIDE Stable/EAP、common ZIPが成功し、websiteも成功した。`publish-release`はCHANGELOGに必要な `## JetBrains 0.1.3` 見出しがなく失敗し、0.1.3のtag/Releaseは作成されていない。公開処理の再実行は承認まで行わない。CodeQL run `38055084000`はC/C++ extractionで `Extraction failed: No source files found` と報告した。全check成功とは扱わない。

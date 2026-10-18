@@ -2,6 +2,14 @@
 
 ## 未リリース / Unreleased
 
+### Nagi 0.2.0 Security Foundation候補 / candidate
+
+- Require an explicit HTTP authentication policy, bounded Host/authority configuration, finite response/rate budgets and route rate rules. Response factories return Result and borrow the actual Request's ResponseContext; error mappers receive that context explicitly. Missing budgets are rejected before listen. See the [migration guide](docs/en/migration-0.2.0.md).
+- Connect durable Session issuance/rotation/revocation, bounded reusable authenticated CSRF tokens, separate finite one-use pre-login state, CORS finalization and the fixed Ed25519 verification-only profile. Keep business errors separate from authentication/runtime failures and preserve original deadlines, revocation gates and actual cancellation joins.
+- Connect typed HTML/SQL and registered HTTPS operations. Outbound requests use checked DNS candidates, TCP-only finite failover, one-operation TTL=0 results, ordinary TLS verification and finite bodies; no automatic resend after request sending begins or implicit decompression. Compression remains a separate 0.2.1 task.
+- HTTP方針・Host・応答/rate予算を明示する安全基盤を候補実装へ接続。ResponseContextは実Requestから借用し、factory/mapperはResultで失敗を返す。Session/CSRF/CORS・Ed25519・typed HTML/SQL・用途別HTTPS操作の保証と移行方法は[日本語ガイド](docs/migration-0.2.0.md)を参照。process-local制限は複数台の全体制限ではなく、OOMからの普遍的回復も保証しない。
+- This is an unreleased candidate. Integrated four-OS, browser/TLS, distribution, resource/performance and independent final acceptance remain required; passing compilation or a nonreproduced timeout alone does not complete Security Foundation. 未確認を完了扱いせず、正式な版・タグ・releaseは別途承認後に行う。
+
 ### JetBrains 0.1.3候補 / JetBrains 0.1.3 candidate
 
 - IntelliJ IDEA / PyCharm共通の補完・定義ジャンプ・編集中診断は同じPR source commitの開発版compilerに接続。プラグインのsyntax highlightingはcompilerに依存せず、公開済み0.1.11は手動Check/Runと通常のRun Configuration実行に対応するが、assist protocolは含まない。

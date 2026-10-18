@@ -184,7 +184,7 @@ pub async fn exercise(app: nagi_runtime::http_server::App<super::State, nagi_run
         assert_eq!(&raw[separator + 4..], expected);
     }
     stop.send(()).unwrap();
-    tokio::time::timeout(std::time::Duration::from_secs(3), task).await.unwrap().unwrap().unwrap()?;
+    tokio::time::timeout(std::time::Duration::from_secs(3), task).await.unwrap().unwrap()?;
     Ok(())
 }
 "#;
