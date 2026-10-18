@@ -66,10 +66,15 @@ fn security_refusals_keep_six_stable_bodies_head_cors_and_challenges() {
                         native.body().bytes.as_ref(),
                         if head { b"".as_slice() } else { expected_body }
                     );
-                    assert_eq!(
-                        native.headers()[names::CONTENT_LENGTH].to_str().unwrap(),
-                        expected_body.len().to_string()
-                    );
+                    // Hyper supplies GET framing after this internal transfer.
+                    // HEAD must already retain the representation length while
+                    // its charged body is suppressed before transport.
+                    if head {
+                        assert_eq!(
+                            native.headers()[names::CONTENT_LENGTH].to_str().unwrap(),
+                            expected_body.len().to_string()
+                        );
+                    }
                     assert_eq!(
                         native.headers()[names::CONTENT_TYPE],
                         "text/plain; charset=utf-8"
