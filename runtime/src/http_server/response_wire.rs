@@ -11,6 +11,8 @@ pub(super) struct WireLayout {
     max_capacity: usize,
     pub(super) managed_bytes: usize,
     pub(super) managed_count: usize,
+    user_bytes: usize,
+    user_count: usize,
 }
 fn product(a: usize, b: usize) -> Result<usize, Diagnostic> {
     a.checked_mul(b)
@@ -58,6 +60,8 @@ impl WireLayout {
         )?;
         let fixed = [
             size_of::<Produced>(),
+            size_of::<super::super::response_public::Response>(),
+            size_of::<super::super::response_public::HttpResponse>(),
             size_of::<ChargedWire>(),
             size_of::<ChargedNativeHeaders>(),
             size_of::<WireLayout>(),
@@ -81,6 +85,8 @@ impl WireLayout {
             max_capacity: raw - raw / 4,
             managed_bytes: limits.managed_header_bytes,
             managed_count: limits.managed_header_count,
+            user_bytes: limits.user_header_bytes,
+            user_count: limits.user_header_count,
         })
     }
 }
@@ -106,6 +112,28 @@ pub(in crate::http_server) enum ManagedHeader {
     Allow,
 }
 impl ManagedHeader {
+    fn is_managed(name: &str) -> bool {
+        [
+            Self::ContentType,
+            Self::ContentLength,
+            Self::CacheControl,
+            Self::Vary,
+            Self::WwwAuthenticate,
+            Self::SetCookie,
+            Self::ContentSecurityPolicy,
+            Self::Nosniff,
+            Self::AllowOrigin,
+            Self::AllowCredentials,
+            Self::AllowMethods,
+            Self::AllowHeaders,
+            Self::MaxAge,
+            Self::RetryAfter,
+            Self::Connection,
+            Self::Allow,
+        ]
+        .into_iter()
+        .any(|key| key.name().eq_ignore_ascii_case(name))
+    }
     pub(in crate::http_server) fn name(self) -> &'static str {
         match self {
             Self::ContentType => "content-type",
@@ -136,6 +164,7 @@ pub(in crate::http_server) struct ChargedNativeHeaders {
     owner: Arc<Quota>,
     // Drop native names/values/container before releasing the shared claim.
     charge: Arc<Reservation>,
+    fault: Option<Diagnostic>,
 }
 impl ChargedNativeHeaders {
     pub(in crate::http_server) fn append_managed(
@@ -190,6 +219,114 @@ impl ChargedNativeHeaders {
             Ok(())
         }
     }
+    pub(in crate::http_server) fn map(&self) -> &HeaderMap {
+        &self.map
+    }
+    pub(in crate::http_server) fn fault(&self) -> Option<Diagnostic> {
+        self.fault
+    }
+    fn preflight_native(
+        &self,
+        name: &str,
+        value: &HeaderValue,
+        replace: bool,
+    ) -> Result<(), Diagnostic> {
+        self.preflight_value(name, value.as_bytes().len(), replace)
+    }
+    // Length-only admission runs before construction of a managed value.
+    pub(in crate::http_server) fn preflight_value(
+        &self,
+        name: &str,
+        value_len: usize,
+        replace: bool,
+    ) -> Result<(), Diagnostic> {
+        let mut counts = [0usize; 2];
+        let mut bytes = [0usize; 2];
+        for (key, old) in self.map.iter() {
+            if replace && key.as_str().eq_ignore_ascii_case(name) {
+                continue;
+            }
+            let group = usize::from(ManagedHeader::is_managed(key.as_str()));
+            counts[group] = sum(counts[group], 1)?;
+            bytes[group] = sum(
+                bytes[group],
+                sum(sum(key.as_str().len(), old.as_bytes().len())?, 4)?,
+            )?;
+        }
+        let group = usize::from(ManagedHeader::is_managed(name));
+        counts[group] = sum(counts[group], 1)?;
+        bytes[group] = sum(bytes[group], sum(sum(name.len(), value_len)?, 4)?)?;
+        if counts[0] > self.layout.user_count
+            || bytes[0] > self.layout.user_bytes
+            || counts[1] > self.layout.managed_count
+            || bytes[1] > self.layout.managed_bytes
+        {
+            return Err(Diagnostic::HeaderLimit);
+        }
+        Ok(())
+    }
+    // Framework mutation stays inside the charged map. Refusal is sticky and
+    // observed at the one native handoff; rejected values never enter the map.
+    pub(in crate::http_server) fn insert<K: axum::http::header::IntoHeaderName + AsRef<str>>(
+        &mut self,
+        name: K,
+        value: HeaderValue,
+    ) -> Option<HeaderValue> {
+        if self.fault.is_some() {
+            return None;
+        }
+        if let Err(error) = self.preflight_native(name.as_ref(), &value, true) {
+            self.fault = Some(error);
+            return None;
+        }
+        match self.map.try_insert(name, value) {
+            Ok(old) => {
+                if let Err(e) = self.check_capacity() {
+                    self.fault = Some(e);
+                }
+                old
+            }
+            Err(_) => {
+                self.fault = Some(Diagnostic::HeaderLimit);
+                None
+            }
+        }
+    }
+    pub(in crate::http_server) fn append<K: axum::http::header::IntoHeaderName + AsRef<str>>(
+        &mut self,
+        name: K,
+        value: HeaderValue,
+    ) -> bool {
+        if self.fault.is_some() {
+            return false;
+        }
+        if let Err(error) = self.preflight_native(name.as_ref(), &value, false) {
+            self.fault = Some(error);
+            return false;
+        }
+        match self.map.try_append(name, value) {
+            Ok(added) => {
+                if let Err(e) = self.check_capacity() {
+                    self.fault = Some(e);
+                }
+                added
+            }
+            Err(_) => {
+                self.fault = Some(Diagnostic::HeaderLimit);
+                false
+            }
+        }
+    }
+    pub(in crate::http_server) fn remove<K: axum::http::header::AsHeaderName>(
+        &mut self,
+        name: K,
+    ) -> Option<HeaderValue> {
+        self.map.remove(name)
+    }
+    #[cfg(test)]
+    pub(in crate::http_server) fn inject_fault(&mut self, error: Diagnostic) {
+        self.fault = Some(error);
+    }
     pub(in crate::http_server) fn value(&self, name: &str) -> Option<&[u8]> {
         self.map.get(name).map(HeaderValue::as_bytes)
     }
@@ -199,6 +336,9 @@ pub(in crate::http_server) struct ChargedWire {
     body: Bytes,
 }
 impl ChargedWire {
+    pub(in crate::http_server) fn from_parts(headers: ChargedNativeHeaders, body: Bytes) -> Self {
+        Self { headers, body }
+    }
     pub(in crate::http_server) fn headers_mut(&mut self) -> &mut ChargedNativeHeaders {
         &mut self.headers
     }
@@ -220,6 +360,9 @@ impl ChargedWire {
         super::super::response_send::SendFault,
     > {
         use super::super::response_send::SendFault;
+        if self.headers.fault.is_some() {
+            return Err(SendFault::Exhausted);
+        }
         if !ledger.accepts(&self) {
             return Err(SendFault::Foreign);
         }
@@ -248,6 +391,7 @@ pub(super) fn convert(produced: Produced) -> Result<ChargedWire, Diagnostic> {
         managed_count: 0,
         owner: Arc::clone(&produced.owner),
         charge: Arc::clone(&produced.headers.charge),
+        fault: None,
     };
     // The complete producer claim, including the conversion peak, was acquired
     // before the original body/header allocations. This API's try_reserve

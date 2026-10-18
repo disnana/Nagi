@@ -1,0 +1,49 @@
+name: SF07 public response scoped production check
+on:
+  push:
+    branches:
+      - test/sf07-u4-production-20261018
+permissions:
+  contents: read
+jobs:
+  production:
+    if: github.ref == 'refs/heads/test/sf07-u4-production-20261018'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify parent and reviewed production source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "553fd56ea67b6cff8b76ae65fc81a2e9e12ce8d2"
+          sha256sum --check <<'HASHES'
+          40cb53addb3f39165339e813b900f0a3acf25d85e95ac851601809217e6322a5  runtime/src/auth/session.rs
+          93d4719621c2fa7eefc67c614b412747dc56f88c1b0fb08c3e1ebe4f0a696c84  runtime/src/auth/session/http_bridge.rs
+          8e47b5d244000fbaad57c58e68313527c4e8d949844692cad966d0a90b768de1  runtime/src/auth/session/secrets.rs
+          b1d1f65cfdb530de91427d99a9ac3935087143664c169872312279e667634a01  runtime/src/http_server.rs
+          803945bfa86e0c983517b6eff8aa4cb5cc8e5f1ed9c0efde511727a3165b2e60  runtime/src/http_server/browser_login.rs
+          4da3855c8c9adf4b40db3e686bea5fd0b8d9fddab657ac4eb2948b069f62d12c  runtime/src/http_server/cors.rs
+          3de4934f5cd753f93e1075e484ad3225f775604f732456fdc08f51293c1359f8  runtime/src/http_server/csrf_http.rs
+          509d48c0098e61b69b57df3f962ebdfff1ab9db34c16d1f674a2a63ccf5fa3d9  runtime/src/http_server/origin.rs
+          a7a93bab58eea44dd335a9d1d94beee38948981e8a1be27f647cc6637b9f25e8  runtime/src/http_server/prelogin_http.rs
+          4b18e1a8e6c55b738aef2e117168509d643beafec5a2e22d4aa73e52a029114a  runtime/src/http_server/request_headers.rs
+          d14c51b4db6e74c144a1361914e8996a85bfff065ac9758c7b5c1e912870d8e7  runtime/src/http_server/response_attachment.rs
+          92b5688470c0a1558d9a365490cf7d6cfe635b8e30dd1dbabf0e02889bcb53db  runtime/src/http_server/response_attachment_tests.rs
+          3ae5c2fe47b0d7ad35f683a1bbcecf65ecdb3a9a52c99c75ccabd996cf670b32  runtime/src/http_server/response_budget.rs
+          c75e7de88053bce47378266e225fb0339d7efacf3e986b925a03008cb54a7291  runtime/src/http_server/response_finalize.rs
+          db2a3257dcf13e482decef7d11fd7a31d24279fb9c6a499b74565ac7ea20b8b2  runtime/src/http_server/response_public.rs
+          ac8739389b8d54d82474ff117e45a828964d5b25f43948e367506c03c1a41b6e  runtime/src/http_server/response_public_tests.rs
+          13be5d40103910690ef6aacc76079832dfd574d79767401b990026ec3d808553  runtime/src/http_server/response_send.rs
+          964761279058fa67a53a393bf2892229e224cc7612bb57df67bb65c5d1fd1e4b  runtime/src/http_server/response_wire.rs
+          b27958e47a413674cbe28b35ded1677cde6ac3a0cef4c125f2265d454f3f9ec6  runtime/src/http_server/vary.rs
+          HASHES
+      - name: Typecheck production library before test consumers
+        run: cargo check --locked -p nagi-runtime --lib

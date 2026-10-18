@@ -15,7 +15,7 @@ pub(super) mod delivery;
 #[path = "session/http_bridge.rs"]
 mod http_bridge;
 pub(crate) use csrf_bridge::CsrfBinding;
-pub(crate) use http_bridge::{retire_http_delivery, take_http_cookie};
+pub(crate) use http_bridge::{http_cookie_maximum, retire_http_delivery, take_http_cookie};
 #[cfg(test)]
 #[path = "session/deadline_probe.rs"]
 pub(crate) mod deadline_probe;

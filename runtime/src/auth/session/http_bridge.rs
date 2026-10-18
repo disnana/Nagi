@@ -57,3 +57,8 @@ mod tests;
 #[cfg(test)]
 #[path = "delivery_wire_tests.rs"]
 mod delivery_tests;
+
+// Existing issuer bound, shared with HTTP preflight before destructive take.
+pub(crate) fn http_cookie_maximum() -> usize {
+    super::secrets::MAX_SET_COOKIE_BYTES
+}

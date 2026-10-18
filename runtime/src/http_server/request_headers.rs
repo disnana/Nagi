@@ -9,10 +9,36 @@ pub(super) struct ReceivedHeaders {
     // Dispose actual map names/values/container before its original claim.
     map: HeaderMap,
     _prior: Option<Arc<Reservation>>,
+    context: ContextOwner,
+    // Last: the actual map, prior response and Context die before this receipt.
+    request_owner: Option<tokio::sync::OwnedSemaphorePermit>,
+}
+enum ContextOwner {
+    Attached(super::ResponseContext),
+    #[cfg(test)]
+    Unattached,
 }
 impl ReceivedHeaders {
+    pub(super) fn configured(
+        map: HeaderMap,
+        prior: Option<Arc<Reservation>>,
+        context: super::ResponseContext,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            map,
+            _prior: prior,
+            context: ContextOwner::Attached(context),
+            request_owner: None,
+        })
+    }
+    #[cfg(test)]
     pub(super) fn new(map: HeaderMap, prior: Option<Arc<Reservation>>) -> Arc<Self> {
-        Arc::new(Self { map, _prior: prior })
+        Arc::new(Self {
+            map,
+            _prior: prior,
+            context: ContextOwner::Unattached,
+            request_owner: None,
+        })
     }
     #[cfg(test)]
     pub(super) fn value(&self, name: &str) -> Option<&[u8]> {
@@ -43,6 +69,40 @@ pub(super) struct RequestHeaders {
     visibility: Visibility,
 }
 impl RequestHeaders {
+    pub(super) fn profile(
+        &mut self,
+        profile: super::response_public::ResponseProfile,
+    ) -> Result<(), crate::Error> {
+        let owner = Arc::get_mut(&mut self.owner)
+            .ok_or_else(|| crate::Error::internal("request owner already shared"))?;
+        match &mut owner.context {
+            ContextOwner::Attached(context) => context.profile = profile,
+            #[cfg(test)]
+            ContextOwner::Unattached => {
+                return Err(crate::Error::internal("unattached request fixture"))
+            }
+        }
+        Ok(())
+    }
+    pub(super) fn admit(
+        &mut self,
+        permit: tokio::sync::OwnedSemaphorePermit,
+    ) -> Result<(), crate::Error> {
+        let owner = Arc::get_mut(&mut self.owner)
+            .ok_or_else(|| crate::Error::internal("request owner already shared"))?;
+        if owner.request_owner.is_some() {
+            return Err(crate::Error::internal("request owner already admitted"));
+        }
+        owner.request_owner = Some(permit);
+        Ok(())
+    }
+    pub(super) fn response_context(&self) -> &super::ResponseContext {
+        match &self.owner.context {
+            ContextOwner::Attached(context) => context,
+            #[cfg(test)]
+            ContextOwner::Unattached => panic!("unattached header fixture has no response Context"),
+        }
+    }
     pub(super) fn from_received(owner: Arc<ReceivedHeaders>) -> Self {
         Self {
             owner,
@@ -113,6 +173,7 @@ impl RequestHeaders {
         Arc::ptr_eq(&self.owner, &other.owner)
     }
 }
+#[cfg(test)]
 impl From<HeaderMap> for RequestHeaders {
     fn from(map: HeaderMap) -> Self {
         Self::from_received(ReceivedHeaders::new(map, None))
