@@ -1,0 +1,10 @@
+name: Nagi 0.2.0 browser follow-up without publication
+on:
+  push:
+    branches: [test/nagi020-browser-followup-20261018]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-tls:
+    uses: ./.github/workflows/sf08-browser.yml
