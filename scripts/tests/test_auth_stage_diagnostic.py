@@ -458,6 +458,106 @@ class DiagnosticCases(unittest.TestCase):
         self.assertIn(b"failed_case=auth::a", output)
         self.assertIn(b"cargo_exit=101 inventory=fail", output)
 
+    def test_known_failed_case_projects_its_closed_source_position(self):
+        case = ("auth::prelogin::tests::consumed_bearer_identity_can_issue_session_"
+                "without_replacing_original_ceiling")
+        raw = (self.raw() + f"test {case} ... FAILED\n" +
+               f"thread '{case}' (712) panicked at "
+               "C:\\ci\\repo\\runtime\\src\\auth\\prelogin\\tests.rs:427:13:\n")
+        accepted, output = self.capture(raw, 101, {case: case})
+        self.assertFalse(accepted)
+        self.assertIn(f"failed_case={case}\n".encode(), output)
+        self.assertIn(
+            f"failed_source_case={case} source=tests line=427 column=13\n".encode(),
+            output,
+        )
+        self.assertNotIn(b"C:\\ci\\repo", output)
+
+    def source_panic(self, case, source="tests.rs", line=427, column=13,
+                     thread_id=" (712)", path_prefix=r"C:\ci\repo"):
+        relative = diagnostic.SOURCE_BINDINGS[source][0].replace("/", "\\")
+        return (f"thread '{case}'{thread_id} panicked at "
+                f"{path_prefix}\\{relative}:{line}:{column}:\n")
+
+    def test_known_failure_source_accepts_windows_paths_optional_thread_id_and_crlf(self):
+        case = diagnostic.CASE_NAMES[0]
+        for ending in ("\n", "\r\n"):
+            with self.subTest(ending=repr(ending)):
+                raw = (self.raw() + f"test {case} ... FAILED\n" +
+                       self.source_panic(case).replace("\n", ending) +
+                       "panic payload wireSecret\n")
+                accepted, output = self.capture(raw, 101, {case: case})
+                self.assertFalse(accepted)
+                self.assertIn(
+                    f"failed_source_case={case} source=tests line=427 column=13\n".encode(),
+                    output,
+                )
+                self.assertNotIn(b"C:\\ci\\repo", output)
+                self.assertNotIn(b"wireSecret", output)
+
+        observer_case = diagnostic.CASE_NAMES[1]
+        raw = (self.raw() + f"test {observer_case} ... FAILED\n" +
+               self.source_panic(observer_case, source="observer_tests.rs", line=99,
+                                 thread_id="", path_prefix=r"D:\ci\repo"))
+        accepted, output = self.capture(raw, 101, {observer_case: observer_case})
+        self.assertFalse(accepted)
+        self.assertIn(
+            f"failed_source_case={observer_case} source=observer_tests line=99 column=13\n".encode(),
+            output,
+        )
+        self.assertNotIn(b"D:\\ci\\repo", output)
+
+    def test_bad_duplicate_and_out_of_range_failed_source_positions_are_unavailable(self):
+        case = diagnostic.CASE_NAMES[0]
+        variants = [
+            self.source_panic(case, source="observer_tests.rs", line=99,
+                              path_prefix=r"C:\ci\repo"),
+            self.source_panic(case, line=510),
+            self.source_panic(case, column=10000),
+            self.source_panic(case) * 2,
+            f"thread '{case}' panicked at C:\\ci\\repo\\tests.rs:427:13 extra secret\n",
+        ]
+        for panic_lines in variants:
+            with self.subTest(panic_count=panic_lines.count("panicked at")):
+                raw = self.raw() + f"test {case} ... FAILED\n" + panic_lines
+                accepted, output = self.capture(raw, 101, {case: case})
+                self.assertFalse(accepted)
+                self.assertIn(
+                    f"failed_source_case={case} source=unavailable\n".encode(), output
+                )
+                self.assertNotIn(b"C:\\ci\\repo", output)
+                self.assertNotIn(b"secret", output)
+
+    def test_expected_or_unrelated_panic_never_infers_failure_or_echoes_private_data(self):
+        case = diagnostic.CASE_NAMES[0]
+        raw = (self.raw() +
+               self.source_panic(case, path_prefix=r"C:\ci\repo") +
+               "thread 'unrelated' panicked at D:\\ci\\repo\\secret.rs:9:1:\n"
+               "panic payload wireSecret\n")
+        accepted, output = self.capture(raw, 101, {case: case})
+        self.assertFalse(accepted)
+        self.assertIn(b"failure_cases=unavailable\n", output)
+        self.assertNotIn(b"failed_case=", output)
+        self.assertNotIn(b"failed_source_case=", output)
+        self.assertNotIn(b"ci\\repo", output)
+        self.assertNotIn(b"wireSecret", output)
+
+    def test_invalid_auth_trace_keeps_independent_known_failure_source_position(self):
+        case = diagnostic.CASE_NAMES[4]
+        raw = (self.raw().replace("lost=false", "lost=unknown") +
+               f"test {case} ... FAILED\n" + self.source_panic(case, line=441) +
+               "panic payload secret\n")
+        accepted, output = self.capture(raw, 101, {case: case})
+        self.assertFalse(accepted)
+        self.assertIn(b"trace_validation=failed\n", output)
+        self.assertIn(f"failed_case={case}\n".encode(), output)
+        self.assertIn(
+            f"failed_source_case={case} source=tests line=441 column=13\n".encode(),
+            output,
+        )
+        self.assertNotIn(b"panic payload", output)
+        self.assertNotIn(b"secret", output)
+
     def test_success_still_requires_exact_slots_and_summary(self):
         accepted, output = self.capture(self.raw() + "test result: ok. 427 passed; 0 failed; 1 ignored;\n", 0)
         self.assertTrue(accepted)
@@ -560,6 +660,18 @@ class DiagnosticCases(unittest.TestCase):
         self.assertEqual(six_argument_result, 0)
         self.assertEqual(wrong_arity_result, 2)
         self.assertNotIn(b"/private", sink.buffer.getvalue())
+
+
+    def test_exact_parent_source_line_ceiling(self):
+        # Exact parent Git blob has 509 lines; do not derive this oracle from the parser.
+        case = diagnostic.CASE_NAMES[0]
+        for number, expected in ((509, "tests line=509 column=13"), (510, "unavailable")):
+            with self.subTest(line=number):
+                raw = self.raw() + f"test {case} ... FAILED\n" + self.source_panic(case, line=number)
+                accepted, output = self.capture(raw, 101, cases={case: case})
+                self.assertFalse(accepted)
+                self.assertIn(f"failed_case={case}\n".encode(), output)
+                self.assertIn(f"failed_source_case={case} source={expected}\n".encode(), output)
 
 
 if __name__ == "__main__":

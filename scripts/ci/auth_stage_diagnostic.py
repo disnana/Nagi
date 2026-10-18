@@ -30,6 +30,31 @@ FAILED_ITEM = re.compile(rf"    ({QUALIFIED})\Z")
 CASE_LIMIT = 1024
 CASE_NAME_LIMIT = 256
 FAILURE_LIMIT = 16
+CASE_NAMES = (
+    "auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling",
+    "auth::prelogin::tests::observer_tests::observed_consumed_missing_row_actual_restoration_wait_gate_expiry",
+    "auth::prelogin::tests::observer_tests::observed_consumed_missing_row_live_denial",
+    "auth::prelogin::tests::one_use_claim_actual_delete_and_full_commit_precede_verifier",
+    "auth::prelogin::tests::two_actual_claims_have_exactly_one_committed_witness",
+)
+CASE_SOURCE = {
+    CASE_NAMES[0]: "tests.rs",
+    CASE_NAMES[1]: "observer_tests.rs",
+    CASE_NAMES[2]: "observer_tests.rs",
+    CASE_NAMES[3]: "tests.rs",
+    CASE_NAMES[4]: "tests.rs",
+}
+SOURCE_BINDINGS = {
+    "tests.rs": ("runtime/src/auth/prelogin/tests.rs",
+                 "7f9fea291cf9bf9e7f9fce6db7797038ef898293f6f6fab3f2eb85e51ce5da4d"),
+    "observer_tests.rs": ("runtime/src/auth/prelogin/observer_tests.rs",
+                          "30238968a7745259abe2dc08ffde7b4f8e4ecdcad37d3bd122d730b56d000ce9"),
+}
+SOURCE_LINE_COUNTS = {"tests.rs": 509, "observer_tests.rs": 150}
+PANIC = re.compile(
+    r"^thread '([^'\r\n]{1,256})'(?: \([0-9]{1,20}\))? panicked at "
+    r"(.{1,512}):([0-9]{1,6}):([0-9]{1,5}):\s*$"
+)
 IO_PHASE = r"(?:RequestWrite|ResponseStatus|ResponseHeaders|ResponseBody|ConnectionEof)"
 IO_KIND = (
     r"(?:NotFound|PermissionDenied|ConnectionRefused|ConnectionReset|HostUnreachable|"
@@ -168,6 +193,66 @@ def failed_cases(text: str, cases):
     if unknown or not found:
         lines.append("failure_cases=unavailable")
     return lines
+
+
+def _panic_locations(panic_lines, expected):
+    locations = {name: None for name in expected}
+    malformed = False
+    for line in panic_lines:
+        match = PANIC.fullmatch(line)
+        if not match:
+            malformed = True
+            continue
+        thread, path, line_raw, col_raw = match.groups()
+        if thread not in locations or locations[thread] is not None:
+            malformed = True
+            continue
+        normalized = path.replace("\\", "/")
+        source = None
+        for candidate, (relative, _expected_sha) in SOURCE_BINDINGS.items():
+            if normalized == relative or normalized.endswith("/" + relative):
+                source = candidate
+        binding = CASE_SOURCE.get(thread)
+        try:
+            number, column = int(line_raw), int(col_raw)
+        except ValueError:
+            malformed = True
+            continue
+        if (source is None or binding is None or source != binding
+                or not 1 <= number <= SOURCE_LINE_COUNTS[source]
+                or not 1 <= column <= 9999):
+            malformed = True
+            continue
+        locations[thread] = (source.removesuffix(".rs"), number, column)
+    return locations, malformed
+
+
+def _failed_source_positions(text: str, failed_lines, cases):
+    if cases is None:
+        return []
+    failed = set()
+    for line in failed_lines:
+        if not line.startswith("failed_case="):
+            continue
+        name = line[len("failed_case="):]
+        if name in CASE_SOURCE and cases.get(name) == name:
+            failed.add(name)
+
+    projected = []
+    raw_lines = text.splitlines()
+    for name in sorted(failed):
+        prefix = f"thread '{name}'"
+        panic_lines = [line for line in raw_lines if line.startswith(prefix)]
+        locations, malformed = _panic_locations(panic_lines, (name,))
+        location = locations[name]
+        if malformed or location is None:
+            projected.append(f"failed_source_case={name} source=unavailable")
+        else:
+            source, number, column = location
+            projected.append(
+                f"failed_source_case={name} source={source} line={number} column={column}"
+            )
+    return projected
 
 
 def http_io_failures(text: str):
@@ -438,7 +523,9 @@ def capture(name: str, root: pathlib.Path, exit_code: int, cases=None) -> bool:
     valid = exit_code == 0 and not oversize and not missing and bool(summary.search(text))
     lines = [f"test={name} cargo_exit={exit_code} inventory={'pass' if valid else 'fail'}"]
     if exit_code != 0:
-        lines.extend(failed_cases(text, cases))
+        failed = failed_cases(text, cases)
+        lines.extend(failed)
+        lines.extend(_failed_source_positions(text, failed, cases))
     if missing:
         lines.append("raw_file=unavailable")
     io_diagnostics = http_io_failures(text) if exit_code != 0 else []
