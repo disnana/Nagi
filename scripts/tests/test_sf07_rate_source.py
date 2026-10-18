@@ -65,7 +65,7 @@ class RateSourceTests(unittest.TestCase):
         self.assertEqual({'security_sf07_private::startup_rate::tests::' + n for n in names},
                          set(summary.EXPECTED['rate-startup']))
         self.assertNotIn('#[ignore', source)
-        self.assertIn('#[cfg(test)]\nmod startup_rate;',
+        self.assertIn('pub(crate) mod startup_rate;',
                       (ROOT/'runtime/src/security_sf07_private/mod.rs').read_text())
         workflow = (ROOT/'.github/workflows/ci.yml').read_text()
         self.assertEqual(workflow.count('python -B scripts/tests/test_sf07_rate_source.py'), 2)

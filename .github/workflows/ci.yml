@@ -632,6 +632,32 @@ jobs:
         if: always() && steps.session_deadline_diag.outcome != 'skipped'
         shell: bash
         run: test '${{ steps.session_deadline_diag.outcome }}' = success
+      - name: Validate production SF06 with isolated owned DNS and TLS
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf06_owned_network.py
+          NAGI_SF06_NAMESPACE_PROBE=1 python -B scripts/tests/test_sf06_owned_network.py HostedLifecycleProbe.test_namespace_eof_reaps_setsid_descendant
+          set +e
+          cargo test --locked -p nagi-runtime --test http_client_production_profile --no-run --message-format=json > "$RUNNER_TEMP/sf06-profile-build.jsonl"
+          compile_rc=$?
+          set -e
+          binary=$(SF06_COMPILE_RC="$compile_rc" python - <<'PYSF06BUILD'
+          import json,os,pathlib,sys
+          rows=[json.loads(line) for line in (pathlib.Path(os.environ["RUNNER_TEMP"])/"sf06-profile-build.jsonl").read_text().splitlines() if line.strip()]
+          if os.environ["SF06_COMPILE_RC"] != "0":
+              for row in rows:
+                  message=row.get("message",{})
+                  if row.get("reason")=="compiler-message" and message.get("level")=="error":
+                      print("sf06_profile_compile_error="+json.dumps({"code":message.get("code"),"message":message.get("message","")[:400]}),file=sys.stderr)
+              raise SystemExit(1)
+          paths=[row["executable"] for row in rows if row.get("reason")=="compiler-artifact" and row.get("target",{}).get("name")=="http_client_production_profile" and row.get("executable")]
+          if len(paths)!=1 or "\n" in paths[0] or "\r" in paths[0]:
+              raise SystemExit("sf06_profile_binary_inventory=invalid")
+          print(paths[0])
+          PYSF06BUILD
+          )
+          python -B scripts/ci/sf06_owned_network.py --binary "$binary" --source-sha "$GITHUB_SHA"
       - name: Preserve compiler and application failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
@@ -825,9 +851,9 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6',
-              'runtime/src/http_server/tests.rs': '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f',
-              'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
+              'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
+              'runtime/src/http_server/tests.rs': 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584',
+              'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
           }
@@ -1771,9 +1797,9 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6',
-              'runtime/src/http_server/tests.rs': '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f',
-              'runtime/src/http_server/send_deadline_tests.rs': '5906dac0d89c142fba610937fc23584136facd91039e74efb8734974b0e9076b',
+              'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
+              'runtime/src/http_server/tests.rs': 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584',
+              'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
           }
@@ -1944,6 +1970,24 @@ jobs:
         if: always() && steps.session_deadline_diag.outcome != 'skipped'
         shell: bash
         run: test '${{ steps.session_deadline_diag.outcome }}' = success
+      - name: Measure bounded SF07 response and rate profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf07_profile_summary.py
+          cargo test --locked -p nagi-runtime --test sf07_small_profile --no-run
+          cargo test --locked -p nagi-runtime --test sf07_small_profile -- --list > "$RUNNER_TEMP/sf07-profile-list.log"
+          python - <<'PYSF07LIST'
+          import os,pathlib,re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"sf07-profile-list.log").read_text()
+          if re.findall(r"(?m)^([a-z0-9_]+): test$",text) != ["response_profile_reports_closed_measurements"]:
+              raise SystemExit("sf07_profile_inventory=invalid")
+          PYSF07LIST
+          set +e
+          cargo test --locked -p nagi-runtime --test sf07_small_profile response_profile_reports_closed_measurements -- --exact --show-output > "$RUNNER_TEMP/sf07-profile-native.log" 2>&1
+          profile_rc=$?
+          set -e
+          python -B scripts/ci/sf07_profile_summary.py --cargo-exit-code "$profile_rc" < "$RUNNER_TEMP/sf07-profile-native.log"
       - name: Preserve target-platform compiler, application, and HTTP observation evidence
         if: failure()
         uses: actions/upload-artifact@v4

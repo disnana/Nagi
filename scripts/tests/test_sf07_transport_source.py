@@ -21,7 +21,7 @@ class TransportSourceTests(unittest.TestCase):
     def test_native_finish_ci_additions_have_strict_inverse_without_hash_replacement(self):
         workflow = text(".github/workflows/ci.yml")
         self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(),
-                         "5d7923afbefb4108ccfaedfb2441cf8832aea38d25a683fd6cc1d62400783eb7")
+                         "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79")
         for addition in projection.SESSION_NATIVE_FINISH_ADDITIONS:
             self.assertEqual(workflow.count(addition), 2)
             for mutated in (workflow.replace(addition, "", 1), workflow.replace(addition, addition + addition, 1)):
@@ -52,11 +52,12 @@ class TransportSourceTests(unittest.TestCase):
     def test_original_http_production_path_and_all_frozen_digest_copies(self):
         http = (ROOT/"runtime/src/http_server.rs").read_bytes().replace(b"\r\n", b"\n")
         self.assertNotIn(b"\r", http)
-        self.assertEqual(http.count(b"#[cfg(test)]\nmod response_send;"), 1)
+        self.assertEqual(http.count(b"mod response_send;"), 1)
+        self.assertNotIn(b"#[cfg(test)]\nmod response_send;", http)
         # U1 reverses only explicit header ownership changes, preserving all
         # original order/diagnostic tokens against exact9b7 base32b3ac6.
-        self.assertEqual(projection.digest(projection.inverse_http(http.decode())),
-                         projection.BASE_TOKENS['http'])
+        self.assertEqual(projection.digest(projection.approved_production('http', http.decode())),
+                         projection.PRODUCTION_SOURCES['http']['tokens'])
         digest = hashlib.sha256(http).hexdigest()
         self.assertEqual(text(".github/workflows/ci.yml").count(digest), 2)
         self.assertEqual(text("scripts/ci/session_private_deadline_diagnostic.py").count(digest), 1)
@@ -76,7 +77,7 @@ class TransportSourceTests(unittest.TestCase):
         headers = owner.split("struct ReceivedHeaders", 1)[1].split("impl ReceivedHeaders", 1)[0]
         self.assertLess(headers.index("map: HeaderMap"), headers.index("_prior: Option<Arc<Reservation>>"))
         self.assertIn("_prior: prior", owner)
-        self.assertIn("ReceivedHeaders::new(parts.headers, prior)", send)
+        self.assertIn("ReceivedHeaders::new_native(parts.headers, parts.extensions, prior)", send)
         self.assertIn("Arc::clone(&self.headers)", send)
         self.assertNotRegex(send, r"(?:headers|map)\.clone\(")
         state = send.split("struct SendState", 1)[1].split("struct SendLedger", 1)[0]
@@ -91,7 +92,9 @@ class TransportSourceTests(unittest.TestCase):
         self.assertLess(driver.index("_after_native: AfterNative"), driver.index("_permit: OwnedSemaphorePermit"))
         self.assertIn("drop(this.native.take());", send)
         self.assertNotIn("impl<F> Drop for NativeDriver", send)
-        self.assertNotIn("Box::", send)
+        production_driver = send.split("struct NativeDriver<F>", 1)[1].split("// Uses the existing body", 1)[0]
+        self.assertNotIn("Box::", production_driver)
+        self.assertIn('#[cfg(test)]\npub(super) fn configured_connection', send)
         guard = send.split("impl Drop for AfterNative", 1)[1].split("struct NativeDriver", 1)[0]
         self.assertIn("state.cached.take()", guard)
         self.assertIn("state.closed = true", guard)

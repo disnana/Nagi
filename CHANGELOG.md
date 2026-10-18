@@ -2,29 +2,25 @@
 
 ## 未リリース / Unreleased
 
-### Nagi 0.2.0 Security Foundation候補 / candidate
-
-- Require an explicit HTTP authentication policy, bounded Host/authority configuration, finite response/rate budgets and route rate rules. Response factories return Result and borrow the actual Request's ResponseContext; error mappers receive that context explicitly. Missing budgets are rejected before listen. See the [migration guide](docs/en/migration-0.2.0.md).
-- Connect durable Session issuance/rotation/revocation, bounded reusable authenticated CSRF tokens, separate finite one-use pre-login state, CORS finalization and the fixed Ed25519 verification-only profile. Keep business errors separate from authentication/runtime failures and preserve original deadlines, revocation gates and actual cancellation joins.
-- Connect typed HTML/SQL and registered HTTPS operations. Outbound requests use checked DNS candidates, TCP-only finite failover, one-operation TTL=0 results, ordinary TLS verification and finite bodies; no automatic resend after request sending begins or implicit decompression. Compression remains a separate 0.2.1 task.
-- HTTP方針・Host・応答/rate予算を明示する安全基盤を候補実装へ接続。ResponseContextは実Requestから借用し、factory/mapperはResultで失敗を返す。Session/CSRF/CORS・Ed25519・typed HTML/SQL・用途別HTTPS操作の保証と移行方法は[日本語ガイド](docs/migration-0.2.0.md)を参照。process-local制限は複数台の全体制限ではなく、OOMからの普遍的回復も保証しない。
-- This is an unreleased candidate. Integrated four-OS, browser/TLS, distribution, resource/performance and independent final acceptance remain required; passing compilation or a nonreproduced timeout alone does not complete Security Foundation. 未確認を完了扱いせず、正式な版・タグ・releaseは別途承認後に行う。
-
 ### JetBrains 0.1.3候補 / JetBrains 0.1.3 candidate
 
 - IntelliJ IDEA / PyCharm共通の補完・定義ジャンプ・編集中診断は同じPR source commitの開発版compilerに接続。プラグインのsyntax highlightingはcompilerに依存せず、公開済み0.1.11は手動Check/Runと通常のRun Configuration実行に対応するが、assist protocolは含まない。
 - IDE標準のNagi Run Configurationは通常のRun/Stopから実行でき、未信頼プロジェクトでは起動しない。0.1.3は未公開候補。matching compilerとplugin ZIPはPR CI検証artifactであり、正式公開版ではない。
 - Compiler-backed completion, navigation and live diagnostics require the matching development compiler built from the same PR source commit. Plugin syntax highlighting is independent of the compiler; published 0.1.11 supports ordinary Check/Run but lacks the assist protocol. The 0.1.3 plugin and matching compiler are PR validation artifacts, not releases.
 
-### SQLite
 
-- Implement SF05's canonical opaque `std.db.sqlite.Query` and direct-literal constructor. Require Query/Parameters for query/all/exec; reject dynamic constructors with original-source checker diagnostics. Remove legacy Db/db_* execution and public runtime Db/Sql without a compatibility fallback. Preserve unrelated user definitions by canonical identity.
-- Connect trusted protected database adapters to actual bounded SQLite queue admission through an opaque reservation and synchronous enqueue inside Grant.submit. Bind actual subject/target into reviewed owner/tenant predicates; distinguish earlier revocation (zero enqueue) from admitted work. Preserve transaction, cancellation, Failure/Outcome, cleanup, and actual close. Durable Session generation remains SF02 work.
-- Migrate CRUD, inventory, tasks, settings, Result examples, editor suggestions, row bridges, and SQL checks. Use exec plus readonly query in the same Tx for former RETURNING workflows, with explicit Options and trusted fixed bootstrap. This change does not publish formal 0.2.0, a version, tag, or release.
+## Nagi 0.2.0
 
-- Add the unreleased `std.db.sqlite` Pool and affine Tx API with typed owned Parameters, explicit transaction boundaries, structured failure outcomes, and observed close. The API is not included in Nagi 0.1.11; see [SF05 migration](docs/en/migration-0.2.0.md).
-- Extend opt-in SQLite SQL checks to literal `std.db.sqlite` query/all/exec operations in the development source. Check schema and row shape, prepare new exec DDL without executing it, and compare direct Parameters builder counts, reporting unavailable Query/Parameters structure for runtime checks.
-- Replace the private deadpool prototype with the existing Tokio semaphore and a lazy adapter; remove deadpool/deadpool-runtime without adding dependencies. Distinguish recoverable reservation failures as ALLOCATION without promising universal OOM recovery. Rust compiler embedding users must handle the added SQLite variants of public standard-module/resource/operation enums; this runtime change retains transaction/lifecycle contracts.
+- Require an explicit HTTP authentication policy, bounded Host/authority configuration, finite response/rate budgets and route rate rules. Response factories return Result and borrow the actual Request's ResponseContext; error mappers receive that context explicitly. Missing budgets are rejected before listen. See the [migration guide](docs/en/migration-0.2.0.md).
+- Connect durable Session issuance/rotation/revocation, bounded reusable authenticated CSRF tokens, separate finite one-use pre-login state, CORS finalization and the fixed Ed25519 verification-only profile. Keep business errors separate from authentication/runtime failures and preserve original deadlines, revocation gates and actual cancellation joins.
+- Connect typed HTML/SQL and registered HTTPS operations. Outbound requests use checked DNS candidates, TCP-only finite failover, one-operation TTL=0 results, ordinary TLS verification and finite bodies; no automatic resend after request sending begins or implicit decompression. Compression remains a separate 0.2.1 task.
+- HTTP方針・Host・応答/rate予算を明示する安全基盤を候補実装へ接続。ResponseContextは実Requestから借用し、factory/mapperはResultで失敗を返す。Session/CSRF/CORS・Ed25519・typed HTML/SQL・用途別HTTPS操作の保証と移行方法は[日本語ガイド](docs/migration-0.2.0.md)を参照。process-local制限は複数台の全体制限ではなく、OOMからの普遍的回復も保証しない。
+
+### SQLite Pool / Transaction and SQL
+
+- Publish the canonical `std.db.sqlite` Pool and affine Tx API with owned Parameters, opaque direct-literal Query values, structured Failure/Outcome and observed close. Acquisition budgets remain separate from SQL execution and busy handling; cancellation does not undo already committed work.
+- Remove legacy Db/db_* execution without a downgrade path. Preserve original-source migration diagnostics, parameter binding, transaction cleanup and actual native joins. See the bilingual migration guide for replacement code and guarantees.
+- Use the existing Tokio semaphore and lazy SQLite adapter instead of deadpool. Checked capacity and recoverable reservation refusal do not guarantee universal recovery from OOM.
 
 ## JetBrains 0.1.2
 

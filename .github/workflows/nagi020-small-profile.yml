@@ -1,0 +1,45 @@
+name: Nagi020 bounded production and resource profiles
+'on':
+  push:
+    branches:
+    - test/nagi020-small-profile-20261018
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: nagi020-profile-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  profiles:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: ubuntu-latest
+          platform: linux-x86_64
+        - os: windows-latest
+          platform: windows-x86_64
+        - os: macos-15
+          platform: macos-arm64
+        - os: macos-15-intel
+          platform: macos-x86_64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      CARGO_INCREMENTAL: '0'
+      CARGO_TERM_COLOR: never
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Fetch locked dependencies
+      run: cargo fetch --locked
+    - name: Measure bounded SF07 response and rate profile
+      shell: bash
+      run: "set -euo pipefail\npython -B scripts/tests/test_sf07_profile_summary.py\ncargo test --locked -p nagi-runtime --test sf07_small_profile --no-run\ncargo test --locked -p nagi-runtime --test sf07_small_profile -- --list > \"$RUNNER_TEMP/sf07-profile-list.log\"\npython - <<'PYSF07LIST'\nimport os,pathlib,re\ntext=(pathlib.Path(os.environ[\"RUNNER_TEMP\"])/\"sf07-profile-list.log\").read_text()\nif re.findall(r\"(?m)^([a-z0-9_]+): test$\",text) != [\"response_profile_reports_closed_measurements\"]:\n    raise SystemExit(\"sf07_profile_inventory=invalid\")\nPYSF07LIST\nset +e\ncargo test --locked -p nagi-runtime --test sf07_small_profile response_profile_reports_closed_measurements -- --exact --show-output > \"$RUNNER_TEMP/sf07-profile-native.log\" 2>&1\nprofile_rc=$?\nset -e\npython -B scripts/ci/sf07_profile_summary.py --cargo-exit-code \"$profile_rc\" < \"$RUNNER_TEMP/sf07-profile-native.log\"\n"
+    - name: Validate production SF06 with isolated owned DNS and TLS
+      shell: bash
+      run: "set -euo pipefail\npython -B scripts/tests/test_sf06_owned_network.py\nNAGI_SF06_NAMESPACE_PROBE=1 python -B scripts/tests/test_sf06_owned_network.py HostedLifecycleProbe.test_namespace_eof_reaps_setsid_descendant\nset +e\ncargo test --locked -p nagi-runtime --test http_client_production_profile --no-run --message-format=json > \"$RUNNER_TEMP/sf06-profile-build.jsonl\"\ncompile_rc=$?\nset -e\nbinary=$(SF06_COMPILE_RC=\"$compile_rc\" python - <<'PYSF06BUILD'\nimport json,os,pathlib,sys\nrows=[json.loads(line) for line in (pathlib.Path(os.environ[\"RUNNER_TEMP\"])/\"sf06-profile-build.jsonl\").read_text().splitlines() if line.strip()]\nif os.environ[\"SF06_COMPILE_RC\"] != \"0\":\n    for row in rows:\n        message=row.get(\"message\",{})\n        if row.get(\"reason\")==\"compiler-message\" and message.get(\"level\")==\"error\":\n            print(\"sf06_profile_compile_error=\"+json.dumps({\"code\":message.get(\"code\"),\"message\":message.get(\"message\",\"\")[:400]}),file=sys.stderr)\n    raise SystemExit(1)\npaths=[row[\"executable\"] for row in rows if row.get(\"reason\")==\"compiler-artifact\" and row.get(\"target\",{}).get(\"name\")==\"http_client_production_profile\" and row.get(\"executable\")]\nif len(paths)!=1 or \"\\n\" in paths[0] or \"\\r\" in paths[0]:\n    raise SystemExit(\"sf06_profile_binary_inventory=invalid\")\nprint(paths[0])\nPYSF06BUILD\n)\npython -B scripts/ci/sf06_owned_network.py --binary \"$binary\" --source-sha \"$GITHUB_SHA\"\n"
+      if: runner.os == 'Linux'

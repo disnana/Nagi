@@ -4,11 +4,15 @@
 
 ## 2026-10-18: 統合候補と残る受入条件
 
-**採用済み仕様・候補実装・実行確認・正式公開を分ける。** mainの確認HEADは `7da0068254c1895ed4e6f2c824aab45eb2fbbf2c`。#121・#122・#123・#126・#131・#132はまだDraftであり、以下の専用検証ブランチはマージ済みでも正式配布でもない。
+**採用済み仕様・候補実装・実行確認・正式公開を分ける。** mainの確認HEADは `7da0068254c1895ed4e6f2c824aab45eb2fbbf2c`。#121・#122・#123・#126・#131・#132で進めた差分をmain向けの単一0.2.0統合PRへ集約する。元PRは実装・レビュー履歴の参照先として保持し、受入判定は統合PRの最新HEADと必要な検証へ結び付ける。以下の専用検証ブランチはマージ済みでも正式配布でもなく、限定検証のスナップショットである。
 
-統合候補 `4337422f5f632fe73e65d512a9ea170001301952` は、Session/CSRF/CORS、Ed25519検証専用profile、typed HTML/SQL、用途別外向きHTTP、SF07の借用ResponseContext・Result factory/mapper・明示route rate/予算、SF08のbrowser fixtureを接続している。[限定CI 39126273963](https://github.com/disnana/Nagi/actions/runs/39126273963)でproduction runtime型検査、全runtime test targetコンパイル、protected操作の実HTTP/TLS 1件、Ed25519 core14件/public1件、Cargoが更新した依存graphによるstandalone fixtureの `cargo check --locked`（型検査）を確認した。これは全テスト実行・4 OS・実ブラウザ受入の代替ではない。
+以前の限定検証スナップショット `4337422f5f632fe73e65d512a9ea170001301952` は、Session/CSRF/CORS、Ed25519検証専用profile、typed HTML/SQL、用途別外向きHTTP、SF07の借用ResponseContext・Result factory/mapper・明示route rate/予算、SF08のbrowser fixtureを接続している。[限定CI 39126273963](https://github.com/disnana/Nagi/actions/runs/39126273963)でproduction runtime型検査、全runtime test targetコンパイル、protected操作の実HTTP/TLS 1件、Ed25519 core14件/public1件、Cargoが更新した依存graphによるstandalone fixtureの `cargo check --locked`（型検査）を確認した。これは全テスト実行・4 OS・実ブラウザ受入の代替ではない。
 
-残るrelease条件は、最終候補の4 OS/MSRV・High/保存Low/手書きLow native・Session/ログイン/取消/解放の回帰・実ブラウザ/TLS・配布物・性能/資源・日英Docs/移行・最終独立監査である。既知のSession 504とB1短TTLの失敗は、限定実行の非再現だけで解消扱いしない。未確認の範囲を「制約」と呼んで完了条件から外さない。正式0.2.0、版変更、タグ、releaseの承認をこの候補検証は含まない。
+現在の統合PRは、候補 `9dd70dc73b2722fb537edc34452916030670d027` の全差分に、レビュー済みsource gate・SF06生成fixture・SF08 browser fixture・日英Docsの修正を加えて構成する。検証用の一時workflowは取り込まない。Nagi本体の0.1.11→0.2.0への版更新は明示承認済みで、外部依存版を変更せず統合PRへ含める。版更新は正式公開を意味しない。
+
+[9ddのCI](https://github.com/disnana/Nagi/actions/runs/39128739265)はIDEA/PyCharm stable・EAP、Plugin Verifier、共通ZIP、MSRV Ed25519、Docs、VSIXが成功したが、source gate・生成fixtureの失敗を含み4 OS全体は失敗した。修正後の限定検証では、[SF06のHigh・Highなし保存Low・手書きLowからの実TLS/Grant実行](https://github.com/disnana/Nagi/actions/runs/39130975356)と[3 browser enginesの実TLS/business 12実行](https://github.com/disnana/Nagi/actions/runs/39129492943)が成功した。[Windows限定CI](https://github.com/disnana/Nagi/actions/runs/39131370586)は送信期限3件・停止/終了確認2件・SF07 wire検証群が成功し、private Session診断のhead_finalizerが20msのhandler予算中に失敗した。DB commit中の期限到達を観測したが、元の失敗と同一原因とも解消済みとも判断しない。診断と原因別の回帰検証が残る。これらは各HEADの限定結果であり、最終統合HEADの全体成功へ流用しない。
+
+残るrelease条件は、最終候補の4 OS/MSRV・High/保存Low/手書きLow native・Session/ログイン/取消/解放の回帰・実ブラウザ/TLS・配布物・性能/資源・日英Docs/移行・最終独立監査である。既知のSession 504とB1短TTLの失敗は、限定実行の非再現だけで解消扱いしない。未確認の範囲を「制約」と呼んで完了条件から外さない。候補検証と版更新の承認は、マージ、タグ、release、Marketplace公開の承認を含まない。
 
 以下の2026-10-10の状態・CI記述は当日の履歴であり、上記候補の現在の実装・CI結果を示さない。
 

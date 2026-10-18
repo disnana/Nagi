@@ -175,8 +175,10 @@ class OwnedStateSummaryTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("old83", ROOT / "scripts/ci/sf07_checkpoint_summary.py")
         summary = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(summary)
-        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 83)
-        self.assertEqual(hashlib.sha256(json.dumps(summary.EXPECTED, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 84)
+        self.assertEqual(summary.EXPECTED["wire"][-1],
+                         "http_server::response_budget::finalize::tests::security_fallback_catalog_and_last_body_view_keep_finite_credit")
+        self.assertEqual(hashlib.sha256(json.dumps({**summary.EXPECTED, "wire": summary.EXPECTED["wire"][:-1]}, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
                          "643c31aa2c66ac769a3cd478c5bdd57f324f058ba9a314352927b0e63dc4409d")
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         p = projection()
@@ -269,7 +271,7 @@ class OwnedStateSummaryTests(unittest.TestCase):
         p = projection()
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertEqual(hashlib.sha256(p.inverse_workflow(workflow).encode()).hexdigest(),
-                         "5d7923afbefb4108ccfaedfb2441cf8832aea38d25a683fd6cc1d62400783eb7")
+                         "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79")
         for addition in p.OWNED_STATE_CI_ADDITIONS:
             for changed in (workflow.replace(addition, "", 1), workflow.replace(addition, addition + addition, 1),
                             workflow.replace(addition, addition.replace("python", "python -c pass", 1), 1)):
@@ -287,7 +289,7 @@ class OwnedStateSummaryTests(unittest.TestCase):
             p.inverse_workflow(private_mutant)
         changed = workflow.replace("set -euo pipefail", "set -eu pipefail", 1)
         self.assertNotEqual(hashlib.sha256(p.inverse_workflow(changed).encode()).hexdigest(),
-                            "5d7923afbefb4108ccfaedfb2441cf8832aea38d25a683fd6cc1d62400783eb7")
+                            "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79")
 
     def test_quota_import_inverse_is_exact_and_retains_all_old_semantic_bytes(self):
         p = projection()

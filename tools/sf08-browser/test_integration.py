@@ -388,7 +388,19 @@ class IntegrationTests(unittest.TestCase):
 
     def test_native_tool_security_deadlines_and_r8_contract_source_unchanged(self):
         source=(c.HERE.parent/'sf08-fixture-runtime/src/main.rs').read_text()
-        self.assertIn('http::options(4096, 5000, 5000, 2000)',source)
+        self.assertIn(
+            'login::checked_for_origin(4096, 5000, 5000, 2000, app_origin)', source)
+        helper=(c.HERE.parents[1]/'runtime/tests/support/browser_login.rs').read_text()
+        self.assertRegex(helper, r'pub\(crate\) fn checked_for_origin\(\s*'
+            r'body: i64,\s*body_ms: i64,\s*handler_ms: i64,\s*'
+            r'shutdown_ms: i64,\s*app_origin: &str,\s*\) -> http::Options')
+        self.assertIn(
+            'response_rate_options(body, body_ms, handler_ms, shutdown_ms)', helper)
+        self.assertIn('app_origin.strip_prefix(\"https://\").unwrap().to_owned()', helper)
+        self.assertIn('http::with_response_limits(', helper)
+        self.assertIn('response_limits(body)', helper)
+        self.assertIn('http::rate_limits(64, 64, 1, 67_108_864, 65_536)', helper)
+        self.assertIn('http::with_rate_limits(options, limits).unwrap()', helper)
         spec=(c.HERE/'business/security-foundation.browser.spec.ts').read_text()
         self.assertEqual(spec.count('test("'),4)
         self.assertIn('await resetFixture()',spec)

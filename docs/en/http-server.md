@@ -1,6 +1,6 @@
 # HTTP API reference
 
-These are unreleased 0.2.0 SF01 APIs. See [migration](migration-0.2.0.md) and [authentication and authorization](security.md).
+These are unreleased 0.2.0 development APIs. See [migration](migration-0.2.0.md) and [authentication and authorization](security.md).
 
 ```nagi
 import std.http.server as http
@@ -62,7 +62,7 @@ Header names are case-insensitive. Single-header getters reject duplicates; `hea
 
 `context` is borrowed from the current Request with `response_context`. It is an opaque response-budget context, not an authentication proof. It cannot outlive its Request or be constructed with a default. The factories return an owned response with a retained budget claim; allocating or serializing beyond the explicit limits returns `Err`. Use `try` or return the factory Result directly. Handle these allocation/budget failures separately from the handler's business error.
 
-The SF07 cutover is still a development candidate: compiler checks cover High, saved Low and handwritten Low; runtime, native and final four-OS acceptance remain pending. This paragraph is not a claim of a released feature.
+The development candidate connects these compiler and runtime APIs. Scoped native checks do not establish final acceptance: all required checks on the final integrated HEAD, including four-OS and resource validation, remain pending. This is not a released-feature claim.
 
 `text` and `bytes` copy borrowed input into a body owned by the Response. `json` borrows its value, so it does not move the original. String literals can be passed directly to view parameters; borrow variables with `view(value)`.
 
@@ -76,8 +76,6 @@ The following is the route-registration fragment, not a complete SF07 startup pr
 app = http.app[State, AuthError](state, map_error)
 app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), handle)
 app = try http.route_mapped(app, http.Method.POST, "/login", http.public_policy[State](), login, map_login_error)
-limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
-return await http.serve(app, 8080, limits)
 ```
 
 - `app[S, E](state, mapper)` owns the state and uses `fn(view[ResponseContext], E) -> Result[Response, Error]` as its default error mapper.
@@ -97,7 +95,7 @@ When an error response needs a request ID, retain the validated ID in the handle
 
 ## Explicit SF07 budgets and rate policy (development candidate)
 
-Response and rate budgets have no implicit defaults. `default_options()` retains the existing transport settings but does not supply the new budgets. Configure both budgets and every route's pre-authentication rate policy before starting the listener. Missing or inconsistent configuration must be rejected before listening; the runtime cutover and native acceptance of this requirement remain pending.
+Response and rate budgets have no implicit defaults. `default_options()` retains the existing transport settings but does not supply the new budgets. Configure both budgets and every route's pre-authentication rate policy before starting the listener. Missing or inconsistent configuration is rejected before listening. Final integrated native/four-OS acceptance remains pending.
 
 | Configuration operation | Contract |
 |---|---|
@@ -156,13 +154,21 @@ In Nagi 0.1.10, a handler that completes normally after its deadline returns 504
 
 An oversized body is rejected with 413 and `Connection: close`, without calling the handler. In the 0.2.0 development version, after sending the response, the server discards at most 8 KiB of remaining input for the shorter of 100 ms and the body deadline, then closes the write side. It retains the connection slot during cleanup and never dispatches discarded input. Normal responses and idle keep-alive do not enter this cleanup path. It does not drain the whole remaining body: a deadline, byte limit or cancellation ends cleanup. Closing with unread data can still cause a TCP reset; receipt of the 413 is not guaranteed for every OS, client, or upload pattern.
 
-Example:
+The following startup fragment continues the two registered routes above (`/` and `/login`). It includes both required SF07 budgets and both rate policies. The finite values illustrate configuration; they are not a measured sizing recommendation. Handler, state and mapper definitions are still required; for a complete buildable application, see the [HTTP authentication example](../../test-nagi-code/library-examples/http-auth/README.en.md).
 
 ```nagi
+route_budget = try http.rate_policy(10, 1000)
+app = try http.rate_route(app, http.Method.GET, "/", route_budget)
+login_budget = try http.rate_policy(10, 1000)
+app = try http.rate_route(app, http.Method.POST, "/login", login_budget)
 limits = try http.options(1048576, 10000, 2000, 10000)
-limits = try http.capacity(limits, 2048, 512)
+limits = try http.capacity(limits, 8, 8)
 limits = try http.header_limits(limits, 32768, 100)
 limits = try http.authority(limits, "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+response_budget = try http.response_limits(4096, 4096, 16, 4096, 32, 4096, 8, 2097152, 8, 2097152, 4096, 32)
+limits = try http.with_response_limits(limits, response_budget)
+rate_budget = try http.rate_limits(8, 8, 1, 1048576, 65536)
+limits = try http.with_rate_limits(limits, rate_budget)
 return await http.serve(app, 8080, limits)
 ```
 

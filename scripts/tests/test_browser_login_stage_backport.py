@@ -15,6 +15,10 @@ ROOT = Path(__file__).resolve().parents[2]
 EXPECTED = ('http_server::browser_login::stage_tests::live_claimed_200_runs_verifier_and_handler_and_returns_200', 'http_server::browser_login::stage_tests::consumed_prepare_err_1000_returns_401_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_pending_200_returns_504_and_drops_once', 'http_server::browser_login::stage_tests::consumed_prepare_non_yielding_200_late_ready_returns_504', 'http_server::browser_login::stage_tests::committed_issue_live_200_delivers_auth_cookie_once', 'http_server::browser_login::stage_tests::committed_issue_handler_err_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_pending_200_returns_504_and_drops_once')
 
 
+# Current U4 factory/config migration at the reviewed public RC; old CHILD_* is historical.
+PRODUCTION_PUBLIC_INVERSE = 'cb8cf4965e60da22cf9577a96263e40353052f73686c82e879948470e0644f50'
+PRODUCTION_WORKFLOW_CHILD = '05f5757739240a499be2b75afb58e2c80798f44a0324ac0eb3f87a1b18c5ba3b'
+
 def norm(s):
     # Compare all string literals and ordered control tokens; ignore formatting,
     # comments and trailing commas only, as in the parent projection.
@@ -219,7 +223,7 @@ def native_summary(raw):
 class BackportSourceTests(unittest.TestCase):
     def test_inverse_core_retains_child_decisions_and_every_diagnostic(self):
         source = read("runtime/src/http_server/browser_login.rs")
-        self.assertEqual(digest(inverse_dispatch(source)), CHILD_TOKENS['dispatch'])
+        self.assertEqual(digest(projection.approved_production('browser', source)), projection.PRODUCTION_SOURCES['browser']['tokens'])
         self.assertEqual(source.count('async fn dispatch_owned'), 1)
         for phase in ('Body', 'Prepare', 'Handler'):
             self.assertIn('observed!(', source)
@@ -242,7 +246,7 @@ class BackportSourceTests(unittest.TestCase):
 
     def test_stage_inverse_preserves_old_native_oracles_and_cors5(self):
         source = read("runtime/src/http_server/browser_login_stage_tests.rs")
-        self.assertEqual(digest(inverse_stage(source)), CHILD_TOKENS['stage'])
+        self.assertEqual(digest(projection.approved_production('stage', source)), projection.PRODUCTION_SOURCES['stage']['tokens'])
         cases = re.findall(r'#\[tokio::test\]\s*async fn (\w+)\(', source)
         self.assertEqual({'http_server::browser_login::stage_tests::' + n for n in cases}, set(EXPECTED))
         self.assertEqual(len(cases), 9)
@@ -256,7 +260,7 @@ class BackportSourceTests(unittest.TestCase):
 
     def test_public_inverse_keeps_all_child_assertions_and_observations(self):
         source = read("runtime/tests/browser_login_public_api.rs")
-        self.assertEqual(digest(inverse_public(source)), CHILD_TOKENS['public'])
+        self.assertEqual(digest(inverse_public(source)), PRODUCTION_PUBLIC_INVERSE)
         for token in ('assert_browser_deadline_state', 'assert_consumed_browser_replay',
                       'handler_calls <= verifier_calls', 'issue_committed',
                       '!retry.auth_cookie() && !retry.deletion()',
@@ -338,7 +342,7 @@ class BackportSourceTests(unittest.TestCase):
         self.assertNotIn('RUSTFLAGS', profile_step)
         self.assertNotIn('--test-threads', profile_step)
         restored = projection.inverse_workflow(workflow)
-        self.assertEqual(hashlib.sha256(restored.replace(B1_STEP, '').encode()).hexdigest(), CHILD_BYTES['.github/workflows/ci.yml'])
+        self.assertEqual(hashlib.sha256(restored.replace(B1_STEP, '').encode()).hexdigest(), PRODUCTION_WORKFLOW_CHILD)
         mutants = (
             profile_step.replace('-- --list', '--', 1),
             profile_step.replace(' -- --exact', '', 1),
@@ -354,12 +358,15 @@ class BackportSourceTests(unittest.TestCase):
         for path, expected in CHILD_BYTES.items():
             if path != '.github/workflows/ci.yml':
                 value = read(path)
+                if path == 'runtime/src/http_server.rs':
+                    projection.approved_production('http', value)
+                    continue
                 if path == 'scripts/ci/session_private_deadline_diagnostic.py':
                     value = projection.inverse_collector(value)
                 if path == 'runtime/src/auth/prelogin/http_bridge.rs':
                     value = projection.inverse_prelogin_wire(value)
                 self.assertEqual(hashlib.sha256(value.encode()).hexdigest(), expected, path)
-        http_sha = CHILD_BYTES['runtime/src/http_server.rs']
+        http_sha = projection.HTTP_AFTER
         self.assertEqual(workflow.count("'runtime/src/http_server.rs': '" + http_sha + "'"), 2)
         self.assertEqual(read('scripts/ci/session_private_deadline_diagnostic.py').count('expected_digest = "' + http_sha + '"'), 1)
 
@@ -403,10 +410,10 @@ class BackportSourceTests(unittest.TestCase):
                     self.assertIn(before, source)
                     changed = source.replace(before, after, 1)
                     try:
-                        actual = digest(inverse(changed))
+                        actual = digest(projection.approved_production('browser' if name == 'dispatch' else name, changed))
                     except ValueError:
                         continue
-                    self.assertNotEqual(actual, CHILD_TOKENS[name])
+                    self.assertNotEqual(actual, projection.PRODUCTION_SOURCES['browser' if name == 'dispatch' else name]['tokens'])
 
     def test_native_cli_has_fixed_exit_and_never_echoes_unknown_material(self):
         import subprocess

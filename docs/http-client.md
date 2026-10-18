@@ -89,7 +89,7 @@ C3として、trusted Rust startupは`StartupCatalog::new(operation_capacity, Re
 
 budget不足は`Capacity`、無効設定・overflow・binding不一致は`InvalidInput`、明示的な確保失敗は`Unavailable`、閉鎖は`Closing`です。いずれもstartupでは`RequestNotStarted`、authは`None`です。計上不整合は`Internal`として閉鎖します。ホストが先に確保した入力、外部crateの隠れたheap、Arc/Bytesのallocator bookkeeping、allocator rounding/fragmentation、実行時DNS/TLS/HTTP bufferやFuture/stack、既存operation ledger、アプリstateはこのaccounting modelの総量保証に含みません。全malloc／heap／RSS上限や普遍的OOM回復を保証するAPIではありません。
 
-C3実装候補の受入には、Rust型検証、native所有fixture、4 OSのexact-head CIと独立reviewが残っています。実測した小規模設定例とproduction-positive profileも別の受入作業です。今回のsource/parse検査や未検証のfixture値を本番推奨値として使わないでください。
+限定SF06 fixtureの独立High reviewはGOし、[run 39130975356 / job 117685886104](https://github.com/disnana/Nagi/actions/runs/39130975356/job/117685886104)ではHigh、Highを介さない保存Low、手書きLowの生成Rustと、TLS/Grant exact 1件が101.89秒でPASSしました。これは対象fixtureの検証です。最終統合HEADの4 OS exact-head CI、全体の独立最終review、実測した小規模設定例とproduction-positive profileは未完了です。未検証のfixture値を本番推奨値として使わないでください。
 
 保護操作では `execute` が実際の `Grant[P]` を消費します。ホストのレビュー済み adapter は、その Grant から得た subject/target を実際の要求へ結び付けます。呼び出し側から任意の URL、method/path の組み合わせ、raw header map、Cookie や cookie jar を渡す API はありません。ヘッダーは登録時の固定 `Accept` / `Content-Type` 宣言と、保護操作に結び付いた任意の Bearer 認証情報に限られます。公開操作は別の型で登録され、Grant や認証情報を受け取りません。`ProtectedOperation` を `execute_public` に渡して認可を迂回することは、型検査で拒否します。
 
@@ -118,6 +118,7 @@ DNS応答のA/AAAA候補をすべて検査します。危険な候補または�
 | High・保存 Low・手書き Low の3形式、2 fixture groups | PASS。呼び出し/API projection の検証であり、一般の本番ホスト構成を示しません |
 | 正のTLS native fixture | PASS。ただし送信先の許可は `cfg(test)` 専用 seam を使います。本番の正の接続profileを証明しません |
 | 本番のloopback拒否 | PASS。A検索はloopbackを返し、AAAA検索は正常なNoDataとして完了します。TCP接続前の拒否を実タスク終了後に確認します |
-| 4 OS の公開API接続CI | 保留中。過去のprivate-head CI結果はこの候補の証拠ではありません |
+| SF06統合fixtureのHigh/保存Low/手書きLow生成RustとTLS/Grant exact 1件 | [PASS（101.89秒）](https://github.com/disnana/Nagi/actions/runs/39130975356/job/117685886104)。対象fixtureのみで、4 OSやproduction-positive profileの受入ではありません |
+| 4 OS の公開API接続CI | 最終統合HEADで保留中。過去のprivate-head CI結果はその代替ではありません |
 
 この候補はリリース済み機能でも、4 OS の本番接続受入れ済み機能でもありません。

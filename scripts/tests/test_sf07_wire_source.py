@@ -51,7 +51,10 @@ class BridgeBoundaryTests(unittest.TestCase):
         text = source("runtime/src/http_server/response_wire.rs")
         self.assertTrue("fn suppress_body_for_head" in text, "HEAD owner boundary missing")
         self.assertIn("-> (ChargedNativeHeaders, Bytes)", text)
-        self.assertNotRegex(text, r"pub[^\n]*fn[^\n]*->[^\n]*(?:&|\b)HeaderMap")
+        borrowed_map = "pub(in crate::http_server) fn map(&self) -> &HeaderMap {\n        &self.map\n    }"
+        self.assertEqual(text.count(borrowed_map), 1)
+        self.assertNotRegex(text.replace(borrowed_map, '', 1), r"pub[^\n]*fn[^\n]*->[^\n]*(?:&|\b)HeaderMap")
+        self.assertNotIn('-> &mut HeaderMap', text)
         self.assertNotRegex(text, r"impl Clone for (?:ChargedWire|ChargedNativeHeaders)")
         self.assertNotIn("self.headers.map.clone()", text)
 
@@ -103,6 +106,15 @@ class BridgeBoundaryTests(unittest.TestCase):
         block = text[text.index(start):text.index(end) + len(end)]
         expected = "a7031c5a4ad071d719f6efc41dd8889d9582169602197a337c94a54cbc4f6861"
         self.assertEqual(hashlib.sha256(projection.inverse_quota(text).encode()).hexdigest(), expected)
+        # Restoring U1's test-only retained catalogue inside the U4 production
+        # profile must fail, even though that exact block is historical evidence.
+        historical_block = block.replace("#[derive(Clone, Copy, Debug, Eq, PartialEq)]\npub(crate) struct CatalogRetention", "#[cfg(test)]\n#[derive(Clone, Copy, Debug, Eq, PartialEq)]\npub(crate) struct CatalogRetention", 1)
+        historical_block = historical_block.replace("impl CatalogRetention {", "#[cfg(test)]\nimpl CatalogRetention {", 1)
+        historical_block = historical_block.replace("impl Quota {", "#[cfg(test)]\nimpl Quota {", 1)
+        self.assertEqual(hashlib.sha256(historical_block.encode()).hexdigest(),
+                         "33a82908cee4b72230b2d5ac1c5b966ba010f673e33562c4092d2b49cc0d39a3")
+        with self.assertRaises(ValueError):
+            projection.inverse_quota(text.replace(block, historical_block, 1))
         without = text.replace(block, "", 1)
         self.assertEqual(hashlib.sha256(projection.inverse_quota(without).encode()).hexdigest(), expected)
         for invalid in (text.replace(start, start + " altered", 1),
@@ -118,7 +130,8 @@ class BridgeBoundaryTests(unittest.TestCase):
         for token in ("header_only", "frame_clone", "head_empty", "fallback_uses_independent",
                       "without_another_allocation", "foreign_owner", "send_sync"):
             self.assertTrue(token in tests, "native boundary oracle missing")
-        self.assertIn("#[cfg(test)]\nmod response_budget;", source("runtime/src/http_server.rs"))
+        self.assertEqual(source("runtime/src/http_server.rs").count("mod response_budget;"), 1)
+        self.assertNotIn("#[cfg(test)]\nmod response_budget;", source("runtime/src/http_server.rs"))
         self.assertIn('#[path = "response_wire_tests.rs"]', source("runtime/src/http_server/response_wire.rs"))
 
 

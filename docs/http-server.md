@@ -62,7 +62,7 @@ Statusは数値を保持するコピー可能な値です。文字列への変�
 
 `context`は現在のRequestから`response_context`で借ります。応答予算のための不透明な値で、認証proofではありません。Requestより長く保持できず、defaultから作れません。factoryは予算の保持責任を持つ所有Responseを返し、明示した確保・直列化の上限を超えると`Err`になります。`try`で処理するかfactoryのResultを直接返し、handlerの業務エラーと予算・確保失敗を区別してください。
 
-SF07の接続は開発候補です。compilerのHigh・保存Low・手書きLow検査はありますが、runtime・native・最終4 OSの受入は未完です。公開済み機能の保証ではありません。
+開発候補ではcompilerとruntimeのAPIを接続しています。限定native検証は最終受入を意味しません。最終統合HEADの4 OS・資源検証を含む必須条件は未完で、公開済み機能の保証ではありません。
 
 `text`、`bytes`は借りた入力をコピーして、Responseが所有するbodyを作ります。`json`は値を借用してJSONを作るため、元の値をmoveしません。文字列リテラルはview引数へ直接渡せます。変数から借りる場合は`view(value)`を使います。
 
@@ -76,8 +76,6 @@ SF07の接続は開発候補です。compilerのHigh・保存Low・手書きLow�
 app = http.app[State, AuthError](state, map_error)
 app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), handle)
 app = try http.route_mapped(app, http.Method.POST, "/login", http.public_policy[State](), login, map_login_error)
-limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
-return await http.serve(app, 8080, limits)
 ```
 
 - `app[S, E](state, mapper)`は状態を所有し、`fn(view[ResponseContext], E) -> Result[Response, Error]`を既定のエラー処理にします。
@@ -97,7 +95,7 @@ Nagi 0.1.10以降では、応答開始前のhandlerやmapperでunwindするpanic
 
 ## SF07の明示予算とrate policy（開発候補）
 
-応答・rateの新予算に暗黙defaultはありません。`default_options()`は従来のtransport設定を持ちますが、新予算を補いません。両方の予算と全routeの認証前rate policyを明示してから起動します。未設定や不整合はlisten前に拒否する契約で、runtime接続とnative受入は未完です。
+応答・rateの新予算に暗黙defaultはありません。`default_options()`は従来のtransport設定を持ちますが、新予算を補いません。両方の予算と全routeの認証前rate policyを明示してから起動します。未設定や不整合はlisten前に拒否します。最終統合HEADのnative・4 OS受入は未完です。
 
 | 設定API | 契約 |
 |---|---|
@@ -156,13 +154,21 @@ Nagi 0.1.10以降では、handlerの応答生成が正常に完了した時点�
 
 本文上限を超えると、handlerを呼ばずに413と`Connection: close`で拒否します。0.2.0開発版では応答の送信後、最大8 KiB・100 msと本文期限の短い方まで残りの入力を読み捨て、書込み側を閉じます。この間は接続枠を保持し、読み捨てた入力をhandlerへ渡しません。通常応答やidle Keep-Aliveではこの後片付けを行いません。残りの本文を最後まで読み捨てる実装ではなく、期限・上限・取消で切断します。未読本文を残した切断ではTCP resetが起こり得るため、すべてのOS・client・送信条件で413を受信できることは保証していません。
 
-設定例：
+次の起動部分は、前の例で登録した2つのroute（`/`と`/login`）へ続けます。必須のSF07予算と両routeのrate policyを含めています。数値は有限な設定方法の例で、実測済みの推奨値ではありません。handler・state・mapperの定義は別途必要です。全体をbuildできる例は[HTTP認証サンプル](../test-nagi-code/library-examples/http-auth/README.md)を参照してください。
 
 ```nagi
+route_budget = try http.rate_policy(10, 1000)
+app = try http.rate_route(app, http.Method.GET, "/", route_budget)
+login_budget = try http.rate_policy(10, 1000)
+app = try http.rate_route(app, http.Method.POST, "/login", login_budget)
 limits = try http.options(1048576, 10000, 2000, 10000)
-limits = try http.capacity(limits, 2048, 512)
+limits = try http.capacity(limits, 8, 8)
 limits = try http.header_limits(limits, 32768, 100)
 limits = try http.authority(limits, "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+response_budget = try http.response_limits(4096, 4096, 16, 4096, 32, 4096, 8, 2097152, 8, 2097152, 4096, 32)
+limits = try http.with_response_limits(limits, response_budget)
+rate_budget = try http.rate_limits(8, 8, 1, 1048576, 65536)
+limits = try http.with_rate_limits(limits, rate_budget)
 return await http.serve(app, 8080, limits)
 ```
 

@@ -52,15 +52,20 @@ class SummaryTests(unittest.TestCase):
             self.assertEqual(summary.classify(raw, "wire"), "compile_failed")
 
     def test_native_failure_is_classified_without_acceptance(self):
-        raw = fixture("wire").replace(b"ok. 38 passed; 0 failed", b"FAILED. 37 passed; 1 failed")
+        original = fixture("wire")
+        count = len(summary.EXPECTED["wire"])
+        raw = original.replace(f"ok. {count} passed; 0 failed".encode(),
+                               f"FAILED. {count - 1} passed; 1 failed".encode())
+        self.assertNotEqual(raw, original)
         self.assertEqual(summary.classify(raw, "wire"), "test_failed")
 
     def test_zero_wrong_count_ignored_or_missing_rows_are_invalid(self):
         raw = fixture("wire")
-        bad = (raw.replace(b"38 passed", b"0 passed"),
+        bad = (raw.replace(f"{len(summary.EXPECTED['wire'])} passed".encode(), b"0 passed"),
                raw.replace(b"0 ignored", b"1 ignored"),
                b"\n".join(raw.split(b"\n")[2:]))
         for mutated in bad:
+            self.assertNotEqual(mutated, raw)
             self.assertEqual(summary.classify(mutated, "wire"), "invalid")
 
     def test_duplicate_foreign_or_non_ok_test_row_is_invalid(self):
@@ -120,7 +125,7 @@ class SummaryTests(unittest.TestCase):
         wire |= native("runtime/src/http_server/response_finalize_tests.rs", "http_server::response_budget::finalize::tests::")
         self.assertEqual(set(summary.EXPECTED["wire"]), wire)
         self.assertEqual(set(summary.EXPECTED["quota"]), quota)
-        self.assertEqual((len(wire), len(quota)), (38, 9))
+        self.assertEqual((len(wire), len(quota)), (39, 9))
 
     def test_previous_59_names_and_new_20_are_exact_and_required(self):
         import hashlib
@@ -129,7 +134,7 @@ class SummaryTests(unittest.TestCase):
         old["wire"] = old["wire"][:22]
         old["transport"] = old["transport"][:8]
         self.assertEqual(hashlib.sha256(json.dumps(old, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), '91fc28d8e6cff5efe7f56b95eae0b838766c1835eee0f5fbb0d34f3a65a71552')
-        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 83)
+        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 84)
         paths = {
             "catalog-retained": ("runtime/src/security_sf07_private/quota_retention_tests.rs", "security_sf07_private::quota::retained_catalog_tests::"),
             "transport": ("runtime/src/http_server/response_send_tests.rs", "http_server::response_send::tests::"),
@@ -271,7 +276,7 @@ def run_browser_cli(mode, raw):
 
 class BrowserCounterProfileTests(unittest.TestCase):
     def test_independent_inventory_keeps_original_sf07_expectation_count(self):
-        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 83)
+        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 84)
         self.assertEqual(len(summary.BROWSER_COUNTER_CASES), 10)
         self.assertEqual(len(summary.BROWSER_COUNTER_PROFILES["browser-counter-strict"]), 1)
         self.assertEqual(len(summary.BROWSER_COUNTER_PROFILES["browser-counter-wire"]), 1)

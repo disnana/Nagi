@@ -1,4 +1,4 @@
-# Nagi 0.1.11 — a backend language in development
+# Nagi 0.2.0 — a backend language in development
 
 [日本語](README.md)
 
