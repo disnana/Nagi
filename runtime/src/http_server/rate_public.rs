@@ -283,8 +283,13 @@ pub(super) async fn before_handler(
             return Some(HttpResponse::rate_refusal(context, reason, source, head))
         }
     }
-    lease
-        .finish_http_auth()
+    let completion = lease.finish_http_auth();
+    #[cfg(nagi_auth_stage_diag)]
+    let completion = crate::auth::session_deadline_observer::observe_guarded(
+        crate::auth::session_deadline_observer::Phase::DeferredTouch,
+        completion,
+    );
+    completion
         .await
         .err()
         .map(|failure| security_response(context, failure, source, head))

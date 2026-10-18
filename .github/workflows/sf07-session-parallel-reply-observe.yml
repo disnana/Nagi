@@ -22,6 +22,7 @@ jobs:
     - name: Compile, run exact Session case, then conditional full Session suite once
       env:
         CARGO_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-session-parallel-reply-target
+        RUSTFLAGS: --cfg nagi_auth_stage_diag
       shell: bash
       run: |
         set -euo pipefail
@@ -38,13 +39,20 @@ jobs:
         import sys
         from pathlib import Path
         
-        PARENT = '7e08ec97699dce0ac6b42de60b91a22a24dd0492'
+        PARENT = '37beae2434e818a2a22eb14dd408abb6f54404cf'
         BRANCH = 'test/sf07-session-parallel-reply-observe-20261018'
         WORKFLOW = '.github/workflows/sf07-session-parallel-reply-observe.yml'
         SOURCE = 'runtime/tests/session_csrf_public_api.rs'
         SOURCE_SIZE = 43085
         SOURCE_LINES = 1249
         SOURCE_SHA256 = 'e6214e0267d6d8a713578c0c173c9ca18bfc11c910f34f51d4ce3a8875457467'
+        HOOK_SOURCES = {
+            'runtime/src/auth/session_deadline_observer.rs': ('3d7e7849f8e2a75a317042f978f889b9946778072df103329bfc81c2ebf5fb2b', 26321, 699),
+            'runtime/src/http_server/csrf_http.rs': ('4e97c5c0268ad6caa49df5a4d5e2cb6e9b4e7cdc5c74e7d900b0439b1ff0a6e1', 22863, 617),
+            'runtime/src/http_server/rate_public.rs': ('3b23397f4a0576c05522188239679abd400676447205accf00302bde2eaa4f16', 11311, 314),
+            'runtime/src/http_server.rs': ('0ffc9a34b9a8153326c9bc8da99a6935adf77ee923807f96d88a228a77affcb6', 79170, 2127),
+        }
+        CHANGED = (WORKFLOW, *tuple(sorted(HOOK_SOURCES)))
         CASE = 'one_reusable_token_admits_two_distinct_actual_requests'
         DIAGNOSTIC_ONLY_CASE = 'controlled_same_file_writer_reports_native_token_identity_boundary'
         FULL_CASES = (
@@ -58,8 +66,15 @@ jobs:
             'failed_guarded_handler_never_finalizes_committed_rotation_cookie',
             'mismatched_startup_origin_refuses_token_and_guarded_routes_before_bind',
             'pending_guarded_authorizer_expires_at_bound_session_and_recovers_permit',
+            DIAGNOSTIC_ONLY_CASE,
+        )
+        UNIT_CASES = (
+            'auth::session_deadline_observer::tests::guarded_closed_fields_are_numeric_and_terminal_is_independent_of_last_db',
+            'auth::session_deadline_observer::tests::guarded_scope_tracks_real_polls_and_preserves_non_guarded_phases',
+            'auth::session_deadline_observer::tests::guarded_scope_cancellation_drops_inner_owner_without_inventing_terminal',
         )
         DIAGNOSTIC_PREFIX = 'csrf_public_assertion_diag phase=ParallelReplies'
+        GUARDED_DIAGNOSTIC_PREFIX = 'csrf_guarded_deadline_diag '
         INFRA_LIMIT = 2 * 1024 * 1024
         OUTPUT_LIMIT = 64 * 1024
         
@@ -68,8 +83,8 @@ jobs:
         
         
         def validate_case_configuration(canonical: bytes) -> None:
-            if DIAGNOSTIC_ONLY_CASE in FULL_CASES:
-                raise Invalid('diagnostic-only case in normal inventory')
+            if FULL_CASES.count(DIAGNOSTIC_ONLY_CASE) != 1:
+                raise Invalid('diagnostic-only case inventory identity')
             anchor = (b'#[cfg(nagi_auth_stage_diag)]\n#[tokio::test]\nasync fn '
                       + DIAGNOSTIC_ONLY_CASE.encode('ascii') + b'()')
             if canonical.count(anchor) != 1:
@@ -83,12 +98,26 @@ jobs:
             return text
         
         
+        def validate_hook_bytes(raw: bytes, expected_sha256: str, expected_size: int,
+                                expected_lines: int) -> bytes:
+            if len(raw) > expected_size + expected_lines:
+                raise Invalid('hook source size limit')
+            canonical = raw.replace(b'\r\n', b'\n')
+            if (b'\r' in canonical or len(canonical) != expected_size
+                    or canonical.count(b'\n') != expected_lines
+                    or hashlib.sha256(canonical).hexdigest() != expected_sha256):
+                raise Invalid('hook source identity mismatch')
+            return canonical
+        
+        
         def source_guard() -> None:
             if os.environ.get('GITHUB_REF') != 'refs/heads/' + BRANCH:
                 raise Invalid('wrong branch')
             if os.environ.get('GITHUB_EVENT_NAME') != 'push':
                 raise Invalid('wrong event')
-            if any(name in os.environ for name in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUST_TEST_THREADS')):
+            if os.environ.get('RUSTFLAGS') != '--cfg nagi_auth_stage_diag':
+                raise Invalid('required diagnostic cfg missing')
+            if any(name in os.environ for name in ('CARGO_ENCODED_RUSTFLAGS', 'RUST_TEST_THREADS')):
                 raise Invalid('test environment override')
             parent = subprocess.run(['git', 'rev-parse', 'HEAD^'], stdout=subprocess.PIPE,
                                     stderr=subprocess.DEVNULL, check=False)
@@ -96,7 +125,9 @@ jobs:
                 raise Invalid('parent mismatch')
             changed = subprocess.run(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'],
                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
-            if changed.returncode or changed.stdout.decode('utf-8', errors='strict').splitlines() != [WORKFLOW]:
+            if changed.returncode:
+                raise Invalid('diff unavailable')
+            if tuple(sorted(changed.stdout.decode('utf-8', errors='strict').splitlines())) != tuple(sorted(CHANGED)):
                 raise Invalid('changed path set mismatch')
             path = Path(SOURCE)
             if path.is_symlink() or not path.is_file():
@@ -114,9 +145,16 @@ jobs:
             validate_case_configuration(canonical)
             if canonical.count(b'async fn ' + CASE.encode() + b'()') != 1:
                 raise Invalid('case identity mismatch')
+            for name, (expected_sha256, expected_size, expected_lines) in HOOK_SOURCES.items():
+                hook = Path(name)
+                if hook.is_symlink() or not hook.is_file():
+                    raise Invalid('hook source is not a regular file')
+                with hook.open('rb') as stream:
+                    hook_raw = stream.read(expected_size + expected_lines + 1)
+                validate_hook_bytes(hook_raw, expected_sha256, expected_size, expected_lines)
             if canonical.count(b'csrf_public_assertion_diag phase=ParallelReplies status_one={} status_two={} checked_calls={:?} calls_at_failure={} checked_rows={:?}') != 1:
                 raise Invalid('assertion identity mismatch')
-            print('source_guard=pass parent=exact changed_paths=1 session_source=sha256_bound')
+            print('source_guard=pass parent=exact changed_paths=5 session_source=sha256_bound hook_sources=4 LF_CRLF_bound=pass overflow_projection=unavailable cfg=nagi_auth_stage_diag')
         
         
         def capture(argv: list[str], limit: int) -> tuple[int, bytes, bool]:
@@ -172,6 +210,58 @@ jobs:
                 raise Invalid('full listing identity')
         
         
+        def parse_unit_listing(raw: bytes) -> int:
+            lines = _listing_lines(raw)
+            if not lines or len(lines) < 2:
+                raise Invalid('unit inventory empty')
+            footer = re.fullmatch(r'([0-9]+) tests?, 0 benchmarks', lines[-1])
+            if footer is None:
+                raise Invalid('unit inventory footer')
+            names = []
+            for row in lines[:-1]:
+                match = re.fullmatch(r'([A-Za-z0-9_:]+): test', row)
+                if match is None:
+                    raise Invalid('unit inventory row')
+                names.append(match.group(1))
+            count = int(footer.group(1))
+            if (count < 1 or count > 10000 or count != len(names)
+                    or len(names) != len(set(names))):
+                raise Invalid('unit inventory count')
+            if any(names.count(case) != 1 for case in UNIT_CASES):
+                raise Invalid('unit case identity')
+            return count
+        
+        
+        def parse_unit_run(raw: bytes, cargo_exit: int, case: str, filtered: int) -> str:
+            if case not in UNIT_CASES or filtered < len(UNIT_CASES) - 1:
+                raise Invalid('unit selector')
+            lines = normalized(raw).splitlines()
+            running = [i for i, line in enumerate(lines) if line == 'running 1 test']
+            if len(running) != 1:
+                raise Invalid('unit run count')
+            run_index = running[0]
+            summary_index, outcome, passed, failed, ignored, measured, got_filtered = _summary_rows(lines)
+            if run_index >= summary_index or (got_filtered, measured) != (filtered, 0):
+                raise Invalid('unit run summary bounds')
+            _reject_outside_run(lines, run_index, summary_index)
+            segment = lines[run_index + 1:summary_index]
+            rows = [re.fullmatch(r'test ([A-Za-z0-9_:]+) \.\.\. (ok|FAILED|ignored)', line)
+                    for line in segment]
+            rows = [row for row in rows if row]
+            if len(rows) != 1 or rows[0].group(1) != case:
+                raise Invalid('unit row identity')
+            state = rows[0].group(2)
+            if state == 'ok':
+                if (outcome, passed, failed, ignored, cargo_exit) != ('ok', 1, 0, 0, 0):
+                    raise Invalid('unit pass exit/count mismatch')
+                return 'passed'
+            if state == 'FAILED':
+                if (outcome, passed, failed, ignored) != ('FAILED', 0, 1, 0) or cargo_exit == 0:
+                    raise Invalid('unit failure exit/count mismatch')
+                return 'failed'
+            raise Invalid('unit ignored case')
+        
+        
         def parse_assertion_block(block: list[str]) -> dict[str, str] | None:
             prefixed = [line for line in block if 'csrf_public_assertion_diag' in line]
             if len(prefixed) != 1 or not prefixed[0].startswith(DIAGNOSTIC_PREFIX + ' '):
@@ -215,6 +305,80 @@ jobs:
                         raise Invalid('malformed stdout marker')
                     markers.append((index, match.group(1)))
             return markers
+        
+        
+        GUARDED_FIELDS = (
+            'status', 'phase', 'event', 'db', 'exit', 'polls', 'begins', 'commands', 'commits',
+            'budget_ms', 'entry_remaining_ms', 'phase_remaining_ms', 'exit_remaining_ms',
+            'selected_deadline_passed', 'terminal',
+        )
+        GUARDED_PATTERN = re.compile(
+            r'^csrf_guarded_deadline_diag status=([0-9]+) phase=([0-9]+) event=([0-9]+) '
+            r'db=([0-9]+) exit=([0-9]+) polls=([0-9]+) begins=([0-9]+) commands=([0-9]+) '
+            r'commits=([0-9]+) budget_ms=([0-9]+) entry_remaining_ms=([0-9]+) '
+            r'phase_remaining_ms=([0-9]+) exit_remaining_ms=([0-9]+) '
+            r'selected_deadline_passed=([0-9]+) terminal=([0-9]+)$'
+        )
+        
+        
+        def parse_guarded_deadline_block(raw: bytes, case: str, running_count: int) -> tuple[dict[str, int], ...] | None:
+            """Project bounded numeric records only from the named failed test's stdout block."""
+            try:
+                lines = normalized(raw).splitlines()
+                run_text = 'running 1 test' if running_count == 1 else f'running {running_count} tests'
+                running = [i for i, line in enumerate(lines) if line == run_text]
+                if len(running) != 1:
+                    return None
+                run_index = running[0]
+                summary_index, _, _, _, _, _, _ = _summary_rows(lines)
+                if run_index >= summary_index:
+                    return None
+                segment = lines[run_index + 1:summary_index]
+                rows = [re.fullmatch(r'test ([A-Za-z0-9_:]+) \.\.\. (ok|FAILED|ignored)', line)
+                        for line in segment]
+                rows = [row for row in rows if row]
+                if sum(row.group(1) == case and row.group(2) == 'FAILED' for row in rows) != 1:
+                    return None
+                markers = _stdout_markers(segment)
+                case_markers = [index for index, name in markers if name == case]
+                headers = [index for index, line in enumerate(segment) if line == 'failures:']
+                if len(case_markers) != 1 or len(headers) != 2 or not (headers[0] < case_markers[0] < headers[1]):
+                    return None
+                marker_index = case_markers[0]
+                following = [index for index, _ in markers if index > marker_index]
+                block_start = marker_index + 1
+                block_end = min(following + [headers[1]])
+                tagged = [index for index, line in enumerate(lines) if 'csrf_guarded_deadline_diag' in line]
+                if not tagged or any(not (run_index < index < summary_index) for index in tagged):
+                    return None
+                selected_tagged = [index for index in tagged
+                                   if run_index + 1 + block_start <= index < run_index + 1 + block_end]
+                if len(selected_tagged) != len(tagged) or not 1 <= len(selected_tagged) <= 8:
+                    return None
+                values = []
+                for index in selected_tagged:
+                    line = lines[index]
+                    if len(line.encode('utf-8')) >= 512 or not line.startswith(GUARDED_DIAGNOSTIC_PREFIX):
+                        return None
+                    match = GUARDED_PATTERN.fullmatch(line)
+                    if match is None:
+                        return None
+                    raw_values = match.groups()
+                    numbers = tuple(int(value) for value in raw_values)
+                    if any(str(value) != raw_value for value, raw_value in zip(numbers, raw_values)):
+                        return None
+                    (status, phase, event, db, exit_code, polls, begins, commands, commits,
+                     budget_ms, entry_ms, phase_ms, exit_ms, selected_passed, terminal) = numbers
+                    if (status != 504 or phase not in (0, 10, 11, 12, 13, 14)
+                            or not 0 <= event <= 2 or not 0 <= db <= 14 or not 0 <= exit_code <= 4
+                            or any(value > 1023 for value in (polls, begins, commands, commits))
+                            or any(value > 60000 for value in (budget_ms, entry_ms, phase_ms, exit_ms))
+                            or selected_passed not in (0, 1) or not 0 <= terminal <= 9):
+                        return None
+                    values.append(dict(zip(GUARDED_FIELDS, numbers)))
+                return tuple(values)
+            except (Invalid, UnicodeDecodeError, ValueError):
+                return None
         
         
         def _reject_outside_run(lines: list[str], run_index: int, summary_index: int) -> None:
@@ -389,6 +553,25 @@ jobs:
             else:
                 raise AssertionError('cfg-disabled diagnostic case anchor accepted without its cfg')
         
+            hook_fixture = b'first line\nsecond line\n'
+            hook_size = len(hook_fixture)
+            hook_lines = hook_fixture.count(b'\n')
+            hook_hash = hashlib.sha256(hook_fixture).hexdigest()
+            assert validate_hook_bytes(hook_fixture, hook_hash, hook_size, hook_lines) == hook_fixture
+            crlf_hook = hook_fixture.replace(b'\n', b'\r\n')
+            assert validate_hook_bytes(crlf_hook, hook_hash, hook_size, hook_lines) == hook_fixture
+            for malformed_hook, size, lines in (
+                (b'first line\rsecond line\n', hook_size, hook_lines),
+                (crlf_hook + b'x', hook_size, hook_lines),
+                (hook_fixture, hook_size, hook_lines + 1),
+            ):
+                try:
+                    validate_hook_bytes(malformed_hook, hook_hash, size, lines)
+                except Invalid:
+                    pass
+                else:
+                    raise AssertionError('invalid LF/CRLF hook source accepted')
+        
             listing = (CASE + ': test\n\n1 test, 0 benchmarks\n').encode()
             parse_listing(listing)
             parse_listing(('    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s\n'
@@ -411,7 +594,7 @@ jobs:
             expected = {'status_one': '200', 'status_two': '403', 'checked_calls': 'some:1',
                         'calls_at_failure': '2', 'checked_rows': 'none'}
             good_lf = raw(diag=good_diag)
-            assert len(FULL_CASES) == 10 and DIAGNOSTIC_ONLY_CASE not in FULL_CASES
+            assert len(FULL_CASES) == 11 and FULL_CASES.count(DIAGNOSTIC_ONLY_CASE) == 1
             assert parse_run(good_lf, 101) == ('failed', expected)
             assert parse_run(good_lf.replace(b'\n', b'\r\n'), 101) == ('failed', expected)
             try:
@@ -419,7 +602,7 @@ jobs:
             except Invalid:
                 pass
             else:
-                raise AssertionError('diagnostic 11-case filtered=10 exact run accepted')
+                raise AssertionError('diagnostic 11-case exact run with wrong dynamic filter count accepted')
             boundary_diag = (DIAGNOSTIC_PREFIX + ' status_one=100 status_two=599 checked_calls=Some(1024) '
                              'calls_at_failure=0 checked_rows=Some(0)')
             boundary = {'status_one': '100', 'status_two': '599', 'checked_calls': 'some:1024',
@@ -473,8 +656,8 @@ jobs:
                 full_listing(FULL_CASES[:-1]),
                 full_listing(FULL_CASES[:-1] + (FULL_CASES[0],)),
                 full_listing(FULL_CASES[:-1] + ('foreign_case',)),
-                full_listing(FULL_CASES + (DIAGNOSTIC_ONLY_CASE,)),
-                full_listing()[:-1].replace(b'10 tests, 0 benchmarks', b'10 tests, 1 benchmark'),
+                full_listing(FULL_CASES + ('foreign_case',)),
+                full_listing()[:-1].replace(b'11 tests, 0 benchmarks', b'11 tests, 1 benchmark'),
             ]
             for transcript in bad_full_lists:
                 try:
@@ -510,14 +693,103 @@ jobs:
         
             assert parse_full_run(full_run(), 0) == ('passed', (), None)
             try:
-                parse_full_run(full_run(cases=FULL_CASES + (DIAGNOSTIC_ONLY_CASE,)), 0)
+                parse_full_run(full_run(cases=FULL_CASES + ('foreign_case',)), 0)
             except Invalid:
                 pass
             else:
-                raise AssertionError('cfg-gated 11-case inventory accepted as production')
+                raise AssertionError('foreign 12-case inventory accepted')
             parallel_failure = full_run(failed_cases=(CASE,), diagnostics={CASE: good_diag})
             assert parse_full_run(parallel_failure, 101) == ('failed', (CASE,), expected)
             assert parse_full_run(parallel_failure.replace(b'\n', b'\r\n'), 101) == ('failed', (CASE,), expected)
+        
+            def guarded_line(**overrides: int) -> str:
+                values = {
+                    'status': 504, 'phase': 14, 'event': 2, 'db': 14, 'exit': 4,
+                    'polls': 1023, 'begins': 1023, 'commands': 1023, 'commits': 1023,
+                    'budget_ms': 60000, 'entry_remaining_ms': 60000,
+                    'phase_remaining_ms': 60000, 'exit_remaining_ms': 60000,
+                    'selected_deadline_passed': 1, 'terminal': 9,
+                }
+                values.update(overrides)
+                return GUARDED_DIAGNOSTIC_PREFIX + ' '.join(
+                    key + '=' + str(values[key]) for key in GUARDED_FIELDS)
+        
+            valid_guard = guarded_line()
+            exact_guard_failure = raw(diag=good_diag + '\n' + valid_guard)
+            guard_records = parse_guarded_deadline_block(exact_guard_failure, CASE, 1)
+            assert guard_records is not None and len(guard_records) == 1
+            assert guard_records[0]['status'] == 504 and guard_records[0]['phase'] == 14
+            assert parse_guarded_deadline_block(exact_guard_failure.replace(b'\n', b'\r\n'), CASE, 1) == guard_records
+            assert parse_guarded_deadline_block(raw(diag=good_diag), CASE, 1) is None
+            min_guard = guarded_line(phase=0, event=0, db=0, exit=0, polls=0, begins=0,
+                                     commands=0, commits=0, budget_ms=0, entry_remaining_ms=0,
+                                     phase_remaining_ms=0, exit_remaining_ms=0,
+                                     selected_deadline_passed=0, terminal=0)
+            assert parse_guarded_deadline_block(raw(diag=good_diag + '\n' + min_guard), CASE, 1) is not None
+            invalid_guard_records = (
+                valid_guard.replace('phase=14', 'phase=15'),
+                valid_guard.replace('event=2', 'event=3'),
+                valid_guard.replace('db=14', 'db=15'),
+                valid_guard.replace('exit=4', 'exit=5'),
+                valid_guard.replace('polls=1023', 'polls=1024'),
+                valid_guard.replace('budget_ms=60000', 'budget_ms=60001'),
+                valid_guard.replace('selected_deadline_passed=1', 'selected_deadline_passed=2'),
+                valid_guard.replace('terminal=9', 'terminal=10'),
+                valid_guard.replace('status=504', 'status=503'),
+                valid_guard + ' unknown=Bearer synthetic_secret',
+                valid_guard.replace('status=504', 'status=504 status=504'),
+                valid_guard.replace('polls=1023', 'polls=0001'),
+                valid_guard + ' ' + ('x' * 512),
+            )
+            for item in invalid_guard_records:
+                assert parse_guarded_deadline_block(raw(diag=good_diag + '\n' + item), CASE, 1) is None
+            eight_records = raw(diag=good_diag + '\n' + '\n'.join([valid_guard] * 8))
+            assert parse_guarded_deadline_block(eight_records, CASE, 1) is not None
+            nine_records = raw(diag=good_diag + '\n' + '\n'.join([valid_guard] * 9))
+            assert parse_guarded_deadline_block(nine_records, CASE, 1) is None
+            other = next(name for name in FULL_CASES if name != CASE)
+            foreign_guard_run = full_run(failed_cases=(CASE, other), diagnostics={
+                CASE: good_diag, other: valid_guard})
+            assert parse_guarded_deadline_block(foreign_guard_run, CASE, len(FULL_CASES)) is None
+            owned_guard_run = full_run(failed_cases=(CASE, other), diagnostics={
+                CASE: good_diag + '\n' + valid_guard, other: valid_guard})
+            assert parse_guarded_deadline_block(owned_guard_run, CASE, len(FULL_CASES)) is None
+        
+            unit_extra = 'auth::unit_inventory_extra'
+            unit_listing = ('\n'.join(name + ': test' for name in (*UNIT_CASES, unit_extra))
+                            + '\n\n4 tests, 0 benchmarks\n').encode()
+            assert parse_unit_listing(unit_listing) == 4
+            for malformed in (
+                ('\n\n0 tests, 0 benchmarks\n').encode(),
+                ('\n'.join([*UNIT_CASES, UNIT_CASES[0]]) + '\n\n4 tests, 0 benchmarks\n').encode(),
+                ('\n'.join([UNIT_CASES[0], UNIT_CASES[1]]) + '\n\n2 tests, 0 benchmarks\n').encode(),
+                ('\n'.join([*UNIT_CASES, unit_extra]) + '\n\n4 tests, 1 benchmark\n').encode(),
+            ):
+                try:
+                    parse_unit_listing(malformed)
+                except Invalid:
+                    pass
+                else:
+                    raise AssertionError('malformed full unit inventory accepted')
+        
+            def unit_run(case: str, filtered: int, state: str = 'ok') -> bytes:
+                if state == 'ok':
+                    row = 'ok'
+                    summary = f'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; {filtered} filtered out; finished in 0.01s'
+                else:
+                    row = 'FAILED'
+                    summary = f'test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; {filtered} filtered out; finished in 0.01s'
+                suffix = '' if state == 'ok' else '\n\nfailures:\n\n---- ' + case + ' stdout ----\nfixture-only panic\n\nfailures:\n    ' + case
+                return ('running 1 test\ntest ' + case + ' ... ' + row + suffix + '\n\n' + summary + '\n').encode()
+        
+            assert parse_unit_run(unit_run(UNIT_CASES[0], 3), 0, UNIT_CASES[0], 3) == 'passed'
+            assert parse_unit_run(unit_run(UNIT_CASES[0], 3, 'FAILED'), 101, UNIT_CASES[0], 3) == 'failed'
+            try:
+                parse_unit_run(unit_run(UNIT_CASES[0], 2), 0, UNIT_CASES[0], 3)
+            except Invalid:
+                pass
+            else:
+                raise AssertionError('unit run with mismatched dynamic filtered count accepted')
             # R6: inspect the entire capture, not only running..summary. Ordinary
             # Cargo preamble/trailer remains valid; outside metadata never disappears.
             ordinary_prefix = b'   Compiling nagi-runtime v0.1.11 (checkout/runtime)\n    Finished arbitrary valid Cargo profile\n     Running ordinary test executable\n'
@@ -575,6 +847,11 @@ jobs:
         
             exact_listing = listing
             parallel_listing = full_listing()
+            unit_names = (*UNIT_CASES, 'auth::unit_inventory_extra')
+            unit_listing = ('\n'.join(name + ': test' for name in unit_names)
+                            + '\n\n' + str(len(unit_names)) + ' tests, 0 benchmarks\n').encode()
+            unit_filtered = len(unit_names) - 1
+        
             def observe_with_fake_capture(responses):
                 calls = []
                 def fake_capture(argv, limit):
@@ -596,59 +873,106 @@ jobs:
                     globals()['source_guard'] = old_guard
         
             compile_ok = (0, b'', False)
-            staged_pass = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
-                           (0, raw('ok'), False), (0, full_run(), False)]
+            unit_passes = [(0, unit_run(case, unit_filtered), False) for case in UNIT_CASES]
+            staged_pass = [compile_ok, compile_ok, (0, unit_listing, False),
+                           (0, parallel_listing, False), (0, exact_listing, False),
+                           *unit_passes, (0, raw('ok'), False), (0, full_run(), False)]
             code, calls, output, remaining = observe_with_fake_capture(staged_pass)
-            assert code == 0 and remaining == 0 and len(calls) == 5
-            expected_prefix = ['cargo', 'test', '--locked', '-p', 'nagi-runtime', '--test', 'session_csrf_public_api']
-            assert calls[0][0] == expected_prefix + ['--no-run']
-            assert calls[1][0] == expected_prefix + ['--', '--list']
-            assert calls[2][0] == expected_prefix + [CASE, '--', '--exact', '--list']
-            assert calls[3][0] == expected_prefix + [CASE, '--', '--exact']
-            assert calls[4][0] == expected_prefix
+            assert code == 0 and remaining == 0 and len(calls) == 10
+            unit_prefix = ['cargo', 'test', '--locked', '-p', 'nagi-runtime', '--lib']
+            session_prefix = ['cargo', 'test', '--locked', '-p', 'nagi-runtime', '--test', 'session_csrf_public_api']
+            assert calls[0][0] == unit_prefix + ['--no-run']
+            assert calls[1][0] == session_prefix + ['--no-run']
+            assert calls[2][0] == unit_prefix + ['--', '--list']
+            assert calls[3][0] == session_prefix + ['--', '--list']
+            assert calls[4][0] == session_prefix + [CASE, '--', '--exact', '--list']
+            for index, case in enumerate(UNIT_CASES, 5):
+                assert calls[index][0] == unit_prefix + [case, '--', '--exact']
+            assert calls[8][0] == session_prefix + [CASE, '--', '--exact']
+            assert calls[9][0] == session_prefix
+            assert 'unit_collection state=pass total=4 selected=3 filtered_execution=3' in output
+            assert 'parallel_collection state=pass cases=11 filtered=0' in output
             assert all(not any(flag in argv for flag in ('--test-threads', '--nocapture', '--show-output'))
                        for argv, _ in calls)
         
-            exact_failed = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
-                            (101, good_lf, False)]
+            exact_failed = [compile_ok, compile_ok, (0, unit_listing, False),
+                            (0, parallel_listing, False), (0, exact_listing, False),
+                            *unit_passes, (101, good_lf, False)]
             code, calls, output, remaining = observe_with_fake_capture(exact_failed)
-            assert code == 101 and len(calls) == 4 and remaining == 0
+            assert code == 101 and len(calls) == 9 and remaining == 0
             assert 'phase=exact_run state=failed cargo_exit=101' in output
-            assert 'phase=parallel_collection state=pass cases=10 filtered=0' in output
             assert 'phase=parallel_run' not in output
         
-            malformed_parallel_list = [compile_ok, (0, b'0 tests, 0 benchmarks\n', False)]
-            code, calls, output, remaining = observe_with_fake_capture(malformed_parallel_list)
-            assert code == 2 and len(calls) == 2 and remaining == 0
-            assert 'phase=parallel_collection state=unavailable' in output
-            malformed_exact_list = [compile_ok, (0, parallel_listing, False),
-                                     (0, b'0 tests, 0 benchmarks\n', False)]
-            code, calls, output, remaining = observe_with_fake_capture(malformed_exact_list)
+            malformed_unit_list = [compile_ok, compile_ok, (0, b'0 tests, 0 benchmarks\n', False)]
+            code, calls, output, remaining = observe_with_fake_capture(malformed_unit_list)
             assert code == 2 and len(calls) == 3 and remaining == 0
+            assert 'phase=unit_collection state=unavailable' in output
+            malformed_parallel_list = [compile_ok, compile_ok, (0, unit_listing, False),
+                                       (0, b'0 tests, 0 benchmarks\n', False)]
+            code, calls, output, remaining = observe_with_fake_capture(malformed_parallel_list)
+            assert code == 2 and len(calls) == 4 and remaining == 0
+            assert 'phase=parallel_collection state=unavailable' in output
+            malformed_exact_list = [compile_ok, compile_ok, (0, unit_listing, False),
+                                    (0, parallel_listing, False), (0, b'0 tests, 0 benchmarks\n', False)]
+            code, calls, output, remaining = observe_with_fake_capture(malformed_exact_list)
+            assert code == 2 and len(calls) == 5 and remaining == 0
             assert 'phase=exact_collection state=unavailable' in output and 'phase=exact_run' not in output
         
-            staged_failure = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
-                              (0, raw('ok'), False), (101, parallel_failure, False)]
+            staged_failure = [compile_ok, compile_ok, (0, unit_listing, False),
+                              (0, parallel_listing, False), (0, exact_listing, False),
+                              *unit_passes, (0, raw('ok'), False), (101, parallel_failure, False)]
             code, calls, output, remaining = observe_with_fake_capture(staged_failure)
-            assert code == 101 and len(calls) == 5 and remaining == 0
+            assert code == 101 and len(calls) == 10 and remaining == 0
             assert 'session_full_failed_case=' + CASE + ' source=unavailable' in output
             assert 'phase=parallel_run state=failed cargo_exit=101' in output and 'projection=closed' in output
             assert 'csrf_public_assertion_diag' not in output and 'runtime/tests/' not in output
         
-            exact_outside = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
-                             (101, (good_diag + '\n').encode() + good_lf, False)]
+            exact_outside = [compile_ok, compile_ok, (0, unit_listing, False),
+                             (0, parallel_listing, False), (0, exact_listing, False),
+                             *unit_passes, (101, (good_diag + '\n').encode() + good_lf, False)]
             code, calls, output, remaining = observe_with_fake_capture(exact_outside)
-            assert code == 101 and len(calls) == 4 and remaining == 0
+            assert code == 101 and len(calls) == 9 and remaining == 0
             assert 'phase=exact_run state=unavailable cargo_exit=101' in output
-            assert 'phase=parallel_collection state=pass cases=10 filtered=0' in output
             assert 'phase=parallel_run' not in output and 'projection=closed' not in output
-            full_outside = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
-                            (0, raw('ok'), False),
+            full_outside = [compile_ok, compile_ok, (0, unit_listing, False),
+                            (0, parallel_listing, False), (0, exact_listing, False),
+                            *unit_passes, (0, raw('ok'), False),
                             (101, parallel_failure + (good_diag + '\n').encode(), False)]
             code, calls, output, remaining = observe_with_fake_capture(full_outside)
-            assert code == 101 and len(calls) == 5 and remaining == 0
+            assert code == 101 and len(calls) == 10 and remaining == 0
             assert 'phase=parallel_run state=unavailable cargo_exit=101' in output
             assert 'csrf_public_assertion_diag' not in output and 'projection=closed' not in output
+        
+            guarded_failure = raw(diag=good_diag + '\n' + valid_guard)
+            guarded_stage = [compile_ok, compile_ok, (0, unit_listing, False),
+                             (0, parallel_listing, False), (0, exact_listing, False),
+                             *unit_passes, (101, guarded_failure, False)]
+            code, calls, output, remaining = observe_with_fake_capture(guarded_stage)
+            assert code == 101 and len(calls) == 9 and remaining == 0
+            assert 'session_guarded_deadline_diag case=' + CASE + ' state=closed samples=1' in output
+            assert 'csrf_guarded_deadline_diag' not in output and 'synthetic_secret' not in output
+        
+            assert parse_guarded_deadline_block(guarded_failure, CASE, 1) is not None
+            exact_overflow = [compile_ok, compile_ok, (0, unit_listing, False),
+                              (0, parallel_listing, False), (0, exact_listing, False),
+                              *unit_passes, (101, guarded_failure, True)]
+            code, calls, output, remaining = observe_with_fake_capture(exact_overflow)
+            assert code == 101 and len(calls) == 9 and remaining == 0
+            assert 'phase=exact_run state=unavailable cargo_exit=101' in output
+            assert 'session_guarded_deadline_diag case=' + CASE + ' state=unavailable capture=overflow' in output
+            assert 'session_guarded_deadline_diag case=' + CASE + ' state=closed' not in output
+            assert 'phase=parallel_run' not in output
+        
+            full_guarded_failure = full_run(failed_cases=(CASE,), diagnostics={CASE: good_diag + '\n' + valid_guard})
+            assert parse_guarded_deadline_block(full_guarded_failure, CASE, len(FULL_CASES)) is not None
+            full_overflow = [compile_ok, compile_ok, (0, unit_listing, False),
+                             (0, parallel_listing, False), (0, exact_listing, False),
+                             *unit_passes, (0, raw('ok'), False), (101, full_guarded_failure, True)]
+            code, calls, output, remaining = observe_with_fake_capture(full_overflow)
+            assert code == 101 and len(calls) == 10 and remaining == 0
+            assert 'phase=parallel_run state=unavailable cargo_exit=101' in output
+            assert 'session_guarded_deadline_diag case=' + CASE + ' state=unavailable capture=overflow' in output
+            assert 'session_guarded_deadline_diag case=' + CASE + ' state=closed' not in output
         
             invalid_diags = [
                 good_diag + ' extra=Bearer synthetic_secret',
@@ -691,7 +1015,56 @@ jobs:
                     pass
                 else:
                     raise AssertionError('invalid encoding/line ending accepted')
-            print('selftest=pass production_inventory=10 optin_case_cfg_excluded=pass full_then_exact_collection=pass exact_filtered=9 LF_CRLF=pass failure_block_association=closed status_range=100..599 counters_bound=0..1024 exits=strict')
+            print('selftest=pass cfg_inventory=11 optin_case=exact filtered=10 unit_inventory=dynamic selected=3 unit_exit=closed guarded_schema=15fields records_max=8 foreign_block=unavailable LF_CRLF=pass existing_failure_association=closed exits=strict')
+        
+        
+        def _unit_target() -> list[str]:
+            return ['-p', 'nagi-runtime', '--lib']
+        
+        
+        def _session_target() -> list[str]:
+            return ['-p', 'nagi-runtime', '--test', 'session_csrf_public_api']
+        
+        
+        def _emit_guarded_deadline(raw: bytes, running_count: int, overflow: bool) -> None:
+            if overflow:
+                print('session_guarded_deadline_diag case=' + CASE + ' state=unavailable capture=overflow')
+                return
+            records = parse_guarded_deadline_block(raw, CASE, running_count)
+            if records is None:
+                print('session_guarded_deadline_diag case=' + CASE + ' state=unavailable')
+                return
+            print('session_guarded_deadline_diag case=' + CASE + ' state=closed samples=' + str(len(records)))
+            for index, record in enumerate(records, 1):
+                values = ' '.join(key + '=' + str(record[key]) for key in GUARDED_FIELDS)
+                print('session_guarded_deadline_diag case=' + CASE + ' sample_index=' + str(index) + ' ' + values)
+        
+        
+        def _run_unit_cases(unit_count: int) -> int:
+            failed_code = 0
+            target = _unit_target()
+            filtered = unit_count - 1
+            for case in UNIT_CASES:
+                args = ['cargo', 'test', '--locked', *target, case, '--', '--exact']
+                code, output, overflow = capture(args, OUTPUT_LIMIT)
+                try:
+                    if overflow:
+                        raise Invalid('unit output overflow')
+                    state = parse_unit_run(output, code, case, filtered)
+                except Exception:
+                    print('session_guard_unit case=' + case + ' state=unavailable cargo_exit=' + str(code)
+                          + ' capture=' + ('overflow' if overflow else 'bounded') + ' output=closed')
+                    if failed_code == 0:
+                        failed_code = code if code else 2
+                    continue
+                if state == 'passed':
+                    print('session_guard_unit case=' + case + ' state=passed cargo_exit=0 filtered=' + str(filtered))
+                else:
+                    print('session_guard_unit case=' + case + ' state=failed cargo_exit=' + str(code)
+                          + ' filtered=' + str(filtered) + ' output=closed')
+                    if failed_code == 0:
+                        failed_code = code if code else 2
+            return failed_code
         
         
         def observe() -> int:
@@ -700,13 +1073,36 @@ jobs:
             except Exception:
                 print('session_parallel_reply phase=source_guard state=unavailable')
                 return 2
-            target = ['-p', 'nagi-runtime', '--test', 'session_csrf_public_api']
-            code, _, overflow = capture(['cargo', 'test', '--locked', *target, '--no-run'], INFRA_LIMIT)
-            print('session_parallel_reply phase=compile state=' + ('pass' if code == 0 and not overflow else 'fail')
-                  + ' cargo_exit=' + str(code) + ' capture=' + ('overflow' if overflow else 'bounded'))
-            if code != 0 or overflow:
+        
+            unit_target = _unit_target()
+            session_target = _session_target()
+            compile_commands = (
+                ('runtime_unit_compile', ['cargo', 'test', '--locked', *unit_target, '--no-run']),
+                ('session_compile', ['cargo', 'test', '--locked', *session_target, '--no-run']),
+            )
+            for label, args in compile_commands:
+                code, _, overflow = capture(args, INFRA_LIMIT)
+                print('session_parallel_reply phase=' + label + ' state=' + ('pass' if code == 0 and not overflow else 'fail')
+                      + ' cargo_exit=' + str(code) + ' capture=' + ('overflow' if overflow else 'bounded'))
+                if code != 0 or overflow:
+                    return code if code else 2
+        
+            # Collect actual complete inventories before any selected execution. The unit
+            # filtered count is computed only from this same target's full --list output.
+            unit_list_args = ['cargo', 'test', '--locked', *unit_target, '--', '--list']
+            code, listing, overflow = capture(unit_list_args, INFRA_LIMIT)
+            try:
+                if code != 0 or overflow:
+                    raise Invalid('unit list process')
+                unit_count = parse_unit_listing(listing)
+            except Exception:
+                print('session_parallel_reply phase=unit_collection state=unavailable cargo_exit=' + str(code)
+                      + ' capture=' + ('overflow' if overflow else 'bounded'))
                 return code if code else 2
-            full_list_args = ['cargo', 'test', '--locked', *target, '--', '--list']
+            print('session_parallel_reply phase=unit_collection state=pass total=' + str(unit_count)
+                  + ' selected=' + str(len(UNIT_CASES)) + ' filtered_execution=' + str(unit_count - 1))
+        
+            full_list_args = ['cargo', 'test', '--locked', *session_target, '--', '--list']
             code, listing, overflow = capture(full_list_args, OUTPUT_LIMIT)
             try:
                 if code != 0 or overflow:
@@ -718,7 +1114,7 @@ jobs:
                 return code if code else 2
             print('session_parallel_reply phase=parallel_collection state=pass cases=' + str(len(FULL_CASES)) + ' filtered=0')
         
-            list_args = ['cargo', 'test', '--locked', *target, CASE, '--', '--exact', '--list']
+            list_args = ['cargo', 'test', '--locked', *session_target, CASE, '--', '--exact', '--list']
             code, listing, overflow = capture(list_args, OUTPUT_LIMIT)
             try:
                 if code != 0 or overflow:
@@ -730,20 +1126,30 @@ jobs:
                 return code if code else 2
             print('session_parallel_reply phase=exact_collection state=pass exact_cases=1 filtered_execution='
                   + str(len(FULL_CASES) - 1))
-            run_args = ['cargo', 'test', '--locked', *target, CASE, '--', '--exact']
+        
+            unit_status = _run_unit_cases(unit_count)
+            if unit_status != 0:
+                return unit_status
+        
+            run_args = ['cargo', 'test', '--locked', *session_target, CASE, '--', '--exact']
             code, output, overflow = capture(run_args, OUTPUT_LIMIT)
             try:
                 if overflow:
                     raise Invalid('exact run capture overflow')
                 state, diag = parse_run(output, code)
+                if state == 'passed' and 'csrf_guarded_deadline_diag' in normalized(output):
+                    raise Invalid('guarded diagnostic in passing test')
             except Exception:
                 print('session_parallel_reply phase=exact_run state=unavailable cargo_exit=' + str(code)
                       + ' status_one=unavailable status_two=unavailable checked_calls=unavailable '
                       + 'calls_at_failure=unavailable checked_rows=unavailable projection=unavailable '
                       + 'capture=' + ('overflow' if overflow else 'bounded'))
+                if code != 0:
+                    _emit_guarded_deadline(output, 1, overflow)
                 return code if code else 2
             if state != 'passed':
                 print('session_parallel_reply phase=exact_run state=failed cargo_exit=' + str(code) + ' ' + fields(diag))
+                _emit_guarded_deadline(output, 1, overflow)
                 return code if code else 2
             print('session_parallel_reply phase=exact_run state=passed cargo_exit=0 '
                   'status_one=unavailable status_two=unavailable checked_calls=unavailable '
@@ -751,17 +1157,21 @@ jobs:
         
             # Deliberately omit filters and test-thread overrides: this is one ordinary
             # default-parallel invocation, conditional on the exact case passing above.
-            full_run_args = ['cargo', 'test', '--locked', *target]
+            full_run_args = ['cargo', 'test', '--locked', *session_target]
             code, output, overflow = capture(full_run_args, OUTPUT_LIMIT)
             try:
                 if overflow:
                     raise Invalid('parallel run capture overflow')
                 state, failed_cases, diag = parse_full_run(output, code)
+                if state == 'passed' and 'csrf_guarded_deadline_diag' in normalized(output):
+                    raise Invalid('guarded diagnostic in passing full run')
             except Exception:
                 print('session_parallel_reply phase=parallel_run state=unavailable cargo_exit=' + str(code)
                       + ' status_one=unavailable status_two=unavailable checked_calls=unavailable '
                       + 'calls_at_failure=unavailable checked_rows=unavailable projection=unavailable '
                       + 'capture=' + ('overflow' if overflow else 'bounded'))
+                if code != 0:
+                    _emit_guarded_deadline(output, len(FULL_CASES), overflow)
                 return code if code else 2
             if state == 'passed':
                 print('session_parallel_reply phase=parallel_run state=passed cargo_exit=0 cases=' + str(len(FULL_CASES)) + ' failed=0 ignored=0')
@@ -770,9 +1180,12 @@ jobs:
                 print('session_full_failed_case=' + name + ' source=unavailable')
             if CASE in failed_cases:
                 print('session_parallel_reply phase=parallel_run state=failed cargo_exit=' + str(code) + ' ' + fields(diag))
+                _emit_guarded_deadline(output, len(FULL_CASES), overflow)
             else:
                 print('session_parallel_reply phase=parallel_run state=expected_case_not_failed cargo_exit=' + str(code)
                       + ' ' + fields(None))
+                if 'csrf_guarded_deadline_diag' in normalized(output):
+                    _emit_guarded_deadline(output, len(FULL_CASES), overflow)
             return code if code else 2
         
         

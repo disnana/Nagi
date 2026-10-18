@@ -1112,7 +1112,13 @@ where
             {
                 return PreparedCompletion::Terminal(response);
             }
-            match handler(request, state, authority).await {
+            let completion = handler(request, state, authority);
+            #[cfg(nagi_auth_stage_diag)]
+            let completion = crate::auth::session_deadline_observer::observe_guarded(
+                crate::auth::session_deadline_observer::Phase::GuardedHandler,
+                completion,
+            );
+            match completion.await {
                 Ok(response) => PreparedCompletion::HandlerOk(response),
                 Err(error) => match mapper(context, error) {
                     Ok(response) => PreparedCompletion::Replacement(response),

@@ -25,6 +25,11 @@ pub(crate) enum Phase {
     Delivery,
     #[cfg(test)]
     Preparation,
+    GuardedPreparation = 10,
+    GuardedBody = 11,
+    GuardedCheckpoint = 12,
+    DeferredTouch = 13,
+    GuardedHandler = 14,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -53,6 +58,21 @@ pub(crate) enum TokenTerminal {
     TakeWire,
     Timer,
     InnerRefusal,
+}
+// Selected at actual Guarded dispatcher branches, never inferred from Db/phase.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub(crate) enum GuardedTerminal {
+    Unclassified,
+    Preparation,
+    LiveGate,
+    Body,
+    CheckpointLateReady,
+    CheckpointTimer,
+    CheckpointRefusal,
+    HandlerLateReady,
+    HandlerTimer,
+    Constrain,
 }
 // Unit-only ordinary dispatcher terminal, selected at the actual match arm.
 #[cfg(test)]
@@ -92,6 +112,7 @@ struct Record {
     db: Db,
     exit: Exit,
     token_terminal: TokenTerminal,
+    guarded_terminal: Option<GuardedTerminal>,
     polls: u16,
     begins: u16,
     commands: u16,
@@ -129,6 +150,7 @@ impl Observer {
                 db: Db::None,
                 exit: Exit::Unclassified,
                 token_terminal: TokenTerminal::Unclassified,
+                guarded_terminal: None,
                 polls: 0,
                 begins: 0,
                 commands: 0,
@@ -139,6 +161,11 @@ impl Observer {
                 native: native_finish::Record::new(),
             }),
         }))
+    }
+    pub(crate) fn new_guarded(admitted: Instant, until: Instant) -> Self {
+        let observer = Self::new(admitted, until);
+        observer.update(|r| r.guarded_terminal = Some(GuardedTerminal::Unclassified));
+        observer
     }
     pub(crate) async fn scope<F: Future>(&self, future: F) -> F::Output {
         ACTIVE.scope(self.clone(), future).await
@@ -214,6 +241,11 @@ impl Observer {
             );
         }
     }
+    pub(crate) fn emit_guarded(&self, status: u16) {
+        if let Some(closed) = self.closed(status) {
+            eprintln!("{}", GuardedClosed(closed));
+        }
+    }
     pub(crate) fn emit_token(&self, status: u16) {
         if let Some(closed) = self.closed(status) {
             eprintln!(
@@ -270,6 +302,26 @@ pub(crate) fn exit(exit: Exit) {
 pub(crate) fn token_terminal(terminal: TokenTerminal) {
     let _ = ACTIVE.try_with(|o| o.update(|r| r.token_terminal = terminal));
 }
+pub(crate) fn guarded_terminal(terminal: GuardedTerminal) {
+    let _ = ACTIVE.try_with(|o| o.update(|r| r.guarded_terminal = Some(terminal)));
+}
+// Shared caller sites also serve ordinary/Browser routes. Leave their existing
+// observer phases untouched: only the explicit Guarded scope enables these marks.
+pub(crate) async fn observe_guarded<F: Future>(stage: Phase, future: F) -> F::Output {
+    let enabled = ACTIVE
+        .try_with(|o| {
+            o.0.record
+                .lock()
+                .map(|r| r.guarded_terminal.is_some())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false);
+    if enabled {
+        observe(stage, future).await
+    } else {
+        future.await
+    }
+}
 pub(crate) async fn observe<F: Future>(stage: Phase, future: F) -> F::Output {
     phase(stage);
     let mut future = std::pin::pin!(future);
@@ -300,6 +352,18 @@ impl fmt::Display for Closed {
         let r = self.record;
         write!(f,"session_deadline_diag status=504 phase={} event={} db={} exit={} polls={} begins={} commands={} commits={} budget_ms={} entry_remaining_ms={} phase_remaining_ms={} exit_remaining_ms={}",
             r.phase as u8,r.event as u8,r.db as u8,r.exit as u8,r.polls,r.begins,r.commands,r.commits,r.budget_ms,r.entry_remaining_ms,r.phase_remaining_ms,self.exit_remaining_ms)
+    }
+}
+// Only fixed keys and bounded enum/counter/timing values. The native Db value
+// is the last observed actual boundary; it is not a claim about lock ownership.
+struct GuardedClosed(Closed);
+impl fmt::Display for GuardedClosed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let r = self.0.record;
+        write!(f, "csrf_guarded_deadline_diag status=504 phase={} event={} db={} exit={} polls={} begins={} commands={} commits={} budget_ms={} entry_remaining_ms={} phase_remaining_ms={} exit_remaining_ms={} selected_deadline_passed={} terminal={}",
+            r.phase as u8, r.event as u8, r.db as u8, r.exit as u8, r.polls, r.begins,
+            r.commands, r.commits, r.budget_ms, r.entry_remaining_ms, r.phase_remaining_ms,
+            self.0.exit_remaining_ms, u8::from(self.0.selected_deadline_passed), r.guarded_terminal.unwrap_or(GuardedTerminal::Unclassified) as u8)
     }
 }
 #[cfg(test)]
@@ -345,6 +409,129 @@ impl fmt::Display for BootstrapClosed {
 mod tests {
     use super::*;
     use std::{task::Poll, time::Duration};
+    #[test]
+    fn guarded_closed_fields_are_numeric_and_terminal_is_independent_of_last_db() {
+        let admitted = Instant::now() - Duration::from_secs(2);
+        let observer = Observer::new_guarded(admitted, admitted + Duration::from_secs(1));
+        observer.update(|r| {
+            r.phase = Phase::DeferredTouch;
+            r.event = Event::Pending;
+            r.db = Db::CommitDone;
+            r.guarded_terminal = Some(GuardedTerminal::HandlerTimer);
+        });
+        assert!(observer.closed(200).is_none());
+        assert!(observer.closed(403).is_none());
+        let output = GuardedClosed(observer.closed(504).unwrap()).to_string();
+        assert!(output.len() < 512);
+        let mut fields = output
+            .strip_prefix("csrf_guarded_deadline_diag ")
+            .unwrap()
+            .split(' ');
+        for key in [
+            "status",
+            "phase",
+            "event",
+            "db",
+            "exit",
+            "polls",
+            "begins",
+            "commands",
+            "commits",
+            "budget_ms",
+            "entry_remaining_ms",
+            "phase_remaining_ms",
+            "exit_remaining_ms",
+            "selected_deadline_passed",
+            "terminal",
+        ] {
+            let (actual, value) = fields.next().unwrap().split_once('=').unwrap();
+            assert_eq!(actual, key);
+            assert!(!value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()));
+        }
+        assert!(fields.next().is_none());
+        assert!(output.contains("phase=13 event=1 db=11 "));
+        assert!(output.ends_with("selected_deadline_passed=1 terminal=8"));
+        assert_eq!(Phase::GuardedPreparation as u8, 10);
+        assert_eq!(Phase::GuardedBody as u8, 11);
+        assert_eq!(Phase::GuardedCheckpoint as u8, 12);
+        assert_eq!(Phase::GuardedHandler as u8, 14);
+    }
+    #[tokio::test]
+    async fn guarded_scope_tracks_real_polls_and_preserves_non_guarded_phases() {
+        let start = Instant::now();
+        let until = start + Duration::from_secs(10);
+        let ordinary = Observer::new(start, until);
+        assert_eq!(
+            ordinary
+                .scope(observe_guarded(Phase::DeferredTouch, std::future::ready(7)))
+                .await,
+            7
+        );
+        assert_eq!(ordinary.0.record.lock().unwrap().phase, Phase::Entry);
+        let observer = Observer::new_guarded(start, until);
+        let result = observer
+            .scope(async {
+                let checkpoint =
+                    observe_guarded(Phase::GuardedCheckpoint, std::future::ready(1)).await;
+                let mut pending = true;
+                let touch = observe_guarded(
+                    Phase::DeferredTouch,
+                    std::future::poll_fn(|cx| {
+                        if pending {
+                            pending = false;
+                            cx.waker().wake_by_ref();
+                            Poll::Pending
+                        } else {
+                            Poll::Ready(2)
+                        }
+                    }),
+                )
+                .await;
+                observe_guarded(
+                    Phase::GuardedHandler,
+                    std::future::ready((checkpoint, touch)),
+                )
+                .await
+            })
+            .await;
+        assert_eq!(result, (1, 2));
+        let record = *observer.0.record.lock().unwrap();
+        assert_eq!(record.phase, Phase::GuardedHandler);
+        assert_eq!(record.event, Event::Ready);
+        assert_eq!(record.polls, 4);
+        assert_eq!(record.db, Db::None);
+        assert_eq!(record.guarded_terminal, Some(GuardedTerminal::Unclassified));
+    }
+    #[tokio::test]
+    async fn guarded_scope_cancellation_drops_inner_owner_without_inventing_terminal() {
+        struct Held<'a>(&'a std::sync::atomic::AtomicUsize);
+        impl Drop for Held<'_> {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        let drops = std::sync::atomic::AtomicUsize::new(0);
+        let start = Instant::now();
+        let observer = Observer::new_guarded(start, start + Duration::from_secs(10));
+        {
+            let mut future =
+                std::pin::pin!(observer.scope(observe_guarded(Phase::DeferredTouch, async {
+                    let _held = Held(&drops);
+                    std::future::pending::<()>().await;
+                })));
+            std::future::poll_fn(|cx| {
+                assert!(future.as_mut().poll(cx).is_pending());
+                Poll::Ready(())
+            })
+            .await;
+            assert_eq!(drops.load(std::sync::atomic::Ordering::SeqCst), 0);
+        }
+        assert_eq!(drops.load(std::sync::atomic::Ordering::SeqCst), 1);
+        let record = *observer.0.record.lock().unwrap();
+        assert_eq!(record.phase, Phase::DeferredTouch);
+        assert_eq!(record.event, Event::Pending);
+        assert_eq!(record.guarded_terminal, Some(GuardedTerminal::Unclassified));
+    }
     #[test]
     fn bootstrap_selected_bound_is_finite_and_never_renews_security() {
         let admitted = Instant::now();

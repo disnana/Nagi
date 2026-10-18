@@ -2,7 +2,7 @@
 use super::*;
 #[cfg(nagi_auth_stage_diag)]
 use crate::auth::session_deadline_observer::{
-    self as deadline_observer, Exit, Observer, Phase, TokenTerminal,
+    self as deadline_observer, Exit, GuardedTerminal, Observer, Phase, TokenTerminal,
 };
 use crate::auth::{csrf, session::CsrfBinding};
 
@@ -159,6 +159,8 @@ async fn await_preparation<T>(
             Ok(deadline) => deadline,
             Err(status) => return Poll::Ready(Err(status)),
         };
+        #[cfg(nagi_auth_stage_diag)]
+        deadline_observer::select_until(deadline);
         if let Poll::Ready(value) = completion {
             return Poll::Ready(Ok(value));
         }
@@ -384,11 +386,46 @@ where
     }
 }
 
+#[cfg(not(nagi_auth_stage_diag))]
+pub(super) use dispatch_guarded_inner as dispatch_guarded;
+
+#[cfg(nagi_auth_stage_diag)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "closed guarded observer forwards the unchanged dispatch inputs"
+)]
+pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
+    store: &csrf::Inner,
+    prepare: &GuardedPrepare<S>,
+    state: Arc<S>,
+    parts: RequestParts,
+    body: hyper::body::Incoming,
+    options: &Options,
+    owner: LeaseOwner,
+    head: bool,
+    admitted: Instant,
+) -> HttpResponse {
+    if let Some(until) = admitted.checked_add(options.security_deadline) {
+        let observer = Observer::new_guarded(admitted, until);
+        let response = observer
+            .scope(dispatch_guarded_inner(
+                store, prepare, state, parts, body, options, owner, head, admitted,
+            ))
+            .await;
+        observer.emit_guarded(response.status().as_u16());
+        return response;
+    }
+    dispatch_guarded_inner(
+        store, prepare, state, parts, body, options, owner, head, admitted,
+    )
+    .await
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "closed guarded dispatch retains the actual route, body, options and request owner"
 )]
-pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
+pub(super) async fn dispatch_guarded_inner<S: Send + Sync + 'static>(
     store: &csrf::Inner,
     prepare: &GuardedPrepare<S>,
     state: Arc<S>,
@@ -407,6 +444,8 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
         return terminal(&owner, Status::SERVICE_UNAVAILABLE, head, true);
     };
     if let Err(e) = csrf::constrain(&owner.lease, until) {
+        #[cfg(nagi_auth_stage_diag)]
+        deadline_observer::guarded_terminal(GuardedTerminal::Constrain);
         return terminal(&owner, e.http_status(), head, true);
     }
     if let Err(status) = options
@@ -432,6 +471,8 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
         prepare(snapshot, Arc::clone(&state), Arc::clone(&owner.lease)).await
     })
     .catch_unwind();
+    #[cfg(nagi_auth_stage_diag)]
+    let future = deadline_observer::observe(Phase::GuardedPreparation, future);
     let (prepared, binding) = match await_preparation(&owner, until, future).await {
         Ok(Ok(Ok(v))) => v,
         Ok(Ok(Err(e))) => {
@@ -442,46 +483,84 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
             );
         }
         Ok(Err(_)) => return terminal(&owner, Status::INTERNAL_SERVER_ERROR, head, true),
-        Err(status) => return terminal(&owner, status, head, true),
+        Err(status) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::Preparation);
+            return terminal(&owner, status, head, true);
+        }
     };
     let common = match live_until(&owner, until) {
         Ok(d) => d,
-        Err(s) => return terminal(&owner, s, head, true),
+        Err(s) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::LiveGate);
+            return terminal(&owner, s, head, true);
+        }
     };
-    let body = match receive_guarded_body(
+    #[cfg(nagi_auth_stage_diag)]
+    deadline_observer::select_until(common);
+    let body_future = receive_guarded_body(
         body,
         options.body_bytes,
         common,
         Instant::now(),
         options.body_deadline,
-    )
-    .await
-    {
+    );
+    #[cfg(nagi_auth_stage_diag)]
+    let body_future = deadline_observer::observe(Phase::GuardedBody, body_future);
+    let body = match body_future.await {
         Ok(body) => body,
-        Err(status) => return terminal(&owner, status, head, true),
+        Err(status) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::Body);
+            return terminal(&owner, status, head, true);
+        }
     };
     let common = match live_until(&owner, until) {
         Ok(d) => d,
-        Err(s) => return terminal(&owner, s, head, true),
+        Err(s) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::LiveGate);
+            return terminal(&owner, s, head, true);
+        }
     };
-    let checkpoint = tokio::time::timeout_at(
-        tokio::time::Instant::from_std(common),
-        AssertUnwindSafe(store.checkpoint(&owner.lease, &binding, digest)).catch_unwind(),
-    )
-    .await;
+    #[cfg(nagi_auth_stage_diag)]
+    deadline_observer::select_until(common);
+    let checkpoint =
+        AssertUnwindSafe(store.checkpoint(&owner.lease, &binding, digest)).catch_unwind();
+    #[cfg(nagi_auth_stage_diag)]
+    let checkpoint = deadline_observer::observe(Phase::GuardedCheckpoint, checkpoint);
+    let checkpoint =
+        tokio::time::timeout_at(tokio::time::Instant::from_std(common), checkpoint).await;
     match checkpoint {
         Ok(_) if Instant::now() >= common => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::CheckpointLateReady);
             return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true);
         }
         Ok(Ok(Ok(()))) => {}
-        Ok(Ok(Err(e))) => return terminal(&owner, e.http_status(), head, true),
+        Ok(Ok(Err(e))) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::CheckpointRefusal);
+            return terminal(&owner, e.http_status(), head, true);
+        }
         Ok(Err(_)) => return terminal(&owner, Status::INTERNAL_SERVER_ERROR, head, true),
-        Err(_) => return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true),
+        Err(_) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::CheckpointTimer);
+            return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true);
+        }
     }
     let common = match live_until(&owner, until) {
         Ok(d) => d,
-        Err(s) => return terminal(&owner, s, head, true),
+        Err(s) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::LiveGate);
+            return terminal(&owner, s, head, true);
+        }
     };
+    #[cfg(nagi_auth_stage_diag)]
+    deadline_observer::select_until(common);
     headers.sanitize();
     let connect = parts.method == Method::CONNECT;
     let request = Request {
@@ -494,6 +573,8 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
         .checked_add(options.handler_deadline)
         .map(|d| d.min(common))
         .unwrap_or(common);
+    #[cfg(nagi_auth_stage_diag)]
+    deadline_observer::select_until(handler_until);
     let completion = tokio::time::timeout_at(
         tokio::time::Instant::from_std(handler_until),
         AssertUnwindSafe(async { prepared(request, state).await }).catch_unwind(),
@@ -501,6 +582,8 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
     .await;
     let response = match completion {
         Ok(_) if Instant::now() >= handler_until || owner.lease.validate().is_err() => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::HandlerLateReady);
             return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true);
         }
         Ok(Ok(completion)) if connect && completion.is_success() => {
@@ -519,7 +602,11 @@ pub(super) async fn dispatch_guarded<S: Send + Sync + 'static>(
             return terminal(&owner, Status::INTERNAL_SERVER_ERROR, head, true);
         }
         Ok(Err(_)) => return terminal(&owner, Status::INTERNAL_SERVER_ERROR, head, true),
-        Err(_) => return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true),
+        Err(_) => {
+            #[cfg(nagi_auth_stage_diag)]
+            deadline_observer::guarded_terminal(GuardedTerminal::HandlerTimer);
+            return terminal(&owner, Status::GATEWAY_TIMEOUT, head, true);
+        }
     };
     crate::auth::session::retire_http_delivery(&owner);
     managed(response, head, true)
