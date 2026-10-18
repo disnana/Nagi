@@ -37,25 +37,22 @@ jobs:
           import subprocess
           from pathlib import Path
           
-          PARENT = "4337422f5f632fe73e65d512a9ea170001301952"
-          BASE_TREE = "34072c578aedda250123489c6bd273f4cb133ea8"
+          PARENT = "2b98867ff6828448c76ebb7be1cee8f578f5b817"
+          BASE_TREE = "ef43fff3b1367a0a4c99c4dcec1b953c491a2074"
           BRANCH = "test/nagi020-b1-ttl-20261018"
           WORKFLOW = ".github/workflows/sf07-b1-short-ttl-causal.yml"
-          CHANGED = (
-              WORKFLOW,
-              "runtime/src/auth/csrf.rs",
-              "runtime/src/auth/csrf/tests.rs",
-          )
+          CHANGED = (WORKFLOW,)
+          # These two reviewed sources are unchanged from the exact parent.
           SOURCES = {
               "runtime/src/auth/csrf.rs": {
-                  "parent_blob": "e5a9d1d751c5c50300f3252d6468806263e77e8a",
+                  "parent_blob": "b53b60ff468b10e0d409053d5089207ed6210eac",
                   "blob": "b53b60ff468b10e0d409053d5089207ed6210eac",
                   "size": 47112,
                   "lines": 1213,
                   "sha256": "2f4719cd26d0f71fd44e5feba35228b0647f82567233c4fc5b47d3e9625541bc",
               },
               "runtime/src/auth/csrf/tests.rs": {
-                  "parent_blob": "131dbf27f945ea34facec6360c9ddc78fba89d2e",
+                  "parent_blob": "07e7b1b7cd9aa5d98db7ac4c50726eda16cb7d62",
                   "blob": "07e7b1b7cd9aa5d98db7ac4c50726eda16cb7d62",
                   "size": 35997,
                   "lines": 927,
@@ -144,7 +141,7 @@ jobs:
               except (GuardFailure, OSError, UnicodeError, ValueError):
                   print("source_guard=fail reason=closed_check")
                   return 1
-              print("source_guard=pass parent=4337422f tree=34072c57 changed_paths=3 source_files=2 parser=sha_bound")
+              print("source_guard=pass parent=2b98867f tree=ef43fff3 changed_paths=1 unchanged_source_files=2 parser=sha_bound")
               return 0
           
           if __name__ == "__main__":
@@ -179,7 +176,8 @@ jobs:
           LIST_LIMIT = 256 * 1024
           SUMMARY = re.compile(
               r"^test result: (ok|FAILED)\. ([0-9]{1,4}) passed; ([0-9]{1,4}) failed; "
-              r"([0-9]{1,4}) ignored; ([0-9]{1,4}) measured; ([0-9]{1,4}) filtered out;$"
+              r"([0-9]{1,4}) ignored; ([0-9]{1,4}) measured; ([0-9]{1,4}) filtered out; "
+              r"finished in (?:0|[1-9][0-9]{0,5})\.[0-9]{2}s$"
           )
           ROW = re.compile(r"^test ([A-Za-z_][A-Za-z0-9_:]*) \.\.\. (ok|FAILED|ignored)$")
           LIST_ROW = re.compile(r"^([A-Za-z_][A-Za-z0-9_:]*): test$")
@@ -282,15 +280,23 @@ jobs:
               passed, failed, ignored, measured, filtered = map(
                   int, (passed_s, failed_s, ignored_s, measured_s, filtered_s)
               )
+              running = [(i, re.fullmatch(r"running ([0-9]{1,4}) tests?", line))
+                         for i, line in enumerate(lines) if line.startswith("running ")]
+              if (len(running) != 1 or running[0][1] is None
+                      or running[0][0] >= summary_index
+                      or int(running[0][1].group(1)) != len(expected_names)):
+                  raise Invalid("test running scope")
               rows = []
-              for line in lines[:summary_index]:
+              for index, line in enumerate(lines):
                   match = ROW.fullmatch(line)
                   if match:
+                      if not running[0][0] < index < summary_index:
+                          raise Invalid("test row outside running scope")
                       rows.append((match.group(1), match.group(2)))
               names = [name for name, _ in rows]
               if len(names) != len(set(names)) or set(names) != expected_names:
                   raise Invalid("test row inventory")
-              if passed + failed + ignored != len(expected_names) or measured != 0 or filtered != total_cases - len(expected_names):
+              if passed + failed + ignored != len(expected_names) or ignored != 0 or measured != 0 or filtered != total_cases - len(expected_names):
                   raise Invalid("test summary counts")
               if (outcome == "ok") != (failed == 0) or (failed == 0 and outcome != "ok"):
                   raise Invalid("test summary result")
