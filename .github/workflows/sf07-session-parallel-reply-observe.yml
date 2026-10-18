@@ -38,7 +38,7 @@ jobs:
         import sys
         from pathlib import Path
         
-        PARENT = '96707e1cec9b18900ab67a5ed01de0130733a621'
+        PARENT = '7e08ec97699dce0ac6b42de60b91a22a24dd0492'
         BRANCH = 'test/sf07-session-parallel-reply-observe-20261018'
         WORKFLOW = '.github/workflows/sf07-session-parallel-reply-observe.yml'
         SOURCE = 'runtime/tests/session_csrf_public_api.rs'
@@ -46,8 +46,8 @@ jobs:
         SOURCE_LINES = 1249
         SOURCE_SHA256 = 'e6214e0267d6d8a713578c0c173c9ca18bfc11c910f34f51d4ce3a8875457467'
         CASE = 'one_reusable_token_admits_two_distinct_actual_requests'
+        DIAGNOSTIC_ONLY_CASE = 'controlled_same_file_writer_reports_native_token_identity_boundary'
         FULL_CASES = (
-            'controlled_same_file_writer_reports_native_token_identity_boundary',
             'checked_profiles_reject_unsealed_or_incompatible_policy_sources',
             'tokens_are_authenticated_reusable_and_preserve_bounded_ledger',
             'guarded_rotation_and_logout_invalidate_old_generation_tokens',
@@ -65,6 +65,15 @@ jobs:
         
         class Invalid(Exception):
             pass
+        
+        
+        def validate_case_configuration(canonical: bytes) -> None:
+            if DIAGNOSTIC_ONLY_CASE in FULL_CASES:
+                raise Invalid('diagnostic-only case in normal inventory')
+            anchor = (b'#[cfg(nagi_auth_stage_diag)]\n#[tokio::test]\nasync fn '
+                      + DIAGNOSTIC_ONLY_CASE.encode('ascii') + b'()')
+            if canonical.count(anchor) != 1:
+                raise Invalid('diagnostic-only case cfg identity mismatch')
         
         
         def normalized(raw: bytes) -> str:
@@ -102,6 +111,7 @@ jobs:
             canonical.decode('utf-8', errors='strict')
             if hashlib.sha256(canonical).hexdigest() != SOURCE_SHA256:
                 raise Invalid('source hash mismatch')
+            validate_case_configuration(canonical)
             if canonical.count(b'async fn ' + CASE.encode() + b'()') != 1:
                 raise Invalid('case identity mismatch')
             if canonical.count(b'csrf_public_assertion_diag phase=ParallelReplies status_one={} status_two={} checked_calls={:?} calls_at_failure={} checked_rows={:?}') != 1:
@@ -149,7 +159,7 @@ jobs:
         
         def parse_full_listing(raw: bytes) -> None:
             lines = _listing_lines(raw)
-            if len(lines) != len(FULL_CASES) + 1 or lines[-1] != '11 tests, 0 benchmarks':
+            if len(lines) != len(FULL_CASES) + 1 or lines[-1] != f'{len(FULL_CASES)} tests, 0 benchmarks':
                 raise Invalid('full listing count')
             rows = lines[:-1]
             names = []
@@ -235,7 +245,7 @@ jobs:
                 raise Invalid('run count')
             run_index = running[0]
             summary_index, outcome, passed, failed, ignored, measured, filtered = _summary_rows(lines)
-            if run_index >= summary_index or filtered != 10 or measured != 0:
+            if run_index >= summary_index or filtered != len(FULL_CASES) - 1 or measured != 0:
                 raise Invalid('run counts')
             _reject_outside_run(lines, run_index, summary_index)
             segment = lines[run_index + 1:summary_index]
@@ -276,7 +286,7 @@ jobs:
         
         def parse_full_run(raw: bytes, cargo_exit: int) -> tuple[str, tuple[str, ...], dict[str, str] | None]:
             lines = normalized(raw).splitlines()
-            running = [i for i, line in enumerate(lines) if line == 'running 11 tests']
+            running = [i for i, line in enumerate(lines) if line == f'running {len(FULL_CASES)} tests']
             if len(running) != 1:
                 raise Invalid('full run count')
             run_index = running[0]
@@ -354,11 +364,12 @@ jobs:
         
         def selftest() -> None:
             def raw(state: str = 'FAILED', diag: str | None = None, *, case: str = CASE,
-                    trailer: str = 'failures:\n    ' + CASE + '\n') -> bytes:
+                    trailer: str = 'failures:\n    ' + CASE + '\n', filtered: int | None = None) -> bytes:
                 status = 'FAILED' if state == 'FAILED' else state
-                summary = ('test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.01s'
+                filtered_count = len(FULL_CASES) - 1 if filtered is None else filtered
+                summary = (f'test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; {filtered_count} filtered out; finished in 0.01s'
                            if status == 'FAILED' else
-                           'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.01s')
+                           f'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; {filtered_count} filtered out; finished in 0.01s')
                 if status == 'FAILED':
                     inside = "thread '" + case + "' panicked at runtime/tests/session_csrf_public_api.rs:946:5:\n"
                     if diag is not None:
@@ -367,6 +378,16 @@ jobs:
                             + case + ' stdout ----\n' + inside + trailer + '\n' + summary + '\n')
                     return body.encode()
                 return ('running 1 test\ntest ' + case + ' ... ok\n\n' + summary + '\n').encode()
+        
+            cfg_fixture = (b'#[cfg(nagi_auth_stage_diag)]\n#[tokio::test]\nasync fn '
+                           + DIAGNOSTIC_ONLY_CASE.encode('ascii') + b'() {}\n')
+            validate_case_configuration(cfg_fixture)
+            try:
+                validate_case_configuration(cfg_fixture.replace(b'#[cfg(nagi_auth_stage_diag)]\n', b''))
+            except Invalid:
+                pass
+            else:
+                raise AssertionError('cfg-disabled diagnostic case anchor accepted without its cfg')
         
             listing = (CASE + ': test\n\n1 test, 0 benchmarks\n').encode()
             parse_listing(listing)
@@ -390,8 +411,15 @@ jobs:
             expected = {'status_one': '200', 'status_two': '403', 'checked_calls': 'some:1',
                         'calls_at_failure': '2', 'checked_rows': 'none'}
             good_lf = raw(diag=good_diag)
+            assert len(FULL_CASES) == 10 and DIAGNOSTIC_ONLY_CASE not in FULL_CASES
             assert parse_run(good_lf, 101) == ('failed', expected)
             assert parse_run(good_lf.replace(b'\n', b'\r\n'), 101) == ('failed', expected)
+            try:
+                parse_run(raw(diag=good_diag, filtered=len(FULL_CASES)), 101)
+            except Invalid:
+                pass
+            else:
+                raise AssertionError('diagnostic 11-case filtered=10 exact run accepted')
             boundary_diag = (DIAGNOSTIC_PREFIX + ' status_one=100 status_two=599 checked_calls=Some(1024) '
                              'calls_at_failure=0 checked_rows=Some(0)')
             boundary = {'status_one': '100', 'status_two': '599', 'checked_calls': 'some:1024',
@@ -406,7 +434,7 @@ jobs:
         
             def exact_failure(body: str, *, after_footer: str = '') -> bytes:
                 summary = ('test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; '
-                           '10 filtered out; finished in 0.01s')
+                           + str(len(FULL_CASES) - 1) + ' filtered out; finished in 0.01s')
                 return ('running 1 test\ntest ' + CASE + ' ... FAILED\n\nfailures:\n\n'
                         + body + '\nfailures:\n    ' + CASE + '\n' + after_footer + '\n'
                         + summary + '\n').encode()
@@ -445,7 +473,8 @@ jobs:
                 full_listing(FULL_CASES[:-1]),
                 full_listing(FULL_CASES[:-1] + (FULL_CASES[0],)),
                 full_listing(FULL_CASES[:-1] + ('foreign_case',)),
-                full_listing()[:-1].replace(b'11 tests, 0 benchmarks', b'11 tests, 1 benchmark'),
+                full_listing(FULL_CASES + (DIAGNOSTIC_ONLY_CASE,)),
+                full_listing()[:-1].replace(b'10 tests, 0 benchmarks', b'10 tests, 1 benchmark'),
             ]
             for transcript in bad_full_lists:
                 try:
@@ -454,16 +483,17 @@ jobs:
                     continue
                 raise AssertionError('invalid full collection accepted')
         
-            def full_run(*, failed_cases: tuple[str, ...] = (), markers: tuple[str, ...] | None = None,
+            def full_run(*, cases: tuple[str, ...] = FULL_CASES, failed_cases: tuple[str, ...] = (),
+                         markers: tuple[str, ...] | None = None,
                          diagnostics: dict[str, str] | None = None, after_footer: str = '') -> bytes:
                 failed_set = set(failed_cases)
-                if not failed_set.issubset(FULL_CASES):
+                if not failed_set.issubset(cases):
                     raise AssertionError('bad test fixture')
                 rows = ['test ' + name + ' ... ' + ('FAILED' if name in failed_set else 'ok')
-                        for name in FULL_CASES]
-                run = 'running 11 tests\n' + '\n'.join(rows) + '\n'
+                        for name in cases]
+                run = 'running ' + str(len(cases)) + ' tests\n' + '\n'.join(rows) + '\n'
                 if not failed_set:
-                    return (run + '\ntest result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; '
+                    return (run + '\ntest result: ok. ' + str(len(cases)) + ' passed; 0 failed; 0 ignored; 0 measured; '
                             '0 filtered out; finished in 0.01s\n').encode()
                 selected_markers = markers if markers is not None else tuple(failed_cases)
                 body = ''
@@ -473,12 +503,18 @@ jobs:
                     if diagnostics and name in diagnostics:
                         body += diagnostics[name] + '\n'
                 footer = '\nfailures:\n' + ''.join('    ' + name + '\n' for name in failed_cases)
-                summary = ('\ntest result: FAILED. ' + str(len(FULL_CASES) - len(failed_cases))
+                summary = ('\ntest result: FAILED. ' + str(len(cases) - len(failed_cases))
                            + ' passed; ' + str(len(failed_cases))
                            + ' failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s\n')
                 return (run + '\nfailures:\n' + body + footer + after_footer + summary).encode()
         
             assert parse_full_run(full_run(), 0) == ('passed', (), None)
+            try:
+                parse_full_run(full_run(cases=FULL_CASES + (DIAGNOSTIC_ONLY_CASE,)), 0)
+            except Invalid:
+                pass
+            else:
+                raise AssertionError('cfg-gated 11-case inventory accepted as production')
             parallel_failure = full_run(failed_cases=(CASE,), diagnostics={CASE: good_diag})
             assert parse_full_run(parallel_failure, 101) == ('failed', (CASE,), expected)
             assert parse_full_run(parallel_failure.replace(b'\n', b'\r\n'), 101) == ('failed', (CASE,), expected)
@@ -560,47 +596,54 @@ jobs:
                     globals()['source_guard'] = old_guard
         
             compile_ok = (0, b'', False)
-            staged_pass = [compile_ok, (0, exact_listing, False), (0, raw('ok'), False),
-                           (0, parallel_listing, False), (0, full_run(), False)]
+            staged_pass = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
+                           (0, raw('ok'), False), (0, full_run(), False)]
             code, calls, output, remaining = observe_with_fake_capture(staged_pass)
             assert code == 0 and remaining == 0 and len(calls) == 5
             expected_prefix = ['cargo', 'test', '--locked', '-p', 'nagi-runtime', '--test', 'session_csrf_public_api']
             assert calls[0][0] == expected_prefix + ['--no-run']
-            assert calls[1][0] == expected_prefix + [CASE, '--', '--exact', '--list']
-            assert calls[2][0] == expected_prefix + [CASE, '--', '--exact']
-            assert calls[3][0] == expected_prefix + ['--', '--list']
+            assert calls[1][0] == expected_prefix + ['--', '--list']
+            assert calls[2][0] == expected_prefix + [CASE, '--', '--exact', '--list']
+            assert calls[3][0] == expected_prefix + [CASE, '--', '--exact']
             assert calls[4][0] == expected_prefix
             assert all(not any(flag in argv for flag in ('--test-threads', '--nocapture', '--show-output'))
                        for argv, _ in calls)
         
-            exact_failed = [compile_ok, (0, exact_listing, False), (101, good_lf, False)]
+            exact_failed = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
+                            (101, good_lf, False)]
             code, calls, output, remaining = observe_with_fake_capture(exact_failed)
-            assert code == 101 and len(calls) == 3 and remaining == 0
+            assert code == 101 and len(calls) == 4 and remaining == 0
             assert 'phase=exact_run state=failed cargo_exit=101' in output
-            assert 'phase=parallel_collection' not in output
+            assert 'phase=parallel_collection state=pass cases=10 filtered=0' in output
+            assert 'phase=parallel_run' not in output
         
-            malformed_parallel_list = [compile_ok, (0, exact_listing, False), (0, raw('ok'), False),
-                                       (0, b'0 tests, 0 benchmarks\n', False)]
+            malformed_parallel_list = [compile_ok, (0, b'0 tests, 0 benchmarks\n', False)]
             code, calls, output, remaining = observe_with_fake_capture(malformed_parallel_list)
-            assert code == 2 and len(calls) == 4 and remaining == 0
+            assert code == 2 and len(calls) == 2 and remaining == 0
             assert 'phase=parallel_collection state=unavailable' in output
+            malformed_exact_list = [compile_ok, (0, parallel_listing, False),
+                                     (0, b'0 tests, 0 benchmarks\n', False)]
+            code, calls, output, remaining = observe_with_fake_capture(malformed_exact_list)
+            assert code == 2 and len(calls) == 3 and remaining == 0
+            assert 'phase=exact_collection state=unavailable' in output and 'phase=exact_run' not in output
         
-            staged_failure = [compile_ok, (0, exact_listing, False), (0, raw('ok'), False),
-                              (0, parallel_listing, False), (101, parallel_failure, False)]
+            staged_failure = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
+                              (0, raw('ok'), False), (101, parallel_failure, False)]
             code, calls, output, remaining = observe_with_fake_capture(staged_failure)
             assert code == 101 and len(calls) == 5 and remaining == 0
             assert 'session_full_failed_case=' + CASE + ' source=unavailable' in output
             assert 'phase=parallel_run state=failed cargo_exit=101' in output and 'projection=closed' in output
             assert 'csrf_public_assertion_diag' not in output and 'runtime/tests/' not in output
         
-            exact_outside = [compile_ok, (0, exact_listing, False),
+            exact_outside = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
                              (101, (good_diag + '\n').encode() + good_lf, False)]
             code, calls, output, remaining = observe_with_fake_capture(exact_outside)
-            assert code == 101 and len(calls) == 3 and remaining == 0
+            assert code == 101 and len(calls) == 4 and remaining == 0
             assert 'phase=exact_run state=unavailable cargo_exit=101' in output
-            assert 'phase=parallel_collection' not in output and 'projection=closed' not in output
-            full_outside = [compile_ok, (0, exact_listing, False), (0, raw('ok'), False),
-                            (0, parallel_listing, False),
+            assert 'phase=parallel_collection state=pass cases=10 filtered=0' in output
+            assert 'phase=parallel_run' not in output and 'projection=closed' not in output
+            full_outside = [compile_ok, (0, parallel_listing, False), (0, exact_listing, False),
+                            (0, raw('ok'), False),
                             (101, parallel_failure + (good_diag + '\n').encode(), False)]
             code, calls, output, remaining = observe_with_fake_capture(full_outside)
             assert code == 101 and len(calls) == 5 and remaining == 0
@@ -648,7 +691,7 @@ jobs:
                     pass
                 else:
                     raise AssertionError('invalid encoding/line ending accepted')
-            print('selftest=pass exact_and_full_lists=pass exact_and_parallel_counts=closed LF_CRLF=pass failure_block_association=closed foreign_duplicate_outside_diagnostic=closed status_range=100..599 counters_bound=0..1024 absent_fields=unavailable exits=strict')
+            print('selftest=pass production_inventory=10 optin_case_cfg_excluded=pass full_then_exact_collection=pass exact_filtered=9 LF_CRLF=pass failure_block_association=closed status_range=100..599 counters_bound=0..1024 exits=strict')
         
         
         def observe() -> int:
@@ -663,6 +706,18 @@ jobs:
                   + ' cargo_exit=' + str(code) + ' capture=' + ('overflow' if overflow else 'bounded'))
             if code != 0 or overflow:
                 return code if code else 2
+            full_list_args = ['cargo', 'test', '--locked', *target, '--', '--list']
+            code, listing, overflow = capture(full_list_args, OUTPUT_LIMIT)
+            try:
+                if code != 0 or overflow:
+                    raise Invalid('full list process')
+                parse_full_listing(listing)
+            except Exception:
+                print('session_parallel_reply phase=parallel_collection state=unavailable cargo_exit=' + str(code)
+                      + ' capture=' + ('overflow' if overflow else 'bounded'))
+                return code if code else 2
+            print('session_parallel_reply phase=parallel_collection state=pass cases=' + str(len(FULL_CASES)) + ' filtered=0')
+        
             list_args = ['cargo', 'test', '--locked', *target, CASE, '--', '--exact', '--list']
             code, listing, overflow = capture(list_args, OUTPUT_LIMIT)
             try:
@@ -673,7 +728,8 @@ jobs:
                 print('session_parallel_reply phase=exact_collection state=unavailable cargo_exit=' + str(code)
                       + ' capture=' + ('overflow' if overflow else 'bounded'))
                 return code if code else 2
-            print('session_parallel_reply phase=exact_collection state=pass exact_cases=1 filtered_execution=10')
+            print('session_parallel_reply phase=exact_collection state=pass exact_cases=1 filtered_execution='
+                  + str(len(FULL_CASES) - 1))
             run_args = ['cargo', 'test', '--locked', *target, CASE, '--', '--exact']
             code, output, overflow = capture(run_args, OUTPUT_LIMIT)
             try:
@@ -693,18 +749,6 @@ jobs:
                   'status_one=unavailable status_two=unavailable checked_calls=unavailable '
                   'calls_at_failure=unavailable checked_rows=unavailable projection=not_applicable')
         
-            full_list_args = ['cargo', 'test', '--locked', *target, '--', '--list']
-            code, listing, overflow = capture(full_list_args, OUTPUT_LIMIT)
-            try:
-                if code != 0 or overflow:
-                    raise Invalid('full list process')
-                parse_full_listing(listing)
-            except Exception:
-                print('session_parallel_reply phase=parallel_collection state=unavailable cargo_exit=' + str(code)
-                      + ' capture=' + ('overflow' if overflow else 'bounded'))
-                return code if code else 2
-            print('session_parallel_reply phase=parallel_collection state=pass cases=11 filtered=0')
-        
             # Deliberately omit filters and test-thread overrides: this is one ordinary
             # default-parallel invocation, conditional on the exact case passing above.
             full_run_args = ['cargo', 'test', '--locked', *target]
@@ -720,7 +764,7 @@ jobs:
                       + 'capture=' + ('overflow' if overflow else 'bounded'))
                 return code if code else 2
             if state == 'passed':
-                print('session_parallel_reply phase=parallel_run state=passed cargo_exit=0 cases=11 failed=0 ignored=0')
+                print('session_parallel_reply phase=parallel_run state=passed cargo_exit=0 cases=' + str(len(FULL_CASES)) + ' failed=0 ignored=0')
                 return 0
             for name in failed_cases:
                 print('session_full_failed_case=' + name + ' source=unavailable')
