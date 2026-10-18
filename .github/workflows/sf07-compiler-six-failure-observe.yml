@@ -1,0 +1,608 @@
+name: SF07 scoped compiler failure observation
+permissions:
+  contents: read
+'on':
+  push:
+    branches:
+    - test/sf07-six-failure-observe-20261018
+jobs:
+  observe-sf07:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/test/sf07-six-failure-observe-20261018'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: ubuntu-latest
+          profile: linux-six-failures
+        - os: windows-latest
+          profile: windows-mock-send
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: never
+      NAGI_ROOT: ${{ github.workspace }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.sha }}
+        fetch-depth: 2
+        persist-credentials: false
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Verify exact parent, unchanged source identities and closed controls
+      shell: bash
+      run: |
+        set -euo pipefail
+        cat > "$RUNNER_TEMP/sf07-six-failure-guard.py" <<'PY'
+        """Bounded, closed collector for the SF07 compiler contract matrix."""
+        import hashlib
+        import io
+        import os
+        import re
+        import subprocess
+        import sys
+        import threading
+        from pathlib import Path
+        
+        PARENT = '0dfda1482390526b135dabe26b9ca4361762b88e'
+        BRANCH = 'test/sf07-six-failure-observe-20261018'
+        WORKFLOW = '.github/workflows/sf07-compiler-six-failure-observe.yml'
+        CHANGED = (WORKFLOW,)
+        SOURCES = {'benchmarks/http_stdlib.nagi': ('f3ecf8fdcb084952515b3f321b18588358ef9e65', 2553, 55), 'benchmarks/security-sf01/fixtures/nagi-policy/main.nagi': ('81fe25486760ac1546b90905504fc8d96e5e368a', 3315, 79), 'benchmarks/security-sf01/fixtures/rust-policy/main.nagi': ('bbff6af727c3f33aed31d655ff62dae2e4511865', 2861, 69), 'benchmarks/security-sf01/run_security_sf01.py': ('d8b4fc83ba93806bdd6904d855dcaf628016e4fc', 17478, 415), 'compiler/src/check.rs': ('0eed4a10c3b700e32b9b5980d6d4b918f3aab674', 237096, 5654), 'compiler/src/stdlib.rs': ('5d2d636ead106a56f41d1d193ab86300121daad4', 94185, 2447), 'compiler/src/stdlib/html.rs': ('3eff60461c11f3ede42d173a5abb8aa9e7bc7dc9', 6011, 139), 'compiler/src/stdlib/html_contract_tests.rs': ('f3a589017e42cdf77cf8722754f6705014057875', 13458, 349), 'compiler/src/stdlib/html_semantic_tests.rs': ('c66ac4494df7d7ab64702560ce80271fda1ce7bb', 11557, 237), 'compiler/tests/auth_boundaries.rs': ('d6f4d248e52d1a5586ed0574a6a21ad970828d11', 12369, 263), 'compiler/tests/build_diagnostics.rs': ('5667269cc6e3e718adb58e2ba55de9d00b43ea93', 48018, 1198), 'compiler/tests/error_routes.rs': ('045b33db5fd5a0d8bb1fdd7b326329846f475789', 11122, 224), 'compiler/tests/fixtures/resource-contract/http-borrow-mappers.low': ('805e08c3adbc766a97901a2ded88da586edd94fa', 38253, 38), 'compiler/tests/fixtures/resource-contract/http-borrow-mappers.nagi': ('f8d178ce5b48ab86968ce660971a8528fb7e12b2', 1118, 20), 'compiler/tests/fixtures/resource-contract/http-borrow-mappers.rs': ('c0847844df6c2c56b1999f5e7833eaeda2e99d64', 13426, 200), 'compiler/tests/fixtures/resource-contract/http-inspection.low': ('7c17cd8d0c6323bd1bc844d7a6cf1bd5a474f95b', 34630, 43), 'compiler/tests/fixtures/resource-contract/http-inspection.nagi': ('6437efe23d67ac8054e8a25944b3fed427d1b4a0', 1345, 30), 'compiler/tests/fixtures/resource-contract/http-inspection.rs': ('3ff3bf9709e79273fd4ea5bf708601b4059cef3c', 11218, 184), 'compiler/tests/fixtures/resource-contract/http-response-context-red.low': ('22db751bfd4fb4ea3b69316b7ade371f1c688977', 617, 18), 'compiler/tests/fixtures/resource-contract/http-response-context-red.nagi': ('b6524625662e0b7b67abd8c3dd924bffa1e7627b', 596, 18), 'compiler/tests/fixtures/security-sf02/reused.low': ('4ebe1e2d5e5292b4180b0b86566ca998e8a2599f', 305, 7), 'compiler/tests/fixtures/security-sf02/reused.nagi': ('4922814c562074edb062083b90fa3c7cede50972', 305, 6), 'compiler/tests/fixtures/security-sf02/startup.low': ('4b35b8817e3c62cba390c08d9a03b5cd2ca59cbb', 1437, 24), 'compiler/tests/fixtures/security-sf02/startup.nagi': ('e5e7ce9123200141856a06ba2f5a7f09c9916243', 1435, 25), 'compiler/tests/fixtures/security-sf03-b1/guarded.low': ('3fd41f6176b75e76e58061547185862821db85b8', 2150, 35), 'compiler/tests/fixtures/security-sf03-b1/guarded.nagi': ('8dd1dce8266a65df9b30cd8799f3f5fbdb7f5dfa', 2161, 34), 'compiler/tests/fixtures/security-sf03-cors/config-manual.low': ('3b9135742988e9860237666d0a101bd105ec9a0a', 881, 14), 'compiler/tests/fixtures/security-sf03-cors/config.nagi': ('16a1197ae0c0754bf8d216df702d571133b3e09c', 897, 18), 'compiler/tests/fixtures/security-sf04/borrowed-document-manual.low': ('b9be56bed859825813d9374a0735d6915169f5b3', 276, 6), 'compiler/tests/fixtures/security-sf04/borrowed-document.nagi': ('91ae53947c257557ec5848547a5522dbfe94465c', 266, 5), 'compiler/tests/fixtures/security-sf04/http-only-manual.low': ('530aa80f6d321c2bde160ea788e0bc6573232aff', 348, 8), 'compiler/tests/fixtures/security-sf04/http-only.nagi': ('067eb26d9059128a915b96f8c4da6884aa4e49a8', 334, 9), 'compiler/tests/fixtures/security-sf04/list-detail-manual.low': ('f37f7dce08828332be3bee4384383a70f1290c0c', 2760, 40), 'compiler/tests/fixtures/security-sf04/list-detail.nagi': ('fa9fd15543dfe7e3b6357330d597783b9ed9a6c8', 2608, 39), 'compiler/tests/fixtures/security-sf04/nominal-document-manual.low': ('74faa45527d52432fc3049833680db0a9b4aabfe', 276, 6), 'compiler/tests/fixtures/security-sf04/nominal-document.nagi': ('ae1688355ccb7cebafd84823a47de2bed9024241', 266, 6), 'compiler/tests/fixtures/security-sf04/renamed-page-manual.low': ('fa3de4380ffe2daec4701999b3959117f0dfd600', 705, 14), 'compiler/tests/fixtures/security-sf04/renamed-page.nagi': ('592a90e70c17e167346a78f307f26b7996c0c496', 677, 14), 'compiler/tests/fixtures/security-sf04/shared-document-manual.low': ('897d347461f4fccb5942c97b677690efab8a498a', 278, 6), 'compiler/tests/fixtures/security-sf04/shared-document.nagi': ('d6fece924f491279d3d17c4092b17e20a36fbb9d', 268, 5), 'compiler/tests/graph_relations.rs': ('6ea2ae8e9281b2c1a0ab234cf8feedc172ef6655', 23438, 603), 'compiler/tests/http_codegen.rs': ('164a1befebb4ee18562007429692f542225786d1', 12190, 274), 'compiler/tests/http_entrypoint.rs': ('732749327c5dbee01ba1b6986534e30eed15a7b5', 8406, 187), 'compiler/tests/http_route_conflicts.rs': ('04eb2b22fedec97d8d9dfdfb3002c4b1167760f3', 9399, 253), 'compiler/tests/http_stdlib.rs': ('8b98b6dcffb66c005507255088c2eba63e7bc805', 68100, 1399), 'compiler/tests/resource_contract_characterization.rs': ('196a5a847968412e38678460989c35cfb9db3fa9', 50094, 1137), 'compiler/tests/security_sf01.rs': ('ad578bc5d89ced21ef8cdc9c251d64c35f3748f4', 23518, 563), 'compiler/tests/security_sf01_native.rs': ('9fec55331b22a45ef9523505aeaeaeee551860f6', 8633, 174), 'compiler/tests/security_sf03_cors.rs': ('c13ed56d8b51afe6549834f6ffa500ab4b773a02', 12149, 193), 'compiler/tests/security_sf04.rs': ('02fe07ea9ee22c425b03b9d5653ee85b37c0a462', 10114, 255), 'compiler/tests/security_sf05_native.rs': ('2207cd9a2d17812dfb006877b935ecf5ebf8d7da', 9886, 161), 'compiler/tests/support/task_service.rs': ('c9cfb6b246360e87fd9024b37a0d5f72a4596871', 9426, 211), 'compiler/tests/support/task_service_s2.rs': ('a392405a57c7a625c8e0b78cff3b7cd65f529af5', 21079, 417), 'docs/en/http-server.md': ('63471c64a43ec4625956e3a1635e6a4b42410e37', 20895, 190), 'docs/en/http.md': ('6cf9e73e8bb20a71cbc2051d19983819095c10b8', 3807, 58), 'docs/en/migration-0.2.0.md': ('b1fedb72924fbd9fddddabd0774821fd99d802b6', 8689, 63), 'docs/en/modules-and-rust.md': ('60bbdc81125fe958a24354504be89a274ee0dab9', 12794, 181), 'docs/en/security.md': ('a272007688f472832f700492d852792d02e6bfaa', 11201, 81), 'docs/http-server.md': ('2137912a3cec9d700412b6063e0190ac99ef13e0', 21812, 190), 'docs/http.md': ('a3612bdb34a8d7c80a6272d979f27ac783e76e02', 4144, 58), 'docs/internal/security-foundation/sf04-contract.en.md': ('51a88de76944e82597d6249df35cd2a671cef6fe', 27828, 178), 'docs/internal/security-foundation/sf04-contract.md': ('8c9dda506753c0aff10cf90a277a5325b40383f7', 27951, 178), 'docs/migration-0.2.0.md': ('49a074664bfffb8a2f14b3f05e12260f3df3f5aa', 8670, 63), 'docs/modules-and-rust.md': ('1eb2059c869c59ff407dc25d6d405c53e34602be', 14191, 181), 'docs/security.md': ('09959a4c7953023cd9e44627fc44490a5147863d', 11604, 81), 'examples/crud.nagi': ('736712c8259242623bd7685cbe188174627d0188', 13354, 231), 'examples/tutorial/http.nagi': ('1beed3e1851df1a4dffa5e13a0330976e778cb03', 2528, 47), 'scripts/http_stdlib_bench.py': ('3ceec3166532f98a9557a6f156abd7ddb91b6346', 11608, 242), 'test-nagi-code/application-examples/auth-boundary/main.nagi': ('829ba15edcccc40c8ebee604e5316063f9eda662', 8458, 188), 'test-nagi-code/application-examples/byte-inspector/main.nagi': ('b25e976833115dab55a0dbca5caae05c966e6711', 2157, 46), 'test-nagi-code/application-examples/device-settings/main.nagi': ('f584cf45335ed82095cac1cfa3090b87b1fdbac7', 6754, 132), 'test-nagi-code/application-examples/quote-api/main.nagi': ('384d23b25323736429c3830802d595ef31c09447', 8348, 172), 'test-nagi-code/inventory.nagi': ('c7c8c1e1a18c5db72fe0c27604b34f4b3678f89d', 12346, 220), 'test-nagi-code/library-examples/http-auth/main.nagi': ('f7f6275f94b4daf794c351851dae04bedf31afa2', 3430, 74), 'test-nagi-code/library-examples/supervised-service/main.low': ('307334e86252ce6fe11dfa2a441de9a21acccde1', 8202, 202), 'test-nagi-code/library-examples/supervised-service/main.nagi': ('e9476216c677074ceaf698e1b5cf3b4b566e4b47', 7003, 153), 'test-nagi-code/result-api/server.nagi': ('9e7b8d07a53b38e1dbf813bd57cbaf6872e6155f', 9989, 193), 'test-nagi-code/web-demo/tasks.nagi': ('7256e8fa9479008616f5f46d5e8c927e8eaa286e', 11972, 205), 'tests/http_stdlib_integration.py': ('6ed659e9d34bd47c5faed84b57494b0a094234a8', 27617, 486), 'tests/route_integration.py': ('71176e28d2761f3bd833fa4ee7d3d6e1317399b3', 7879, 152)}
+        CAP = 2 * 1024 * 1024
+        CASE_CAP = 64 * 1024
+        
+        class Invalid(Exception):
+            pass
+        
+        def source_guard():
+            if os.environ.get('GITHUB_REF') != 'refs/heads/' + BRANCH:
+                raise Invalid('wrong branch')
+            if 'RUST_TEST_THREADS' in os.environ or 'RUSTFLAGS' in os.environ or 'CARGO_ENCODED_RUSTFLAGS' in os.environ:
+                raise Invalid('diagnostic environment present')
+            parent = subprocess.run(['git', 'rev-parse', 'HEAD^'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
+            if parent.returncode or parent.stdout.decode('ascii', errors='strict').strip() != PARENT:
+                raise Invalid('parent mismatch')
+            changed = subprocess.run(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
+            if changed.returncode:
+                raise Invalid('diff unavailable')
+            names = tuple(sorted(changed.stdout.decode('utf-8', errors='strict').splitlines()))
+            if names != CHANGED:
+                raise Invalid('changed path set mismatch')
+            for name, (expected, size, lines) in SOURCES.items():
+                path = Path(name)
+                if path.is_symlink() or not path.is_file():
+                    raise Invalid('source is not a regular file')
+                with path.open('rb') as handle:
+                    raw = handle.read(size + lines + 1)
+                if len(raw) > size + lines:
+                    raise Invalid('source size limit')
+                normalized = raw.replace(b'\r\n', b'\n')
+                if b'\r' in normalized or len(normalized) != size:
+                    raise Invalid('source line ending or size')
+                normalized.decode('utf-8', errors='strict')
+                blob = hashlib.sha1(b'blob ' + str(len(normalized)).encode() + b'\0' + normalized).hexdigest()
+                if blob != expected:
+                    raise Invalid('source identity mismatch')
+            print('compiler_source_guard=pass exact_parent=1 sources=' + str(len(SOURCES)) + ' changed_paths=' + str(len(CHANGED)) + ' line_endings=LF_or_CRLF')
+        
+        def capture(argv, limit=CAP):
+            try:
+                process = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)
+            except OSError:
+                return 127, b'', b'', {'out': False, 'err': False}
+            outputs = {'out': bytearray(), 'err': bytearray()}
+            overflow = {'out': False, 'err': False}
+            def drain(pipe, key):
+                while True:
+                    chunk = pipe.read(8192)
+                    if not chunk:
+                        return
+                    room = limit - len(outputs[key])
+                    if room > 0:
+                        outputs[key].extend(chunk[:room])
+                    if len(chunk) > room:
+                        overflow[key] = True
+            readers = [threading.Thread(target=drain, args=(process.stdout, 'out'), daemon=True),
+                       threading.Thread(target=drain, args=(process.stderr, 'err'), daemon=True)]
+            for reader in readers:
+                reader.start()
+            code = process.wait()
+            for reader in readers:
+                reader.join()
+            return code, bytes(outputs['out']), bytes(outputs['err']), overflow
+        
+        def decode(raw):
+            text = raw.decode('utf-8', errors='strict').replace('\r\n', '\n')
+            if '\r' in text:
+                raise Invalid('bare output carriage return')
+            return text
+        
+        def parse_list(raw, expected):
+            text = decode(raw)
+            names, footers = [], []
+            for line in text.splitlines():
+                if not line:
+                    continue
+                row = re.fullmatch(r'([A-Za-z0-9_:]+): test', line)
+                if row:
+                    names.append(row.group(1))
+                    continue
+                footer = re.fullmatch(r'(\d+) tests?, 0 benchmarks', line)
+                if footer:
+                    footers.append(int(footer.group(1)))
+                    continue
+                raise Invalid('list grammar')
+            if len(names) != len(set(names)) or set(names) != set(expected):
+                raise Invalid('list identity')
+            if footers != [len(expected)]:
+                raise Invalid('list footer count')
+            return len(names)
+        
+        def parse_result(raw, expected, filtered=0):
+            text = decode(raw)
+            lines = text.splitlines()
+            summary_rows = []
+            for index, line in enumerate(lines):
+                result = re.fullmatch(r'test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored; (\d+) measured; (\d+) filtered out; finished in ([0-9]+(?:\.[0-9]+)?)s', line)
+                if result:
+                    summary_rows.append((index, result.group(1), *[int(result.group(i)) for i in range(2, 7)]))
+            if len(summary_rows) != 1:
+                raise Invalid('result summary count')
+            summary_index, outcome, got_passed, got_failed, got_ignored, measured, got_filtered = summary_rows[0]
+            if any(line for line in lines[summary_index + 1:]):
+                raise Invalid('trailing result output')
+        
+            statuses, running, progress, markers = [], [], [], []
+            initial_failure_header = False
+            failure_body_boundary = False
+            first_output = next((index for index, line in enumerate(lines[:summary_index])
+                                 if re.fullmatch(r'---- ([A-Za-z0-9_:]+) stdout ----', line)), summary_index)
+            prefix = lines[:first_output]
+            for line in prefix:
+                if failure_body_boundary:
+                    if not line:
+                        continue
+                    raise Invalid('failure output boundary')
+                if not line:
+                    continue
+                if line == 'failures:':
+                    if initial_failure_header or len(statuses) != len(expected) or not any(state == 'FAILED' for _, state in statuses):
+                        raise Invalid('initial failure header')
+                    initial_failure_header = True
+                    failure_body_boundary = True
+                    continue
+                runline = re.fullmatch(r'running (\d+) tests?', line)
+                if runline:
+                    running.append(int(runline.group(1)))
+                    continue
+                row = re.fullmatch(r'test ([A-Za-z0-9_:]+) \.\.\. (ok|FAILED|ignored)', line)
+                if row:
+                    statuses.append((row.group(1), row.group(2)))
+                    continue
+                notice = re.fullmatch(r'test ([A-Za-z0-9_:]+) has been running for over 60 seconds', line)
+                if notice:
+                    progress.append(notice.group(1))
+                    continue
+                raise Invalid('result prefix grammar')
+        
+            for line in lines[first_output:summary_index]:
+                marker = re.fullmatch(r'---- ([A-Za-z0-9_:]+) stdout ----', line)
+                if marker:
+                    markers.append(marker.group(1))
+        
+            if len(running) != 1 or running[0] != len(expected) or len(statuses) != len(expected):
+                raise Invalid('result row count')
+            names = [name for name, _ in statuses]
+            if len(names) != len(set(names)) or set(names) != set(expected):
+                raise Invalid('result identity')
+            failed_names = {name for name, state in statuses if state == 'FAILED'}
+            if initial_failure_header != bool(failed_names):
+                raise Invalid('initial failure header identity')
+            if initial_failure_header:
+                header_index = prefix.index('failures:')
+                if header_index == 0 or prefix[header_index - 1] or header_index == len(prefix) - 1:
+                    raise Invalid('failure header boundary')
+            if any(name not in expected for name in progress) or any(name not in failed_names for name in markers):
+                raise Invalid('progress or output identity')
+            if len(markers) != len(set(markers)):
+                raise Invalid('duplicate failure output')
+        
+            trailer = lines[:summary_index]
+            while trailer and not trailer[-1]:
+                trailer.pop()
+            reported_failures = []
+            if failed_names:
+                while trailer:
+                    failure = re.fullmatch(r'    ([A-Za-z0-9_:]+)', trailer[-1])
+                    if not failure:
+                        break
+                    reported_failures.append(failure.group(1))
+                    trailer.pop()
+                while trailer and not trailer[-1]:
+                    trailer.pop()
+                if not trailer or trailer[-1] != 'failures:':
+                    raise Invalid('failure footer missing')
+                trailer.pop()
+                if len(reported_failures) != len(set(reported_failures)) or set(reported_failures) != failed_names:
+                    raise Invalid('failure inventory')
+            elif markers or any(line == 'failures:' for line in trailer):
+                raise Invalid('unexpected failure footer')
+        
+            passed = sum(state == 'ok' for _, state in statuses)
+            failed = sum(state == 'FAILED' for _, state in statuses)
+            ignored = sum(state == 'ignored' for _, state in statuses)
+            if (passed, failed, ignored) != (got_passed, got_failed, got_ignored) or measured != 0 or got_filtered != filtered:
+                raise Invalid('result counts')
+            if (outcome == 'ok') != (failed == 0):
+                raise Invalid('result outcome')
+            return passed, failed, ignored, measured, got_filtered, tuple(sorted(name for name, state in statuses if state == 'FAILED'))
+        
+        CASES = (
+            ('http_stdlib', 'status_method_and_db_free_app_execute_from_high_and_saved_low', 32),
+            ('http_codegen', 'borrow_and_named_mapper_registration_execute_native_adapters', 4),
+            ('error_routes', 'explicit_http_json_routes_preserve_data_and_optional_payloads_in_high_and_low', 2),
+            ('security_sf01_native', 'policies_and_nominal_request_proofs_execute_in_all_three_paths', 0),
+            ('security_sf05_native', 'query_parameters_and_protected_predicate_execute_high_saved_and_handwritten_low', 0),
+            ('http_entrypoint', 'explicit_http_server_builds_and_returns_invalid_port_in_high_and_low', 3),
+        )
+        DISPLAY_CAP = CASE_CAP
+        TOKEN_RE = re.compile(r'(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]+')
+        
+        
+        def _visible_text(raw):
+            text = raw.decode('utf-8', errors='backslashreplace').replace('\r\n', '\n')
+            text = TOKEN_RE.sub(r'\1[STATIC_TEST_TOKEN_REDACTED]', text)
+            out = []
+            for char in text:
+                code = ord(char)
+                if char == '\n':
+                    out.append(char)
+                elif char == '\t':
+                    out.append('\\t')
+                elif char.isprintable():
+                    out.append(char)
+                elif code <= 0xff:
+                    out.append(f'\\x{code:02x}')
+                else:
+                    out.append(f'\\u{code:04x}')
+            return ''.join(out)
+        
+        
+        def diagnostic_lines(stream, raw, overflow):
+            text = _visible_text(raw)
+            result = []
+            used = 0
+            marker = 'native_diag|[display truncated]'
+            marker_size = len(marker.encode('utf-8')) + 1
+            prefix = 'native_diag|'
+            prefix_size = len(prefix.encode('utf-8'))
+            for line in text.split('\n'):
+                rendered = prefix + line
+                encoded = rendered.encode('utf-8') + b'\n'
+                if used + len(encoded) + marker_size > DISPLAY_CAP:
+                    available = DISPLAY_CAP - used - marker_size
+                    if available > prefix_size:
+                        body = line.encode('utf-8')[:max(0, available - prefix_size - 1)]
+                        clipped = body.decode('utf-8', errors='ignore')
+                        result.append(prefix + clipped)
+                    result.append(marker)
+                    break
+                result.append(rendered)
+                used += len(encoded)
+            return result
+        
+        def _overflowed(overflow):
+            return any(overflow.values()) if isinstance(overflow, dict) else bool(overflow)
+        
+        
+        def _stream_overflow(overflow, key):
+            return bool(overflow.get(key, False)) if isinstance(overflow, dict) else bool(overflow)
+        
+        
+        def emit_diagnostics(case, stdout, stderr, overflow):
+            for key, raw in (('out', stdout), ('err', stderr)):
+                stream = 'stdout' if key == 'out' else 'stderr'
+                print('failure_diagnostic case=' + case + ' stream=' + stream +
+                      ' captured_bytes=' + str(len(raw)) +
+                      ' overflow=' + str(int(_stream_overflow(overflow, key))))
+                for line in diagnostic_lines(stream, raw, _stream_overflow(overflow, key)):
+                    print(line)
+        
+        
+        def _reject(call, expected_message):
+            try:
+                call()
+            except Invalid:
+                return
+            raise Invalid(expected_message)
+        
+        
+        def selftest():
+            global capture
+            if parse_list(b'case_one: test\n\n1 test, 0 benchmarks\n', ['case_one']) != 1:
+                raise Invalid('exact list positive')
+            _reject(lambda: parse_list(b'\n0 tests, 0 benchmarks\n', ['case_one']), 'zero list mutant')
+            _reject(lambda: parse_list(b'other_case: test\n\n1 test, 0 benchmarks\n', ['case_one']), 'wrong list mutant')
+            passed = b'running 1 test\ntest case_one ... ok\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 32 filtered out; finished in 0.01s\n'
+            if parse_result(passed, ['case_one'], 32) != (1, 0, 0, 0, 32, ()):
+                raise Invalid('passing profile positive')
+            failed = (b'running 1 test\ntest case_one ... FAILED\n\nfailures:\n\n'
+                      b'---- case_one stdout ----\nstatic failure body\n\nfailures:\n'
+                      b'    case_one\n\n\ntest result: FAILED. 0 passed; 1 failed; 0 ignored; '
+                      b'0 measured; 32 filtered out; finished in 0.01s\n')
+            expected_failure = (0, 1, 0, 0, 32, ('case_one',))
+            if parse_result(failed, ['case_one'], 32) != expected_failure:
+                raise Invalid('standard named failure positive')
+            if parse_result(failed.replace(b'32 filtered out', b'4 filtered out'), ['case_one'], 4) != (0, 1, 0, 0, 4, ('case_one',)):
+                raise Invalid('other exact target filter count')
+            _reject(lambda: parse_result(failed.replace(b'32 filtered out', b'31 filtered out'), ['case_one'], 32), 'filter mutant')
+            _reject(lambda: parse_result(failed.replace(b'    case_one', b'    other_case'), ['case_one'], 32), 'failure identity mutant')
+            displayed = '\n'.join(diagnostic_lines('stderr', b'Authorization: Bearer fixture\n::error::sample\n', False))
+            if 'fixture' in displayed or '[STATIC_TEST_TOKEN_REDACTED]' not in displayed or 'native_diag|::error::sample' not in displayed:
+                raise Invalid('bounded diagnostic renderer')
+            clipped = diagnostic_lines('stdout', b'x' * (DISPLAY_CAP * 2), True)
+            if sum(len(line.encode('utf-8')) + 1 for line in clipped) > DISPLAY_CAP or not any('display truncated' in line for line in clipped):
+                raise Invalid('diagnostic display cap')
+            saved_capture, saved_stdout = capture, sys.stdout
+            fake_output = io.StringIO()
+            try:
+                capture = lambda argv, **kwargs: (0, b'unrecognized output shape\n', b'bounded diagnostic detail\n', {'out': False, 'err': False})
+                sys.stdout = fake_output
+                fake_exit = run_mock_send()
+            finally:
+                capture, sys.stdout = saved_capture, saved_stdout
+            emitted = fake_output.getvalue()
+            if fake_exit != 1 or 'state=unavailable cargo_exit=0' not in emitted:
+                raise Invalid('zero-exit invalid result gate')
+            if 'failure_diagnostic case=' not in emitted or 'stream=stdout' not in emitted or 'stream=stderr' not in emitted:
+                raise Invalid('zero-exit invalid result diagnostics')
+            if 'native_diag|unrecognized output shape' not in emitted or 'native_diag|bounded diagnostic detail' not in emitted:
+                raise Invalid('zero-exit diagnostic content projection')
+            probe_code, probe_out, probe_err, probe_overflow = capture([
+                sys.executable, '-c', "import sys; sys.stdout.buffer.write(b'X' * 32); sys.stderr.buffer.write(b'Y')"
+            ], limit=8)
+            if (probe_code, probe_out, probe_err, probe_overflow) != (0, b'X' * 8, b'Y', {'out': True, 'err': False}):
+                raise Invalid('independent per-stream capture limit')
+            print('six_failure_guard_synthetic_controls=pass list=exact_one result=pass_and_named_fail filters=target_specific diagnostic=bounded_prefixed_redacted invalid_zero_exit=nonzero_with_both_streams per_stream_cap=pass')
+        
+        
+        def cargo(args):
+            return ['cargo', *args]
+        
+        
+        def _show_failure(label, code, stdout, stderr, overflow):
+            print(label + '=fail cargo_exit=' + str(code) + ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
+            emit_diagnostics(label, stdout, stderr, overflow)
+        
+        
+        def compile_targets():
+            code, stdout, stderr, overflow = capture(cargo(['fetch', '--locked']))
+            print('locked_dependency_fetch=' + ('pass' if code == 0 and not _overflowed(overflow) else 'fail') +
+                  ' cargo_exit=' + str(code) + ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
+            if code != 0 or _overflowed(overflow):
+                emit_diagnostics('locked_dependency_fetch', stdout, stderr, overflow)
+                return 1
+            args = ['test', '--locked', '-p', 'nagic']
+            for target, _, _ in CASES:
+                args.extend(['--test', target])
+            args.append('--no-run')
+            code, stdout, stderr, overflow = capture(cargo(args))
+            good = code == 0 and not _overflowed(overflow)
+            print('six_target_compile=' + ('pass' if good else 'fail') +
+                  ' cargo_exit=' + str(code) + ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
+            if not good:
+                emit_diagnostics('six_target_compile', stdout, stderr, overflow)
+            return 0 if good else 1
+        
+        
+        def inventories():
+            failed = False
+            for target, case, _ in CASES:
+                argv = cargo(['test', '--locked', '-p', 'nagic', '--test', target,
+                              case, '--', '--exact', '--list'])
+                code, stdout, stderr, overflow = capture(argv)
+                try:
+                    if code != 0 or _overflowed(overflow):
+                        raise Invalid('exact list command failed')
+                    count = parse_list(stdout, [case])
+                    print('exact_case_inventory target=' + target + ' state=pass name=' + case +
+                          ' listed=' + str(count))
+                except Exception:
+                    print('exact_case_inventory target=' + target + ' state=unavailable name=' + case +
+                          ' cargo_exit=' + str(code) + ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
+                    emit_diagnostics(target + '_list', stdout, stderr, overflow)
+                    failed = True
+            return int(failed)
+        
+        
+        def execute_cases():
+            failed = False
+            for target, case, filtered in CASES:
+                argv = cargo(['test', '--locked', '-p', 'nagic', '--test', target,
+                              case, '--', '--exact'])
+                code, stdout, stderr, overflow = capture(argv, limit=CASE_CAP)
+                parsed = None
+                reason = 'result grammar'
+                try:
+                    if _overflowed(overflow):
+                        raise Invalid('bounded capture overflow')
+                    parsed = parse_result(stdout, [case], filtered)
+                    passed, failures, ignored, measured, got_filtered, failed_names = parsed
+                    if code == 0 and (passed, failures, ignored, measured, got_filtered, failed_names) == (1, 0, 0, 0, filtered, ()):
+                        print('failure_case_observation target=' + target + ' name=' + case +
+                              ' state=pass cargo_exit=0 passed=1 failed=0 ignored=0 filtered=' + str(filtered))
+                        continue
+                    if code != 0 and (passed, failures, ignored, measured, got_filtered, failed_names) == (0, 1, 0, 0, filtered, (case,)):
+                        print('failure_case_observation target=' + target + ' name=' + case +
+                              ' state=fail cargo_exit=' + str(code) + ' passed=0 failed=1 ignored=0 filtered=' + str(filtered))
+                        emit_diagnostics(case, stdout, stderr, overflow)
+                        failed = True
+                        continue
+                    reason = 'exit_or_count_mismatch'
+                except Exception:
+                    if _overflowed(overflow):
+                        reason = 'bounded_capture_overflow'
+                print('failure_case_observation target=' + target + ' name=' + case +
+                      ' state=unavailable cargo_exit=' + str(code) + ' reason=' + reason +
+                      ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
+                emit_diagnostics(case, stdout, stderr, overflow)
+                failed = True
+            return int(failed)
+        
+        
+        MOCK_SEND = ('build_diagnostics', 'imported_async_ffi_send_failure_maps_the_cause_note_in_high_and_saved_low', 29)
+        
+        
+        def _run_named(target, case, filtered, profile):
+            argv = cargo(['test', '--locked', '-p', 'nagic', '--test', target,
+                          case, '--', '--exact'])
+            code, stdout, stderr, overflow = capture(argv, limit=CASE_CAP)
+            try:
+                if _overflowed(overflow):
+                    raise Invalid('bounded capture overflow')
+                parsed = parse_result(stdout, [case], filtered)
+                passed, failures, ignored, measured, got_filtered, failed_names = parsed
+                if code == 0 and (passed, failures, ignored, measured, got_filtered, failed_names) == (1, 0, 0, 0, filtered, ()):
+                    print(profile + ' state=pass cargo_exit=0 passed=1 failed=0 ignored=0 filtered=' + str(filtered))
+                    return 0
+                if code != 0 and (passed, failures, ignored, measured, got_filtered, failed_names) == (0, 1, 0, 0, filtered, (case,)):
+                    print(profile + ' state=fail cargo_exit=' + str(code) + ' passed=0 failed=1 ignored=0 filtered=' + str(filtered))
+                    emit_diagnostics(case, stdout, stderr, overflow)
+                    return 1
+                reason = 'exit_or_count_mismatch'
+            except Exception:
+                reason = 'bounded_capture_overflow' if _overflowed(overflow) else 'result_grammar'
+            print(profile + ' state=unavailable cargo_exit=' + str(code) + ' reason=' + reason +
+                  ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
+            emit_diagnostics(case, stdout, stderr, overflow)
+            return 1
+        
+        
+        def compile_mock_send():
+            code, stdout, stderr, overflow = capture(cargo(['fetch', '--locked']))
+            print('windows_mock_send_dependency_fetch=' + ('pass' if code == 0 and not _overflowed(overflow) else 'fail') +
+                  ' cargo_exit=' + str(code) + ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
+            if code != 0 or _overflowed(overflow):
+                emit_diagnostics('windows_mock_send_dependency_fetch', stdout, stderr, overflow)
+                return 1
+            code, stdout, stderr, overflow = capture(cargo(['test', '--locked', '-p', 'nagic', '--test', MOCK_SEND[0], '--no-run']))
+            good = code == 0 and not _overflowed(overflow)
+            print('windows_mock_send_compile=' + ('pass' if good else 'fail') +
+                  ' cargo_exit=' + str(code) + ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
+            if not good:
+                emit_diagnostics('windows_mock_send_compile', stdout, stderr, overflow)
+            return 0 if good else 1
+        
+        
+        def list_mock_send():
+            target, case, _ = MOCK_SEND
+            code, stdout, stderr, overflow = capture(cargo(['test', '--locked', '-p', 'nagic', '--test', target,
+                                                             case, '--', '--exact', '--list']))
+            try:
+                if code != 0 or _overflowed(overflow):
+                    raise Invalid('exact list command failed')
+                listed = parse_list(stdout, [case])
+                print('windows_mock_send_inventory state=pass name=' + case + ' listed=' + str(listed))
+                return 0
+            except Exception:
+                print('windows_mock_send_inventory state=unavailable cargo_exit=' + str(code) +
+                      ' capture=' + ('overflow' if _overflowed(overflow) else 'bounded'))
+                emit_diagnostics(case + '_list', stdout, stderr, overflow)
+                return 1
+        
+        
+        def run_mock_send():
+            target, case, filtered = MOCK_SEND
+            # Invalid output grammar is surfaced even when Cargo exits zero. The strict
+            # parser remains the gate, so a shape mismatch can never become a pass.
+            return _run_named(target, case, filtered, 'windows_mock_send_observation')
+        
+        
+        def main():
+            try:
+                if len(sys.argv) != 2:
+                    raise Invalid('mode')
+                mode = sys.argv[1]
+                if mode == 'selftest':
+                    selftest()
+                    return 0
+                if mode == 'sources':
+                    source_guard()
+                    return 0
+                if mode == 'compile':
+                    return compile_targets()
+                if mode == 'list':
+                    return inventories()
+                if mode == 'run':
+                    return execute_cases()
+                if mode == 'compile-mock-send':
+                    return compile_mock_send()
+                if mode == 'list-mock-send':
+                    return list_mock_send()
+                if mode == 'run-mock-send':
+                    return run_mock_send()
+                raise Invalid('mode')
+            except Exception:
+                print('six_failure_guard=unavailable reason=closed_validation_failure')
+                return 2
+        
+        
+        if __name__ == '__main__':
+            raise SystemExit(main())
+        PY
+        python "$RUNNER_TEMP/sf07-six-failure-guard.py" selftest
+        python "$RUNNER_TEMP/sf07-six-failure-guard.py" sources
+    - name: Fetch locked dependencies and compile six Linux failing harnesses
+      if: matrix.profile == 'linux-six-failures'
+      env:
+        CARGO_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+        NAGI_NATIVE_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+      shell: bash
+      run: |
+        set -euo pipefail
+        python "$RUNNER_TEMP/sf07-six-failure-guard.py" compile
+    - name: Verify the six exact Linux cases are collected once
+      if: matrix.profile == 'linux-six-failures'
+      env:
+        CARGO_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+        NAGI_NATIVE_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+      shell: bash
+      run: |
+        set -euo pipefail
+        python "$RUNNER_TEMP/sf07-six-failure-guard.py" list
+    - name: Run six Linux cases once with bounded failure output
+      if: matrix.profile == 'linux-six-failures'
+      env:
+        CARGO_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+        NAGI_NATIVE_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+      shell: bash
+      run: |
+        set -euo pipefail
+        python "$RUNNER_TEMP/sf07-six-failure-guard.py" run
+    - name: Fetch locked dependencies and compile the Windows mock Send harness
+      if: matrix.profile == 'windows-mock-send'
+      env:
+        CARGO_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+        NAGI_NATIVE_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+      shell: bash
+      run: |
+        set -euo pipefail
+        python "$RUNNER_TEMP/sf07-six-failure-guard.py" compile-mock-send
+    - name: Verify the exact Windows mock Send case is collected once
+      if: matrix.profile == 'windows-mock-send'
+      env:
+        CARGO_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+        NAGI_NATIVE_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+      shell: bash
+      run: |
+        set -euo pipefail
+        python "$RUNNER_TEMP/sf07-six-failure-guard.py" list-mock-send
+    - name: Run Windows mock Send once and surface invalid bounded output
+      if: matrix.profile == 'windows-mock-send'
+      env:
+        CARGO_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+        NAGI_NATIVE_TARGET_DIR: ${{ runner.temp }}/nagi-sf07-six-observation-target
+      shell: bash
+      run: |
+        set -euo pipefail
+        python "$RUNNER_TEMP/sf07-six-failure-guard.py" run-mock-send
