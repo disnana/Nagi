@@ -7,6 +7,34 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::oneshot,
 };
+
+fn with_test_response_limits(options: Options) -> Options {
+    let limits = response_limits(
+        4096,
+        65_536,
+        256,
+        4096,
+        32,
+        131_072,
+        256,
+        16_777_216 + 32_768,
+        1024,
+        285_212_672,
+        4096,
+        32,
+    )
+    .unwrap();
+    with_response_limits(options, limits).unwrap()
+}
+
+fn response_text(request: &Request, status: Status, body: &str) -> Result<Response, Error> {
+    text(response_context(request), status, body)
+}
+
+fn response_empty(request: &Request, status: Status) -> Result<Response, Error> {
+    empty(response_context(request), status)
+}
+
 struct Server {
     address: std::net::SocketAddr,
     stopped: Option<oneshot::Sender<()>>,
@@ -21,7 +49,7 @@ impl Server {
         // Existing lifecycle fixtures explicitly accept their localhost Host;
         // public serve/serve_listener do not supply an authority default.
         let options = authority(
-            options,
+            with_test_response_limits(options),
             "https://localhost",
             vec!["localhost".to_owned()],
             1,
@@ -148,7 +176,7 @@ async fn bearer_server() -> Server {
         authenticated_policy(|_, _| async {
             VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(60))
         }),
-        |_, _, _| async { Ok(text(Status::OK, "owned")) },
+        |request, _, _| async move { response_text(&request, Status::OK, "owned") },
     )
     .unwrap();
     Server::new(app, options(4, 1000, 1000, 1000).unwrap()).await
@@ -263,11 +291,11 @@ async fn session_server(f: &CookieFixture, calls: Arc<AtomicUsize>) -> Server {
         Method::GET,
         "/owned",
         session_authenticated_policy(session::clone_store(&f.store)),
-        move |_, _, scope| {
+        move |request, _, scope| {
             calls.fetch_add(1, Ordering::SeqCst);
             async move {
                 assert_eq!(scope.subject(), 7);
-                Ok(text(Status::OK, "owned"))
+                response_text(&request, Status::OK, "owned")
             }
         },
     )
@@ -336,9 +364,9 @@ async fn session_authorizer_receives_real_metadata_and_foreign_grant_is_refused(
             );
             Grant::<Owned>::from_authorized(scope, 9)
         }),
-        |_, _, grant| async move {
+        |request, _, grant| async move {
             grant.validate().unwrap();
-            Ok(text(Status::OK, "owned"))
+            response_text(&request, Status::OK, "owned")
         },
     )
     .unwrap();
@@ -364,10 +392,10 @@ async fn session_authorizer_receives_real_metadata_and_foreign_grant_is_refused(
                 )
             }
         }),
-        |_, _, _| async {
+        |request, _, _| async move {
             panic!("foreign authority reached handler");
             #[allow(unreachable_code)]
-            Ok(text(Status::OK, "owned"))
+            response_text(&request, Status::OK, "owned")
         },
     )
     .unwrap();
@@ -386,7 +414,7 @@ async fn session_head_mapper_panic_timeout_and_304_use_managed_finalizer() {
         Method::GET,
         "/owned",
         session_authenticated_policy(session::clone_store(&fixture.store)),
-        |_, _, _| async { Ok(text(Status::OK, "owned")) },
+        |request, _, _| async move { response_text(&request, Status::OK, "owned") },
     )
     .unwrap();
     let server = Server::new(app, options(4, 1000, 1000, 1000).unwrap()).await;
@@ -400,12 +428,12 @@ async fn session_head_mapper_panic_timeout_and_304_use_managed_finalizer() {
             Method::GET,
             "/owned",
             session_authenticated_policy(session::clone_store(&fixture.store)),
-            move |_, _, _| async move {
+            move |request, _, _| async move {
                 match mode {
                     0 => Err(Error::invalid("owned business error")),
                     1 => panic!("owned handler panic"),
                     2 => std::future::pending::<Result<Response, Error>>().await,
-                    _ => Ok(empty(crate::http_server::status(304).unwrap())),
+                    _ => response_empty(&request, crate::http_server::status(304).unwrap()),
                 }
             },
         )

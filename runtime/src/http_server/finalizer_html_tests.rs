@@ -15,7 +15,7 @@ fn document() -> html::HtmlDocument {
     .unwrap();
     html::document(&policy, "Items", body).unwrap()
 }
-fn managed(response: &axum::http::Response<BufferedBody>) {
+fn managed(response: &HttpResponse) {
     assert_eq!(response.headers()["content-security-policy"], EXPECTED_CSP);
     assert_eq!(response.headers()["x-content-type-options"], "nosniff");
 }

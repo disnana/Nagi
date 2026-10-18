@@ -2,7 +2,7 @@ use super::*;
 
 const EXPECTED_CSP: &str = "default-src 'none'; script-src 'none'; style-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
 
-fn managed(response: &axum::http::Response<BufferedBody>) {
+fn managed(response: &HttpResponse) {
     assert_eq!(response.headers()["content-security-policy"], EXPECTED_CSP);
     assert_eq!(response.headers()["x-content-type-options"], "nosniff");
 }

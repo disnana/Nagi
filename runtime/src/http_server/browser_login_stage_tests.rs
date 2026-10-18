@@ -322,6 +322,8 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
     } else {
         None
     };
+    // Configure finite response storage before the deliberately timed stage.
+    let response_request = response_public::tests::request_fixture(256);
     let admitted = Instant::now();
     let stage_until = admitted + Duration::from_millis(security as u64);
     // The same original actual owner only narrows; it is never replaced or
@@ -333,6 +335,7 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
             // production core borrows it; cancellation drops it before SQL reads.
             let owner = witness.owner;
             dispatch_owned(
+                response_context(&response_request),
                 &pool,
                 &prepare,
                 Arc::clone(&state),

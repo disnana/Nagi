@@ -369,6 +369,8 @@ impl BodyKind {
 const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'none'; style-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
 
 mod response_public;
+#[cfg(test)]
+pub(crate) use response_public::tests::request_fixture as bounded_response_request_fixture;
 pub use response_public::{
     append_header, append_header_text, bytes, empty, html_response, json, response_context,
     response_limits, text, with_response_limits, Response, ResponseContext, ResponseLimits,
@@ -1296,8 +1298,19 @@ struct IncomingRequest<B> {
     version: axum::http::Version,
 }
 impl<B> IncomingRequest<B> {
-    fn new(request: axum::http::Request<B>, headers: RequestHeaders) -> Self {
+    fn new(
+        request: axum::http::Request<B>,
+        prior: Option<Arc<crate::security_sf07_private::quota::Reservation>>,
+        context: ResponseContext,
+    ) -> Self {
         let (parts, body) = request.into_parts();
+        let headers =
+            RequestHeaders::from_received(request_headers::ReceivedHeaders::configured_native(
+                parts.headers,
+                parts.extensions,
+                prior,
+                context,
+            ));
         Self {
             parts: RequestParts {
                 method: parts.method,
@@ -1910,11 +1923,10 @@ where
                 let probe = options.lifecycle_probe.clone();
                 #[cfg(test)]
                 let service_probe = probe.clone();
-                let service = service_fn(move |mut request: axum::http::Request<hyper::body::Incoming>| {
+                let service = service_fn(move |request: axum::http::Request<hyper::body::Incoming>| {
                     let ledger = Arc::clone(&service_ledger);
                     let head = request.method() == Method::HEAD;
                     let prior = ledger.take_prior();
-                    let headers = std::mem::take(request.headers_mut());
                     let context = responses.context();
                     let may_have_body = !hyper::body::Body::is_end_stream(request.body());
                     let app = Arc::clone(&app);
@@ -1922,8 +1934,7 @@ where
                     let requests = Arc::clone(&requests);
                     let future = async move {
                         let prior = prior?;
-                        let headers = RequestHeaders::from_received(request_headers::ReceivedHeaders::configured(headers, prior, context));
-                        let request = IncomingRequest::new(request, headers);
+                        let request = IncomingRequest::new(request, prior, context);
                         let response = match dispatch(app, request, options, requests, peer.ip()).await { Ok(response) => response, Err(never) => match never {} };
                         response.transfer_native(&ledger, head)
                     };

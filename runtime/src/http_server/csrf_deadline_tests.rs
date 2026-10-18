@@ -449,6 +449,8 @@ async fn preparation_result_case(completion: Completion, late: bool) {
 }
 #[tokio::test]
 async fn guarded_preparation_initially_expired_session_still_challenges_401() {
+    let response_request = response_public::tests::request_fixture(64);
+    let response_context = response_context(&response_request);
     let f = Fixture::new().await;
     let tx = sqlite::begin(&f.pool, sqlite::BeginMode::Immediate)
         .await
@@ -472,7 +474,7 @@ async fn guarded_preparation_initially_expired_session_still_challenges_401() {
     );
     match await_preparation(&owner, until, AssertUnwindSafe(future).catch_unwind()).await {
         Ok(Ok(Err(error))) => {
-            let response = security_response(error, PolicySource::Session).into_http(false);
+            let response = security_response(response_context, error, PolicySource::Session, false);
             assert_eq!(response.status().as_u16(), 401);
             assert!(response.headers().contains_key(names::WWW_AUTHENTICATE));
             assert!(!response.headers().contains_key(names::SET_COOKIE));
@@ -489,6 +491,11 @@ async fn guarded_preparation_initially_expired_session_still_challenges_401() {
 // short body windows do not assume a bound on database or scheduler throughput.
 #[tokio::test]
 async fn guarded_body_wire_preserves_absolute_deadline_and_strict_precedence() {
+    let response_request = response_public::tests::request_fixture(64);
+    let context = response_context(&response_request);
+    let producer = Arc::clone(&context.producer);
+    let fallback = Arc::clone(&context.fallback);
+    drop(response_request);
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     for (body_ms, security_ms, spent_ms, expected) in [
         (80, 240, 0, 408),
@@ -500,11 +507,22 @@ async fn guarded_body_wire_preserves_absolute_deadline_and_strict_precedence() {
         let address = listener.local_addr().unwrap();
         let calls = Arc::new(AtomicUsize::new(0));
         let observed = Arc::clone(&calls);
+        let producer = Arc::clone(&producer);
+        let fallback = Arc::clone(&fallback);
         let connection = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
+            let ledger =
+                response_send::SendLedger::new(Arc::clone(&producer), Arc::clone(&fallback));
+            let service_ledger = Arc::clone(&ledger);
             let service = hyper::service::service_fn(
                 move |request: hyper::Request<hyper::body::Incoming>| {
                     let observed = Arc::clone(&observed);
+                    let ledger = Arc::clone(&service_ledger);
+                    let context = ResponseContext {
+                        profile: ResponseProfile::default(),
+                        producer: Arc::clone(&producer),
+                        fallback: Arc::clone(&fallback),
+                    };
                     async move {
                         observed.fetch_add(1, Ordering::SeqCst);
                         assert_eq!(request.headers().get(names::CONTENT_LENGTH).unwrap(), "5");
@@ -525,16 +543,22 @@ async fn guarded_body_wire_preserves_absolute_deadline_and_strict_precedence() {
                             Ok(_) => panic!("incomplete Content-Length body must not complete"),
                             Err(status) => status,
                         };
-                        Ok::<_, std::convert::Infallible>(vary::finish(managed(
-                            transport(status, false, true),
-                            false,
-                            true,
-                        )))
+                        Ok::<_, std::convert::Infallible>(
+                            vary::finish(managed(
+                                transport(&context, status, false, true),
+                                false,
+                                true,
+                            ))
+                            .transfer_native(&ledger, false)
+                            .unwrap(),
+                        )
                     }
                 },
             );
-            hyper::server::conn::http1::Builder::new()
-                .serve_connection(hyper_util::rt::TokioIo::new(socket), service)
+            let permit = Arc::new(Semaphore::new(1)).try_acquire_owned().unwrap();
+            let native = hyper::server::conn::http1::Builder::new()
+                .serve_connection(hyper_util::rt::TokioIo::new(socket), service);
+            response_send::NativeDriver::new(native, ledger, permit)
                 .await
                 .unwrap();
         });

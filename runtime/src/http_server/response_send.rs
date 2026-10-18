@@ -94,7 +94,7 @@ impl SendLedger {
         Ok(ReceivedRequest {
             method: parts.method,
             uri: parts.uri,
-            headers: ReceivedHeaders::new(parts.headers, prior),
+            headers: ReceivedHeaders::new_native(parts.headers, parts.extensions, prior),
             _body: body,
         })
     }

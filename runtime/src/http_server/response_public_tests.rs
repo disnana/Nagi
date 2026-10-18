@@ -47,7 +47,7 @@ pub(in crate::http_server) fn headers_fixture(map: HeaderMap, body_bound: usize)
         .unwrap();
     headers
 }
-pub(in crate::http_server) fn request_fixture(body_bound: usize) -> Request {
+pub(crate) fn request_fixture(body_bound: usize) -> Request {
     Request {
         method: Method::GET,
         uri: Uri::from_static("/"),

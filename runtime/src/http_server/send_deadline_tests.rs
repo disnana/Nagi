@@ -235,6 +235,12 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
     )
     .unwrap()
     .into_http(false);
+    let context = response_context(&response_request);
+    let ledger = response_send::SendLedger::new(
+        Arc::clone(&context.producer),
+        Arc::clone(&context.fallback),
+    );
+    let reply = reply.transfer_native(&ledger, false).unwrap();
     let transferred = Arc::new(AtomicBool::new(false));
     let header_flush = Arc::new(AtomicBool::new(false));
     #[cfg(windows)]
@@ -284,7 +290,12 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
     };
     let mut builder = http1::Builder::new();
     builder.max_buf_size(8192);
-    let task = tokio::spawn(builder.serve_connection(io, service));
+    let permit = Arc::new(Semaphore::new(1)).try_acquire_owned().unwrap();
+    let task = tokio::spawn(response_send::NativeDriver::new(
+        builder.serve_connection(io, service),
+        ledger,
+        permit,
+    ));
     send(&mut client, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
     // Read only the actual headers, leaving the large body backpressured.
     // Preserve the 2s watchdog and all required native premises. Cleanup and
