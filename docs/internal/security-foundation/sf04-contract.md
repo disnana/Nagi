@@ -55,11 +55,11 @@ HtmlTagのみnative Copy/Cloneを持つ。それ以外にpublic Clone/Default/Fr
 | `html.join(policy: view[HtmlPolicy], left: HtmlFragment, right: HtmlFragment) -> Result[HtmlFragment, Error]` | Reference, Move, Move |
 | `html.copy_fragment(policy: view[HtmlPolicy], fragment: view[HtmlFragment]) -> Result[HtmlFragment, Error]` | Reference, Reference |
 | `html.document(policy: view[HtmlPolicy], title: view[str], body: HtmlFragment) -> Result[HtmlDocument, Error]` | Reference, Reference, Move |
-| `http.html_response(status: http.Status, document: html.HtmlDocument) -> http.Response` | Move, Move |
+| `http.html_response(context: view[http.ResponseContext], status: http.Status, document: html.HtmlDocument) -> Result[http.Response, Error]` | Reference, Move, Move |
 
 全操作は同期、generic arity 0、`emit_type_args=false`、`borrow_owner=None`。所有する戻り値を作り、viewを返さない。明示 `view[...]` 入力は既存のPassing::Reference、owning/scalar引数はMove（HtmlTag自体はCopy）。callerのviewはcall終了を越えて保持しない。policy profileはruntime内部でowned immutableに保持し、Reference入力のlifetimeを延長しない。
 
-標準Rustのpublic APIも同じ型/順序/結果で `view[T]` を `&T`、`str`を`&str`、`i64`を`i64`、Errorを既存runtime Errorへ写す。`http_server::html_response(Status, html::HtmlDocument) -> Response` が唯一のHTML response入口の契約。低levelunchecked constructor、public fields/body-kind setter、unsafe trait conversion、ambient string/bytes HTML response factoryを標準Rustにも残さない。カスタムnative Rust/unsafe externの任意active配信は別のtrusted-host著者境界であり、標準APIの迂回として案内しない。
+標準Rustのpublic APIも同じ型/順序/結果で `view[T]` を `&T`、`str`を`&str`、`i64`を`i64`、Errorを既存runtime Errorへ写す。`http_server::html_response(&ResponseContext, Status, html::HtmlDocument) -> Result<Response, Error>` が唯一のHTML response入口の契約です。contextは現在のRequestから借り、戻り値Responseは所有値です。低levelunchecked constructor、public fields/body-kind setter、unsafe trait conversion、ambient string/bytes HTML response factoryを標準Rustにも残さない。カスタムnative Rust/unsafe externの任意active配信は別のtrusted-host著者境界であり、標準APIの迂回として案内しない。
 
 ## Subsetと構造 — SF04-C02
 

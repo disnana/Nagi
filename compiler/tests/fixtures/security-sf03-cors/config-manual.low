@@ -1,10 +1,12 @@
 import std.http.server as http;
 record State { value: i64; }
 record CorsPolicy { value: i64; }
-async fn respond(request: http.Request,state: shared[State],proof: unit) -> Result[http.Response,Error] { return ok(http.text(http.Status.OK,"owned")); }
+async fn respond(request: http.Request,state: shared[State],proof: unit) -> Result[http.Response,Error] { return http.text(http.response_context(view(request)),http.Status.OK,"owned"); }
 fn build(path: view[str]) -> Result[http.App[State,Error],Error] {
  let app = http.app_default[State](State(value=7));
  app = try http.route(app,http.Method.GET,path,http.public_policy[State](),respond);
+ let rate = try http.rate_policy(1000000,1000);
+ app = try http.rate_route(app,http.Method.GET,path,rate);
  let cors = try http.cors_policy(["https://app.example.invalid"],["content-type"],http.CorsCredentials.ALLOW,0,2,128,2,64);
  return http.cors_route[State,Error](app,http.Method.GET,path,cors);
 }

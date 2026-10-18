@@ -46,15 +46,15 @@ def query_user(request: view[http.Request]) -> Result[User, Error]:
             return error("query must contain limit and name")
 
 async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, "ok"))
+    return http.text(http.response_context(view(request)), http.Status.OK, "ok")
 
 async def small(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     user = User(id=1, name="alice", age=18)
-    return http.json[User](http.Status.OK, user)
+    return http.json[User](http.response_context(view(request)), http.Status.OK, user)
 
 async def query_params(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     user = try query_user(view(request))
-    return http.json[User](http.Status.OK, user)
+    return http.json[User](http.response_context(view(request)), http.Status.OK, user)
 
 async def get_user(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try path_i64(view(request), view("/users/"))
@@ -62,44 +62,44 @@ async def get_user(request: http.Request, state: shared[State], authority: unit)
         case Ok(found):
             match found:
                 case Some(user):
-                    return http.json[User](http.Status.OK, user)
+                    return http.json[User](http.response_context(view(request)), http.Status.OK, user)
                 case None:
-                    return ok(http.empty(http.Status.NOT_FOUND))
+                    return http.empty(http.response_context(view(request)), http.Status.NOT_FOUND)
         case Err(problem):
             return fail(problem)
 
 async def list_users(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     users = try await storage_list_users(view(state.db))
-    return http.json[List[User]](http.Status.OK, users)
+    return http.json[List[User]](http.response_context(view(request)), http.Status.OK, users)
 
 async def create_user(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     input = try json_decode[CreateUser](request.body)
     user = try await storage_create_user(view(state.db), input.name, input.age)
-    return http.json[User](http.Status.OK, user)
+    return http.json[User](http.response_context(view(request)), http.Status.OK, user)
 
 async def update_user(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try path_i64(view(request), view("/users/"))
     input = try json_decode[CreateUser](request.body)
     user = try await storage_update_user(view(state.db), id, input.name, input.age)
-    return http.json[User](http.Status.OK, user)
+    return http.json[User](http.response_context(view(request)), http.Status.OK, user)
 
 async def delete_user(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try path_i64(view(request), view("/users/"))
     deleted = try await storage_delete_user(view(state.db), id)
-    return http.json[i64](http.Status.OK, deleted)
+    return http.json[i64](http.response_context(view(request)), http.Status.OK, deleted)
 
 async def echo(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     input = try json_decode[CreateUser](request.body)
-    return http.json[CreateUser](http.Status.OK, input)
+    return http.json[CreateUser](http.response_context(view(request)), http.Status.OK, input)
 
 async def wait_ms(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     duration = try path_i64(view(request), view("/wait/"))
     await sleep(duration)
-    return http.json[i64](http.Status.OK, duration)
+    return http.json[i64](http.response_context(view(request)), http.Status.OK, duration)
 
 async def bounded_bytes(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    source = http.text(http.Status.OK, "chunk:0\nchunk:1\nchunk:2\nchunk:3\nchunk:4\n")
-    return ok(http.bytes(http.Status.OK, source.body))
+    source = try http.text(http.response_context(view(request)), http.Status.OK, "chunk:0\nchunk:1\nchunk:2\nchunk:3\nchunk:4\n")
+    return http.bytes(http.response_context(view(request)), http.Status.OK, source.body)
 
 async def main() -> Result[unit, Error]:
     path = env("NAGI_DB", ":memory:")
@@ -107,20 +107,49 @@ async def main() -> Result[unit, Error]:
     try await bootstrap_users(view(db))
     app = http.app_default[State](State(db=db))
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    route_policy_1 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/health", route_policy_1)
     app = try http.route(app, http.Method.GET, "/small", http.public_policy[State](), small)
+    route_policy_2 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/small", route_policy_2)
     app = try http.route(app, http.Method.GET, "/query", http.public_policy[State](), query_params)
+    route_policy_3 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/query", route_policy_3)
     app = try http.route(app, http.Method.GET, "/users/{id}", http.public_policy[State](), get_user)
+    route_policy_4 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/users/{id}", route_policy_4)
     app = try http.route(app, http.Method.GET, "/users", http.public_policy[State](), list_users)
+    route_policy_5 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/users", route_policy_5)
     app = try http.route(app, http.Method.POST, "/users", http.public_policy[State](), create_user)
+    route_policy_6 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.POST, "/users", route_policy_6)
     app = try http.route(app, http.Method.PUT, "/users/{id}", http.public_policy[State](), update_user)
+    route_policy_7 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.PUT, "/users/{id}", route_policy_7)
     app = try http.route(app, http.Method.DELETE, "/users/{id}", http.public_policy[State](), delete_user)
+    route_policy_8 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.DELETE, "/users/{id}", route_policy_8)
     app = try http.route(app, http.Method.POST, "/echo", http.public_policy[State](), echo)
+    route_policy_9 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.POST, "/echo", route_policy_9)
     app = try http.route(app, http.Method.GET, "/wait/{id}", http.public_policy[State](), wait_ms)
+    route_policy_10 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/wait/{id}", route_policy_10)
     app = try http.route(app, http.Method.GET, "/stream", http.public_policy[State](), bounded_bytes)
+    route_policy_11 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/stream", route_policy_11)
     limits = try http.options(1048576, 10000, 2000, 10000)
     limits = try http.capacity(limits, 1024, 256)
     port = 8080
     limits = try http.authority(limits, "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    limits = try http.with_response_limits(limits, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    limits = try http.with_rate_limits(limits, rate_budget)
     return await http.serve(app, port, limits)
 
 # This HTTP-facing projection preserves the primary Error. The SQLite Failure

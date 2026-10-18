@@ -3,14 +3,18 @@ class State:
     seed: i64
 class Payload:
     label: str
-def encode(value: Payload) -> Result[http.Response, Error]:
-    return http.json[Payload](http.Status.OK, value)
-def map_builtin(error: Error) -> http.Response:
-    return http.empty(http.Status.INTERNAL_SERVER_ERROR)
-def map_text(error: str) -> http.Response:
-    return http.empty(http.Status.BAD_REQUEST)
+def encode(context: view[http.ResponseContext], value: Payload) -> Result[http.Response, Error]:
+    return http.json[Payload](context, http.Status.OK, value)
+def map_builtin(context: view[http.ResponseContext], error: Error) -> Result[http.Response, Error]:
+    return http.empty(context, http.Status.INTERNAL_SERVER_ERROR)
+def map_text(context: view[http.ResponseContext], error: str) -> Result[http.Response, Error]:
+    return http.empty(context, http.Status.BAD_REQUEST)
 async def handler(request: http.Request, state: shared[State], access: unit) -> Result[http.Response, str]:
-    return ok(http.empty(http.Status.OK))
+    match http.empty(http.response_context(view(request)), http.Status.OK):
+        case Ok(response):
+            return ok(response)
+        case Err(_):
+            return fail("response construction failed")
 def setup(state: State) -> Result[http.App[State, Error], Error]:
     app = http.app[State, Error](state, map_builtin)
     return http.route_mapped(app, http.Method.GET, view("/probe"), http.public_policy[State](), handler, map_text)

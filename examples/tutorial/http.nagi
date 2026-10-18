@@ -10,7 +10,7 @@ class Greeting:
     name: str
 
 async def home(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, view(state.greeting)))
+    return http.text(http.response_context(view(request)), http.Status.OK, view(state.greeting))
 
 async def greet(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id_text = try slice(request.path, 7, len(request.path))
@@ -18,17 +18,30 @@ async def greet(request: http.Request, state: shared[State], authority: unit) ->
     if id < 1:
         return error("id must be positive")
     value = Greeting(id=id, name="Nagi")
-    return http.json[Greeting](http.Status.OK, value)
+    return http.json[Greeting](http.response_context(view(request)), http.Status.OK, value)
 
 async def echo(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     value = try json_decode[Greeting](request.body)
-    return http.json[Greeting](http.Status.OK, value)
+    return http.json[Greeting](http.response_context(view(request)), http.Status.OK, value)
 
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(greeting="Hello, Nagi!"))
     app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), home)
+    route_policy_1 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/", route_policy_1)
     app = try http.route(app, http.Method.GET, "/greet/{id}", http.public_policy[State](), greet)
+    route_policy_2 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/greet/{id}", route_policy_2)
     app = try http.route(app, http.Method.POST, "/echo", http.public_policy[State](), echo)
+    route_policy_3 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.POST, "/echo", route_policy_3)
     limits = http.default_options()
     limits = try http.authority(limits, "https://localhost", ["localhost:8094", "127.0.0.1:8094"], 2, 256)
+    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    limits = try http.with_response_limits(limits, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    limits = try http.with_rate_limits(limits, rate_budget)
     return await http.serve(app, 8094, limits)

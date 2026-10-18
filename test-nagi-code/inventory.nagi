@@ -42,11 +42,11 @@ def item_id(request: view[http.Request]) -> Result[i64, Error]:
     return parse_i64(try slice(request.path, 7, len(request.path)))
 
 async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, "ok"))
+    return http.text(http.response_context(view(request)), http.Status.OK, "ok")
 
 async def list_items(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     rows = try await storage_list_items(view(state.db))
-    return http.json[List[Item]](http.Status.OK, rows)
+    return http.json[List[Item]](http.response_context(view(request)), http.Status.OK, rows)
 
 async def get_item(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try item_id(view(request))
@@ -55,9 +55,9 @@ async def get_item(request: http.Request, state: shared[State], authority: unit)
         case Ok(found):
             match found:
                 case Some(item):
-                    return http.json[Item](http.Status.OK, item)
+                    return http.json[Item](http.response_context(view(request)), http.Status.OK, item)
                 case None:
-                    return ok(http.empty(http.Status.NOT_FOUND))
+                    return http.empty(http.response_context(view(request)), http.Status.NOT_FOUND)
         case Err(problem):
             return fail(problem)
 
@@ -65,7 +65,7 @@ async def create_item(request: http.Request, state: shared[State], authority: un
     input = try json_decode[SaveItem](request.body)
     try validate_item(view(input.name), input.quantity)
     item = try await storage_create_item(view(state.db), input.name, input.quantity)
-    return http.json[Item](http.Status.OK, item)
+    return http.json[Item](http.response_context(view(request)), http.Status.OK, item)
 
 async def update_item(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try item_id(view(request))
@@ -73,22 +73,22 @@ async def update_item(request: http.Request, state: shared[State], authority: un
     try validate_id(id)
     try validate_item(view(input.name), input.quantity)
     item = try await storage_update_item(view(state.db), id, input.name, input.quantity)
-    return http.json[Item](http.Status.OK, item)
+    return http.json[Item](http.response_context(view(request)), http.Status.OK, item)
 
 async def delete_item(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try item_id(view(request))
     try validate_id(id)
     affected = try await storage_delete_item(view(state.db), id)
-    return http.json[DeleteResult](http.Status.OK, DeleteResult(id=id, deleted=affected > 0))
+    return http.json[DeleteResult](http.response_context(view(request)), http.Status.OK, DeleteResult(id=id, deleted=affected > 0))
 
 async def inventory_summary(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     match await storage_inventory_summary(view(state.db), 0):
         case Ok(found):
             match found:
                 case Some(summary):
-                    return http.json[InventorySummary](http.Status.OK, summary)
+                    return http.json[InventorySummary](http.response_context(view(request)), http.Status.OK, summary)
                 case None:
-                    return ok(http.empty(http.Status.NOT_FOUND))
+                    return http.empty(http.response_context(view(request)), http.Status.NOT_FOUND)
         case Err(problem):
             return fail(problem)
 
@@ -103,13 +103,35 @@ async def main() -> Result[unit, Error]:
     print(port)
     app = http.app_default[State](State(db=db))
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    route_policy_1 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/health", route_policy_1)
     app = try http.route(app, http.Method.GET, "/items", http.public_policy[State](), list_items)
+    route_policy_2 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/items", route_policy_2)
     app = try http.route(app, http.Method.GET, "/items/{id}", http.public_policy[State](), get_item)
+    route_policy_3 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/items/{id}", route_policy_3)
     app = try http.route(app, http.Method.POST, "/items", http.public_policy[State](), create_item)
+    route_policy_4 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.POST, "/items", route_policy_4)
     app = try http.route(app, http.Method.PUT, "/items/{id}", http.public_policy[State](), update_item)
+    route_policy_5 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.PUT, "/items/{id}", route_policy_5)
     app = try http.route(app, http.Method.DELETE, "/items/{id}", http.public_policy[State](), delete_item)
+    route_policy_6 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.DELETE, "/items/{id}", route_policy_6)
     app = try http.route(app, http.Method.GET, "/inventory/summary", http.public_policy[State](), inventory_summary)
-    return await http.serve(app, port, http.default_options())
+    route_policy_7 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/inventory/summary", route_policy_7)
+    options = http.default_options()
+    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    options = try http.with_response_limits(options, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    options = try http.with_rate_limits(options, rate_budget)
+    return await http.serve(app, port, options)
 
 # This HTTP-facing projection preserves the primary Error. The SQLite Failure
 # (outcome, cleanup and retired metadata) stays observable in database APIs.

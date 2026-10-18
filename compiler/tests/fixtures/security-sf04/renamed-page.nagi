@@ -2,12 +2,13 @@ import std.html as markup
 import std.http.server as web
 class HtmlDocument:
     value: i64
-def respond(document: markup.HtmlDocument) -> web.Response:
-    return web.html_response(web.Status.CREATED, document)
-def build_page() -> Result[web.Response, Error]:
+def respond(request: web.Request, document: markup.HtmlDocument) -> Result[web.Response, Error]:
+    context = web.response_context(view(request))
+    return web.html_response(context, web.Status.CREATED, document)
+def build_page(request: web.Request) -> Result[web.Response, Error]:
     policy = try markup.policy("https://example.invalid")
     text = try markup.text(view(policy), "通常の café & tea")
     document = try markup.document(view(policy), "Renamed & checked", text)
-    return ok(respond(document))
+    return respond(request, document)
 def user_value() -> i64:
     return HtmlDocument(value=7).value

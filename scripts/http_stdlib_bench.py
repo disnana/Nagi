@@ -124,9 +124,12 @@ def main():
     def start(name, label):
         binary, port = binaries[name]
         log = (output / f"{name}-server-{label}.log").open("w")
+        mode_env = dict(env, NAGI_SAMPLE_PORT=str(port))
+        if name in ("nagi", "rust"):
+            mode_env["NAGI_HTTP_AUTHORITY"] = f"127.0.0.1:{port}"
         process = subprocess.Popen(
             ["taskset", "-c", str(server_cpu), str(binary)],
-            env=dict(env, NAGI_SAMPLE_PORT=str(port)), stdout=log, stderr=log,
+            env=mode_env, stdout=log, stderr=log,
         )
         try:
             deadline = time.monotonic() + 10

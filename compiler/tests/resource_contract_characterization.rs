@@ -207,6 +207,14 @@ const RESOURCES: &[ResourceExpected] = &[
         &[],
     ),
     (
+        R::ResponseContext,
+        M::HttpServer,
+        "ResponseContext",
+        &[],
+        [false, false, false, false, false],
+        &[],
+    ),
+    (
         R::Response,
         M::HttpServer,
         "Response",
@@ -236,6 +244,30 @@ const RESOURCES: &[ResourceExpected] = &[
         "Options",
         &[],
         [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::ResponseLimits,
+        M::HttpServer,
+        "ResponseLimits",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::RateLimits,
+        M::HttpServer,
+        "RateLimits",
+        &[],
+        [false, false, true, true, true],
+        &[],
+    ),
+    (
+        R::RatePolicy,
+        M::HttpServer,
+        "RatePolicy",
+        &[],
+        [false, false, true, true, false],
         &[],
     ),
     (
@@ -511,8 +543,8 @@ fn registered_resources_match_the_independent_inventory() {
         shared: false,
         debug: false,
     };
-    assert_eq!(RESOURCES.len(), 56);
-    assert_eq!(stdlib::RESOURCES.len(), 56);
+    assert_eq!(RESOURCES.len(), 60);
+    assert_eq!(stdlib::RESOURCES.len(), 60);
     assert_eq!(
         stdlib::RESOURCES.iter().copied().collect::<HashSet<_>>(),
         RESOURCES.iter().map(|r| r.0).collect()
@@ -653,11 +685,12 @@ const OPERATIONS: &[OperationExpected] = &[
     op!(Status,HttpServer,"status",1,&[],"M",None,false,true,"(value: i64) -> Result[Status, Error]"),
     op!(Method,HttpServer,"method",1,&[],"R",None,false,true,"(name: view[str]) -> Result[Method, Error]"),
     op!(MethodName,HttpServer,"method_name",1,&[],"R",Some(0),false,true,"(method: view[Method]) -> view[str]"),
-    op!(Empty,HttpServer,"empty",1,&[],"M",None,false,true,"(status: Status) -> Response"),
-    op!(Text,HttpServer,"text",2,&[],"MR",None,false,true,"(status: Status, body: view[str]) -> Response"),
+    op!(ResponseContext,HttpServer,"response_context",1,&[],"R",Some(0),false,true,"(request: view[Request]) -> view[ResponseContext]"),
+    op!(Empty,HttpServer,"empty",2,&[],"RM",None,false,true,"(context: view[ResponseContext], status: Status) -> Result[Response, Error]"),
+    op!(Text,HttpServer,"text",3,&[],"RMR",None,false,true,"(context: view[ResponseContext], status: Status, body: view[str]) -> Result[Response, Error]"),
     op!(Html,HttpServer,"html",2,&[],"MR",None,false,true,"(status: Status, body: view[str]) -> Response"),
-    op!(Bytes,HttpServer,"bytes",2,&[],"MR",None,false,true,"(status: Status, body: view[bytes]) -> Response"),
-    op!(Json,HttpServer,"json",2,&["T"],"MB",None,false,true,"[T](status: Status, value: T) -> Result[Response, Error]"),
+    op!(Bytes,HttpServer,"bytes",3,&[],"RMR",None,false,true,"(context: view[ResponseContext], status: Status, body: view[bytes]) -> Result[Response, Error]"),
+    op!(Json,HttpServer,"json",3,&["T"],"RMB",None,false,true,"[T](context: view[ResponseContext], status: Status, value: T) -> Result[Response, Error]"),
     op!(AppendHeader,HttpServer,"append_header",3,&[],"MRR",None,false,true,"(response: Response, name: view[str], value: view[bytes]) -> Result[Response, Error]"),
     op!(AppendHeaderText,HttpServer,"append_header_text",3,&[],"MRR",None,false,true,"(response: Response, name: view[str], value: view[str]) -> Result[Response, Error]"),
     op!(Header,HttpServer,"header",2,&[],"RR",Some(0),false,true,"(request: view[Request], name: view[str]) -> Result[Option[view[bytes]], Error]"),
@@ -666,16 +699,23 @@ const OPERATIONS: &[OperationExpected] = &[
     op!(IsJsonContentType,HttpServer,"is_json_content_type",1,&[],"R",None,false,true,"(request: view[Request]) -> Result[bool, Error]"),
     op!(DefaultOptions,HttpServer,"default_options",0,&[],"",None,false,true,"() -> Options"),
     op!(Options,HttpServer,"options",4,&[],"MMMM",None,false,true,"(body_bytes: i64, body_ms: i64, handler_ms: i64, shutdown_ms: i64) -> Result[Options, Error]"),
+    op!(ResponseLimits,HttpServer,"response_limits",12,&[],"MMMMMMMMMMMM",None,false,true,"(body_bytes: i64, user_header_bytes: i64, user_header_count: i64, managed_header_bytes: i64, managed_header_count: i64, serialization_writes: i64, live_responses: i64, retained_bytes: i64, fallback_responses: i64, fallback_retained_bytes: i64, fallback_managed_header_bytes: i64, fallback_managed_header_count: i64) -> Result[ResponseLimits, Error]"),
+    op!(WithResponseLimits,HttpServer,"with_response_limits",2,&[],"MM",None,false,true,"(options: Options, limits: ResponseLimits) -> Result[Options, Error]"),
+    op!(RateLimits,HttpServer,"rate_limits",5,&[],"MMMMM",None,false,true,"(rules: i64, domains: i64, subject_slots: i64, retained_bytes: i64, request_work: i64) -> Result[RateLimits, Error]"),
+    op!(WithRateLimits,HttpServer,"with_rate_limits",2,&[],"MM",None,false,true,"(options: Options, limits: RateLimits) -> Result[Options, Error]"),
+    op!(RatePolicy,HttpServer,"rate_policy",2,&[],"MM",None,false,true,"(burst: i64, refill_ms: i64) -> Result[RatePolicy, Error]"),
+    op!(RateSubject,HttpServer,"rate_subject",5,&[],"MMMMM",None,false,true,"(policy: RatePolicy, burst: i64, refill_ms: i64, subject_slots: i64, idle_ms: i64) -> Result[RatePolicy, Error]"),
+    op!(RateRoute,HttpServer,"rate_route",4,&[],"MMRM",None,false,false,"(app: App[S, E], method: Method, path: view[str], policy: RatePolicy) -> Result[App[S, E], Error]"),
     op!(Capacity,HttpServer,"capacity",3,&[],"MMM",None,false,true,"(options: Options, connections: i64, requests: i64) -> Result[Options, Error]"),
     op!(HeaderTimeout,HttpServer,"header_timeout",2,&[],"MM",None,false,true,"(options: Options, milliseconds: i64) -> Result[Options, Error]"),
     op!(HeaderLimits,HttpServer,"header_limits",3,&[],"MMM",None,false,true,"(options: Options, bytes: i64, count: i64) -> Result[Options, Error]"),
     op!(SendTimeout,HttpServer,"send_timeout",2,&[],"MM",None,false,true,"(options: Options, milliseconds: i64) -> Result[Options, Error]"),
     op!(Authority,HttpServer,"authority",5,&[],"MRMMM",None,false,true,"(options: Options, external_origin: view[str], authorities: List[str], entry_limit: i64, byte_limit: i64) -> Result[Options, Error]"),
     op!(TrustedProxy,HttpServer,"trusted_proxy",2,&[],"MM",None,false,true,"(options: Options, peer_ips: List[str]) -> Result[Options, Error]"),
-    op!(App,HttpServer,"app",2,&["S","E"],"MP",None,false,true,"[S, E](state: S, mapper: fn[E, Response]) -> App[S, E]"),
+    op!(App,HttpServer,"app",2,&["S","E"],"MP",None,false,true,"[S, E](state: S, mapper: fn[view[ResponseContext], E, Result[Response, Error]]) -> App[S, E]"),
     op!(AppDefault,HttpServer,"app_default",1,&["S"],"M",None,false,true,"[S](state: S) -> App[S, Error]"),
     op!(Route,HttpServer,"route",5,&[],"MMRMH",None,false,false,"(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, E]]]) -> Result[App[S, E], Error]"),
-    op!(RouteMapped,HttpServer,"route_mapped",6,&[],"MMRMHP",None,false,false,"(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, F]]], mapper: fn[F, Response]) -> Result[App[S, E], Error]"),
+    op!(RouteMapped,HttpServer,"route_mapped",6,&[],"MMRMHP",None,false,false,"(app: App[S, E], method: Method, path: view[str], policy: Policy[S, A], handler: fn[Request, shared[S], A, Future[Result[Response, F]]], mapper: fn[view[ResponseContext], F, Result[Response, Error]]) -> Result[App[S, E], Error]"),
     op!(Serve,HttpServer,"serve",3,&[],"MMM",None,true,true,"(app: App[S, E], port: i64, options: Options) -> Future[Result[unit, Error]]"),
     op!(ActorDefaultOptions,Actor,"default_options",0,&[],"",None,false,true,"() -> Options"),
     op!(ActorOptions,Actor,"options",5,&[],"MMMMM",None,false,true,"(children: i64, events: i64, restarts: i64, window_ms: i64, shutdown_ms: i64) -> Result[Options, Error]"),
@@ -712,12 +752,12 @@ const OPERATIONS: &[OperationExpected] = &[
     op!(HtmlJoin,Html,"join",3,&[],"RMM",None,false,false,"(policy: view[HtmlPolicy], left: HtmlFragment, right: HtmlFragment) -> Result[HtmlFragment, Error]"),
     op!(HtmlCopyFragment,Html,"copy_fragment",2,&[],"RR",None,false,false,"(policy: view[HtmlPolicy], fragment: view[HtmlFragment]) -> Result[HtmlFragment, Error]"),
     op!(HtmlDocument,Html,"document",3,&[],"RRM",None,false,false,"(policy: view[HtmlPolicy], title: view[str], body: HtmlFragment) -> Result[HtmlDocument, Error]"),
-    op!(HttpHtmlResponse,HttpServer,"html_response",2,&[],"MM",None,false,false,"(status: Status, document: HtmlDocument) -> Response"),
+    op!(HttpHtmlResponse,HttpServer,"html_response",3,&[],"RMM",None,false,false,"(context: view[ResponseContext], status: Status, document: HtmlDocument) -> Result[Response, Error]"),
 ];
 #[test]
 fn registered_operations_match_signatures_and_passing() {
-    assert_eq!(OPERATIONS.len(), 121);
-    assert_eq!(stdlib::OPERATIONS.len(), 121);
+    assert_eq!(OPERATIONS.len(), 129);
+    assert_eq!(stdlib::OPERATIONS.len(), 129);
     assert_eq!(
         stdlib::OPERATIONS.iter().copied().collect::<HashSet<_>>(),
         OPERATIONS.iter().map(|r| r.operation).collect()
@@ -787,6 +827,122 @@ fn registered_operations_match_signatures_and_passing() {
         );
         assert!(names.insert((id, expected.name)));
     }
+}
+
+#[test]
+fn u4_response_context_resource_and_lookup_contract_is_registered() {
+    let contexts: Vec<_> = stdlib::RESOURCES
+        .iter()
+        .copied()
+        .filter(|&resource| {
+            let info = stdlib::resource_info(resource);
+            info.module == M::HttpServer && info.name == "ResponseContext"
+        })
+        .collect();
+    assert_eq!(
+        contexts.len(),
+        1,
+        "ResponseContext resource is missing or duplicated"
+    );
+    let context = stdlib::resource_info(contexts[0]);
+    assert_eq!(context.arity, 0);
+    assert!(context.type_parameters.is_empty());
+    assert_eq!(
+        [
+            context.copy,
+            context.equality,
+            context.storage,
+            context.shared,
+            context.debug
+        ],
+        [false, false, false, false, false]
+    );
+
+    let operation = |module: M, name: &str| {
+        let matches: Vec<_> = stdlib::OPERATIONS
+            .iter()
+            .copied()
+            .map(stdlib::operation_info)
+            .filter(|info| info.module == module && info.name == name)
+            .collect();
+        assert_eq!(matches.len(), 1, "{module:?}.{name} missing or duplicated");
+        matches[0]
+    };
+    let info = operation(M::HttpServer, "response_context");
+    assert_eq!(info.arity, 1);
+    assert!(info.type_parameters.is_empty());
+    assert_eq!(info.parameters, [Passing::Reference]);
+    assert_eq!(info.borrow_owner, Some(0));
+    assert_eq!(
+        info.signature,
+        "(request: view[Request]) -> view[ResponseContext]"
+    );
+}
+
+#[test]
+fn u4_app_mapper_contract_is_registered_after_context_factories() {
+    let operation = |module: M, name: &str| {
+        let matches: Vec<_> = stdlib::OPERATIONS
+            .iter()
+            .copied()
+            .map(stdlib::operation_info)
+            .filter(|info| info.module == module && info.name == name)
+            .collect();
+        assert_eq!(matches.len(), 1, "{module:?}.{name} missing or duplicated");
+        matches[0]
+    };
+    let expect = |info: &stdlib::OperationInfo,
+                  parameters: &[Passing],
+                  type_parameters: &[&str],
+                  borrow_owner: Option<usize>,
+                  signature: &str| {
+        assert_eq!(info.parameters, parameters, "{}", info.name);
+        assert_eq!(info.arity, parameters.len(), "{}", info.name);
+        assert_eq!(info.type_parameters, type_parameters, "{}", info.name);
+        assert_eq!(info.generic_arity, type_parameters.len(), "{}", info.name);
+        assert_eq!(info.borrow_owner, borrow_owner, "{}", info.name);
+        assert_eq!(info.signature, signature, "{}", info.name);
+    };
+
+    expect(
+        operation(M::HttpServer, "empty"),
+        &[Passing::Reference, Passing::Move],
+        &[],
+        None,
+        "(context: view[ResponseContext], status: Status) -> Result[Response, Error]",
+    );
+    expect(
+        operation(M::HttpServer, "text"),
+        &[Passing::Reference, Passing::Move, Passing::Reference],
+        &[],
+        None,
+        "(context: view[ResponseContext], status: Status, body: view[str]) -> Result[Response, Error]",
+    );
+    expect(
+        operation(M::HttpServer, "bytes"),
+        &[Passing::Reference, Passing::Move, Passing::Reference],
+        &[],
+        None,
+        "(context: view[ResponseContext], status: Status, body: view[bytes]) -> Result[Response, Error]",
+    );
+    // Context-first insertion shifts the borrowed JSON value from argument 1
+    // to argument 2 in serialized Passing metadata.
+    expect(
+        operation(M::HttpServer, "json"),
+        &[Passing::Reference, Passing::Move, Passing::Borrow],
+        &["T"],
+        None,
+        "[T](context: view[ResponseContext], status: Status, value: T) -> Result[Response, Error]",
+    );
+    // The adopted App mapper receives only a borrowed response context and
+    // returns a fallible owned response.
+    expect(
+        operation(M::HttpServer, "app"),
+        &[Passing::Move, Passing::Mapper],
+        &["S", "E"],
+        None,
+        "[S, E](state: S, mapper: fn[view[ResponseContext], E, Result[Response, Error]]) -> App[S, E]",
+    );
 }
 
 // Resource-valued fields are written as nominal names and resolved only after

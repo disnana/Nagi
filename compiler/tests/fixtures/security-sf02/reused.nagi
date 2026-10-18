@@ -1,6 +1,6 @@
 import std.auth.session as session
 import std.auth as auth
 import std.http.server as http
-def reject(response: http.Response, value: session.SessionResponse) -> Result[http.Response, session.Failure]:
+def reject(response: http.Response, other: http.Response, value: session.SessionResponse) -> Result[http.Response, session.Failure]:
     first = session.apply(response, value)
-    return session.apply(http.empty(http.Status.OK), value)
+    return session.apply(other, value)

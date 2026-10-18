@@ -51,18 +51,26 @@ Header names are case-insensitive. Single-header getters reject duplicates; `hea
 
 | Function | Return type |
 |---|---|
-| `empty(status)` | `Response` |
-| `text(status, text)` | `Response` |
-| `bytes(status, body)` | `Response` |
-| `json[T](status, value)` | `Result[Response, Error]` |
+| `response_context(view(request))` | `view[ResponseContext]` |
+| `empty(context, status)` | `Result[Response, Error]` |
+| `text(context, status, text)` | `Result[Response, Error]` |
+| `bytes(context, status, body)` | `Result[Response, Error]` |
+| `json[T](context, status, value)` | `Result[Response, Error]` |
+| `html_response(context, status, document)` | `Result[Response, Error]` |
 | `append_header(response, name, value: view[bytes])` | `Result[Response, Error]` |
 | `append_header_text(response, name, value: view[str])` | `Result[Response, Error]` |
 
+`context` is borrowed from the current Request with `response_context`. It is an opaque response-budget context, not an authentication proof. It cannot outlive its Request or be constructed with a default. The factories return an owned response with a retained budget claim; allocating or serializing beyond the explicit limits returns `Err`. Use `try` or return the factory Result directly. Handle these allocation/budget failures separately from the handler's business error.
+
+The SF07 cutover is still a development candidate: compiler checks cover High, saved Low and handwritten Low; runtime, native and final four-OS acceptance remain pending. This paragraph is not a claim of a released feature.
+
 `text` and `bytes` copy borrowed input into a body owned by the Response. `json` borrows its value, so it does not move the original. String literals can be passed directly to view parameters; borrow variables with `view(value)`.
 
-Header append consumes and returns the response. It preserves duplicate nonreserved headers such as X-Trace. It rejects Content-Length, Transfer-Encoding, Content-Type, Set-Cookie, WWW-Authenticate, Cache-Control, Vary, CORS, CSP, nosniff, and other security-managed headers. Cookie/Session issuance remains unimplemented until SF02. HEAD omits the body while retaining its GET-equivalent length. 204, 205, and 304 omit the body. Authority-form CONNECT returns 400 at the startup-configuration gate below. If an origin-form CONNECT handler returns success, tunnels remain unsupported: the server returns 501 and closes the connection.
+Header append consumes and returns the response. It preserves duplicate nonreserved headers such as X-Trace. It rejects Content-Length, Transfer-Encoding, Content-Type, Set-Cookie, WWW-Authenticate, Cache-Control, Vary, CORS, CSP, nosniff, and other security-managed headers. Cookie/Session issuance uses the dedicated Session API; header append cannot issue a cookie. HEAD omits the body while retaining its GET-equivalent length. 204, 205, and 304 omit the body. Authority-form CONNECT returns 400 at the startup-configuration gate below. If an origin-form CONNECT handler returns success, tunnels remain unsupported: the server returns 501 and closes the connection.
 
 ## App and routes
+
+The following is the route-registration fragment, not a complete SF07 startup program. Add explicit response/rate budgets and a rate policy for every route as described below.
 
 ```nagi
 app = http.app[State, AuthError](state, map_error)
@@ -72,18 +80,42 @@ limits = try http.authority(http.default_options(), "https://localhost", ["local
 return await http.serve(app, 8080, limits)
 ```
 
-- `app[S, E](state, mapper)` owns the state and uses `fn(E) -> Response` as its default error mapper.
+- `app[S, E](state, mapper)` owns the state and uses `fn(view[ResponseContext], E) -> Result[Response, Error]` as its default error mapper.
 - `app_default[S](state)` uses the default mapper for `Error`.
 - Policy is created by `public_policy[S]()`, `authenticated_policy[S](verifier)` or `authorized_policy[S,P](verifier, authorizer)`. Its output A is respectively unit, AuthScope or Grant[P]. The compiler checks S and A against the handler; old arities receive migration diagnostics.
 - A handler has the signature `async def handle(request: Request, state: shared[S], access: A) -> Result[Response, E]`. The state itself is not copied per request. Rust requires bounds such as `Send + Sync` on state and `Send` on the handler future; build performs the final validation.
 - `route_mapped` accepts a handler with its own error type and a matching mapper.
 - GET routes automatically accept HEAD unless an explicit HEAD route takes precedence. A different method on an existing path returns 405 with Allow.
 
+Mappers receive the borrowed response context explicitly and handle application failures. A mapper that itself returns `Err` uses the finite built-in fallback path; exhausting that independent fallback closes the connection without repeated allocation. CORS and managed headers remain on responses that can be produced. This does not guarantee a response after every failure or universal OOM recovery.
+
 Mappers handle application failures. The server handles malformed HTTP, limits, and deadlines. Avoid exposing database error details or credentials in responses.
 
 In Nagi 0.1.10, an unwinding panic in a handler or mapper before the response starts returns a generic 500 and closes that connection. Catching a panic does not roll back shared state or database updates. Return ordinary failures through Result. Recovery is not guaranteed for `panic=abort`, process termination such as OOM, a second panic during unwinding, custom Rust cleanup, or failures after the response starts.
 
 When an error response needs a request ID, retain the validated ID in the handler and move it into a custom error only on failure. The [quote API example](../../test-nagi-code/application-examples/quote-api/README.en.md) passes its ID to a shared mapper this way.
+
+## Explicit SF07 budgets and rate policy (development candidate)
+
+Response and rate budgets have no implicit defaults. `default_options()` retains the existing transport settings but does not supply the new budgets. Configure both budgets and every route's pre-authentication rate policy before starting the listener. Missing or inconsistent configuration must be rejected before listening; the runtime cutover and native acceptance of this requirement remain pending.
+
+| Configuration operation | Contract |
+|---|---|
+| `response_limits(body_bytes, user_header_bytes, user_header_count, managed_header_bytes, managed_header_count, serialization_writes, live_responses, retained_bytes, fallback_responses, fallback_retained_bytes, fallback_managed_header_bytes, fallback_managed_header_count)` | Twelve explicit `i64` inputs; returns `Result[ResponseLimits, Error]`. Ordinary and fallback budgets are separate |
+| `with_response_limits(options, limits)` | Moves Options and ResponseLimits; returns `Result[Options, Error]` |
+| `rate_limits(rules, domains, subject_slots, retained_bytes, request_work)` | Five explicit `i64` inputs; returns `Result[RateLimits, Error]`. Finite count, retained-capacity and work checks; no fixed public limit of 4096 |
+| `with_rate_limits(options, limits)` | Moves Options and RateLimits; returns `Result[Options, Error]` |
+| `rate_policy(burst, refill_ms)` | Returns `Result[RatePolicy, Error]` for a pre-authentication route bucket |
+| `rate_subject(policy, burst, refill_ms, subject_slots, idle_ms)` | Consumes the policy and adds a finite verified-subject bucket; returns `Result[RatePolicy, Error]` |
+| `rate_route(app, method, path, policy)` | Moves the App and policy, preserving the App's state/error types; returns `Result[App[S, E], Error]` |
+
+`burst` is both the initial token count and its maximum. `refill_ms` is the interval for replenishing **one** token. For example, `rate_policy(10, 1000)` initially admits ten requests, then replenishes one token per second; it does not replenish ten per second. Subject buckets follow the same rule. A subject slot is reclaimed only after full refill and its explicit idle condition are both satisfied. Sample values are finite illustrative settings, not production sizing recommendations or latency SLAs.
+
+The adopted consumption order is entry checks → route bucket → authentication/CSRF/body checks → verified-subject bucket → handler/Session issuance or update. A route 429 can precede 401/403. Errors and cancellation do not refund tokens. Normal preflight does not consume a route token, but remains subject to entry capacity, concurrency and deadlines. Subject buckets require a profile that supplies a verified subject. This is process-local control with sharing limited to one route; it is not an aggregate limit across routes, processes or machines.
+
+Token shortage maps to 429; table/quota capacity exhaustion or closing/clock faults map to 503. Internal or mapper failure maps to 500. Existing security/deadline rejections keep their priority. A finite fallback is attempted only within its independent allowance; if that allowance is exhausted, the transport closes.
+
+A configuration's accepted arithmetic bounds do not establish a whole-process memory limit or a latency SLA. Exact startup catalogue accounting, measured small profiles, native concurrency and final four-OS verification are release blockers, not completed guarantees.
 
 ## Limits and shutdown
 

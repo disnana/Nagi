@@ -41,6 +41,13 @@ Owned local Option/Result and same-task async calls remain available for AuthSco
 
 Move, Task/spawn semantics and SQLite Pool/Tx acquisition budgets, close, actual join and Outcome are preserved. Unifying old Db/dynamic SQL belongs to SF05. Custom Rust/Axum hosts remain explicit trusted boundaries outside the standard dispatcher guarantee; no compatibility layer automatically falls back to them.
 
+## SF07 response and rate migration (development candidate)
+
+- Replace status-first `empty/text/bytes/json/html_response` calls with a borrowed context from `http.response_context(view(request))` as their first argument. Every factory returns `Result[Response, Error]`; return it directly or use `try`. Do not wrap a factory Result in a second `ok`.
+- Change both App and route-specific mappers to `fn(view[http.ResponseContext], E) -> Result[http.Response, Error]`. The business error E and the mapper's own Error are different failures.
+- Add explicit `response_limits`/`with_response_limits` and `rate_limits`/`with_rate_limits` to Options, then `rate_policy`/`rate_route` for every route. Use `rate_subject` only for verified-subject profiles. There is no implicit new budget and no executable unbounded compatibility factory.
+- See the [API reference](http-server.md#explicit-sf07-budgets-and-rate-policy-development-candidate) for argument order, process-local scope and refusal behavior. This is an adopted cutover with compiler checks, not completed runtime/native/four-OS acceptance. The final measured startup example and integration tests remain release requirements.
+
 ## SQLite SF05
 
 | Old entry | Checker/Rust migration | Equivalent business verification |

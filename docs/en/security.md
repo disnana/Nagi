@@ -1,6 +1,6 @@
 # Authentication and authorization (unreleased 0.2.0 SF01)
 
-Authentication verifies who a caller is; authorization checks whether that caller may perform a particular operation on its actual target. SF01 provides explicit standard HTTP Policy, request-bound proofs and invalidation at request end. SF02 durable Sessions and Cookie issuance, and B1 Session-backed CSRF, are partial development-source implementations; public-login CSRF, CORS, cryptographic verifiers, typed HTML and outbound HTTP remain later steps. This does not establish completion of Security Foundation or retroactively change published 0.1.x.
+Authentication verifies who a caller is; authorization checks whether that caller may perform a particular operation on its actual target. SF01 provides explicit standard HTTP Policy, request-bound proofs and invalidation at request end. SF02 durable Sessions and Cookie issuance, and B1 Session-backed CSRF, are partial development-source implementations; public-login CSRF, CORS, cryptographic verifiers and outbound HTTP remain later steps; typed HTML is a separate SF04 development candidate. This does not establish completion of Security Foundation or retroactively change published 0.1.x.
 
 ## Choose a policy for every route
 
@@ -15,17 +15,13 @@ import std.http.server as http
 class State:
     greeting: str
 async def hello(request: http.Request, state: shared[State], access: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, view(state.greeting)))
-async def main() -> Result[unit, Error]:
-    app = http.app_default[State](State(greeting="Hello, Nagi!"))
-    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
-    limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
-    return await http.serve(app, 8080, limits)
+    context = http.response_context(view(request))
+    return http.text(context, http.Status.OK, view(state.greeting))
 ```
 
-Save this as `server.nagi` in your working directory and run `nagic run server.nagi` there with the development compiler. In another terminal, `curl http://127.0.0.1:8080/` returns `Hello, Nagi!`. Stop with Ctrl+C. Choose another port if occupied. See [setup](getting-started.md) and the [HTTP reference](http-server.md) for installation, limits and diagnostics.
+This shows the handler shape only; it is not a runnable server by itself. The 0.2.0 candidate requires explicit response and rate budgets plus a rate policy for every route before startup. No unverified values are recommended here. See the [HTTP API reference](http-server.md#explicit-sf07-budgets-and-rate-policy-development-candidate) for the requirements; runtime acceptance remains pending.
 
-This checks a public response over plaintext loopback HTTP. An HTTPS origin setting does not add TLS or complete browser authentication, Secure Cookies or Origin/CSRF. Migrate TLS frontend and actual peer/proxy deployment through [authority configuration](http-server.md#limits-and-shutdown).
+A complete loopback server still needs a TLS frontend for HTTPS; an HTTPS origin setting does not add TLS or complete browser authentication, Secure Cookies or Origin/CSRF. See [authority configuration](http-server.md#limits-and-shutdown) for peer and proxy deployment.
 
 Policy is nonCopy/nonshared configuration moved into a route; create another policy for another registration. The checker matches Policy state/output against the three handler arguments. Public policy cannot connect a proof-requiring handler. It does not prove that choosing public is appropriate for the business or that verifier/authorizer logic is correct.
 
@@ -58,7 +54,7 @@ A protected adapter first obtains bounded native capacity. Reserving capacity is
 | `UNAVAILABLE` | 503 | `security service unavailable` |
 | `INTERNAL` | 500 | `security service failure` |
 
-Read failures with `auth.kind(view(failure))` and `auth.message(view(failure))`; the message view borrows its Failure. An exhausted security budget returns 504, and an unwinding panic returns a generic 500. Business Result Err is handled by the app/route mapper and is not flattened into security Failure.
+Read failures with `auth.kind(view(failure))` and `auth.message(view(failure))`; the message view borrows its Failure. An exhausted security budget returns 504, and an unwinding panic returns a generic 500. Business Result Err is handled by the app/route mapper and is not flattened into security Failure. A mapper receives a request-borrowed `ResponseContext` and returns `Result[http.Response, Error]`; response-factory errors propagate as that Error.
 
 `security_timeout(options, positive_ms)` sets one absolute budget shared by verification and authorization. It is not reset at each wait. HEAD fallback inherits GET policy; explicit HEAD and OPTIONS also require Policy. 404/405 issue no proof and invoke no handler. The unreleased SF03 CORS candidate adds metadata-only preflight; see [HTTP CORS](http-server.md#explicit-cors-route-metadata-unreleased-sf03-candidate). It does not waive authentication or CSRF.
 

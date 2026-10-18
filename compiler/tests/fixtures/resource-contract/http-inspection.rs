@@ -40,11 +40,12 @@ pub fn __nagi_def_2f6e6167692d676f6c64656e2f687474702d696e7370656374696f6e2f6d61
 }
 #[allow(non_snake_case, arithmetic_overflow)]
 pub async fn __nagi_def_2f6e6167692d676f6c64656e2f687474702d696e7370656374696f6e2f6d61696e2e6e616769_f_68616e646c6572(mut request: ::nagi_runtime::http_server::Request, mut state: ::std::sync::Arc<__nagi_def_2f6e6167692d676f6c64656e2f687474702d696e7370656374696f6e2f6d61696e2e6e616769_c_5374617465>, mut access: ()) -> ::std::result::Result<::nagi_runtime::http_server::Response, ::nagi_runtime::Error> {
+    let mut context: &::nagi_runtime::http_server::ResponseContext = ::nagi_runtime::http_server::response_context(&(request));
     let mut accepted: ::std::primitive::bool = (crate::__nagi_def_2f6e6167692d676f6c64656e2f687474702d696e7370656374696f6e2f6d61696e2e6e616769_f_616c6c6f776564(&(request), state))?;
     if accepted {
-        return ::std::result::Result::Ok(::nagi_runtime::http_server::empty(::nagi_runtime::http_server::Status::OK));
+        return ::nagi_runtime::http_server::empty(context, ::nagi_runtime::http_server::Status::OK);
     } else {
-        return ::std::result::Result::Ok(::nagi_runtime::http_server::empty(::nagi_runtime::http_server::Status::UNAUTHORIZED));
+        return ::nagi_runtime::http_server::empty(context, ::nagi_runtime::http_server::Status::UNAUTHORIZED);
     }
 }
 #[allow(non_snake_case, arithmetic_overflow)]
@@ -66,6 +67,8 @@ pub mod http {
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::Request as Request;
     #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::ResponseContext as ResponseContext;
+    #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::Response as Response;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::Method as Method;
@@ -73,6 +76,12 @@ pub mod http {
     pub use ::nagi_runtime::http_server::Status as Status;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::Options as Options;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::ResponseLimits as ResponseLimits;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::RateLimits as RateLimits;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::RatePolicy as RatePolicy;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::App as App;
     #[allow(unused_imports)]
@@ -87,6 +96,8 @@ pub mod http {
     pub use ::nagi_runtime::http_server::method as method;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::method_name as method_name;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::response_context as response_context;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::empty as empty;
     #[allow(unused_imports)]
@@ -111,6 +122,20 @@ pub mod http {
     pub use ::nagi_runtime::http_server::default_options as default_options;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::options as options;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::response_limits as response_limits;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::with_response_limits as with_response_limits;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::rate_limits as rate_limits;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::with_rate_limits as with_rate_limits;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::rate_policy as rate_policy;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::rate_subject as rate_subject;
+    #[allow(unused_imports)]
+    pub use ::nagi_runtime::http_server::rate_route as rate_route;
     #[allow(unused_imports)]
     pub use ::nagi_runtime::http_server::capacity as capacity;
     #[allow(unused_imports)]

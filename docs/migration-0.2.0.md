@@ -41,6 +41,13 @@ AuthScope/Grantの所有Option/Resultと同task async呼出しは維持します
 
 move/Task/spawnの意味論、SQLite Pool/Txの取得予算・close・actual join・Outcomeを変更しません。旧Db/dynamic SQLの一本化は独立SF05で行います。custom Rust/Axum hostは標準dispatcherの保証外のtrusted境界として残す理由を明記します。旧standard入口をそこへ自動fallbackする互換層はありません。
 
+## SF07の応答・rate移行（開発候補）
+
+- status先頭の`empty/text/bytes/json/html_response`は、`http.response_context(view(request))`から借りたContextを第1引数へ追加します。すべて`Result[Response, Error]`なので直接返すか`try`で処理し、factoryのResultをさらに`ok`で包まないでください。
+- Appとroute固有のmapperは、どちらも`fn(view[http.ResponseContext], E) -> Result[http.Response, Error]`へ変更します。業務エラーEとmapper自身のErrorは別の失敗です。
+- Optionsへ`response_limits`／`with_response_limits`と`rate_limits`／`with_rate_limits`を明示し、全routeに`rate_policy`／`rate_route`を設定します。`rate_subject`は認証済みsubjectを得るprofileだけで使います。新予算の暗黙defaultや、実行可能な無制限の旧factoryは設けません。
+- 引数順・process内の支持範囲・拒否時動作は[APIリファレンス](http-server.md#sf07の明示予算とrate-policy開発候補)を参照してください。採用済み接続とcompiler検査の説明であり、runtime／native／4 OSの受入完了ではありません。最終的な実測設定例と統合テストは出荷条件として残します。
+
 ## SQLite SF05
 
 | 旧入口 | checker/Rust APIと移行 | 同等業務の検証 |

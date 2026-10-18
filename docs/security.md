@@ -1,6 +1,6 @@
 # 認証・認可（未リリース0.2.0 SF01）
 
-認証は「誰か」を確認し、認可は「この対象へこの操作をしてよいか」を確認します。SF01は標準HTTPの明示Policy、requestに結び付いたproofと終了時の失効を提供します。開発sourceのSF02永続Session・Cookie発行とB1のSession向けCSRFは部分実装で、public login CSRF・CORS・暗号verifier・typed HTML・送信HTTPは後続工程です。Security Foundation全体が完成したとは扱いません。公開済み0.1.xへ遡及適用しません。
+認証は「誰か」を確認し、認可は「この対象へこの操作をしてよいか」を確認します。SF01は標準HTTPの明示Policy、requestに結び付いたproofと終了時の失効を提供します。開発sourceのSF02永続Session・Cookie発行とB1のSession向けCSRFは部分実装で、public login CSRF・CORS・暗号verifier・送信HTTPは後続工程で、typed HTMLは別のSF04開発候補です。Security Foundation全体が完成したとは扱いません。公開済み0.1.xへ遡及適用しません。
 
 ## すべてのrouteで方針を選ぶ
 
@@ -15,17 +15,13 @@ import std.http.server as http
 class State:
     greeting: str
 async def hello(request: http.Request, state: shared[State], access: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, view(state.greeting)))
-async def main() -> Result[unit, Error]:
-    app = http.app_default[State](State(greeting="Hello, Nagi!"))
-    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
-    limits = try http.authority(http.default_options(), "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
-    return await http.serve(app, 8080, limits)
+    context = http.response_context(view(request))
+    return http.text(context, http.Status.OK, view(state.greeting))
 ```
 
-開発compilerで作業フォルダーの`server.nagi`へ保存し、同じ場所で`nagic run server.nagi`を実行します。別ターミナルで`curl http://127.0.0.1:8080/`を実行すると`Hello, Nagi!`です。終了はCtrl+C。port使用中なら別portを選び、compiler導入は[準備](getting-started.md)、制限と診断は[HTTP reference](http-server.md)を確認してください。
+これはhandlerの形だけを示し、そのまま実行できるserverではありません。0.2.0候補では起動前に応答予算・rate予算と全routeのrate policyを明示します。未検証の値はここでは推奨しません。要件は[HTTP API reference](http-server.md#sf07の明示予算とrate-policy開発候補)を参照してください。runtime acceptanceは未完了です。
 
-これはpublic応答の平文loopback確認です。HTTPS origin設定はTLSを追加せず、browser認証・Secure Cookie・Origin/CSRFを完成させません。TLS frontendと実peer/proxy配置は[authority設定](http-server.md#制限と停止)へ移行してください。
+完全なloopback serverを組み立てても、HTTPS origin設定だけでTLSは追加されず、browser認証・Secure Cookie・Origin/CSRFも完成しません。TLS frontendと実peer/proxy配置は[authority設定](http-server.md#制限と停止)を参照してください。
 
 Policyは非Copy・非sharedの設定値です。routeへmoveし、再利用する場合は新しいPolicyを作ります。型検査はPolicyのState・出力型とhandlerの3引数を照合します。publicを選ぶとproofを要求するhandlerは接続できません。明示publicの選択が業務上正しいか、verifier/authorizerの内容が正しいかまでは証明しません。
 
@@ -58,7 +54,7 @@ leaseの期限は有限security/body/handler予算とverified identityの絶対�
 | `UNAVAILABLE` | 503 | `security service unavailable` |
 | `INTERNAL` | 500 | `security service failure` |
 
-`auth.kind(view(failure))`と`auth.message(view(failure))`で読みます。messageのviewはFailureの借用として扱います。security予算の超過は504、unwind panicは詳細を伏せた500です。handlerの業務Result Errは既定/route mapperが扱い、security Failureとflattenしません。
+`auth.kind(view(failure))`と`auth.message(view(failure))`で読みます。messageのviewはFailureの借用として扱います。security予算の超過は504、unwind panicは詳細を伏せた500です。handlerの業務Result Errは既定／route mapperが扱い、security Failureとflattenしません。mapperはrequest-borrowed ResponseContextを受け取り、`Result[http.Response, Error]`を返します。response factoryの失敗はそのErrorとして伝播します。
 
 `security_timeout(options, positive_ms)`はverifierとauthorizer共通の絶対予算を設定します。待機ごとにリセットしません。HEAD fallbackはGET policyを使い、明示HEAD/OPTIONSもPolicyが必要です。404/405はproofとhandlerを発行しません。未リリースSF03 CORS候補はmetadata専用preflightを追加します。[HTTP CORS](http-server.md)を参照してください。認証・CSRFを免除しません。
 

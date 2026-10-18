@@ -1,6 +1,6 @@
 # HTTP APIリファレンス
 
-未リリース0.2.0 SF01のAPIです。[移行](migration-0.2.0.md)と[認証・認可](security.md)も参照してください。
+未リリース0.2.0の開発APIです。[移行](migration-0.2.0.md)と[認証・認可](security.md)も参照してください。
 
 ```nagi
 import std.http.server as http
@@ -51,18 +51,26 @@ Statusは数値を保持するコピー可能な値です。文字列への変�
 
 | 関数 | 戻り値 |
 |---|---|
-| `empty(status)` | `Response` |
-| `text(status, text)` | `Response` |
-| `bytes(status, body)` | `Response` |
-| `json[T](status, value)` | `Result[Response, Error]` |
+| `response_context(view(request))` | `view[ResponseContext]` |
+| `empty(context, status)` | `Result[Response, Error]` |
+| `text(context, status, text)` | `Result[Response, Error]` |
+| `bytes(context, status, body)` | `Result[Response, Error]` |
+| `json[T](context, status, value)` | `Result[Response, Error]` |
+| `html_response(context, status, document)` | `Result[Response, Error]` |
 | `append_header(response, name, value: view[bytes])` | `Result[Response, Error]` |
 | `append_header_text(response, name, value: view[str])` | `Result[Response, Error]` |
 
+`context`は現在のRequestから`response_context`で借ります。応答予算のための不透明な値で、認証proofではありません。Requestより長く保持できず、defaultから作れません。factoryは予算の保持責任を持つ所有Responseを返し、明示した確保・直列化の上限を超えると`Err`になります。`try`で処理するかfactoryのResultを直接返し、handlerの業務エラーと予算・確保失敗を区別してください。
+
+SF07の接続は開発候補です。compilerのHigh・保存Low・手書きLow検査はありますが、runtime・native・最終4 OSの受入は未完です。公開済み機能の保証ではありません。
+
 `text`、`bytes`は借りた入力をコピーして、Responseが所有するbodyを作ります。`json`は値を借用してJSONを作るため、元の値をmoveしません。文字列リテラルはview引数へ直接渡せます。変数から借りる場合は`view(value)`を使います。
 
-ヘッダー追加は応答を受け取り、新しい応答を返します。非reservedの同名ヘッダー（X-Traceなど）は重複を保持します。Content-Length/Transfer-Encoding/Content-Type/Set-Cookie/WWW-Authenticate/Cache-Control/Vary、CORS/CSP/nosniff等のsecurity-managedヘッダーは拒否します。Cookie/Session発行はSF02まで未実装です。HEADではbodyを送らず、GET相当の長さを保持します。204・205・304ではbodyを送信しません。authority-form CONNECTは起動設定節のgateで400になります。origin-form CONNECTのhandlerが成功応答を返した場合もtunnelは未対応で、501で接続を閉じます。
+ヘッダー追加は応答を受け取り、新しい応答を返します。非reservedの同名ヘッダー（X-Traceなど）は重複を保持します。Content-Length/Transfer-Encoding/Content-Type/Set-Cookie/WWW-Authenticate/Cache-Control/Vary、CORS/CSP/nosniff等のsecurity-managedヘッダーは拒否します。Cookie/Sessionの発行は専用Session APIを使い、ヘッダー追加で迂回できません。HEADではbodyを送らず、GET相当の長さを保持します。204・205・304ではbodyを送信しません。authority-form CONNECTは起動設定節のgateで400になります。origin-form CONNECTのhandlerが成功応答を返した場合もtunnelは未対応で、501で接続を閉じます。
 
 ## Appとroute
+
+以下はroute登録部分の断片です。SF07の起動全体を表していません。下記の応答・rate予算と全routeのrate policy設定を加えてください。
 
 ```nagi
 app = http.app[State, AuthError](state, map_error)
@@ -72,18 +80,42 @@ limits = try http.authority(http.default_options(), "https://localhost", ["local
 return await http.serve(app, 8080, limits)
 ```
 
-- `app[S, E](state, mapper)`は状態を所有し、`fn(E) -> Response`を既定のエラー処理にします。
+- `app[S, E](state, mapper)`は状態を所有し、`fn(view[ResponseContext], E) -> Result[Response, Error]`を既定のエラー処理にします。
 - `app_default[S](state)`は`Error`用の既定処理を使います。
 - Policyは`public_policy[S]()`、`authenticated_policy[S](verifier)`、`authorized_policy[S,P](verifier, authorizer)`から作ります。Aは順にunit、AuthScope、Grant[P]です。旧arityにはmigration診断が出ます。
 - handlerは`async def handle(request: Request, state: shared[S], access: A) -> Result[Response, E]`です。状態そのものはリクエストごとにコピーしません。Rust側では状態に`Send + Sync`、handlerのFutureに`Send`などが必要で、最終的な適合はbuildで検証します。
 - `route_mapped`はhandlerの独自エラー型と、それに合うmapperを指定できます。
 - 登録済みGETにHEADを自動で対応させます。HEADの明示登録を優先します。既存パスでmethodが違う場合は405とAllowを返します。
 
+mapperは借用Contextを明示的に受け取り、アプリのエラーを処理します。mapper自身の`Err`は有限の組込fallbackへ進み、その独立予算まで不足した場合は再確保を繰り返さず接続を閉じます。応答できる場合はCORS／managed headersを維持します。常に応答できることや、OOMからの普遍的回復は保証しません。
+
 mapperはアプリのエラーを処理します。不正なHTTP、制限超過、タイムアウトはサーバー側で処理します。データベースのエラー詳細や認証情報は応答へ直接出さないでください。
 
 Nagi 0.1.10以降では、応答開始前のhandlerやmapperでunwindするpanicが起きた場合、詳細を含まない500を返し、その接続を閉じます。これはpanicの検出であり、共有状態やDBの更新を巻き戻す仕組みではありません。通常の失敗はResultで返してください。`panic=abort`、OOMなどによるプロセス終了、unwind中の二重panic、独自Rustの解放処理、応答開始後の障害は回復を保証しません。
 
 エラー応答にリクエストIDなどが必要なら、handlerで検証した値を保持し、失敗時に独自エラー型へmoveできます。[見積APIの例](../test-nagi-code/application-examples/quote-api/README.md)では、この方法で共通mapperへIDを渡しています。
+
+## SF07の明示予算とrate policy（開発候補）
+
+応答・rateの新予算に暗黙defaultはありません。`default_options()`は従来のtransport設定を持ちますが、新予算を補いません。両方の予算と全routeの認証前rate policyを明示してから起動します。未設定や不整合はlisten前に拒否する契約で、runtime接続とnative受入は未完です。
+
+| 設定API | 契約 |
+|---|---|
+| `response_limits(body_bytes, user_header_bytes, user_header_count, managed_header_bytes, managed_header_count, serialization_writes, live_responses, retained_bytes, fallback_responses, fallback_retained_bytes, fallback_managed_header_bytes, fallback_managed_header_count)` | 12個の`i64`を明示し、`Result[ResponseLimits, Error]`を返す。通常応答とfallbackは別予算 |
+| `with_response_limits(options, limits)` | OptionsとResponseLimitsをmoveし、`Result[Options, Error]`を返す |
+| `rate_limits(rules, domains, subject_slots, retained_bytes, request_work)` | 5個の`i64`を明示し、`Result[RateLimits, Error]`を返す。有限の件数・保持量・探索workを検査し、4096を固定の公開上限にしない |
+| `with_rate_limits(options, limits)` | OptionsとRateLimitsをmoveし、`Result[Options, Error]`を返す |
+| `rate_policy(burst, refill_ms)` | 認証前route bucketの`Result[RatePolicy, Error]`を返す |
+| `rate_subject(policy, burst, refill_ms, subject_slots, idle_ms)` | policyを消費して有限の認証済みsubject枠を追加し、`Result[RatePolicy, Error]`を返す |
+| `rate_route(app, method, path, policy)` | Appとpolicyをmoveし、state／業務エラーの型を保った`Result[App[S, E], Error]`を返す |
+
+`burst`は最初に使えるtoken数と貯められる最大数、`refill_ms`はtokenを1個補充する間隔です。例えば`rate_policy(10, 1000)`は最初の10件を受け入れ、その後は1秒ごとに1個を補充します。1秒ごとに10個を補充する設定ではありません。subject bucketも同じ規則です。subject枠の回収は全tokenの補充と明示idle条件の両方を満たした場合に限ります。サンプルの数値は有限な説明用設定で、実運用の推奨値や遅延SLAではありません。
+
+採用した消費順序は入口検査→route枠→認証・CSRF・body検査→認証済みsubject枠→handler／Session発行・更新です。routeの429が401／403より先になる場合があります。Errや取消で返金しません。正常preflightはroute tokenを消費しませんが、入口のcapacity・同時実行数・期限の保護は受けます。subject枠は認証済み主体を得られるprofileだけで使います。同一route・同一process内の制限で、別route・別process・複数台を通じた全体制限ではありません。
+
+token不足は429、table／quota容量不足やClosing／ClockFaultは503、内部故障やmapper自身の失敗は500です。既に成立した認証・期限等の拒否を上書きしません。独立した有限fallback枠まで不足した場合は接続を閉じます。
+
+算術的に受理できる設定でも、全processメモリや遅延SLAの保証ではありません。起動catalogue保持量の正確な計上、小規模設定の実測、native並行動作、最終4 OS検証はリリース阻害要因として残っています。
 
 ## 制限と停止
 

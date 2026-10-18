@@ -168,18 +168,56 @@ fn borrow_and_named_mappers_preserve_high_low_codegen() {
 #[test]
 fn borrow_and_named_mapper_registration_execute_native_adapters() {
     use std::process::Command;
-    // Execute json/Borrow and app/route_mapped registration, not mapper bodies
-    // or HTTP dispatch. Existing socket tests cover the runtime request path.
-    let source = format!("{}\n@rust(\"native::probe\")\nextern def probe() -> Result[unit, Error]\ndef main() -> Result[unit, Error]:\n    return probe()\n", explicit_policy_source(BORROW_MAPPERS));
+    // Run JSON/Borrow from the response context of a real bounded request, and
+    // retain both named mapper registrations through High and saved Low.
+    let mapped = explicit_policy_source(BORROW_MAPPERS)
+        .replace(
+            "match http.empty(http.response_context(view(request)), http.Status.OK):",
+            "match encode(http.response_context(view(request)), Payload(label=\"seven\")):",
+        )
+        .replace(
+            "return http.route_mapped(app, http.Method.GET, view(\"/probe\"), http.public_policy[State](), handler, map_text)",
+            "app = try http.route_mapped(app, http.Method.GET, view(\"/probe\"), http.public_policy[State](), handler, map_text)\n    rate = try http.rate_policy(10, 1000)\n    return http.rate_route(app, http.Method.GET, \"/probe\", rate)",
+        );
+    let source = format!(
+        "{}\n@rust(\"native::probe\")\nextern async def probe() -> Result[unit, Error]\nasync def main() -> Result[unit, Error]:\n    return await probe()\n",
+        mapped
+    );
     let (fixture, program) = Fixture::checked(&source);
     fs::write(fixture.0.join("saved.low"), emit::low(&program)).unwrap();
     fs::write(
+        fixture.0.join("nagi.toml"),
+        "[rust.dependencies]\ntokio = { version = \"1.48\", features = [\"net\", \"io-util\", \"sync\", \"time\", \"rt\"] }\n",
+    )
+    .unwrap();
+    fs::write(
         fixture.0.join("native.rs"),
         r#"
-pub fn probe() -> Result<(), nagi_runtime::Error> {
-    let response = crate::encode(crate::Payload { label: String::from("seven") })?;
-    assert_eq!(response.status().value(), 200);
-    let _app = crate::setup(crate::State { seed: 1 })?;
+pub async fn probe() -> Result<(), nagi_runtime::Error> {
+    use nagi_runtime::http_server as http;
+    use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}, sync::oneshot};
+    use std::time::Duration;
+    let app = crate::setup(crate::State { seed: 1 })?;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let options = http::capacity(http::default_options(), 1, 1)?;
+    let limits = http::response_limits(1024, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512, 12)?;
+    let options = http::with_response_limits(options, limits)?;
+    let rate_limits = http::rate_limits(4, 1, 2, 131072, 64)?;
+    let options = http::with_rate_limits(options, rate_limits)?;
+    let options = http::authority(options, "https://localhost", vec!["localhost".to_owned()], 1, 128)?;
+    let (stop, shutdown) = oneshot::channel();
+    let task = tokio::spawn(http::serve_listener(listener, app, options, async { let _ = shutdown.await; }));
+    let mut stream = TcpStream::connect(address).await.unwrap();
+    stream.write_all(b"GET /probe HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").await.unwrap();
+    let mut response = Vec::new();
+    tokio::time::timeout(Duration::from_secs(3), stream.read_to_end(&mut response)).await.unwrap().unwrap();
+    let separator = response.windows(4).position(|window| window == b"\r\n\r\n").unwrap();
+    let head = std::str::from_utf8(&response[..separator]).unwrap();
+    assert!(head.starts_with("HTTP/1.1 200 "), "{head}");
+    assert_eq!(&response[separator + 4..], b"{\"label\":\"seven\"}");
+    stop.send(()).unwrap();
+    tokio::time::timeout(Duration::from_secs(3), task).await.unwrap().unwrap()?;
     println!("borrow and named mapper registration execute");
     Ok(())
 }
@@ -204,7 +242,8 @@ pub fn probe() -> Result<(), nagi_runtime::Error> {
                 "native.rs",
                 "--out",
                 "build",
-                "--no-project",
+                "--project",
+                fixture.0.to_str().unwrap(),
             ])
             .env("NAGI_NATIVE_TARGET_DIR", &target)
             .env("CARGO_NET_OFFLINE", "true")

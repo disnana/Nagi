@@ -20,11 +20,11 @@ def device_id(request: view[http.Request]) -> Result[i64, Error]:
         return error("device id is missing")
     return parse_i64(try slice(request.path, 9, len(request.path)))
 
-def missing_device() -> Result[http.Response, Error]:
-    return http.json[ErrorBody](http.Status.NOT_FOUND, ErrorBody(error="not found"))
+def missing_device(context: view[http.ResponseContext]) -> Result[http.Response, Error]:
+    return http.json[ErrorBody](context, http.Status.NOT_FOUND, ErrorBody(error="not found"))
 
 async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, "ok"))
+    return http.text(http.response_context(view(request)), http.Status.OK, "ok")
 
 async def find_device(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     id = try device_id(view(request))
@@ -32,15 +32,15 @@ async def find_device(request: http.Request, state: shared[State], authority: un
         case Ok(found):
             match found:
                 case Some(device):
-                    return http.json[DeviceSettings](http.Status.OK, device)
+                    return http.json[DeviceSettings](http.response_context(view(request)), http.Status.OK, device)
                 case None:
-                    return missing_device()
+                    return missing_device(http.response_context(view(request)))
         case Err(problem):
             return fail(problem)
 
 async def devices(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
     rows = try await storage_list_devices(view(state.db))
-    return http.json[List[DeviceSettings]](http.Status.OK, rows)
+    return http.json[List[DeviceSettings]](http.response_context(view(request)), http.Status.OK, rows)
 
 async def main() -> Result[unit, Error]:
     path = env("NAGI_SAMPLE_DB", "settings.sqlite")
@@ -49,8 +49,14 @@ async def main() -> Result[unit, Error]:
     try await seed_devices(view(db))
     app = http.app_default[State](State(db=db))
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    route_policy_1 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/health", route_policy_1)
     app = try http.route(app, http.Method.GET, "/devices", http.public_policy[State](), devices)
+    route_policy_2 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/devices", route_policy_2)
     app = try http.route(app, http.Method.GET, "/devices/{id}", http.public_policy[State](), find_device)
+    route_policy_3 = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/devices/{id}", route_policy_3)
     port = try parse_i64(env("NAGI_SAMPLE_PORT", "8091"))
     wire_authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8091")
     options = try http.authority(
@@ -60,6 +66,13 @@ async def main() -> Result[unit, Error]:
         1,
         256
     )
+    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    options = try http.with_response_limits(options, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    options = try http.with_rate_limits(options, rate_budget)
     return await http.serve(app, port, options)
 
 # This HTTP-facing projection preserves the primary Error. The SQLite Failure

@@ -4,7 +4,8 @@ import std.http.server as http;
 fn transfer_fragment(fragment: html.HtmlFragment) -> html.HtmlFragment {
     return fragment;
 }
-fn build_page() -> Result[http.Response, Error] {
+fn build_page(request: http.Request) -> Result[http.Response, Error] {
+    let context = http.response_context(view(request));
     let base_policy = try html.policy("https://example.invalid");
     let policy = try html.limits(base_policy, 65536, 16384, 1024, 16, 16, 2048);
 
@@ -35,10 +36,5 @@ fn build_page() -> Result[http.Response, Error] {
     let content = try html.join(view(policy), items, detail);
     let page = try html.element(view(policy), html.HtmlTag.DIV, html.attributes(view(policy)), content);
     let document = try html.document(view(policy), "Items & details", page);
-    return ok(http.html_response(http.Status.OK, document));
-}
-async fn main() -> Result[unit, Error] {
-    let response = try build_page();
-    assert_true(response.status.value == 200);
-    return ok(print("SF04 typed list/detail page built"));
+    return http.html_response(context, http.Status.OK, document);
 }

@@ -83,7 +83,7 @@ fn shadowed_serve_calls_and_non_http_programs_do_not_emit_http_glue() {
 
 #[test]
 fn explicit_routes_without_serve_do_not_synthesize_an_entrypoint() {
-    let source = "import std.http.server as http\nclass State:\n    value: i64\nasync def answer(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:\n    return ok(http.text(http.Status.OK, \"42\"))\ndef setup() -> Result[http.App[State, Error], Error]:\n    app = http.app_default[State](State(value=0))\n    return http.route(app, http.Method.GET, view(\"/answer\"), http.public_policy[State](), answer)\n";
+    let source = "import std.http.server as http\nclass State:\n    value: i64\nasync def answer(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:\n    return http.text(http.response_context(view(request)), http.Status.OK, \"42\")\ndef setup() -> Result[http.App[State, Error], Error]:\n    app = http.app_default[State](State(value=0))\n    return http.route(app, http.Method.GET, view(\"/answer\"), http.public_policy[State](), answer)\n";
     let high = checked(source, true);
     let low = checked(&emit::low(&high), false);
     let handler = high
@@ -115,9 +115,35 @@ impl Drop for Fixture {
 fn explicit_http_server_builds_and_returns_invalid_port_in_high_and_low() {
     // An invalid port exercises explicit App/route/serve through the real
     // generated entrypoint without opening a socket or leaving a server live.
-    // Configure authority and assert the port message so another startup
-    // validation cannot accidentally satisfy this negative oracle.
-    let source = "import std.http.server as http\nclass State:\n    value: i64\nasync def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:\n    return ok(http.empty(http.Status.OK))\nasync def main() -> Result[unit, Error]:\n    app = http.app_default[State](State(value=0))\n    app = try http.route(app, http.Method.GET, view(\"/\"), http.public_policy[State](), handler)\n    if True:\n        options = try http.authority(http.default_options(), \"https://localhost\", [\"localhost\"], 1, 128)\n        match await http.serve(app, -1, options):\n            case Ok(_):\n                return error(\"invalid port accepted\")\n            case Err(problem):\n                assert_true(error_kind(problem) == \"invalid\")\n                assert_true(error_message(problem) == \"HTTP port must be between 1 and 65535\")\n                return ok(print(\"invalid port handled\"))\n    else:\n        return error(\"wrong branch\")\n";
+    // Configure bounded response/rate state and authority so the invalid-port
+    // error remains the first startup failure and the purpose of the test.
+    let source = r#"import std.http.server as http
+class State:
+    value: i64
+async def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return http.empty(http.response_context(view(request)), http.Status.OK)
+async def main() -> Result[unit, Error]:
+    app = http.app_default[State](State(value=0))
+    app = try http.route(app, http.Method.GET, view("/"), http.public_policy[State](), handler)
+    policy = try http.rate_policy(10, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/", policy)
+    if True:
+        options = try http.capacity(http.default_options(), 1, 1)
+        response_limits = try http.response_limits(1024, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512, 12)
+        options = try http.with_response_limits(options, response_limits)
+        rate_limits = try http.rate_limits(4, 1, 2, 131072, 64)
+        options = try http.with_rate_limits(options, rate_limits)
+        options = try http.authority(options, "https://localhost", ["localhost"], 1, 128)
+        match await http.serve(app, -1, options):
+            case Ok(_):
+                return error("invalid port accepted")
+            case Err(problem):
+                assert_true(error_kind(problem) == "invalid")
+                assert_true(error_message(problem) == "HTTP port must be between 1 and 65535")
+                return ok(print("invalid port handled"))
+    else:
+        return error("wrong branch")
+"#;
     let high = checked(source, true);
     let fixture = Fixture(std::env::temp_dir().join(format!(
         "nagi-http-entrypoint-{}-{}",

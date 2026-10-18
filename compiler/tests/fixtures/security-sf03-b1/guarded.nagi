@@ -15,7 +15,7 @@ def inspect_failure(failure: view[csrf.Failure]) -> i64:
     outcome = csrf.outcome(failure)
     return 0
 async def inspect(request: http.Request, state: shared[State], scope: auth.AuthScope) -> Result[http.Response, Error]:
-    return ok(http.empty(http.Status.OK))
+    return http.empty(http.response_context(view(request)), http.Status.OK)
 def guarded_registration(store: view[session.Store], csrf_store: view[csrf.CsrfStore]) -> Result[http.App[State, Error], Error]:
     app = http.app_default[State](State(store=session.clone_store(store)))
     app = try http.session_csrf_tokens[State, Error](app, "/_csrf", csrf.clone_store(csrf_store))

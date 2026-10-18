@@ -15,38 +15,45 @@ ROOT = Path(__file__).resolve().parents[1]
 AUTH_EXAMPLE = ROOT / "test-nagi-code/library-examples/http-auth/main.nagi"
 
 EXTRA_HANDLERS = '''
-def operation_error(problem: Error) -> http.Response:
-    return http.text(http.Status.INTERNAL_SERVER_ERROR, "operation failed")
+def operation_error(context: view[http.ResponseContext], problem: Error) -> Result[http.Response, Error]:
+    return http.text(context, http.Status.INTERNAL_SERVER_ERROR, "operation failed")
 
-def forbidden(problem: AuthError) -> http.Response:
-    return http.text(http.Status.FORBIDDEN, "access denied")
+def forbidden(context: view[http.ResponseContext], problem: AuthError) -> Result[http.Response, Error]:
+    return http.text(context, http.Status.FORBIDDEN, "access denied")
+
+def auth_factory_result(result: Result[http.Response, Error]) -> Result[http.Response, AuthError]:
+    match result:
+        case Ok(response):
+            return ok(response)
+        case Err(_):
+            return fail(AuthError.Internal)
 
 async def echo(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.bytes(http.Status.CREATED, request.body))
+    return http.bytes(http.response_context(view(request)), http.Status.CREATED, request.body)
 
 async def cookies(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    output = http.text(http.Status.OK, "cookies")
+    output = try http.text(http.response_context(view(request)), http.Status.OK, "cookies")
     output = try http.append_header_text(output, "X-Trace", "first")
     output = try http.append_header_text(output, "X-Trace", "second")
     return ok(output)
 
 async def text_headers(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    output = http.text(http.Status.OK, "text headers")
+    output = try http.text(http.response_context(view(request)), http.Status.OK, "text headers")
     output = try http.append_header_text(output, "X-Demo", "nagi")
     output = try http.append_header_text(output, "X-Trace", "first=demo")
     output = try http.append_header_text(output, "X-Trace", "second=demo")
     return ok(output)
 
 async def reserved_header(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    output = http.text(http.Status.OK, "reserved header")
+    output = try http.text(http.response_context(view(request)), http.Status.OK, "reserved header")
     return http.append_header_text(output, "Set-Cookie", "sid=demo")
 
 async def invalid_header(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    output = http.empty(http.Status.OK)
+    output = try http.empty(http.response_context(view(request)), http.Status.OK)
     return http.append_header_text(output, "X-Demo", "demo\\r\\nX-Injected: yes")
 
 async def invalid_framing(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    output = http.empty(http.Status.OK)
+    output = try http.empty(http.response_context(view(request)), http.Status.OK)
     return http.append_header_text(output, "Content-Length", "123")
 
 async def panic_index(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
@@ -56,7 +63,7 @@ async def panic_index(request: http.Request, state: shared[State], authority: un
             values = [7]
             await sleep(1)
             print(values[index])
-            return ok(http.text(http.Status.OK, "unreachable"))
+            return http.text(http.response_context(view(request)), http.Status.OK, "unreachable")
         case None:
             return error("missing index")
 
@@ -65,34 +72,34 @@ async def panic_divide(request: http.Request, state: shared[State], authority: u
         case Some(value):
             divisor = try parse_i64(value)
             print(10 / divisor)
-            return ok(http.text(http.Status.OK, "unreachable"))
+            return http.text(http.response_context(view(request)), http.Status.OK, "unreachable")
         case None:
             return error("missing divisor")
 
 async def no_content(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
-    return ok(http.text(http.Status.NO_CONTENT, "must not be sent"))
+    return auth_factory_result(http.text(http.response_context(view(request)), http.Status.NO_CONTENT, "must not be sent"))
 
 async def reset_content(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
-    return ok(http.text(http.Status.RESET_CONTENT, "must not be sent"))
+    return auth_factory_result(http.text(http.response_context(view(request)), http.Status.RESET_CONTENT, "must not be sent"))
 
 async def not_modified(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
-    return ok(http.text(http.Status.NOT_MODIFIED, "must not be sent"))
+    return auth_factory_result(http.text(http.response_context(view(request)), http.Status.NOT_MODIFIED, "must not be sent"))
 
 async def conflict(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
-    return ok(http.text(http.Status.CONFLICT, "already exists"))
+    return auth_factory_result(http.text(http.response_context(view(request)), http.Status.CONFLICT, "already exists"))
 
 async def throttled(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
-    return ok(http.text(http.Status.TOO_MANY_REQUESTS, "slow down"))
+    return auth_factory_result(http.text(http.response_context(view(request)), http.Status.TOO_MANY_REQUESTS, "slow down"))
 
 async def query(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
     match request.query:
         case Some(value):
-            return ok(http.text(http.Status.OK, value))
+            return auth_factory_result(http.text(http.response_context(view(request)), http.Status.OK, value))
         case None:
-            return ok(http.text(http.Status.OK, "no query"))
+            return auth_factory_result(http.text(http.response_context(view(request)), http.Status.OK, "no query"))
 
 async def explicit_head(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, AuthError]:
-    return ok(http.text(http.Status.ACCEPTED, "head-only"))
+    return auth_factory_result(http.text(http.response_context(view(request)), http.Status.ACCEPTED, "head-only"))
 
 def method_name(request: view[http.Request]) -> view[str]:
     return http.method_name(view(request.method))
@@ -104,7 +111,7 @@ async def method(request: http.Request, state: shared[State], authority: unit) -
     name = method_name(view(request))
     direct = direct_method_name(view(request))
     assert_true(name == direct)
-    return ok(http.text(http.Status.OK, name))
+    return auth_factory_result(http.text(http.response_context(view(request)), http.Status.OK, name))
 
 def compare_strings(owned: str, borrowed: view[str]) -> bool:
     assert_true(owned == borrowed)
@@ -160,9 +167,14 @@ async def comparisons(request: http.Request, state: shared[State], authority: un
     assert_true(owned >= empty)
     assert_true(empty != owned)
     assert_true(owned != empty)
-    return ok(http.bytes(http.Status.OK, view(owned)))
+    return http.bytes(http.response_context(view(request)), http.Status.OK, view(owned))
 
-async def launch(app: http.App[State, AuthError], port: i64, wire_authority: str) -> Result[unit, Error]:
+def attach_test_rate(app: http.App[State, AuthError], method: http.Method, path: view[str]) -> Result[http.App[State, AuthError], Error]:
+    # Every call consumes a freshly checked route-only policy.
+    policy = try http.rate_policy(1000, 1000)
+    return http.rate_route(app, method, path, policy)
+
+def test_options(wire_authority: str) -> Result[http.Options, Error]:
     options = try http.authority(
         http.default_options(),
         "https://localhost",
@@ -170,36 +182,71 @@ async def launch(app: http.App[State, AuthError], port: i64, wire_authority: str
         1,
         256
     )
+    # Finite test fixture only; this is not a public sizing or SLA recommendation.
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    options = try http.with_response_limits(options, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 1, 67108864, 65536)
+    options = try http.with_rate_limits(options, rate_budget)
+    return ok(options)
+
+async def launch(app: http.App[State, AuthError], port: i64, wire_authority: str) -> Result[unit, Error]:
+    options = try test_options(wire_authority)
     return await http.serve(app, port, options)
 
 async def main() -> Result[unit, Error]:
     state = State(authorization=env("NAGI_DEMO_AUTHORIZATION", ""), greeting="first app", subject=1)
     app = http.app[State, AuthError](state, auth_error)
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    app = try attach_test_rate(app, http.Method.GET, view("/health"))
     app = try http.route(app, http.Method.GET, "/me", http.authenticated_policy[State](verify), profile)
+    app = try attach_test_rate(app, http.Method.GET, view("/me"))
     app = try http.route_mapped(app, http.Method.GET, "/restricted", http.public_policy[State](), restricted, forbidden)
+    app = try attach_test_rate(app, http.Method.GET, view("/restricted"))
     app = try http.route_mapped(app, http.Method.POST, "/echo", http.public_policy[State](), echo, operation_error)
+    app = try attach_test_rate(app, http.Method.POST, view("/echo"))
     app = try http.route_mapped(app, http.Method.POST, "/cookies", http.public_policy[State](), cookies, operation_error)
+    app = try attach_test_rate(app, http.Method.POST, view("/cookies"))
     app = try http.route_mapped(app, http.Method.GET, "/text-headers", http.public_policy[State](), text_headers, operation_error)
+    app = try attach_test_rate(app, http.Method.GET, view("/text-headers"))
     app = try http.route_mapped(app, http.Method.GET, "/reserved-header", http.public_policy[State](), reserved_header, operation_error)
+    app = try attach_test_rate(app, http.Method.GET, view("/reserved-header"))
     app = try http.route_mapped(app, http.Method.GET, "/invalid-header", http.public_policy[State](), invalid_header, operation_error)
+    app = try attach_test_rate(app, http.Method.GET, view("/invalid-header"))
     app = try http.route_mapped(app, http.Method.GET, "/invalid-framing", http.public_policy[State](), invalid_framing, operation_error)
+    app = try attach_test_rate(app, http.Method.GET, view("/invalid-framing"))
     app = try http.route_mapped(app, http.Method.GET, "/panic-index", http.public_policy[State](), panic_index, operation_error)
+    app = try attach_test_rate(app, http.Method.GET, view("/panic-index"))
     app = try http.route_mapped(app, http.Method.GET, "/panic-divide", http.public_policy[State](), panic_divide, operation_error)
+    app = try attach_test_rate(app, http.Method.GET, view("/panic-divide"))
     app = try http.route(app, http.Method.GET, "/no-content", http.public_policy[State](), no_content)
+    app = try attach_test_rate(app, http.Method.GET, view("/no-content"))
     app = try http.route(app, http.Method.GET, "/reset-content", http.public_policy[State](), reset_content)
+    app = try attach_test_rate(app, http.Method.GET, view("/reset-content"))
     app = try http.route(app, http.Method.GET, "/not-modified", http.public_policy[State](), not_modified)
+    app = try attach_test_rate(app, http.Method.GET, view("/not-modified"))
     app = try http.route(app, http.Method.GET, "/conflict", http.public_policy[State](), conflict)
+    app = try attach_test_rate(app, http.Method.GET, view("/conflict"))
     app = try http.route(app, http.Method.GET, "/throttled", http.public_policy[State](), throttled)
+    app = try attach_test_rate(app, http.Method.GET, view("/throttled"))
     app = try http.route(app, http.Method.GET, "/query", http.public_policy[State](), query)
+    app = try attach_test_rate(app, http.Method.GET, view("/query"))
     app = try http.route(app, http.Method.GET, "/head", http.public_policy[State](), health)
+    app = try attach_test_rate(app, http.Method.GET, view("/head"))
     app = try http.route(app, http.Method.HEAD, "/head", http.public_policy[State](), explicit_head)
+    app = try attach_test_rate(app, http.Method.HEAD, view("/head"))
     app = try http.route_mapped(app, http.Method.POST, "/comparisons", http.public_policy[State](), comparisons, operation_error)
+    app = try attach_test_rate(app, http.Method.POST, view("/comparisons"))
     extended = try http.method("PROPFIND")
     app = try http.route(app, extended, "/method", http.public_policy[State](), method)
+    extended_rate = try http.method("PROPFIND")
+    app = try attach_test_rate(app, extended_rate, view("/method"))
     second = http.app[State, AuthError](State(authorization=env("NAGI_SECOND_AUTHORIZATION", ""), greeting="second app", subject=2), auth_error)
     second = try http.route(second, http.Method.GET, "/health", http.public_policy[State](), health)
+    second = try attach_test_rate(second, http.Method.GET, view("/health"))
     second = try http.route(second, http.Method.GET, "/me", http.authenticated_policy[State](verify), profile)
+    second = try attach_test_rate(second, http.Method.GET, view("/me"))
     port = try parse_i64(env("NAGI_TEST_PORT", "0"))
     second_port = try parse_i64(env("NAGI_SECOND_PORT", "0"))
     wire_authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8080")

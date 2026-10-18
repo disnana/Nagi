@@ -37,15 +37,18 @@ extern def read(grant: auth.Grant[Read]) -> Result[i64, auth.Failure]
 @rust("native::exercise")
 extern async def exercise(app: http.App[State, Error]) -> Result[unit, Error]
 async def handler(request: http.Request, state: shared[State], grant: auth.Grant[Read]) -> Result[http.Response, Error]:
+    context = http.response_context(view(request))
     match read(grant):
         case Ok(value):
-            return http.json[i64](http.Status.OK, value)
+            return http.json[i64](context, http.Status.OK, value)
         case Err(problem):
             return internal_error(copy(auth.message(view(problem))))
 def setup() -> Result[http.App[State, Error], Error]:
     app = http.app_default[State](State(value=42))
     policy = http.authorized_policy[State, Read](verify, authorize)
-    return http.route(app, http.Method.GET, "/answer", policy, handler)
+    app = try http.route(app, http.Method.GET, "/answer", policy, handler)
+    rate = try http.rate_policy(10, 1000)
+    return http.rate_route(app, http.Method.GET, "/answer", rate)
 def deny_factory() -> auth.Failure:
     return auth.denied()
 async def main() -> Result[unit, Error]:
@@ -71,15 +74,18 @@ extern fn read(grant: auth.Grant[Read]) -> Result[i64, auth.Failure];
 @rust("native::exercise")
 extern async fn exercise(app: http.App[State, Error]) -> Result[unit, Error];
 async fn handler(request: http.Request, state: shared[State], grant: auth.Grant[Read]) -> Result[http.Response, Error] {
+    let context = http.response_context(view(request));
     match read(grant) {
-        case Ok(value) { return http.json[i64](http.Status.OK, value); }
+        case Ok(value) { return http.json[i64](context, http.Status.OK, value); }
         case Err(problem) { return internal_error(copy(auth.message(view(problem)))); }
     }
 }
 fn setup() -> Result[http.App[State, Error], Error] {
     let app = http.app_default[State](State(value=42));
     let policy = http.authorized_policy[State, Read](verify, authorize);
-    return http.route(app, http.Method.GET, "/answer", policy, handler);
+    app = try http.route(app, http.Method.GET, "/answer", policy, handler);
+    let rate = try http.rate_policy(10, 1000);
+    return http.rate_route(app, http.Method.GET, "/answer", rate);
 }
 fn deny_factory() -> auth.Failure { return auth.denied(); }
 async fn main() -> Result[unit, Error] {
@@ -109,7 +115,12 @@ pub fn read(grant:Grant<super::Read>)->Result<i64,Failure>{grant.submit((),|subj
 pub async fn exercise(app:http::App<super::State,Error>)->Result<(),Error>{
  use tokio::{net::{TcpListener,TcpStream},io::{AsyncReadExt,AsyncWriteExt},sync::oneshot};
  let listener=TcpListener::bind("127.0.0.1:0").await.unwrap();let address=listener.local_addr().unwrap();
- let options=http::authority(http::default_options(),"https://localhost",vec!["localhost".to_owned()],1,128).unwrap();
+ let options=http::capacity(http::default_options(),3,3).unwrap();
+ let response_limits=http::response_limits(1024,128,4,512,12,128,3,393216,3,393216,512,12).unwrap();
+ let options=http::with_response_limits(options,response_limits).unwrap();
+ let rate_limits=http::rate_limits(4,1,2,131072,64).unwrap();
+ let options=http::with_rate_limits(options,rate_limits).unwrap();
+ let options=http::authority(options,"https://localhost",vec!["localhost".to_owned()],1,128).unwrap();
  let (stop,done)=oneshot::channel();let task=tokio::spawn(http::serve_listener(listener,app,options,async{let _=done.await;}));
  for (credentials,status,body) in [("Authorization: Bearer fixture\r\n",200,"51"),("",401,"invalid credential"),("Authorization: Bearer rejected\r\n",401,"invalid credential")] {
   let mut stream=TcpStream::connect(address).await.unwrap();let request=format!("GET /answer HTTP/1.1\r\nHost: localhost\r\n{credentials}Connection: close\r\n\r\n");stream.write_all(request.as_bytes()).await.unwrap();
