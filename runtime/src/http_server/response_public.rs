@@ -362,6 +362,7 @@ pub(super) struct HttpResponse {
     // Set only by closed dispatcher/auth refusal paths, never inferred from a
     // user Response status or construction Context.
     runtime_refusal: Option<Status>,
+    rate_reason: Option<FallbackStatus>,
     #[cfg(test)]
     allow_allocations: usize,
 }
@@ -425,6 +426,7 @@ impl HttpResponse {
             dependencies: vary::Dependencies::default(),
             deletion: None,
             runtime_refusal: None,
+            rate_reason: None,
             #[cfg(test)]
             allow_allocations: 0,
         }
@@ -475,10 +477,55 @@ impl HttpResponse {
                 dependencies: vary::Dependencies::default(),
                 deletion: None,
                 runtime_refusal: None,
+                rate_reason: None,
                 #[cfg(test)]
                 allow_allocations: 0,
             },
         }
+    }
+    pub(super) fn rate_refusal(
+        context: &ResponseContext,
+        reason: FallbackStatus,
+        source: PolicySource,
+        head: bool,
+    ) -> Self {
+        let fallback = Arc::clone(&context.fallback);
+        let status = StatusCode::from_u16(reason.code()).expect("closed rate refusal status");
+        let intent = fallback
+            .intent(reason)
+            .context(source, head, context.profile.dependencies.core())
+            .connection_close(true);
+        let intent = if let Some(origin) = &context.profile.origin {
+            intent.cors(origin.clone(), context.profile.credentials)
+        } else {
+            Ok(intent)
+        };
+        let mut response = match intent
+            .ok()
+            .and_then(|intent| fallback.terminal(intent).into_response())
+        {
+            Some((_, wire)) => Self::from_wire(status, wire, Arc::clone(&fallback)),
+            None => Self {
+                status,
+                headers: None,
+                body: BufferedBody {
+                    bytes: Bytes::new(),
+                    sending: None,
+                },
+                fallback,
+                source,
+                dependencies: context.profile.dependencies,
+                deletion: None,
+                runtime_refusal: None,
+                rate_reason: None,
+                #[cfg(test)]
+                allow_allocations: 0,
+            },
+        };
+        response.source = source;
+        response.dependencies = context.profile.dependencies;
+        response.rate_reason = Some(reason);
+        response
     }
     pub(super) fn established_refusal(mut self) -> Self {
         if matches!(self.status.as_u16(), 401 | 403 | 408 | 413 | 504) {
@@ -490,6 +537,7 @@ impl HttpResponse {
         let status = self.runtime_refusal.unwrap_or(status);
         let mut replacement = Self::terminal(Arc::clone(&self.fallback), status, head, close);
         replacement.runtime_refusal = self.runtime_refusal;
+        replacement.rate_reason = self.rate_reason;
         replacement.source = self.source;
         replacement.dependencies = self.dependencies;
         replacement
@@ -606,10 +654,14 @@ impl HttpResponse {
             let status = self
                 .runtime_refusal
                 .unwrap_or_else(|| refusal_status(Status(self.status), error));
-            let reason = FallbackStatus::all()
-                .into_iter()
-                .find(|r| r.code() == status.0.as_u16())
-                .unwrap_or(FallbackStatus::Internal);
+            let reason = if status.0 == StatusCode::TOO_MANY_REQUESTS {
+                self.rate_reason.unwrap_or(FallbackStatus::Internal)
+            } else {
+                FallbackStatus::all()
+                    .into_iter()
+                    .find(|r| r.code() == status.0.as_u16())
+                    .unwrap_or(FallbackStatus::Internal)
+            };
             let mut intent = self
                 .fallback
                 .intent(reason)

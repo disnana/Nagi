@@ -142,6 +142,7 @@ impl CredentialMetadata {
 
 /// Trusted verifier output, not an authorization proof. No Nagi factory.
 pub struct VerifiedIdentity {
+    pending_http_touch: Option<session::HttpTouch>,
     subject: i64,
     expires_at: Instant,
     credential: CredentialMetadata,
@@ -154,6 +155,7 @@ impl VerifiedIdentity {
             return Err(Failure::expired());
         }
         Ok(Self {
+            pending_http_touch: None,
             subject,
             expires_at,
             credential: CredentialMetadata {
@@ -164,6 +166,11 @@ impl VerifiedIdentity {
     }
 }
 struct Gate {
+    // None belongs to existing trusted non-HTTP admission. Only the HTTP
+    // dispatcher can create Pending; only its post-body rate gate admits it.
+    http_admitted: Option<bool>,
+    subject: Option<i64>,
+    http_touch: Option<session::HttpTouch>,
     active: bool,
     expires_at: Instant,
 }
@@ -197,6 +204,9 @@ impl LeaseOwner {
         Ok(Self {
             lease: Arc::new(Lease {
                 gate: Mutex::new(Gate {
+                    http_admitted: None,
+                    subject: None,
+                    http_touch: None,
                     active: true,
                     expires_at,
                 }),
@@ -205,6 +215,11 @@ impl LeaseOwner {
             }),
             delivery,
         })
+    }
+    pub(crate) fn new_http(expires_at: Instant) -> Result<Self, Failure> {
+        let owner = Self::new(expires_at)?;
+        owner.lease.checked_gate()?.http_admitted = Some(false);
+        Ok(owner)
     }
     // Closed synchronous operations only; this is not a host callback gateway.
     fn checked_delivery<'a>(
@@ -221,11 +236,44 @@ impl Drop for LeaseOwner {
             Err(error) => error.into_inner(),
         };
         gate.active = false;
+        let pending_touch = gate.http_touch.take();
         // Keep the gate held through secret disposal: gate -> cell, no await.
         self.delivery.clear();
+        drop(gate);
+        drop(pending_touch);
     }
 }
 impl Lease {
+    pub(crate) fn rate_subject(&self) -> Result<i64, Failure> {
+        self.checked_gate()?.subject.ok_or_else(Failure::internal)
+    }
+    // Called only after the request's rate/CSRF/body gates have succeeded. No
+    // callback or await holds Gate; HttpTouch rechecks after native capacity.
+    pub(crate) async fn finish_http_auth(self: &Arc<Self>) -> Result<(), Failure> {
+        let touch = { self.checked_gate()?.http_touch.take() };
+        if let Some(touch) = touch {
+            touch.apply(Arc::clone(self)).await?;
+        }
+        // Recheck original expiry/active owner under the same gate that guards
+        // actual Session delivery. A late DB reply cannot resurrect admission.
+        let mut gate = self.checked_gate()?;
+        if gate.http_admitted == Some(true) {
+            return Err(Failure::invalid_request());
+        }
+        if gate.http_admitted == Some(false) {
+            gate.http_admitted = Some(true);
+        }
+        Ok(())
+    }
+
+    fn checked_session_gate(&self) -> Result<std::sync::MutexGuard<'_, Gate>, Failure> {
+        let gate = self.checked_gate()?;
+        if gate.http_admitted == Some(false) {
+            return Err(Failure::denied());
+        }
+        Ok(gate)
+    }
+
     pub(crate) fn validate(&self) -> Result<(), Failure> {
         drop(self.checked_gate()?);
         Ok(())
@@ -238,6 +286,17 @@ impl Lease {
         Ok(gate)
     }
 }
+// Conservative credit for actual per-request lease layout/control, including
+// new subject/deferred-touch state. Existing host-captured heap is not measured.
+pub(crate) fn rate_metadata_bytes(requests: usize) -> Option<usize> {
+    std::mem::size_of::<Lease>()
+        // The verified output temporarily owns deferred metadata before bind
+        // moves it into Gate. Credit both complete actual layouts conservatively.
+        .checked_add(std::mem::size_of::<VerifiedIdentity>())?
+        .checked_add(2 * std::mem::size_of::<usize>())?
+        .checked_mul(requests)
+        .filter(|n| *n <= isize::MAX as usize)
+}
 /// Same-task, non-cloneable identity bound to a live dispatcher-owned request.
 ///
 /// ```compile_fail
@@ -249,14 +308,24 @@ pub struct AuthScope {
     credential: CredentialMetadata,
 }
 impl AuthScope {
-    pub(crate) fn bind(identity: VerifiedIdentity, lease: Arc<Lease>) -> Result<Self, Failure> {
-        {
+    pub(crate) fn bind(mut identity: VerifiedIdentity, lease: Arc<Lease>) -> Result<Self, Failure> {
+        let retired_touch = {
             let mut gate = lease.checked_gate()?;
             if identity.expires_at <= Instant::now() {
                 return Err(Failure::expired());
             }
+            if gate.http_admitted.is_some() && gate.subject.is_some() {
+                return Err(Failure::invalid_request());
+            }
             gate.expires_at = gate.expires_at.min(identity.expires_at);
-        }
+            gate.subject = Some(identity.subject);
+            let retired = gate.http_touch.take();
+            gate.http_touch = identity.pending_http_touch.take();
+            retired
+        };
+        // Existing trusted non-HTTP rebinding remains available; any old Store
+        // owner must be disposed after the short authority lock is released.
+        drop(retired_touch);
         Ok(Self {
             subject: identity.subject,
             lease,

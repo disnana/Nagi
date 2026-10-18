@@ -41,6 +41,8 @@ pub(super) fn register<S, E>(
     let routes = app.routes.entry(path.to_owned()).or_default();
     for method in [Method::GET, Method::HEAD] {
         routes.push(Route {
+            rate: None,
+            rate_index: None,
             cors: None,
             source: PolicySource::Session,
             method,
@@ -238,6 +240,16 @@ async fn dispatch_tokens_inner(
             .map_err(|e| security_response(context, e, PolicySource::Session, head))?;
         let _scope = AuthScope::bind(identity, Arc::clone(&owner.lease.lease))
             .map_err(|e| security_response(context, e, PolicySource::Session, head))?;
+        // Identity and the fixed endpoint's empty-body checks succeeded. Charge
+        // subject before either deferred Session touch or token issuance.
+        rate_public::before_handler(
+            context,
+            parts.headers.request_rate(),
+            &owner.lease.lease,
+            PolicySource::Session,
+            head,
+        )
+        .await?;
         if head {
             return Ok((binding, None));
         }

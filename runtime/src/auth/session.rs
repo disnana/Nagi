@@ -15,6 +15,7 @@ pub(super) mod delivery;
 #[path = "session/http_bridge.rs"]
 mod http_bridge;
 pub(crate) use csrf_bridge::CsrfBinding;
+pub(in crate::auth) use http_bridge::HttpTouch;
 pub(crate) use http_bridge::{http_cookie_maximum, retire_http_delivery, take_http_cookie};
 #[cfg(test)]
 #[path = "session/deadline_probe.rs"]
@@ -333,6 +334,7 @@ impl Snapshot {
             return Err(super::Failure::unavailable());
         }
         Ok(super::VerifiedIdentity {
+            pending_http_touch: None,
             subject: self.subject,
             expires_at: self.expires_at,
             credential: super::CredentialMetadata {
@@ -531,6 +533,15 @@ impl Foundation {
         cookie_headers: &[&str],
         authorization_present: bool,
     ) -> Result<Snapshot, Failure> {
+        self.lookup_cookie_mode(cookie_headers, authorization_present, true)
+            .await
+    }
+    async fn lookup_cookie_mode(
+        &self,
+        cookie_headers: &[&str],
+        authorization_present: bool,
+        touch: bool,
+    ) -> Result<Snapshot, Failure> {
         let same_site = match self.same_site {
             1 => cookie::SameSite::Strict,
             2 => cookie::SameSite::Lax,
@@ -541,7 +552,7 @@ impl Foundation {
         let id = policy
             .read(cookie_headers, authorization_present)
             .map_err(Failure::secret)?;
-        self.lookup(id.digest().into_bytes()).await
+        self.lookup_mode(id.digest().into_bytes(), touch).await
     }
     // Called only by a future secure Store initializer. This private layer
     // accepts already-reviewed Cookie policy and a fresh OS-CSPRNG incarnation.
@@ -728,13 +739,16 @@ impl Foundation {
     }
 
     pub(super) async fn lookup(&self, digest: [u8; 32]) -> Result<Snapshot, Failure> {
+        self.lookup_mode(digest, true).await
+    }
+    async fn lookup_mode(&self, digest: [u8; 32], touch: bool) -> Result<Snapshot, Failure> {
         let (tx, c, _) = self.transaction().await?;
         let result=async {
             let row=sqlite::query::<SessionRow>(&tx,sqlite::literal("SELECT lineage,subject,digest,generation,idle_ms,absolute_ms FROM __nagi_session_rows WHERE digest=? AND idle_ms>? AND absolute_ms>?"),sqlite::bind_i64(sqlite::bind_i64(sqlite::bind_bytes(sqlite::parameters(),digest.to_vec()),c.ceil_ms),c.ceil_ms)).await.map_err(Failure::database)?.ok_or_else(Failure::credential)?;
             let snapshot=self.snapshot(row,&c)?;
             let next=c.floor_ms.checked_add(self.options.idle_ms).ok_or_else(Failure::unavailable)?.min(snapshot.absolute_ms);
             let last_touch=snapshot.idle_ms.checked_sub(self.options.idle_ms).ok_or_else(Failure::unavailable)?;
-            if c.floor_ms.checked_sub(last_touch).ok_or_else(Failure::unavailable)? >= self.options.touch_ms && next>snapshot.idle_ms {
+            if touch && c.floor_ms.checked_sub(last_touch).ok_or_else(Failure::unavailable)? >= self.options.touch_ms && next>snapshot.idle_ms {
                 let p=sqlite::bind_i64(sqlite::bind_bytes(sqlite::bind_i64(sqlite::bind_i64(sqlite::parameters(),next),snapshot.lineage),digest.to_vec()),snapshot.generation);
                 if exec(&tx,"UPDATE __nagi_session_rows SET idle_ms=? WHERE lineage=? AND digest=? AND generation=?",p).await?!=1 {return Err(Failure::denied());}
             }

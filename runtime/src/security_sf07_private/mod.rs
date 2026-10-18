@@ -1,13 +1,11 @@
 //! Private SF07 quota ownership; other core/fixture modules remain test-only.
-#[cfg(test)]
-mod indexed;
+pub(crate) mod indexed;
 #[cfg(test)]
 mod legacy_rate;
 mod owned_state_lock;
 pub(crate) use owned_state_lock::OwnedStateLock;
 pub(crate) mod quota;
-#[cfg(test)]
-mod startup_rate;
+pub(crate) mod startup_rate;
 
 #[cfg(test)]
 mod owned_state_owner_tests;

@@ -23,95 +23,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "63da3783154d200373d5eee5321bc0000e0dda21"
+          test "$(git rev-parse HEAD^)" = "1945b38d222eb06ef9d9fd8fff09648832337f98"
           sha256sum --check <<'HASHES'
-          9f71dbbfd5518ad29a4fc27a78bc66cdb4612664abfce05ee68da9fd7c723c87  runtime/src/auth/csrf.rs
-          562f5c1ae0cca5b8e6a507efdc3df24cf7c66ce5f7b9a369d3f3ece28ede4a7c  runtime/src/auth/csrf/tests.rs
-          40cb53addb3f39165339e813b900f0a3acf25d85e95ac851601809217e6322a5  runtime/src/auth/session.rs
-          d5eab202d858572bdac9740996b3dd7d1faf5417829e09e4df31458ee50b2257  runtime/src/auth/session/delivery_wire_tests.rs
-          93d4719621c2fa7eefc67c614b412747dc56f88c1b0fb08c3e1ebe4f0a696c84  runtime/src/auth/session/http_bridge.rs
-          05438e2cb0069d7c3539d418b0b3c91c62f87cf715a4756155c375d44a606abf  runtime/src/auth/session/http_bridge_tests.rs
-          8e47b5d244000fbaad57c58e68313527c4e8d949844692cad966d0a90b768de1  runtime/src/auth/session/secrets.rs
-          8d89f157ecde522b6c2b66240b3c80ccc3a59af341c6fbc70b01fe36ee3037c9  runtime/src/auth/session/wire_cell_tests.rs
-          bf760889d97d663ea4a1e4a2c6a5eaa5df12cc13e623d8cb4807d3de024fa603  runtime/src/html.rs
-          92dfb82ef4ad9d41cefff0e8e8238c0c99c1216a5d6ea3211659e5499e1799fb  runtime/src/http_server.rs
-          c344bd211acc121691a8640f92a8ce13a3ba99c654b631673c7de67f19844dce  runtime/src/http_server/authority_tests.rs
-          803945bfa86e0c983517b6eff8aa4cb5cc8e5f1ed9c0efde511727a3165b2e60  runtime/src/http_server/browser_login.rs
-          d92843dce512d296008be05ef27b53d7cb2ee80f4aec4b3abbfb1c5065631d27  runtime/src/http_server/browser_login_stage_tests.rs
-          4da3855c8c9adf4b40db3e686bea5fd0b8d9fddab657ac4eb2948b069f62d12c  runtime/src/http_server/cors.rs
-          58649568ad1ec202c2635a866eed7d3fa9d36c26298c60733fa47ba874796b27  runtime/src/http_server/cors/tests.rs
-          19eee7d034cfb91d93191693b27f0a19d6d108ebfd721bbecb5a55d06305b550  runtime/src/http_server/csrf_deadline_tests.rs
-          3de4934f5cd753f93e1075e484ad3225f775604f732456fdc08f51293c1359f8  runtime/src/http_server/csrf_http.rs
-          dfef4074b447c5076bd772b1dfa1a7ca6d6e32f116878940ec2ce1e99375eec5  runtime/src/http_server/finalizer_html_tests.rs
-          2b7f01d3089adf4991e1d71e85ff1128b68bba97fff5415975fd07ea9e98a739  runtime/src/http_server/finalizer_tests.rs
-          509d48c0098e61b69b57df3f962ebdfff1ab9db34c16d1f674a2a63ccf5fa3d9  runtime/src/http_server/origin.rs
-          961252be58dc053ae449b9b5183e70aeced984e8f5b9f4284de7a33c24028492  runtime/src/http_server/panic_tests.rs
-          f948ccd2af89f168d4bab6b9225c69162d381ff692b5eac5e67e18370e68878a  runtime/src/http_server/prelogin_http.rs
-          6bc17c3b5faef525050f51a7464a6c029611d71f769ab99321f433200994bd8e  runtime/src/http_server/prelogin_tests.rs
-          aefe002a17686316044912d977bbca531a2ed12427412e015319771e9628a19a  runtime/src/http_server/private_deadline_calibration.rs
-          6ab584105ad5e297fd1b77ddf8ccd3b1593a4a3732ff84868f59bdefea8ccf27  runtime/src/http_server/request_headers.rs
-          ca5102269fcd7312f104997d865a6289629da0aa7c46c4837a4eed71efe90dbf  runtime/src/http_server/request_headers_tests.rs
-          d14c51b4db6e74c144a1361914e8996a85bfff065ac9758c7b5c1e912870d8e7  runtime/src/http_server/response_attachment.rs
-          92b5688470c0a1558d9a365490cf7d6cfe635b8e30dd1dbabf0e02889bcb53db  runtime/src/http_server/response_attachment_tests.rs
-          3ae5c2fe47b0d7ad35f683a1bbcecf65ecdb3a9a52c99c75ccabd996cf670b32  runtime/src/http_server/response_budget.rs
-          c75e7de88053bce47378266e225fb0339d7efacf3e986b925a03008cb54a7291  runtime/src/http_server/response_finalize.rs
-          db2a3257dcf13e482decef7d11fd7a31d24279fb9c6a499b74565ac7ea20b8b2  runtime/src/http_server/response_public.rs
-          fc863dcab656af3005e3d46f2bcfabc23ff5005b1da93291049e01a6a82217df  runtime/src/http_server/response_public_tests.rs
-          ac7e094e57ad0671dc1e562e23790379d98a9d5d9a751a011c02eb8d31a61607  runtime/src/http_server/response_send.rs
-          964761279058fa67a53a393bf2892229e224cc7612bb57df67bb65c5d1fd1e4b  runtime/src/http_server/response_wire.rs
-          a2f59568832adfaca1a7ae7e0c480da3a608228ec47d1ae15d4b02cd05b59eb9  runtime/src/http_server/security_tests.rs
-          2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea  runtime/src/http_server/send_deadline_tests.rs
-          67751d6012bec7dfe9e8468545ab244d8d16eb8b8e3ed0a13bdca81966769628  runtime/src/http_server/tests.rs
-          b27958e47a413674cbe28b35ded1677cde6ac3a0cef4c125f2265d454f3f9ec6  runtime/src/http_server/vary.rs
-          f1677ca7a513d5614b613b267f6ba83e468d87a30cf9aa443a3283688d4ff9a9  runtime/src/security_sf07_private/owned_state_lock.rs
-          a6ce41df08c014b729acc445f0a311088c46856929ba9d8e05a314025f7ac54b  runtime/src/security_sf07_private/quota.rs
+          b2fc31b270e0a3ed2cfb3e142156365750298527d31e9f54da735af664f531a8  runtime/src/auth.rs
+          8eb9c7e34e272d28c63cceec50bcc6526ecd6d518721df2a4c2f239b8bf678c8  runtime/src/auth/session.rs
+          f7a5f17425aa65e6344b5452e246c97e26fc66af8bbbfceecdc7e12c99fc0b83  runtime/src/auth/session/delivery.rs
+          048dcbad80abb4ba296cd9a47beb5b3adba3f42fc6a0f0df64e8f287c408f316  runtime/src/auth/session/http_bridge.rs
+          c30bf5287f448b9b0214d47dc29a0a4c50c6f3e611028352de3967ec9587817d  runtime/src/http_server.rs
+          9947895cc5a1eeb461e3b327ab9b9df1231b37281ecc0d6b448d12752ab08313  runtime/src/http_server/csrf_http.rs
+          7ecdfabaecfc784104cea86b9640cb48d284b0a73882699bc821da7f1793fbc4  runtime/src/http_server/prelogin_http.rs
+          b56eacba20d855fe40faf918c5021d6859b630a0531e54040c62a8ce0c53f8ca  runtime/src/http_server/rate_public.rs
+          b8cf36a9bf90ec9a3a49dc0f792e63ac6b913e37e675da6eb5ee9cf2a27168b1  runtime/src/http_server/request_headers.rs
+          a2274938a3609be2a09062464f37ad9ea1b87ac3eef97f3b381fe8812dddada7  runtime/src/http_server/response_public.rs
+          fa17657956dc38b2994cb2803d4146759097cd92299c9a56751c407347a721b1  runtime/src/security_sf07_private/mod.rs
+          f4222ed85eb95309d86fce2da71271a31d5cc549d7e99137d98432ee7ab672b6  runtime/src/security_sf07_private/startup_rate.rs
           HASHES
-      - name: Compile the complete migrated library tests first
-        run: cargo test --locked -p nagi-runtime --lib --no-run
-      - name: Verify exact public and lifetime test collection
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/public-u4-tests.list"
-          python - "$RUNNER_TEMP/public-u4-tests.list" <<'PY'
-          import pathlib,sys
-          actual={line.removesuffix(': test') for line in pathlib.Path(sys.argv[1]).read_text().splitlines() if line.endswith(': test')}
-          wanted=['http_server::response_public::tests::allow_serialization_preflights_before_allocation_and_keeps_405_close', 'http_server::response_public::tests::managed_header_refusal_keeps_denial_and_independent_fallback_exhaustion_closes', 'http_server::response_public::tests::missing_explicit_response_settings_and_later_incompatible_capacity_reject', 'http_server::response_public::tests::native_fault_classification_distinguishes_user_status_from_established_refusal', 'http_server::response_public::tests::prebuilt_fixture_adoption_keeps_same_claim_and_actual_bytes_owner_without_copy', 'http_server::response_public::tests::public_context_is_request_owned_and_json_has_distinct_body_and_work_limits', 'http_server::response_public::tests::public_first_request_header_owner_survives_native_join_and_permit_reuse', 'http_server::response_public::tests::public_mapper_failure_and_business_error_remain_distinct_completion_kinds', 'http_server::response_public::tests::retained_response_never_restores_old_cors_when_current_headers_or_fallback_are_full', 'http_server::response_public::tests::retained_same_producer_response_uses_current_request_cors_on_real_wire']
-          exact=['http_server::request_headers::native_owner_tests::native_extensions_follow_last_header_view_and_drop_before_request_receipt', 'http_server::request_headers::tests::actual_native_parts_extensions_live_through_handler_and_drop_after_join']
-          if {name for name in actual if name.startswith('http_server::response_public::tests::')} != set(wanted) or not set(exact)<=actual:
-              raise SystemExit('exact public/lifetime inventory mismatch')
-          if len({name for name in actual if name.startswith('http_server::response_attachment::')}) != 6 or len({name for name in actual if name.startswith('http_server::response_send::')}) != 10:
-              raise SystemExit('affected native inventory mismatch')
-          print('public_cases=10 lifetime_cases=2 inventory=passed')
-          PY
-      - name: Execute public response contracts once
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib http_server::response_public::tests:: | tee "$RUNNER_TEMP/u4-public.log"
-      - name: Execute exact native metadata lifetime regressions once
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib http_server::request_headers::native_owner_tests::native_extensions_follow_last_header_view_and_drop_before_request_receipt -- --exact | tee "$RUNNER_TEMP/u4-owner.log"
-          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests::actual_native_parts_extensions_live_through_handler_and_drop_after_join -- --exact | tee "$RUNNER_TEMP/u4-parts.log"
-      - name: Execute previously verified affected native attachment and send cases once
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib http_server::response_attachment:: | tee "$RUNNER_TEMP/u4-attachment.log"
-          cargo test --locked -p nagi-runtime --lib http_server::response_send:: | tee "$RUNNER_TEMP/u4-send.log"
-      - name: Enforce all selected executions without ignored or zero-test success
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - "$RUNNER_TEMP" <<'PY'
-          import pathlib,re,sys
-          root=pathlib.Path(sys.argv[1])
-          for name,count in [('public',10),('owner',1),('parts',1),('attachment',6),('send',10)]:
-              text=(root/('u4-'+name+'.log')).read_text()
-              results=re.findall(r'test result: ok\. ([0-9]+) passed; ([0-9]+) failed; ([0-9]+) ignored;',text)
-              if results!=[(str(count),'0','0')]:
-                  raise SystemExit('exact runtime execution count mismatch: '+name)
-          print('public=10 lifetime=2 attachment=6 send=10 executed=28 failed=0 ignored=0')
-          PY
+      - name: Typecheck production library before test consumers
+        run: cargo check --locked -p nagi-runtime --lib

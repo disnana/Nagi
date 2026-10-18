@@ -13,6 +13,7 @@ pub(super) struct ReceivedHeaders {
     _extensions: Extensions,
     _prior: Option<Arc<Reservation>>,
     context: ContextOwner,
+    rate: Option<super::rate_public::RequestRate>,
     // Last: the actual map, prior response and Context die before this receipt.
     request_owner: Option<tokio::sync::OwnedSemaphorePermit>,
 }
@@ -41,6 +42,7 @@ impl ReceivedHeaders {
             _extensions: extensions,
             _prior: prior,
             context: ContextOwner::Attached(context),
+            rate: None,
             request_owner: None,
         })
     }
@@ -59,6 +61,7 @@ impl ReceivedHeaders {
             _extensions: extensions,
             _prior: prior,
             context: ContextOwner::Unattached,
+            rate: None,
             request_owner: None,
         })
     }
@@ -91,6 +94,21 @@ pub(super) struct RequestHeaders {
     visibility: Visibility,
 }
 impl RequestHeaders {
+    pub(super) fn rate(
+        &mut self,
+        rate: super::rate_public::RequestRate,
+    ) -> Result<(), crate::Error> {
+        let owner = Arc::get_mut(&mut self.owner)
+            .ok_or_else(|| crate::Error::internal("request owner already shared"))?;
+        if owner.rate.is_some() {
+            return Err(crate::Error::internal("request rate already attached"));
+        }
+        owner.rate = Some(rate);
+        Ok(())
+    }
+    pub(super) fn request_rate(&self) -> Option<&super::rate_public::RequestRate> {
+        self.owner.rate.as_ref()
+    }
     pub(super) fn profile(
         &mut self,
         profile: super::response_public::ResponseProfile,

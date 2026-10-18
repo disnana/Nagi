@@ -58,6 +58,15 @@ pub(crate) struct Capacity {
     request_work: u64,
 }
 impl Capacity {
+    // Caller temporary Record storage is checked before that Vec allocates.
+    pub(crate) fn admit_catalogue(&self, records: usize, retained: usize) -> Result<(), Error> {
+        if records > self.rules || retained > self.retained_bytes {
+            Err(Error::Invalid)
+        } else {
+            Ok(())
+        }
+    }
+
     pub(crate) fn checked(
         rules: i64,
         domains: i64,
@@ -86,6 +95,20 @@ pub(crate) struct Policy {
     subject: Option<Rule>,
 }
 impl Policy {
+    pub(crate) fn has_subject(&self) -> bool {
+        self.subject.is_some()
+    }
+    pub(crate) fn record(&self, subject_support: SubjectSupport) -> Record {
+        // Copy checked immutable scalars only, never limiter state/brands.
+        Record {
+            policy: Self {
+                route: self.route,
+                subject: self.subject,
+            },
+            subject_support,
+        }
+    }
+
     pub(crate) fn checked(burst: i64, refill_ms: i64) -> Result<Self, Error> {
         let burst = u32::try_from(burst)
             .ok()
@@ -141,10 +164,16 @@ pub(crate) struct Binding {
     route: RuleId,
     subject: Option<(RuleId, DomainId)>,
 }
+impl Binding {
+    pub(crate) fn has_subject(self) -> bool {
+        self.subject.is_some()
+    }
+}
 pub(crate) struct Plan {
     owner: RateOwner,
     bindings: Vec<Binding>,
     retained_bytes: usize,
+    #[cfg(test)]
     request_work: u64,
 }
 fn bridge_bytes(records: usize, rules: usize, catalog_bytes: usize) -> Result<usize, Error> {
@@ -160,9 +189,17 @@ fn bridge_bytes(records: usize, rules: usize, catalog_bytes: usize) -> Result<us
     )
 }
 impl Plan {
+    #[cfg(test)]
     pub(crate) fn checked(
         records: &[Record],
         limits: Capacity,
+        catalog_bytes: usize,
+    ) -> Result<Option<Self>, Error> {
+        Self::checked_ref(records, &limits, catalog_bytes)
+    }
+    pub(crate) fn checked_ref(
+        records: &[Record],
+        limits: &Capacity,
         catalog_bytes: usize,
     ) -> Result<Option<Self>, Error> {
         if records.is_empty() {
@@ -264,6 +301,7 @@ impl Plan {
             owner,
             bindings,
             retained_bytes,
+            #[cfg(test)]
             request_work,
         }))
     }
@@ -285,6 +323,7 @@ impl Plan {
     pub(crate) fn retained_bytes(&self) -> usize {
         self.retained_bytes
     }
+    #[cfg(test)]
     pub(crate) fn request_work(&self) -> u64 {
         self.request_work
     }

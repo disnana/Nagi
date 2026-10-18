@@ -368,6 +368,11 @@ impl BodyKind {
 }
 const CONTENT_SECURITY_POLICY: &str = "default-src 'none'; script-src 'none'; style-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
 
+mod rate_public;
+use rate_public::RuntimeRate;
+pub use rate_public::{
+    rate_limits, rate_policy, rate_route, rate_subject, with_rate_limits, RateLimits, RatePolicy,
+};
 mod response_public;
 #[cfg(test)]
 pub(crate) use response_public::tests::request_fixture as bounded_response_request_fixture;
@@ -411,6 +416,7 @@ impl hyper::body::Body for BufferedBody {
 #[derive(Debug)]
 pub struct Options {
     response_limits: Option<ResponseLimits>,
+    rate_limits: Option<RateLimits>,
     authority: Option<authority::Config>,
     body_bytes: usize,
     body_deadline: Duration,
@@ -433,6 +439,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             response_limits: None,
+            rate_limits: None,
             authority: None,
             body_bytes: 1024 * 1024,
             body_deadline: Duration::from_secs(10),
@@ -490,6 +497,7 @@ pub fn capacity(mut options: Options, connections: i64, requests: i64) -> Result
     options.connections = positive_size(connections, Semaphore::MAX_PERMITS, "connections")?;
     options.requests = positive_size(requests, Semaphore::MAX_PERMITS, "requests")?;
     response_public::validate_options(&options)?;
+    rate_public::validate_options(&options)?;
     Ok(options)
 }
 pub fn header_timeout(mut options: Options, milliseconds_value: i64) -> Result<Options, Error> {
@@ -507,6 +515,7 @@ pub fn header_limits(mut options: Options, bytes: i64, count: i64) -> Result<Opt
     options.header_bytes = bytes;
     options.header_count = count;
     response_public::validate_options(&options)?;
+    rate_public::validate_options(&options)?;
     Ok(options)
 }
 pub fn send_timeout(mut options: Options, milliseconds_value: i64) -> Result<Options, Error> {
@@ -883,6 +892,8 @@ enum RouteKind<S> {
     },
 }
 struct Route<S> {
+    rate: Option<RatePolicy>,
+    rate_index: Option<usize>,
     source: PolicySource,
     method: Method,
     kind: RouteKind<S>,
@@ -1065,6 +1076,8 @@ where
         },
     };
     routes.push(Route {
+        rate: None,
+        rate_index: None,
         cors: None,
         source,
         method,
@@ -1091,10 +1104,11 @@ where
             let headers = request.headers.share();
             let context = headers.response_context();
             let head = request.is_head();
-            if let Err(failure) = lease.validate() {
-                return PreparedCompletion::Terminal(security_response(
-                    context, failure, source, head,
-                ));
+            if let Err(response) =
+                rate_public::before_handler(context, headers.request_rate(), &lease, source, head)
+                    .await
+            {
+                return PreparedCompletion::Terminal(response);
             }
             match handler(request, state, authority).await {
                 Ok(response) => PreparedCompletion::HandlerOk(response),
@@ -1349,11 +1363,10 @@ fn response_catalog_bytes<S, E>(app: &App<S, E>) -> Result<usize, Error> {
             .ok_or_else(|| Error::invalid("HTTP catalogue metadata overflow"))?;
         Ok(())
     };
-    // PARTIAL: own Vec/String/CORS capacities only. HashMap bucket and pinned
-    // matchit allocations are NOT yet credited. This is an explicit release
-    // blocker to be resolved with the U5 startup catalogue adapter; this helper
-    // must not be cited as complete metadata/accounting acceptance. Referenced
-    // application state and auth stores have independent boundaries.
+    // Extra conservative credit for directly owned Vec/String/CORS capacities.
+    // Preexisting opaque routing containers, handler captures/shared state and
+    // allocator/RSS are outside the new response/rate allocation domains. This
+    // is not a measurement or guarantee of the entire App heap graph.
     for (path, routes) in &app.routes {
         add(path.capacity())?;
         add(routes
@@ -1373,6 +1386,7 @@ async fn dispatch<S, E>(
     mut request: IncomingRequest<hyper::body::Incoming>,
     options: Arc<Options>,
     requests: Arc<Semaphore>,
+    rates: Arc<RuntimeRate>,
     peer: std::net::IpAddr,
 ) -> Result<HttpResponse, Infallible>
 where
@@ -1457,6 +1471,15 @@ where
     {
         return Ok(cors_context.finish(transport(Status::INTERNAL_SERVER_ERROR, head, true)));
     }
+    let rate = match route.rate_index.and_then(|index| rates.request(index).ok()) {
+        Some(rate) => rate,
+        None => {
+            return Ok(cors_context.finish(transport(Status::INTERNAL_SERVER_ERROR, head, true)))
+        }
+    };
+    if request.parts.headers.rate(rate).is_err() {
+        return Ok(cors_context.finish(transport(Status::INTERNAL_SERVER_ERROR, head, true)));
+    }
     let context = request.parts.headers.response_context().share();
     let transport = |status, head, close| self::transport(&context, status, head, close);
 
@@ -1494,6 +1517,9 @@ where
                 &context,
             ));
         }
+        // CORS preflight returned above without touching either rate bucket.
+        let rate=request.parts.headers.request_rate().expect("selected checked route rate");
+        if let Err(reason)=rate.route() { return Ok(finish(HttpResponse::rate_refusal(&context,reason,route.source,head))); }
         let version = request.version();
         let (parts, body) = request.into_parts();
         let total = options
@@ -1504,7 +1530,7 @@ where
         let Some(deadline) = total.and_then(|t| admitted.checked_add(t)) else {
             return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true)));
         };
-        let owner = match LeaseOwner::new(deadline) {
+        let owner = match LeaseOwner::new_http(deadline) {
             Ok(owner) => owner,
             Err(_) => return Ok(finish(transport(Status::SERVICE_UNAVAILABLE, head, true))),
         };
@@ -1825,7 +1851,7 @@ pub fn prelogin_bootstrap<S, E>(
     )
 }
 
-pub async fn serve<S, E>(app: App<S, E>, port: i64, options: Options) -> Result<(), Error>
+pub async fn serve<S, E>(mut app: App<S, E>, port: i64, options: Options) -> Result<(), Error>
 where
     S: Send + Sync + 'static,
     E: 'static,
@@ -1835,6 +1861,11 @@ where
     prelogin_http::check_startup(&app, &options)?;
     csrf_http::check_startup(&app, &options)?;
     let _ = RuntimeResponses::checked(&options, response_catalog_bytes(&app)?)?;
+    let rate_limits = options
+        .rate_limits
+        .as_ref()
+        .ok_or_else(|| Error::invalid("explicit rate limits are required"))?;
+    let _ = RuntimeRate::checked(&mut app, rate_limits, options.requests, options.connections)?;
     let port = u16::try_from(port)
         .ok()
         .filter(|port| *port != 0)
@@ -1851,7 +1882,7 @@ where
 /// lets a Rust host integrate Nagi with its existing termination signal.
 pub async fn serve_listener<S, E>(
     listener: TcpListener,
-    app: App<S, E>,
+    mut app: App<S, E>,
     options: Options,
     shutdown_signal: impl Future<Output = ()>,
 ) -> Result<(), Error>
@@ -1864,6 +1895,11 @@ where
     prelogin_http::check_startup(&app, &options)?;
     csrf_http::check_startup(&app, &options)?;
     let responses = RuntimeResponses::checked(&options, response_catalog_bytes(&app)?)?;
+    let rate_limits = options
+        .rate_limits
+        .as_ref()
+        .ok_or_else(|| Error::invalid("explicit rate limits are required"))?;
+    let rates = RuntimeRate::checked(&mut app, rate_limits, options.requests, options.connections)?;
     let app = Arc::new(app);
     let options = Arc::new(options);
     let connections = Arc::new(Semaphore::new(options.connections));
@@ -1912,6 +1948,7 @@ where
                 let app = Arc::clone(&app);
                 let options = Arc::clone(&options);
                 let requests = Arc::clone(&requests);
+                let rates = Arc::clone(&rates);
                 let responses = Arc::clone(&responses);
                 let ledger = response_send::SendLedger::new(Arc::clone(&responses.producer), Arc::clone(&responses.fallback));
                 let service_ledger = Arc::clone(&ledger);
@@ -1932,10 +1969,11 @@ where
                     let app = Arc::clone(&app);
                     let options = Arc::clone(&options);
                     let requests = Arc::clone(&requests);
+                    let rates = Arc::clone(&rates);
                     let future = async move {
                         let prior = prior?;
                         let request = IncomingRequest::new(request, prior, context);
-                        let response = match dispatch(app, request, options, requests, peer.ip()).await { Ok(response) => response, Err(never) => match never {} };
+                        let response = match dispatch(app, request, options, requests, rates, peer.ip()).await { Ok(response) => response, Err(never) => match never {} };
                         response.transfer_native(&ledger, head)
                     };
                     let sending = service_sending.clone();
@@ -2023,6 +2061,7 @@ where
             }
         }
     }
+    rates.close();
     Ok(())
 }
 
