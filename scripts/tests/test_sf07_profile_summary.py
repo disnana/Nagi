@@ -238,7 +238,7 @@ class ProfileSummaryTests(unittest.TestCase):
         )
         self.assertEqual(process.returncode, 2)
         self.assertEqual(process.stdout, b"")
-        self.assertEqual(process.stderr, b"sf07_profile=unavailable\n")
+        self.assertEqual(process.stderr, b"sf07_profile=unavailable" + os.linesep.encode("ascii"))
 
     def test_cli_fails_closed_without_echoing_invalid_input(self):
         env = dict(os.environ)
@@ -254,7 +254,7 @@ class ProfileSummaryTests(unittest.TestCase):
         )
         self.assertEqual(process.returncode, 2)
         self.assertEqual(process.stdout, b"")
-        self.assertEqual(process.stderr, b"sf07_profile=unavailable\n")
+        self.assertEqual(process.stderr, b"sf07_profile=unavailable" + os.linesep.encode("ascii"))
 
 
 if __name__ == "__main__":
