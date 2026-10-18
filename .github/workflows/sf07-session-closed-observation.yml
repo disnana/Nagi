@@ -1,0 +1,336 @@
+name: SF07 exact-source Session failure observation
+'on':
+  push:
+    branches:
+    - test/sf07-session-observe-20261018
+permissions:
+  contents: read
+jobs:
+  session-observation:
+    if: github.ref == 'refs/heads/test/sf07-session-observe-20261018'
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-latest
+        - windows-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.sha }}
+        fetch-depth: 2
+        persist-credentials: false
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy
+    - name: Verify exact parent, frozen source and closed guard controls
+      shell: bash
+      run: |
+        set -euo pipefail
+        test "$(git rev-parse HEAD^)" = "f99a80b60ef8cfded1dac80480d3ef654ef9ca4a"
+        test -z "${RUST_TEST_THREADS+x}"
+        cat > "$RUNNER_TEMP/sf07-selected-guard.py" <<'PY'
+        """Frozen source and selected libtest result guards; no runtime instrumentation."""
+        from pathlib import Path
+        import hashlib
+        import re
+        import sys
+
+        GROUPS = {'new_rate': ['http_server::rate_public::tests::checked_public_rate_configuration_rejects_missing_duplicate_and_unsupported_subjects', 'http_server::rate_public::tests::actual_route_vec_capacity_and_retained_boundary_are_charged', 'http_server::rate_public::tests::all_registered_routes_require_explicit_policy_and_capacity_revalidation', 'http_server::rate_public::tests::established_expired_lease_wins_over_an_exhausted_subject_bucket', 'http_server::rate_public::tests::retry_after_rounding_and_internal_rate_failures_have_closed_distinct_outcomes'], 'new_session': ['auth::session::http_bridge::rate_tests::http_subject_denial_and_new_subject_capacity_do_not_refresh_session_idle', 'auth::session::http_bridge::rate_tests::http_authorizers_cannot_stage_issue_rotate_or_logout_before_body_subject_admission', 'auth::session::http_bridge::rate_tests::delayed_deferred_touch_cannot_admit_a_retired_http_lease', 'auth::session::http_bridge::rate_tests::existing_non_http_admission_and_admitted_http_session_delivery_remain_live', 'auth::session::http_bridge::rate_tests::admitted_http_subject_can_issue_once_and_limited_subject_cannot_issue_again', 'auth::session::http_bridge::rate_tests::cors_preflight_uses_finite_entry_without_charging_either_rate_bucket', 'auth::session::http_bridge::rate_tests::body_refusal_after_auth_does_not_charge_subject_or_admit_session_work'], 'old_public': ['http_server::response_public::tests::missing_explicit_response_settings_and_later_incompatible_capacity_reject', 'http_server::response_public::tests::public_context_is_request_owned_and_json_has_distinct_body_and_work_limits', 'http_server::response_public::tests::public_mapper_failure_and_business_error_remain_distinct_completion_kinds', 'http_server::response_public::tests::managed_header_refusal_keeps_denial_and_independent_fallback_exhaustion_closes', 'http_server::response_public::tests::public_first_request_header_owner_survives_native_join_and_permit_reuse', 'http_server::response_public::tests::native_fault_classification_distinguishes_user_status_from_established_refusal', 'http_server::response_public::tests::allow_serialization_preflights_before_allocation_and_keeps_405_close', 'http_server::response_public::tests::retained_response_never_restores_old_cors_when_current_headers_or_fallback_are_full', 'http_server::response_public::tests::prebuilt_fixture_adoption_keeps_same_claim_and_actual_bytes_owner_without_copy', 'http_server::response_public::tests::retained_same_producer_response_uses_current_request_cors_on_real_wire'], 'old_owner': ['http_server::request_headers::native_owner_tests::native_extensions_follow_last_header_view_and_drop_before_request_receipt'], 'old_parts': ['http_server::request_headers::tests::actual_native_parts_extensions_live_through_handler_and_drop_after_join'], 'old_attachment': ['http_server::response_attachment::tests::explicit_attachment_inputs_reject_invalid_profiles', 'http_server::response_attachment::tests::context_factories_keep_original_charge_and_enforce_serialized_limits', 'http_server::response_attachment::tests::actual_native_context_empty_body_and_head_retain_charge_through_join', 'http_server::response_attachment::tests::received_request_owner_keeps_prior_charge_after_native_close_and_join', 'http_server::response_attachment::tests::exhausted_independent_fallback_closes_actual_native_before_permit_release', 'http_server::response_attachment::tests::first_request_owner_limits_survive_native_join_and_connection_reuse'], 'old_send': ['http_server::response_send::tests::head_and_empty_keep_native_cache_charge_at_ready_until_driver_drop', 'http_server::response_send::tests::keep_alive_cache_moves_to_same_shared_request_owner_past_native_shutdown', 'http_server::response_send::tests::pipelined_requests_keep_one_cache_slot_and_multiple_prior_map_owners', 'http_server::response_send::tests::fallback_is_independent_then_exhaustion_closes_real_transport_without_reallocation', 'http_server::response_send::tests::foreign_wire_fails_closed_and_native_connection_actually_ends', 'http_server::response_send::tests::parse_failure_does_not_release_pending_claim_at_ready', 'http_server::response_send::tests::abort_before_actual_join_and_handler_panic_release_only_on_native_destruction', 'http_server::response_send::tests::unpolled_and_ready_native_io_drop_before_cache_guard_and_connection_permit', 'http_server::response_send::tests::prepared_managed_head_and_empty_use_existing_native_drop_chain', 'http_server::response_send::owned_state_lock_tests::poisoned_ledger_disposal_keeps_native_cache_and_permit_release_order'], 'guarded': ['guarded_rotation_and_logout_invalidate_old_generation_tokens'], 'browser_stage': ['http_server::browser_login::stage_tests::live_claimed_200_runs_verifier_and_handler_and_returns_200', 'http_server::browser_login::stage_tests::consumed_prepare_err_1000_returns_401_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_pending_200_returns_504_and_drops_once', 'http_server::browser_login::stage_tests::consumed_prepare_non_yielding_200_late_ready_returns_504', 'http_server::browser_login::stage_tests::committed_issue_live_200_delivers_auth_cookie_once', 'http_server::browser_login::stage_tests::committed_issue_handler_err_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_pending_200_returns_504_and_drops_once'], 'session_full': ['controlled_same_file_writer_reports_native_token_identity_boundary', 'checked_profiles_reject_unsealed_or_incompatible_policy_sources', 'tokens_are_authenticated_reusable_and_preserve_bounded_ledger', 'guarded_rotation_and_logout_invalidate_old_generation_tokens', 'body_checkpoint_rejects_generation_changed_after_actual_authorization', 'finite_origin_and_header_refusals_preserve_existing_token_and_capacity', 'one_reusable_token_admits_two_distinct_actual_requests', 'guarded_partial_body_preparation_uses_original_security_deadline', 'failed_guarded_handler_never_finalizes_committed_rotation_cookie', 'mismatched_startup_origin_refuses_token_and_guarded_routes_before_bind', 'pending_guarded_authorizer_expires_at_bound_session_and_recovers_permit'], 'session_normal': ['checked_profiles_reject_unsealed_or_incompatible_policy_sources', 'tokens_are_authenticated_reusable_and_preserve_bounded_ledger', 'guarded_rotation_and_logout_invalidate_old_generation_tokens', 'body_checkpoint_rejects_generation_changed_after_actual_authorization', 'finite_origin_and_header_refusals_preserve_existing_token_and_capacity', 'one_reusable_token_admits_two_distinct_actual_requests', 'guarded_partial_body_preparation_uses_original_security_deadline', 'failed_guarded_handler_never_finalizes_committed_rotation_cookie', 'mismatched_startup_origin_refuses_token_and_guarded_routes_before_bind', 'pending_guarded_authorizer_expires_at_bound_session_and_recovers_permit'], 'browser_full': ['public_login_claims_once_then_named_verifier_issue_and_appended_cookies', 'input_and_strict_json_rejections_do_not_consume_or_call_verifier', 'committed_claim_stays_consumed_on_verifier_error_panic_and_deadline', 'issue_commit_then_handler_err_panic_or_timeout_never_delivers_auth_cookie', 'wire_body_cap_is_independent_of_db_quota_and_checked_before_claim', 'browser_profile_refuses_non_post_and_wrong_startup_origin', 'body_own_deadline_408_security_earlier_or_equal_504_before_claim', 'shutdown_cancels_actual_request_and_committed_token_cannot_return', 'closed_native_pool_refuses_before_verifier_and_session_capacity_never_redelivers', 'json_value_nodes_and_container_depth_accept_exact_bounds']}
+        SOURCES = {'runtime/src/auth/session.rs': ('0e86700c45663421341cf68d05ceb1e0606c1cd09cd21ba5113af4eba8d5b46a', 34396, 908), 'runtime/src/auth/session/delivery_wire_tests.rs': ('7ee13a01436dadb5b0102e8993ee544d123d19212a1e1fc8ca0168cbe7339b5f', 35111, 931), 'runtime/src/auth/session/http_bridge_tests.rs': ('9bccff7c72af7ff4c3f345eab88d222fc4e7b30a89f51c8006987f9c38775685', 17591, 484), 'runtime/src/auth/session/http_rate_tests.rs': ('447c3f63fd8696763651df9929afd0cf9ac480e7d0942f5c34e8c6f8ec73e61a', 22379, 640), 'runtime/src/http_server.rs': ('f9dace2fd2fdfecc6ea056921610503411e8077fbfee89b5232c567ab1bddc1f', 78880, 2121), 'runtime/src/http_server/prelogin_tests.rs': ('d473d56ed6ccda073a06c63ec5ecb42d0e4d7149208f766fb3f0c61f00bdaa80', 21110, 589), 'runtime/src/http_server/private_deadline_calibration.rs': ('46c19926ec6fd5c22751b3d6dd7a07fe608c373ffd3320433a79ad47e842fd53', 9368, 255), 'runtime/src/http_server/rate_public.rs': ('56925cfcf211d10abcdb639c8ee1ed44faff9731a7b321b1d2da558c3a6ede0a', 11079, 309), 'runtime/src/http_server/rate_public_tests.rs': ('50afde0c031ca92c668e489fb976056ed5d90625f1a31c9a79d197df9c8628ba', 7407, 211), 'runtime/src/http_server/request_headers_tests.rs': ('1a993e32549d5d60b647427b99892528085b54ccac697fa0d632defa40f6b4cc', 14454, 394), 'runtime/src/http_server/response_budget.rs': ('ba894c38ff30ca09f69a3671c685145d39eb996447a970e0d70a78a027b4f889', 18146, 506), 'runtime/src/http_server/response_finalize.rs': ('036c841558e1afc9709f68b61bc733ebcd0cec58c77d4107c735cb5b3708c3b2', 29812, 852), 'runtime/src/http_server/response_public.rs': ('7b735244cbcb42ff24b74cd1db3eb65600205c9f642cb6284a359bd9c4596bff', 26372, 711), 'runtime/src/http_server/response_public_tests.rs': ('281116b8b1271753683372722c7a531a6414f8e1f4773a388ffeb50ca920be9c', 22303, 653), 'runtime/src/http_server/response_wire.rs': ('7533fa6ff7a570232b6548a1cd21f79a53356ec0bef076cd60b3432a70150664', 24136, 676), 'runtime/src/http_server/tests.rs': ('af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584', 78597, 2201), 'runtime/src/http_server/vary.rs': ('7ebb60822cb53887299866b0a1ca36e118d5861d4a25c44f7f455b90bc49052c', 2674, 70), 'runtime/tests/browser_login_public_api.rs': ('4999e44ad29bf7777a9f92d349eee025c9d3c1112162b7cc7d0524c74e745050', 48454, 1315), 'runtime/tests/cors_public_api.rs': ('be5428a7a8357f180584fc9a39f7ff7f6e04f479919d5bfc27b4bc0da3f001cb', 23095, 686), 'runtime/tests/html_core_api.rs': ('c2ab019831bd7404330cf671f01294a5aa2a34b780547e8f1835317c71bb3ab7', 4463, 130), 'runtime/tests/prelogin_public_api.rs': ('2f30ebb06c3d4233f4d5bb08aacb74fd69d2f4aaba063a8563a608b0c1fd9602', 19366, 538), 'runtime/tests/security_sf01.rs': ('4db4dfcc03bdd70dbabab183eef23e7e90b93ee4ed06c5560351ac24c788adbf', 3275, 103), 'runtime/tests/session_csrf_public_api.rs': ('8f7a3cfe0a18f56d862b88c28dde90a340a197be285c10ea1313f8b0dfe50f96', 43232, 1257), 'runtime/tests/session_public_api.rs': ('793c0f35e2f5b47b26648844abc6df8ce33d1b769632a9101e6db471a450c6a9', 16541, 483), 'runtime/src/http_server/browser_login.rs': ('17252effa839788999212f90b1418bdba27173ef3c230ee4223311ebd4ce64b6', 15014, 408), 'runtime/src/http_server/browser_login_stage_tests.rs': ('220975a888800934f209be4ec4a96449e32f3cedef90119e517d6c01b2dcb3a3', 20701, 553), 'runtime/src/http_server/csrf_http.rs': ('4e6a34f10a61e303cf6bcdeae4767c89b0707cda5ab9cf59509414d6a60ddfbb', 19431, 530), 'scripts/ci/session_deadline_diagnostic.py': ('fd95ce1b20aeb82a44625de40fb343a92b70f36b78d212983cfb5d48ed1aaef5', 67487, 1313), 'scripts/ci/auth_stage_diagnostic.py': ('254afd848d977f17775b83ed43feab29874ad808392229a95e54156ff3e8c50f', 25341, 614), 'scripts/ci/session_native_finish_diagnostic.py': ('c0112f366ffa7691a1459a719447da8c5b3f4c15deceeeded5fdf3f5afe8a62e', 4022, 89), 'scripts/ci/session_private_deadline_diagnostic.py': ('4c67b5bd63f27fdef7f2e3eca66554ef369157015a54b6603a66c47ba72a51e2', 16582, 359), 'scripts/tests/test_session_deadline_diagnostic.py': ('a4263919347b414c9ca02fc0f84a57d99a5961bd60236620af97692e1ba6de0d', 69279, 1114), 'scripts/tests/test_session_native_finish_diagnostic.py': ('7953eaa29624c8ddf24139d9a27ee86350e4f1fa1515eed033d06f38e1530648', 9168, 148), 'runtime/src/http_server/prelogin_http.rs': ('4d7644d3d46d1b2f3d7898a6362e95404bd0df41711644449c742f5955dc8835', 9587, 264), 'runtime/src/http_server/response_attachment.rs': ('fdbc9ed7ee6cf8156590581d9ebf17fe3dee499c05cd27f6cfb149f2c237c4eb', 7597, 213), 'runtime/examples/http_stdlib_baseline.rs': ('234a1358c6527825b0677e693e4fa31727fd36f84211f7a929ea0a99c99cb4d2', 3187, 99)}
+
+
+        def source_bytes(raw, size, lines, digest):
+            if len(raw) > size + lines:
+                raise ValueError('source size mismatch')
+            normalized = raw.replace(b'\r\n', b'\n')
+            if b'\r' in normalized:
+                raise ValueError('bare source carriage return')
+            normalized.decode('utf-8', errors='strict')
+            if len(normalized) != size or hashlib.sha256(normalized).hexdigest() != digest:
+                raise ValueError('frozen source mismatch')
+
+
+        def sources():
+            for name, (digest, size, lines) in SOURCES.items():
+                path = Path(name)
+                if path.is_symlink() or not path.is_file():
+                    raise ValueError('source must be a regular file')
+                with path.open('rb') as handle:
+                    raw = handle.read(size + lines + 1)
+                source_bytes(raw, size, lines, digest)
+            print('frozen_sources=36 verified; LF_or_CRLF_only')
+
+
+        def list_names(text):
+            names, footers = [], []
+            for line in text.splitlines():
+                if not line:
+                    continue
+                entry = re.fullmatch(r'(\S+): test', line)
+                if entry:
+                    names.append(entry[1])
+                    continue
+                footer = re.fullmatch(r'(\d+) tests?, (\d+) benchmarks?', line)
+                if not footer:
+                    raise ValueError('unknown collection shape')
+                footers.append((int(footer[1]), int(footer[2])))
+            if len(names) != len(set(names)) or footers != [(len(names), 0)]:
+                raise ValueError('invalid collection count')
+            return set(names)
+
+
+        def listing(lib, external):
+            library, integration = list_names(lib), list_names(external)
+            prefixes = {
+                'browser_stage': 'http_server::browser_login::stage_tests::',
+                'new_rate': 'http_server::rate_public::tests::',
+                'new_session': 'auth::session::http_bridge::rate_tests::',
+                'old_public': 'http_server::response_public::tests::',
+                'old_owner': 'http_server::request_headers::native_owner_tests::',
+                'old_attachment': 'http_server::response_attachment::tests::',
+                'old_send': 'http_server::response_send::',
+            }
+            for key, prefix in prefixes.items():
+                if {name for name in library if name.startswith(prefix)} != set(GROUPS[key]):
+                    raise ValueError('selected module inventory mismatch')
+            if integration != set(GROUPS['session_normal']):
+                raise ValueError('normal Session inventory mismatch')
+            if not set(GROUPS['old_parts']).issubset(library) or not set(GROUPS['guarded']).issubset(integration):
+                raise ValueError('exact selected case absent')
+
+
+        def result(text, expected, code=0, full=False):
+            if code != 0:
+                raise ValueError('nonzero cargo is not success')
+            starts = re.findall(r'^running (\d+) tests?$', text, re.M)
+            cases = re.findall(r'^test (\S+) \.\.\. (ok|FAILED|ignored[^\n]*)$', text, re.M)
+            totals = re.findall(r'^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored; (\d+) measured; (\d+) filtered out; finished in [^\n]+$', text, re.M)
+            if starts != [str(len(expected))] or len(cases) != len(expected) or len({name for name, _ in cases}) != len(cases):
+                raise ValueError('execution count mismatch')
+            if {name for name, _ in cases} != set(expected) or any(status != 'ok' for _, status in cases):
+                raise ValueError('missing/failed/ignored execution')
+            if len(totals) != 1 or totals[0][:5] != ('ok', str(len(expected)), '0', '0', '0'):
+                raise ValueError('result summary mismatch')
+            if full and totals[0][5] != '0':
+                raise ValueError('full suite filtered cases')
+
+
+        STAGE_SOURCE = 'runtime/src/http_server/browser_login_stage_tests.rs'
+        STAGE_LINES = 553
+        STAGE_SHA = '220975a888800934f209be4ec4a96449e32f3cedef90119e517d6c01b2dcb3a3'
+        STAGE_PHASES = frozenset(('uncaught_panic', 'timer_completion', 'pending_before_deadline',
+                                 'response_status', 'managed_headers', 'owner_retired', 'sanitized_request',
+                                 'consumed_deletion', 'auth_cookie', 'business_fault_entered'))
+        STAGE_CAUSES = {
+            'real issue failed before stage acknowledgement': 'issue_before_ack',
+            'response escaped actual issue stage': 'issue_escaped',
+            'native stage setup wall guard': 'issue_wall_guard',
+            'unattached header fixture has no response Context': 'unattached_context',
+        }
+
+
+        def stage_failures(text):
+            """Only independently FAILED known cases; no rejected text/path is rendered."""
+            failed = set(re.findall(r'^test (\S+) \.\.\. FAILED$', text, re.M))
+            projected = []
+            for name in GROUPS['browser_stage']:
+                if name not in failed:
+                    continue
+                starts = list(re.finditer(r'^---- ' + re.escape(name) + r' stdout ----$', text, re.M))
+                facts = []
+                if len(starts) == 1:
+                    block = text[starts[0].end():]
+                    boundary = re.search(r'^(?:---- .* stdout ----|failures:|successes:|test result:)', block, re.M)
+                    if boundary:
+                        block = block[:boundary.start()]
+                    panics = re.finditer(r"^thread '" + re.escape(name) + r"'(?: \([0-9]{1,20}\))? panicked at ([^\r\n]+):([0-9]{1,7}):([0-9]{1,5}):\n([^\r\n]*)", block, re.M)
+                    for panic in panics:
+                        path, number, column, message = panic.groups()
+                        # Caught business panics are expected by two fixtures. Their
+                        # presence is neither a failed-case oracle nor a failure cause.
+                        if message in ('owned stage verifier panic', 'owned stage handler panic'):
+                            continue
+                        phase_match = re.fullmatch(r'(?:assertion `left == right` failed: )?browser_stage_oracle phase=([a-z_]+)', message)
+                        phase = phase_match[1] if phase_match and phase_match[1] in STAGE_PHASES else 'unavailable'
+                        cause = STAGE_CAUSES.get(message, 'unavailable')
+                        path = path.replace('\\', '/')
+                        allowed = (path == STAGE_SOURCE or path == 'src/http_server/browser_login_stage_tests.rs'
+                                   or path.endswith('/' + STAGE_SOURCE))
+                        if allowed and 1 <= int(number) <= STAGE_LINES and 1 <= int(column) <= 4096:
+                            facts.append(' source=browser_login_stage_tests line=' + str(int(number))
+                                         + ' column=' + str(int(column)) + ' source_sha256=' + STAGE_SHA
+                                         + ' phase=' + phase + ' cause=' + cause)
+                        elif phase != 'unavailable' or cause != 'unavailable':
+                            facts.append(' source=unavailable phase=' + phase + ' cause=' + cause)
+                # Ambiguous/missing blocks/locations remain explicitly unavailable.
+                fact = facts[0] if len(facts) == 1 else ' source=unavailable phase=unavailable cause=unavailable'
+                projected.append('stage_failure case=' + name + fact)
+            return projected
+
+
+        def selftest():
+            case = GROUPS['new_rate'][0]
+            good = 'running 1 test\ntest ' + case + ' ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 99 filtered out; finished in 0.00s\n'
+            result(good, [case])
+            library = [name for key in ('new_rate','new_session','old_public','old_owner','old_parts','old_attachment','old_send','browser_stage') for name in GROUPS[key]]
+            def listed(names):
+                return ''.join(name + ': test\n' for name in names) + '\n' + str(len(names)) + ' tests, 0 benchmarks\n'
+            listing(listed(library), listed(GROUPS['session_normal']))
+            digest = hashlib.sha256(b'x\n').hexdigest()
+            source_bytes(b'x\n', 2, 1, digest)
+            source_bytes(b'x\r\n', 2, 1, digest)
+            negative = [
+                lambda: result(good, [case], 101),
+                lambda: result(good.replace('running 1 test', 'running 0 tests').replace('1 passed', '0 passed'), [case]),
+                lambda: result(good.replace(' ... ok', ' ... ignored').replace('1 passed', '0 passed').replace('0 ignored', '1 ignored'), [case]),
+                lambda: result(good.replace(' ... ok', ' ... FAILED'), [case]),
+                lambda: result(good.replace(case, 'wrong_case'), [case]),
+                lambda: result(good.replace('1 passed', '2 passed'), [case]),
+                lambda: result(good.replace('\n\ntest result:', '\ntest ' + case + ' ... ok\n\ntest result:'), [case]),
+                lambda: listing(listed(library[1:]), listed(GROUPS['session_normal'])),
+                lambda: listing(listed(library), listed([])),
+                lambda: listing(listed(library + [case]), listed(GROUPS['session_normal'])),
+                lambda: source_bytes(b'y\n', 2, 1, digest),
+                lambda: source_bytes(b'x\r', 2, 1, digest),
+                lambda: source_bytes(b'x\nxx', 2, 1, digest),
+                lambda: source_bytes(b'\xff\n', 2, 1, digest),
+            ]
+            for reject in negative:
+                try:
+                    reject()
+                except ValueError:
+                    continue
+                raise ValueError('negative control accepted')
+            result(good.replace('99 filtered out', '0 filtered out'), [case], full=True)
+            try:
+                result(good, [case], full=True)
+            except ValueError:
+                pass
+            else:
+                raise ValueError('full suite filtering accepted')
+            print('synthetic_negative_controls=15 rejected; positive_shapes_and_LF_CRLF=passed; native_evidence=none')
+
+
+        if __name__ == '__main__':
+            try:
+                mode = sys.argv[1]
+                if mode == 'selftest':
+                    selftest()
+                elif mode == 'sources':
+                    sources()
+                elif mode == 'listing':
+                    listing(Path(sys.argv[2]).read_text(encoding='utf-8'), Path(sys.argv[3]).read_text(encoding='utf-8'))
+                    print('new=12 old=28 guarded=1 actual_collection=passed')
+                elif mode == 'full-listing':
+                    if list_names(Path(sys.argv[2]).read_text(encoding='utf-8')) != set(GROUPS['session_full']) or list_names(Path(sys.argv[3]).read_text(encoding='utf-8')) != set(GROUPS['browser_full']):
+                        raise ValueError('diagnostic full inventory mismatch')
+                    print('diagnostic_collection=session11 browser10 passed')
+                elif mode == 'result':
+                    key = sys.argv[2]
+                    code, capture = int(sys.argv[4]), int(sys.argv[5])
+                    with Path(sys.argv[3]).open('rb') as handle:
+                        raw = handle.read(256*1024+1)
+                    if len(raw) > 256*1024:
+                        raise ValueError('bounded capture overflow')
+                    text = raw.decode('utf-8', errors='strict').replace('\r\n','\n')
+                    print('group=' + key + ' cargo_exit=' + str(code) + ' capture_exit=' + str(capture))
+                    for name in GROUPS[key]:
+                        if re.search(r'^test ' + re.escape(name) + r' \.\.\. FAILED$', text, re.M):
+                            print('group=' + key + ' failed_case=' + name)
+                    if capture != 0:
+                        raise ValueError('capture failure')
+                    if key == 'browser_stage':
+                        for fact in stage_failures(text):
+                            print(fact)
+                    result(text, GROUPS[key], code)
+                    print('group=' + key + ' executed=' + str(len(GROUPS[key])) + ' failed=0 ignored=0')
+                else:
+                    raise ValueError('invalid mode')
+            except (ValueError, OSError, KeyError, IndexError):
+                raise SystemExit('closed source/inventory/result guard failed')
+        PY
+        python "$RUNNER_TEMP/sf07-selected-guard.py" selftest
+        python "$RUNNER_TEMP/sf07-selected-guard.py" sources
+        if bash -c 'set -euo pipefail; false | cat'; then
+          exit 1
+        fi
+    - name: Compile and collect existing opt-in diagnostic full targets
+      env:
+        RUSTFLAGS: --cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag
+      shell: bash
+      run: |
+        set -euo pipefail
+        trap 'rm -f "$RUNNER_TEMP"/sf07-*.raw' EXIT
+        python -B scripts/tests/test_session_deadline_diagnostic.py
+        python -B scripts/tests/test_session_native_finish_diagnostic.py
+        cargo test --locked -p nagi-runtime --test session_csrf_public_api --no-run
+        cargo test --locked -p nagi-runtime --test browser_login_public_api --no-run
+        cargo test --locked -p nagi-runtime --test session_csrf_public_api -- --list > "$RUNNER_TEMP/sf07-diag-session-list.raw"
+        cargo test --locked -p nagi-runtime --test browser_login_public_api -- --list > "$RUNNER_TEMP/sf07-diag-browser-list.raw"
+        python "$RUNNER_TEMP/sf07-selected-guard.py" full-listing "$RUNNER_TEMP/sf07-diag-session-list.raw" "$RUNNER_TEMP/sf07-diag-browser-list.raw"
+    - name: Execute full Session and Browser suites once with bounded existing diagnostics
+      env:
+        RUSTFLAGS: --cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag
+      shell: bash
+      run: |
+        set -euo pipefail
+        trap 'rm -f "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"' EXIT
+        if cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | python -c 'import sys; remaining=256*1024+1
+        while True:
+         data=sys.stdin.buffer.read(8192)
+         if not data: break
+         if remaining:
+          sys.stdout.buffer.write(data[:remaining]); remaining-=min(remaining,len(data))
+        sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-session.raw"; then
+          session_status=("${PIPESTATUS[@]}")
+        else
+          session_status=("${PIPESTATUS[@]}")
+        fi
+        if cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys; remaining=256*1024+1
+        while True:
+         data=sys.stdin.buffer.read(8192)
+         if not data: break
+         if remaining:
+          sys.stdout.buffer.write(data[:remaining]); remaining-=min(remaining,len(data))
+        sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-browser.raw"; then
+          browser_status=("${PIPESTATUS[@]}")
+        else
+          browser_status=("${PIPESTATUS[@]}")
+        fi
+        if python scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "${session_status[0]}" "${browser_status[0]}" "$RUNNER_TEMP/session-deadline-diagnostic.json"; then
+          collector_rc=0
+        else
+          collector_rc=$?
+        fi
+        printf 'session_cargo_exit=%s browser_cargo_exit=%s session_capture_exit=%s browser_capture_exit=%s collector_exit=%s\n' "${session_status[0]}" "${browser_status[0]}" "${session_status[1]}" "${browser_status[1]}" "$collector_rc"
+        python - <<'PY'
+        import json, pathlib, sys
+        sys.path.insert(0, 'scripts/ci')
+        import session_deadline_diagnostic as diagnostic
+        path = pathlib.Path(__import__('os').environ['RUNNER_TEMP']) / 'session-deadline-diagnostic.json'
+        with path.open('rb') as stream:
+            raw = stream.read(diagnostic.OUTPUT_LIMIT + 1)
+        if len(raw) > diagnostic.OUTPUT_LIMIT:
+            raise SystemExit('session_closed_record unavailable')
+        record = json.loads(raw)
+        if not diagnostic._closed_record_shape(record, False):
+            raise SystemExit('session_closed_record unavailable')
+        print('session_closed_record=' + json.dumps(record, sort_keys=True, separators=(',', ':')))
+        PY
+        test "${session_status[0]}" -eq 0
+        test "${browser_status[0]}" -eq 0
+        test "${session_status[1]}" -eq 0
+        test "${browser_status[1]}" -eq 0
+        test "$collector_rc" -eq 0
+    - name: Preserve closed diagnostic result only
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: sf07-session-browser-${{ runner.os }}
+        path: ${{ runner.temp }}/session-deadline-diagnostic.json
+        if-no-files-found: ignore
