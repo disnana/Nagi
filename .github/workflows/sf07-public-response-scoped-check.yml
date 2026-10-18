@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "f07dc17cb61b6f539ea92dccfb4a6905a8969725"
+          test "$(git rev-parse HEAD^)" = "63da3783154d200373d5eee5321bc0000e0dda21"
           sha256sum --check <<'HASHES'
           9f71dbbfd5518ad29a4fc27a78bc66cdb4612664abfce05ee68da9fd7c723c87  runtime/src/auth/csrf.rs
           562f5c1ae0cca5b8e6a507efdc3df24cf7c66ce5f7b9a369d3f3ece28ede4a7c  runtime/src/auth/csrf/tests.rs
@@ -56,7 +56,7 @@ jobs:
           3ae5c2fe47b0d7ad35f683a1bbcecf65ecdb3a9a52c99c75ccabd996cf670b32  runtime/src/http_server/response_budget.rs
           c75e7de88053bce47378266e225fb0339d7efacf3e986b925a03008cb54a7291  runtime/src/http_server/response_finalize.rs
           db2a3257dcf13e482decef7d11fd7a31d24279fb9c6a499b74565ac7ea20b8b2  runtime/src/http_server/response_public.rs
-          30134db4b34d1bbdd637c23e11dbed5d01e998296634e7fb21f5f2104e4898d1  runtime/src/http_server/response_public_tests.rs
+          fc863dcab656af3005e3d46f2bcfabc23ff5005b1da93291049e01a6a82217df  runtime/src/http_server/response_public_tests.rs
           ac7e094e57ad0671dc1e562e23790379d98a9d5d9a751a011c02eb8d31a61607  runtime/src/http_server/response_send.rs
           964761279058fa67a53a393bf2892229e224cc7612bb57df67bb65c5d1fd1e4b  runtime/src/http_server/response_wire.rs
           a2f59568832adfaca1a7ae7e0c480da3a608228ec47d1ae15d4b02cd05b59eb9  runtime/src/http_server/security_tests.rs
@@ -85,14 +85,20 @@ jobs:
           print('public_cases=10 lifetime_cases=2 inventory=passed')
           PY
       - name: Execute public response contracts once
+        shell: bash
         run: |
+          set -euo pipefail
           cargo test --locked -p nagi-runtime --lib http_server::response_public::tests:: | tee "$RUNNER_TEMP/u4-public.log"
       - name: Execute exact native metadata lifetime regressions once
+        shell: bash
         run: |
+          set -euo pipefail
           cargo test --locked -p nagi-runtime --lib http_server::request_headers::native_owner_tests::native_extensions_follow_last_header_view_and_drop_before_request_receipt -- --exact | tee "$RUNNER_TEMP/u4-owner.log"
           cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests::actual_native_parts_extensions_live_through_handler_and_drop_after_join -- --exact | tee "$RUNNER_TEMP/u4-parts.log"
       - name: Execute previously verified affected native attachment and send cases once
+        shell: bash
         run: |
+          set -euo pipefail
           cargo test --locked -p nagi-runtime --lib http_server::response_attachment:: | tee "$RUNNER_TEMP/u4-attachment.log"
           cargo test --locked -p nagi-runtime --lib http_server::response_send:: | tee "$RUNNER_TEMP/u4-send.log"
       - name: Enforce all selected executions without ignored or zero-test success

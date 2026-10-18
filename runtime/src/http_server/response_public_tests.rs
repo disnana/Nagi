@@ -260,7 +260,7 @@ async fn public_first_request_header_owner_survives_native_join_and_permit_reuse
     .unwrap();
     options = authority(
         options,
-        "http://localhost",
+        "https://localhost",
         vec!["localhost".into()],
         1,
         128,
@@ -577,7 +577,7 @@ async fn retained_same_producer_response_uses_current_request_cors_on_real_wire(
     .unwrap();
     options = authority(
         options,
-        "http://localhost",
+        "https://localhost",
         vec!["localhost".into()],
         1,
         128,
