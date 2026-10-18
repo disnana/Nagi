@@ -23,7 +23,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "c0e1d8b6e8b66a44da078f8380704833d60fdf89"
+          test "$(git rev-parse HEAD^)" = "e3d2afcc48f2b4ec50e2d0d244030457ce504208"
           sha256sum --check <<'HASHES'
           9f71dbbfd5518ad29a4fc27a78bc66cdb4612664abfce05ee68da9fd7c723c87  runtime/src/auth/csrf.rs
           40cb53addb3f39165339e813b900f0a3acf25d85e95ac851601809217e6322a5  runtime/src/auth/session.rs
@@ -31,12 +31,22 @@ jobs:
           8e47b5d244000fbaad57c58e68313527c4e8d949844692cad966d0a90b768de1  runtime/src/auth/session/secrets.rs
           bf760889d97d663ea4a1e4a2c6a5eaa5df12cc13e623d8cb4807d3de024fa603  runtime/src/html.rs
           b1d1f65cfdb530de91427d99a9ac3935087143664c169872312279e667634a01  runtime/src/http_server.rs
+          c344bd211acc121691a8640f92a8ce13a3ba99c654b631673c7de67f19844dce  runtime/src/http_server/authority_tests.rs
           803945bfa86e0c983517b6eff8aa4cb5cc8e5f1ed9c0efde511727a3165b2e60  runtime/src/http_server/browser_login.rs
+          a589752a60c6f606c80099d8a6fec06bfa4ec344f3c3d3956be8737fec84921d  runtime/src/http_server/browser_login_stage_tests.rs
           4da3855c8c9adf4b40db3e686bea5fd0b8d9fddab657ac4eb2948b069f62d12c  runtime/src/http_server/cors.rs
+          0493602e12133d26e1cc32237a71cf37a03bff9fcebe592f1cace34f6190dbee  runtime/src/http_server/cors/tests.rs
+          c4a0923b82fd20c68746749de6b2484be6cf5213157203c05d06664897791ed2  runtime/src/http_server/csrf_deadline_tests.rs
           3de4934f5cd753f93e1075e484ad3225f775604f732456fdc08f51293c1359f8  runtime/src/http_server/csrf_http.rs
+          491101ba70d10ae87029fc5de71c32d6ee69d1977b0ac07720093f27f9ccd535  runtime/src/http_server/finalizer_html_tests.rs
+          35bf93deac9e59e83b1539b5b03c51e7551274ad35186deb69264c081dd4a884  runtime/src/http_server/finalizer_tests.rs
           509d48c0098e61b69b57df3f962ebdfff1ab9db34c16d1f674a2a63ccf5fa3d9  runtime/src/http_server/origin.rs
+          961252be58dc053ae449b9b5183e70aeced984e8f5b9f4284de7a33c24028492  runtime/src/http_server/panic_tests.rs
           f948ccd2af89f168d4bab6b9225c69162d381ff692b5eac5e67e18370e68878a  runtime/src/http_server/prelogin_http.rs
+          825e310dee26af7364bd0b00b2c055b90878ea450ad039279a70cedfeeb88a8e  runtime/src/http_server/prelogin_tests.rs
+          aefe002a17686316044912d977bbca531a2ed12427412e015319771e9628a19a  runtime/src/http_server/private_deadline_calibration.rs
           4b18e1a8e6c55b738aef2e117168509d643beafec5a2e22d4aa73e52a029114a  runtime/src/http_server/request_headers.rs
+          85dade5b1a4d504dc1ce1549bb8fcf76c86a267da60e55b1abba057c9743a767  runtime/src/http_server/request_headers_tests.rs
           d14c51b4db6e74c144a1361914e8996a85bfff065ac9758c7b5c1e912870d8e7  runtime/src/http_server/response_attachment.rs
           92b5688470c0a1558d9a365490cf7d6cfe635b8e30dd1dbabf0e02889bcb53db  runtime/src/http_server/response_attachment_tests.rs
           3ae5c2fe47b0d7ad35f683a1bbcecf65ecdb3a9a52c99c75ccabd996cf670b32  runtime/src/http_server/response_budget.rs
@@ -45,9 +55,12 @@ jobs:
           ac8739389b8d54d82474ff117e45a828964d5b25f43948e367506c03c1a41b6e  runtime/src/http_server/response_public_tests.rs
           1d40db93b992834c163c043b49bd45f6f66dd7098dfee8818ed8cdb17396060d  runtime/src/http_server/response_send.rs
           964761279058fa67a53a393bf2892229e224cc7612bb57df67bb65c5d1fd1e4b  runtime/src/http_server/response_wire.rs
+          a2f59568832adfaca1a7ae7e0c480da3a608228ec47d1ae15d4b02cd05b59eb9  runtime/src/http_server/security_tests.rs
+          301cdade3b0364f0934e147cae469d699f70dc0b15b2cabd9af8a53ae01ea350  runtime/src/http_server/send_deadline_tests.rs
+          67751d6012bec7dfe9e8468545ab244d8d16eb8b8e3ed0a13bdca81966769628  runtime/src/http_server/tests.rs
           b27958e47a413674cbe28b35ded1677cde6ac3a0cef4c125f2265d454f3f9ec6  runtime/src/http_server/vary.rs
           f1677ca7a513d5614b613b267f6ba83e468d87a30cf9aa443a3283688d4ff9a9  runtime/src/security_sf07_private/owned_state_lock.rs
           a6ce41df08c014b729acc445f0a311088c46856929ba9d8e05a314025f7ac54b  runtime/src/security_sf07_private/quota.rs
           HASHES
-      - name: Typecheck production library before test consumers
-        run: cargo check --locked -p nagi-runtime --lib
+      - name: Compile migrated library tests before native execution
+        run: cargo test --locked -p nagi-runtime --lib --no-run

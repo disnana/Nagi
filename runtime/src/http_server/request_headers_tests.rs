@@ -253,7 +253,7 @@ async fn extension_handler(
     if state.panic {
         panic!("fixed extension handler panic");
     }
-    Ok(text(Status::OK, "owned"))
+    text(response_context(&request), Status::OK, "owned")
 }
 
 #[tokio::test]

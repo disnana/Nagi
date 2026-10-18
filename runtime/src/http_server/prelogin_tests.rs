@@ -267,6 +267,8 @@ async fn origin_credential_and_body_rejections_never_issue_state() {
 }
 #[tokio::test]
 async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
+    let response_request = response_public::tests::request_fixture(1);
+    let response_context = response_context(&response_request);
     let f = Fixture::new(1000).await;
     let first = prelogin::HttpOwner::new(
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
@@ -311,7 +313,7 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     f.pool.bootstrap_http(&owner, None).await.unwrap();
     let seal = owner.seal().unwrap();
     let denied = finalize_prelogin(
-        PreloginCompletion::Replacement(Some(seal), empty(Status::OK)),
+        PreloginCompletion::Replacement(Some(seal), empty(response_context, Status::OK).unwrap()),
         &owner,
         false,
         &f.pool,
@@ -333,8 +335,8 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     assert!(owner.seal().is_err());
     f.stop().await;
     for response in [
-        empty(Status::NOT_MODIFIED),
-        conflicting_cache_for_test(empty(Status::OK)),
+        empty(response_context, Status::NOT_MODIFIED).unwrap(),
+        conflicting_cache_for_test(empty(response_context, Status::OK).unwrap()),
     ] {
         let f = Fixture::new(1000).await;
         let owner = prelogin::HttpOwner::new(

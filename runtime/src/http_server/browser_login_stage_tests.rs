@@ -171,12 +171,14 @@ async fn handler(request: Request, state: Arc<State>, scope: AuthScope) -> Resul
     assert!(!request.headers.contains_key(names::COOKIE));
     assert!(!request.headers.contains_key("x-csrf-token"));
     if state.mode == Mode::Plain {
-        return Ok(text(Status::OK, "owned"));
+        return text(response_context(&request), Status::OK, "owned");
     }
     let intent = session::issue(&state.store, scope)
         .await
         .map_err(|_| Error::internal("owned stage issue refused"))?;
-    let response = session::apply(text(Status::OK, "owned"), intent).unwrap();
+    let response = text(response_context(&request), Status::OK, "owned")?;
+    let response = session::apply(response, intent)
+        .map_err(|_| Error::internal("owned stage session apply refused"))?;
     state.stats.issue_ack.store(true, Ordering::SeqCst);
     // This suspension is reached only after the real Session issue/apply
     // returned. The original prepared_handler future retains the real response.

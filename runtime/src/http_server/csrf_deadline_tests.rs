@@ -60,7 +60,9 @@ impl Fixture {
         )
         .unwrap();
         let intent = session::issue(&store, scope).await.unwrap();
-        let response = session::apply(empty(Status::OK), intent).unwrap();
+        let request = response_public::tests::request_fixture(1);
+        let response = empty(response_context(&request), Status::OK).unwrap();
+        let response = session::apply(response, intent).unwrap();
         let (status, headers) = session_delivery_headers_for_test(response, &owner);
         assert_eq!(status.as_u16(), 200);
         let mut cookie = HeaderMap::new();

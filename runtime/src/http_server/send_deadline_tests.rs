@@ -221,12 +221,15 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
     };
     #[cfg(not(windows))]
     let (accepted_send_before, accepted_send_after) = (0_i32, 0_i32);
+    let response_request = response_public::tests::request_fixture(STALLED_BODY_LENGTH);
     let reply = append_header(
-        representation(
+        response_public::tests::adopt_bytes_fixture(
+            response_context(&response_request),
             Status::OK,
-            BodyKind::Binary,
             Bytes::from(vec![b'x'; STALLED_BODY_LENGTH]),
-        ),
+            BodyKind::Binary,
+        )
+        .unwrap(),
         "x-padding",
         &vec![b'p'; 8192],
     )
@@ -380,8 +383,8 @@ async fn header_flush_before_buffered_frame_keeps_original_send_end() {
 
 #[tokio::test]
 async fn empty_response_completion_does_not_expire_idle_keep_alive() {
-    async fn reply(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(empty(Status::NO_CONTENT))
+    async fn reply(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+        empty(response_context(&request), Status::NO_CONTENT)
     }
     let app = route(app_default(()), Method::GET, "/", public_policy(), reply).unwrap();
     let probe = Arc::new(lifecycle_probe::Probe::default());
@@ -404,8 +407,8 @@ async fn empty_response_completion_does_not_expire_idle_keep_alive() {
 
 #[tokio::test]
 async fn buffered_response_completion_does_not_expire_idle_keep_alive() {
-    async fn reply(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(text(Status::OK, "ok"))
+    async fn reply(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+        text(response_context(&request), Status::OK, "ok")
     }
     let app = route(app_default(()), Method::GET, "/", public_policy(), reply).unwrap();
     let probe = Arc::new(lifecycle_probe::Probe::default());

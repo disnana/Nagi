@@ -22,7 +22,9 @@ fn managed(response: &axum::http::Response<BufferedBody>) {
 
 #[test]
 fn html_response_consumes_a_checked_document_and_keeps_debug_opaque() {
-    let response = html_response(Status::CREATED, document());
+    let request = response_public::tests::request_fixture(256);
+    let context = response_context(&request);
+    let response = html_response(context, Status::CREATED, document()).unwrap();
     assert_eq!(response.body(), EXPECTED_DOCUMENT);
     assert!(!format!("{response:?}").contains("Items"));
     let response = response.into_http(false);
@@ -37,16 +39,22 @@ fn html_response_consumes_a_checked_document_and_keeps_debug_opaque() {
 
 #[test]
 fn content_encoding_is_reserved_for_html_only() {
+    let request = response_public::tests::request_fixture(256);
+    let context = response_context(&request);
     for name in ["Content-Encoding", "CONTENT-ENCODING", "content-encoding"] {
-        let error =
-            append_header_text(html_response(Status::OK, document()), name, "gzip").unwrap_err();
+        let error = append_header_text(
+            html_response(context, Status::OK, document()).unwrap(),
+            name,
+            "gzip",
+        )
+        .unwrap_err();
         assert!(matches!(error.kind, ErrorKind::Invalid));
     }
     for response in [
-        empty(Status::OK),
-        text(Status::OK, "Item"),
-        bytes(Status::OK, b"Item"),
-        json(Status::OK, &vec![1]).unwrap(),
+        empty(context, Status::OK).unwrap(),
+        text(context, Status::OK, "Item").unwrap(),
+        bytes(context, Status::OK, b"Item").unwrap(),
+        json(context, Status::OK, &vec![1]).unwrap(),
     ] {
         let response = append_header_text(
             append_header_text(response, "Content-Encoding", "gzip").unwrap(),
@@ -70,14 +78,20 @@ fn content_encoding_is_reserved_for_html_only() {
 
 #[test]
 fn finalizer_rejects_an_internal_html_encoding_invariant_violation() {
-    let mut response = html_response(Status::CREATED, document());
+    let request = response_public::tests::request_fixture(256);
+    let mut response =
+        html_response(response_context(&request), Status::CREATED, document()).unwrap();
     // Private invariant injection, not a public factory or network request.
     response
+        .produced
         .headers
-        .insert(names::CONTENT_ENCODING, HeaderValue::from_static("gzip"));
+        .append(b"content-encoding", b"gzip")
+        .unwrap();
     response
+        .produced
         .headers
-        .insert("x-trace", HeaderValue::from_static("discard"));
+        .append(b"x-trace", b"discard")
+        .unwrap();
     let response = response.into_http(false);
     managed(&response);
     assert_eq!(response.status(), Status::INTERNAL_SERVER_ERROR.0);
@@ -92,7 +106,11 @@ fn finalizer_rejects_an_internal_html_encoding_invariant_violation() {
 
 #[test]
 fn typed_head_and_bodyless_statuses_follow_owned_representation_rules() {
-    let response = html_response(Status::OK, document()).into_http(true);
+    let request = response_public::tests::request_fixture(256);
+    let context = response_context(&request);
+    let response = html_response(context, Status::OK, document())
+        .unwrap()
+        .into_http(true);
     managed(&response);
     assert!(response.body().bytes.is_empty());
     assert_eq!(
@@ -109,7 +127,9 @@ fn typed_head_and_bodyless_statuses_follow_owned_representation_rules() {
             Status::RESET_CONTENT,
             Status::NOT_MODIFIED,
         ] {
-            let response = html_response(status, document()).into_http(head);
+            let response = html_response(context, status, document())
+                .unwrap()
+                .into_http(head);
             managed(&response);
             assert!(response.body().bytes.is_empty());
             assert!(!response.headers().contains_key(names::CONTENT_TYPE));
@@ -144,10 +164,13 @@ fn typed_head_and_bodyless_statuses_follow_owned_representation_rules() {
 
 #[test]
 fn an_ordinary_html_business_mapper_uses_the_standard_finalizer() {
-    fn mapper(_: i64) -> Response {
-        html_response(Status::BAD_REQUEST, document())
+    fn mapper(context: &ResponseContext, _: i64) -> Result<Response, Error> {
+        html_response(context, Status::BAD_REQUEST, document())
     }
-    let response = (app((), mapper).mapper)(7).into_http(false);
+    let request = response_public::tests::request_fixture(256);
+    let response = (app((), mapper).mapper)(response_context(&request), 7)
+        .unwrap()
+        .into_http(false);
     managed(&response);
     assert_eq!(response.status(), Status::BAD_REQUEST.0);
     assert_eq!(response.body().bytes.as_ref(), EXPECTED_DOCUMENT);
