@@ -138,15 +138,18 @@ async fn established_expired_lease_wins_over_an_exhausted_subject_bucket() {
         Arc::clone(&owner.lease),
     )
     .unwrap();
-    before_handler(
-        context,
-        Some(&rate),
-        &owner.lease,
-        PolicySource::Bearer,
-        false,
-    )
-    .await
-    .unwrap_or_else(|_| panic!("first subject admission failed"));
+    assert!(
+        before_handler(
+            context,
+            Some(&rate),
+            &owner.lease,
+            PolicySource::Bearer,
+            false,
+        )
+        .await
+        .is_none(),
+        "first subject admission failed"
+    );
     let other = LeaseOwner::new_http(Instant::now() + Duration::from_secs(10)).unwrap();
     let _scope = AuthScope::bind(
         VerifiedIdentity::from_verified(7, Instant::now() + Duration::from_secs(30)).unwrap(),
@@ -157,7 +160,6 @@ async fn established_expired_lease_wins_over_an_exhausted_subject_bucket() {
     drop(other);
     let refusal = before_handler(context, Some(&rate), &lease, PolicySource::Bearer, false)
         .await
-        .err()
         .expect("retired lease must fail");
     assert_eq!(refusal.status(), StatusCode::UNAUTHORIZED);
 }

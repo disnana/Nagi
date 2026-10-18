@@ -262,26 +262,32 @@ pub(super) async fn before_handler(
     lease: &Arc<Lease>,
     source: PolicySource,
     head: bool,
-) -> Result<(), HttpResponse> {
-    lease
-        .validate()
-        .map_err(|failure| security_response(context, failure, source, head))?;
-    let rate = rate.ok_or_else(|| {
-        HttpResponse::rate_refusal(context, FallbackStatus::Internal, source, head)
-    })?;
+) -> Option<HttpResponse> {
+    if let Err(failure) = lease.validate() {
+        return Some(security_response(context, failure, source, head));
+    }
+    let Some(rate) = rate else {
+        return Some(HttpResponse::rate_refusal(
+            context,
+            FallbackStatus::Internal,
+            source,
+            head,
+        ));
+    };
     match rate.subject(lease) {
         Ok(()) => {}
         Err(SubjectFailure::Authority(failure)) => {
-            return Err(security_response(context, failure, source, head))
+            return Some(security_response(context, failure, source, head))
         }
         Err(SubjectFailure::Rate(reason)) => {
-            return Err(HttpResponse::rate_refusal(context, reason, source, head))
+            return Some(HttpResponse::rate_refusal(context, reason, source, head))
         }
     }
     lease
         .finish_http_auth()
         .await
-        .map_err(|failure| security_response(context, failure, source, head))
+        .err()
+        .map(|failure| security_response(context, failure, source, head))
 }
 
 #[cfg(test)]

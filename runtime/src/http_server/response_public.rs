@@ -600,7 +600,10 @@ impl HttpResponse {
             let next = methods
                 .clone()
                 .chain(include_head.then_some("HEAD"))
-                .filter(|method| previous.map_or(true, |old| *method > old))
+                .filter(|method| match previous {
+                    None => true,
+                    Some(old) => *method > old,
+                })
                 .min()
                 .ok_or(Diagnostic::Fault)?;
             if index != 0 {

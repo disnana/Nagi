@@ -335,13 +335,15 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
             // production core borrows it; cancellation drops it before SQL reads.
             let owner = witness.owner;
             dispatch_owned(
-                response_context(&response_request),
-                &pool,
-                &prepare,
+                DispatchBorrowed {
+                    response_context: response_context(&response_request),
+                    pool: &pool,
+                    prepare: &prepare,
+                    options: &options,
+                    owner: &owner,
+                },
                 Arc::clone(&state),
                 witness.input,
-                &options,
-                &owner,
                 admitted,
             )
             .await

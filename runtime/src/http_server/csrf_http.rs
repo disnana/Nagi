@@ -242,14 +242,17 @@ async fn dispatch_tokens_inner(
             .map_err(|e| security_response(context, e, PolicySource::Session, head))?;
         // Identity and the fixed endpoint's empty-body checks succeeded. Charge
         // subject before either deferred Session touch or token issuance.
-        rate_public::before_handler(
+        if let Some(response) = rate_public::before_handler(
             context,
             parts.headers.request_rate(),
             &owner.lease.lease,
             PolicySource::Session,
             head,
         )
-        .await?;
+        .await
+        {
+            return Err(response);
+        }
         if head {
             return Ok((binding, None));
         }

@@ -135,35 +135,48 @@ where
     // Keep native remainder/unused body alive past actual owner Drop, exactly
     // as the original wrapper. The shared core only borrows these one-shot parts.
     dispatch_owned(
-        &context,
-        pool,
-        prepare,
+        DispatchBorrowed {
+            response_context: &context,
+            pool,
+            prepare,
+            options,
+            owner: &owner,
+        },
         state,
         Input::Wire {
             parts: &mut parts,
             body: &mut body,
         },
-        options,
-        &owner,
         admitted,
     )
     .await
 }
 
+struct DispatchBorrowed<'a, S> {
+    response_context: &'a ResponseContext,
+    pool: &'a Pool,
+    prepare: &'a BrowserPrepare<S>,
+    options: &'a Options,
+    owner: &'a HttpOwner,
+}
+
 async fn dispatch_owned<S, B>(
-    response_context: &ResponseContext,
-    pool: &Pool,
-    prepare: &BrowserPrepare<S>,
+    borrowed: DispatchBorrowed<'_, S>,
     state: Arc<S>,
     input: Input<'_, B>,
-    options: &Options,
-    owner: &HttpOwner,
     admitted: Instant,
 ) -> HttpResponse
 where
     S: Send + Sync + 'static,
     B: hyper::body::Body<Data = Bytes> + Unpin,
 {
+    let DispatchBorrowed {
+        response_context,
+        pool,
+        prepare,
+        options,
+        owner,
+    } = borrowed;
     #[cfg(nagi_browser_login_diag)]
     let observer = diag::Observer::new(&owner.lease_owner().lease);
     let terminal =

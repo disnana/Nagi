@@ -1106,7 +1106,7 @@ where
             let headers = request.headers.share();
             let context = headers.response_context();
             let head = request.is_head();
-            if let Err(response) =
+            if let Some(response) =
                 rate_public::before_handler(context, headers.request_rate(), &lease, source, head)
                     .await
             {
