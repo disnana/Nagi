@@ -612,15 +612,7 @@ fn security_response(
     source: PolicySource,
     head: bool,
 ) -> HttpResponse {
-    let status = match failure.kind() {
-        FailureKind::InvalidRequest => Status::BAD_REQUEST,
-        FailureKind::InvalidCredential | FailureKind::Expired => Status::UNAUTHORIZED,
-        FailureKind::Denied => Status::FORBIDDEN,
-        FailureKind::Unavailable => Status::SERVICE_UNAVAILABLE,
-        FailureKind::Internal => Status::INTERNAL_SERVER_ERROR,
-    };
-    HttpResponse::terminal_profile(Arc::clone(&context.fallback), status, source, head, true)
-        .established_refusal()
+    HttpResponse::security_refusal(context, failure.kind(), source, head).established_refusal()
 }
 
 fn bearer_headers(request: &Request) -> Result<(), Failure> {

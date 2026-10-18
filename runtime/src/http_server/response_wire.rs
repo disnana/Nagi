@@ -2,6 +2,7 @@
 //! Logical storage credits include pinned http1.5.0 conversion/growth peaks;
 //! allocator size classes/RSS and universal native OOM recovery are excluded.
 use super::*;
+use crate::auth::FailureKind;
 use axum::http::{HeaderMap, HeaderName, HeaderValue};
 
 #[derive(Clone, Copy)]
@@ -448,9 +449,10 @@ pub(in crate::http_server) enum FallbackStatus {
     MisdirectedRequest,
     HeaderFieldsTooLarge,
     VersionNotSupported,
+    Security(FailureKind),
 }
 impl FallbackStatus {
-    pub(in crate::http_server) fn all() -> [Self; 17] {
+    pub(in crate::http_server) fn all() -> [Self; 23] {
         [
             Self::Limited {
                 retry_seconds: u64::MAX,
@@ -471,6 +473,12 @@ impl FallbackStatus {
             Self::MisdirectedRequest,
             Self::HeaderFieldsTooLarge,
             Self::VersionNotSupported,
+            Self::Security(FailureKind::InvalidCredential),
+            Self::Security(FailureKind::Denied),
+            Self::Security(FailureKind::Expired),
+            Self::Security(FailureKind::InvalidRequest),
+            Self::Security(FailureKind::Unavailable),
+            Self::Security(FailureKind::Internal),
         ]
     }
     pub(in crate::http_server) fn code(self) -> u16 {
@@ -492,6 +500,13 @@ impl FallbackStatus {
             Self::MisdirectedRequest => 421,
             Self::HeaderFieldsTooLarge => 431,
             Self::VersionNotSupported => 505,
+            Self::Security(kind) => match kind {
+                FailureKind::InvalidCredential | FailureKind::Expired => 401,
+                FailureKind::Denied => 403,
+                FailureKind::InvalidRequest => 400,
+                FailureKind::Unavailable => 503,
+                FailureKind::Internal => 500,
+            },
         }
     }
     pub(in crate::http_server) fn body(self) -> &'static [u8] {
@@ -513,6 +528,7 @@ impl FallbackStatus {
             Self::MisdirectedRequest => b"Misdirected Request",
             Self::HeaderFieldsTooLarge => b"Request Header Fields Too Large",
             Self::VersionNotSupported => b"HTTP Version Not Supported",
+            Self::Security(kind) => kind.message().as_bytes(),
         }
     }
 }

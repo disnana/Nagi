@@ -10,6 +10,146 @@ use tokio::{
     sync::oneshot,
 };
 
+type SecurityRefusalCase = (fn() -> Failure, u16, &'static [u8]);
+fn stable_security_refusal_cases() -> [SecurityRefusalCase; 6] {
+    [
+        (Failure::invalid_credential, 401, b"invalid credential"),
+        (Failure::denied, 403, b"permission denied"),
+        (Failure::expired, 401, b"authority expired"),
+        (Failure::invalid_request, 400, b"invalid security request"),
+        (Failure::unavailable, 503, b"security service unavailable"),
+        (Failure::internal, 500, b"security service failure"),
+    ]
+}
+
+#[test]
+fn security_refusals_keep_six_stable_bodies_head_cors_and_challenges() {
+    for (failure, status, body) in stable_security_refusal_cases() {
+        assert_eq!(failure().message().as_bytes(), body);
+        for source in [PolicySource::Bearer, PolicySource::Session] {
+            for head in [false, true] {
+                for fault in [false, true] {
+                    let mut limits = limits_fixture(256, 1);
+                    limits.fallback_responses = 2;
+                    let options =
+                        with_response_limits(capacity(default_options(), 1, 1).unwrap(), limits)
+                            .unwrap();
+                    let runtime = RuntimeResponses::checked(&options, 0).unwrap();
+                    let mut context = runtime.context();
+                    context.profile.origin =
+                        Some(HeaderValue::from_static("https://app.example.invalid"));
+                    context.profile.credentials = true;
+                    // Early auth denial may precede source-profile attachment.
+                    context.profile.dependencies = vary::Dependencies::ORIGIN;
+                    let mut response = security_response(&context, failure(), source, head);
+                    if fault {
+                        response
+                            .headers
+                            .as_mut()
+                            .unwrap()
+                            .inject_fault(Diagnostic::Fault);
+                    }
+                    // An actual new internal fault still classifies unsealed
+                    // 400/503 as500. Established401/403 keep their prior refusal.
+                    let (expected_status, expected_body) = if fault && matches!(status, 400 | 503) {
+                        (500, b"internal error".as_slice())
+                    } else {
+                        (status, body)
+                    };
+                    let ledger = response_send::SendLedger::new(
+                        Arc::clone(&runtime.producer),
+                        Arc::clone(&runtime.fallback),
+                    );
+                    let native = response.transfer_native(&ledger, head).unwrap();
+                    assert_eq!(native.status().as_u16(), expected_status);
+                    assert_eq!(
+                        native.body().bytes.as_ref(),
+                        if head { b"".as_slice() } else { expected_body }
+                    );
+                    assert_eq!(
+                        native.headers()[names::CONTENT_LENGTH].to_str().unwrap(),
+                        expected_body.len().to_string()
+                    );
+                    assert_eq!(
+                        native.headers()[names::CONTENT_TYPE],
+                        "text/plain; charset=utf-8"
+                    );
+                    assert_eq!(native.headers()[names::CACHE_CONTROL], "no-store");
+                    assert_eq!(
+                        native.headers()[names::CONTENT_SECURITY_POLICY],
+                        CONTENT_SECURITY_POLICY
+                    );
+                    assert_eq!(native.headers()[names::X_CONTENT_TYPE_OPTIONS], "nosniff");
+                    assert_eq!(native.headers()[names::CONNECTION], "close");
+                    assert_eq!(
+                        native.headers()[names::ACCESS_CONTROL_ALLOW_ORIGIN],
+                        "https://app.example.invalid"
+                    );
+                    assert_eq!(
+                        native.headers()[names::ACCESS_CONTROL_ALLOW_CREDENTIALS],
+                        "true"
+                    );
+                    assert_eq!(
+                        native.headers()[names::VARY],
+                        "Authorization, Cookie, Origin"
+                    );
+                    assert_eq!(
+                        native
+                            .headers()
+                            .get(names::WWW_AUTHENTICATE)
+                            .map(|v| v.as_bytes()),
+                        if expected_status == 401 {
+                            Some(if source == PolicySource::Session {
+                                b"Session".as_slice()
+                            } else {
+                                b"Bearer".as_slice()
+                            })
+                        } else {
+                            None
+                        }
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn security_replacement_retains_typed_body_and_generic_status_fallback_stays_generic() {
+    for (failure, status, body) in stable_security_refusal_cases() {
+        let mut limits = limits_fixture(256, 1);
+        limits.fallback_responses = 2;
+        let options =
+            with_response_limits(capacity(default_options(), 1, 1).unwrap(), limits).unwrap();
+        let runtime = RuntimeResponses::checked(&options, 0).unwrap();
+        let context = runtime.context();
+        let response = security_response(&context, failure(), PolicySource::Session, false);
+        let replacement =
+            response.replacement(Status(StatusCode::from_u16(status).unwrap()), false, true);
+        drop(response);
+        let ledger = response_send::SendLedger::new(
+            Arc::clone(&runtime.producer),
+            Arc::clone(&runtime.fallback),
+        );
+        let native = replacement.transfer_native(&ledger, false).unwrap();
+        assert_eq!(native.status().as_u16(), status);
+        assert_eq!(native.body().bytes.as_ref(), body);
+    }
+    for (status, body) in [
+        (Status::UNAUTHORIZED, b"unauthorized".as_slice()),
+        (Status::BAD_REQUEST, b"Bad Request".as_slice()),
+        (
+            Status::SERVICE_UNAVAILABLE,
+            b"service unavailable".as_slice(),
+        ),
+    ] {
+        let request = request_fixture(256);
+        let context = response_context(&request);
+        let response = HttpResponse::terminal(Arc::clone(&context.fallback), status, false, true);
+        assert_eq!(response.body().bytes.as_ref(), body);
+    }
+}
+
 pub(in crate::http_server) fn headers_fixture(map: HeaderMap, body_bound: usize) -> RequestHeaders {
     let body = i64::try_from(body_bound).unwrap();
     let retained = body

@@ -444,7 +444,7 @@ impl PreparedResponse {
             response.cookie(cookie)?;
             response.vary(VarySet::COOKIE);
         }
-        if matches!(intent.reason, FallbackStatus::Unauthorized) {
+        if intent.reason.code() == 401 {
             response.plan.append(
                 ManagedHeader::WwwAuthenticate,
                 if intent.source == PolicySource::Session {

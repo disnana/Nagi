@@ -362,7 +362,7 @@ pub(super) struct HttpResponse {
     // Set only by closed dispatcher/auth refusal paths, never inferred from a
     // user Response status or construction Context.
     runtime_refusal: Option<Status>,
-    rate_reason: Option<FallbackStatus>,
+    terminal_reason: Option<FallbackStatus>,
     #[cfg(test)]
     allow_allocations: usize,
 }
@@ -426,7 +426,7 @@ impl HttpResponse {
             dependencies: vary::Dependencies::default(),
             deletion: None,
             runtime_refusal: None,
-            rate_reason: None,
+            terminal_reason: None,
             #[cfg(test)]
             allow_allocations: 0,
         }
@@ -446,10 +446,22 @@ impl HttpResponse {
         head: bool,
         close: bool,
     ) -> Self {
-        let reason = FallbackStatus::all()
-            .into_iter()
-            .find(|reason| reason.code() == status.0.as_u16())
-            .unwrap_or(FallbackStatus::Internal);
+        Self::terminal_profile_reason(fallback, status, source, head, close, None)
+    }
+    fn terminal_profile_reason(
+        fallback: Arc<FallbackLedger>,
+        status: Status,
+        source: PolicySource,
+        head: bool,
+        close: bool,
+        reason: Option<FallbackStatus>,
+    ) -> Self {
+        let reason = reason.unwrap_or_else(|| {
+            FallbackStatus::all()
+                .into_iter()
+                .find(|reason| reason.code() == status.0.as_u16())
+                .unwrap_or(FallbackStatus::Internal)
+        });
         let intent = fallback
             .intent(reason)
             .context(source, head, response_budget::finalize::VarySet::EMPTY)
@@ -477,11 +489,19 @@ impl HttpResponse {
                 dependencies: vary::Dependencies::default(),
                 deletion: None,
                 runtime_refusal: None,
-                rate_reason: None,
+                terminal_reason: None,
                 #[cfg(test)]
                 allow_allocations: 0,
             },
         }
+    }
+    pub(super) fn security_refusal(
+        context: &ResponseContext,
+        kind: FailureKind,
+        source: PolicySource,
+        head: bool,
+    ) -> Self {
+        Self::profiled_refusal(context, FallbackStatus::Security(kind), source, head)
     }
     pub(super) fn rate_refusal(
         context: &ResponseContext,
@@ -489,11 +509,27 @@ impl HttpResponse {
         source: PolicySource,
         head: bool,
     ) -> Self {
+        Self::profiled_refusal(context, reason, source, head)
+    }
+    fn profiled_refusal(
+        context: &ResponseContext,
+        reason: FallbackStatus,
+        source: PolicySource,
+        head: bool,
+    ) -> Self {
         let fallback = Arc::clone(&context.fallback);
         let status = StatusCode::from_u16(reason.code()).expect("closed rate refusal status");
+        let dependencies = if matches!(reason, FallbackStatus::Security(_)) {
+            context
+                .profile
+                .dependencies
+                .union(vary::Dependencies::source(source))
+        } else {
+            context.profile.dependencies
+        };
         let intent = fallback
             .intent(reason)
-            .context(source, head, context.profile.dependencies.core())
+            .context(source, head, dependencies.core())
             .connection_close(true);
         let intent = if let Some(origin) = &context.profile.origin {
             intent.cors(origin.clone(), context.profile.credentials)
@@ -514,17 +550,17 @@ impl HttpResponse {
                 },
                 fallback,
                 source,
-                dependencies: context.profile.dependencies,
+                dependencies,
                 deletion: None,
                 runtime_refusal: None,
-                rate_reason: None,
+                terminal_reason: None,
                 #[cfg(test)]
                 allow_allocations: 0,
             },
         };
         response.source = source;
-        response.dependencies = context.profile.dependencies;
-        response.rate_reason = Some(reason);
+        response.dependencies = dependencies;
+        response.terminal_reason = Some(reason);
         response
     }
     pub(super) fn established_refusal(mut self) -> Self {
@@ -535,9 +571,21 @@ impl HttpResponse {
     }
     pub(super) fn replacement(&self, status: Status, head: bool, close: bool) -> Self {
         let status = self.runtime_refusal.unwrap_or(status);
-        let mut replacement = Self::terminal(Arc::clone(&self.fallback), status, head, close);
+        let mut replacement = match self.terminal_reason {
+            Some(reason @ FallbackStatus::Security(_)) if reason.code() == status.0.as_u16() => {
+                Self::terminal_profile_reason(
+                    Arc::clone(&self.fallback),
+                    status,
+                    self.source,
+                    head,
+                    close,
+                    Some(reason),
+                )
+            }
+            _ => Self::terminal(Arc::clone(&self.fallback), status, head, close),
+        };
         replacement.runtime_refusal = self.runtime_refusal;
-        replacement.rate_reason = self.rate_reason;
+        replacement.terminal_reason = self.terminal_reason;
         replacement.source = self.source;
         replacement.dependencies = self.dependencies;
         replacement
@@ -655,8 +703,13 @@ impl HttpResponse {
             let status = self
                 .runtime_refusal
                 .unwrap_or_else(|| refusal_status(Status(self.status), error));
-            let reason = if status.0 == StatusCode::TOO_MANY_REQUESTS {
-                self.rate_reason.unwrap_or(FallbackStatus::Internal)
+            let reason = if let Some(reason) = self
+                .terminal_reason
+                .filter(|reason| reason.code() == status.0.as_u16())
+            {
+                reason
+            } else if status.0 == StatusCode::TOO_MANY_REQUESTS {
+                FallbackStatus::Internal
             } else {
                 FallbackStatus::all()
                     .into_iter()

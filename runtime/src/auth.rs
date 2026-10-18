@@ -57,6 +57,16 @@ impl FailureKind {
     pub const INVALID_REQUEST: Self = Self::InvalidRequest;
     pub const UNAVAILABLE: Self = Self::Unavailable;
     pub const INTERNAL: Self = Self::Internal;
+    pub(crate) const fn message(self) -> &'static str {
+        match self {
+            Self::InvalidCredential => "invalid credential",
+            Self::Denied => "permission denied",
+            Self::Expired => "authority expired",
+            Self::InvalidRequest => "invalid security request",
+            Self::Unavailable => "security service unavailable",
+            Self::Internal => "security service failure",
+        }
+    }
 }
 /// Stable public codes/messages, without credentials or internal causes.
 #[derive(Debug)]
@@ -68,14 +78,7 @@ impl Failure {
         self.kind
     }
     pub fn message(&self) -> &str {
-        match self.kind {
-            FailureKind::InvalidCredential => "invalid credential",
-            FailureKind::Denied => "permission denied",
-            FailureKind::Expired => "authority expired",
-            FailureKind::InvalidRequest => "invalid security request",
-            FailureKind::Unavailable => "security service unavailable",
-            FailureKind::Internal => "security service failure",
-        }
+        self.kind.message()
     }
     pub fn invalid_credential() -> Self {
         Self {
