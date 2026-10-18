@@ -303,7 +303,7 @@ async fn public_first_request_header_owner_survives_native_join_and_permit_reuse
         assert_eq!(status, if turn == 1 { 503 } else { 200 });
         tokio::time::timeout(
             WAIT,
-            probe.wait(|probe| probe.joins.load(Ordering::SeqCst) >= turn + 1),
+            probe.wait(|probe| probe.joins.load(Ordering::SeqCst) > turn),
         )
         .await
         .unwrap();

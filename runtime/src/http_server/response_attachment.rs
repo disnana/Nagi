@@ -18,6 +18,8 @@ use tokio::{
     sync::{OwnedSemaphorePermit, Semaphore},
 };
 
+type AttachedConnection<F> = (NativeDriver<F>, Arc<SendLedger>);
+
 pub(super) struct Options {
     producer: Arc<Producer>,
     fallback: Arc<FallbackLedger>,
@@ -77,13 +79,7 @@ impl Options {
         self: &Arc<Self>,
         io: T,
         handler: H,
-    ) -> Result<
-        (
-            NativeDriver<impl Future<Output = Result<(), SendFault>> + Unpin>,
-            Arc<SendLedger>,
-        ),
-        Diagnostic,
-    >
+    ) -> Result<AttachedConnection<impl Future<Output = Result<(), SendFault>> + Unpin>, Diagnostic>
     where
         T: AsyncRead + AsyncWrite + Unpin,
         H: Fn(Request) -> F,

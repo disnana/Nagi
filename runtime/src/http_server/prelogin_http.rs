@@ -4,6 +4,13 @@ use crate::auth::prelogin::{HttpOwner, HttpSeal, Pool};
 #[cfg(nagi_auth_stage_diag)]
 use crate::auth::session_deadline_observer::{self as diag, Exit, Observer, Phase};
 
+#[cfg_attr(
+    test,
+    allow(
+        clippy::large_enum_variant,
+        reason = "Test-only inline replacement preserves the production no-allocation completion."
+    )
+)]
 pub(super) enum PreloginCompletion {
     Ready(HttpSeal),
     #[cfg(test)]

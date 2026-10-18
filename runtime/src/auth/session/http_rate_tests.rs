@@ -416,10 +416,11 @@ async fn delayed_deferred_touch_cannot_admit_a_retired_http_lease() {
         attempt.await.err().unwrap().kind(),
         auth::FailureKind::Expired
     );
-    let gate = lease.gate.lock().unwrap();
-    assert!(!gate.active);
-    assert_eq!(gate.http_admitted, Some(false));
-    drop(gate);
+    {
+        let gate = lease.gate.lock().unwrap();
+        assert!(!gate.active);
+        assert_eq!(gate.http_admitted, Some(false));
+    }
     assert_eq!(fixture.rows().await, before);
     fixture.stop().await;
 }

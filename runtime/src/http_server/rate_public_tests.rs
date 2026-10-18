@@ -185,9 +185,7 @@ fn retry_after_rounding_and_internal_rate_failures_have_closed_distinct_outcomes
         RateDecision::Closing,
         RateDecision::ClockFault,
     ] {
-        let reason = decision(unavailable)
-            .err()
-            .expect("unavailable limiter must refuse");
+        let reason = decision(unavailable).expect_err("unavailable limiter must refuse");
         assert!(matches!(reason, FallbackStatus::Capacity));
         let request = bounded_response_request_fixture(256);
         let mut context = response_context(&request).share();
