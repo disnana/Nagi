@@ -237,7 +237,7 @@ fn request() -> Request {
     Request {
         method: Method::POST,
         uri: "/login".parse().unwrap(),
-        headers: headers.into(),
+        headers: response_public::tests::headers_fixture(headers, 256),
         body: Bytes::from_static(b"{}"),
     }
 }
@@ -245,18 +245,19 @@ fn request() -> Request {
 struct StageWitness {
     owner: HttpOwner,
     input: Input<'static, hyper::body::Incoming>,
+    response_context: ResponseContext,
 }
 impl StageWitness {
     async fn claimed(pool: &Pool) -> Self {
         let (owner, context) = pool.claim_stage_for_test().await.unwrap();
         assert!(owner.was_consumed());
         assert!(Arc::ptr_eq(&context.lease(), &owner.lease_owner().lease));
+        let request = request();
+        let response_context = response_context(&request).share();
         Self {
             owner,
-            input: Input::Claimed {
-                request: request(),
-                context,
-            },
+            input: Input::Claimed { request, context },
+            response_context,
         }
     }
     async fn issued(self, prepare: &BrowserPrepare<State>, state: Arc<State>) -> Self {
@@ -293,6 +294,7 @@ impl StageWitness {
         Self {
             owner: self.owner,
             input: Input::Handler(future),
+            response_context: self.response_context,
         }
     }
 }
@@ -322,8 +324,6 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
     } else {
         None
     };
-    // Configure finite response storage before the deliberately timed stage.
-    let response_request = response_public::tests::request_fixture(256);
     let admitted = Instant::now();
     let stage_until = admitted + Duration::from_millis(security as u64);
     // The same original actual owner only narrows; it is never replaced or
@@ -333,10 +333,11 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
         AssertUnwindSafe(async {
             // Real owner remains inside the dispatched future, while the SAME
             // production core borrows it; cancellation drops it before SQL reads.
+            let response_context = witness.response_context;
             let owner = witness.owner;
             dispatch_owned(
                 DispatchBorrowed {
-                    response_context: response_context(&response_request),
+                    response_context: &response_context,
                     pool: &pool,
                     prepare: &prepare,
                     options: &options,
