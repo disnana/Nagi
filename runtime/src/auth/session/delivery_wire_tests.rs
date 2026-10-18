@@ -811,7 +811,8 @@ async fn mapper_identity_of_same_request_seal_never_delivers_cookie() {
         |request, store, scope| async move {
             let intent = session::issue(&store, scope).await.unwrap();
             let applied = session::apply(
-                response_text(&request, Status::BAD_REQUEST, "owned mapped")?,
+                response_text(&request, Status::BAD_REQUEST, "owned mapped")
+                    .expect("bounded test response fits fixture"),
                 intent,
             )
             .unwrap();
@@ -843,12 +844,14 @@ async fn mapper_selecting_saved_same_request_seal_never_delivers_cookie() {
         |request, store, scope| async move {
             let intent = session::issue(&store, scope).await.unwrap();
             let saved = session::apply(
-                response_text(&request, Status::BAD_REQUEST, "owned replacement")?,
+                response_text(&request, Status::BAD_REQUEST, "owned replacement")
+                    .expect("bounded test response fits fixture"),
                 intent,
             )
             .unwrap();
             Err::<Response, (Response, Response)>((
-                response_text(&request, Status::OK, "unused")?,
+                response_text(&request, Status::OK, "unused")
+                    .expect("bounded test response fits fixture"),
                 saved,
             ))
         },

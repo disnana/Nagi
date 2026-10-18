@@ -311,7 +311,7 @@ async fn actual_native_parts_extensions_live_through_handler_and_drop_after_join
                 let head = request.method() == Method::HEAD;
                 let prior = service_ledger.take_prior();
                 let context = ResponseContext {
-                    profile: ResponseProfile::default(),
+                    profile: response_public::ResponseProfile::default(),
                     producer: Arc::clone(&producer),
                     fallback: Arc::clone(&fallback),
                 };

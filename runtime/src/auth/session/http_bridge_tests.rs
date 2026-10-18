@@ -392,10 +392,10 @@ async fn session_authorizer_receives_real_metadata_and_foreign_grant_is_refused(
                 )
             }
         }),
-        |request, _, _| async move {
+        |_, _, _| async {
             panic!("foreign authority reached handler");
             #[allow(unreachable_code)]
-            response_text(&request, Status::OK, "owned")
+            Err::<Response, Error>(Error::invalid("unreachable foreign handler"))
         },
     )
     .unwrap();

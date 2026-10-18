@@ -114,7 +114,7 @@ fn builtins_and_ordinary_error_mapper_use_the_same_finalizer() {
         Status::SERVICE_UNAVAILABLE,
         Status::GATEWAY_TIMEOUT,
     ] {
-        let response = transport(status, false, true);
+        let response = transport(context, status, false, true);
         managed(&response);
         assert_eq!(response.status(), status.0);
         assert_eq!(
@@ -135,7 +135,7 @@ fn builtins_and_ordinary_error_mapper_use_the_same_finalizer() {
             (Failure::internal(), Status::INTERNAL_SERVER_ERROR),
         ] {
             let response = vary::finish(finalize_authenticated(
-                security_response(failure, source).into_http(false),
+                security_response(context, failure, source, false),
                 source,
                 false,
             ));

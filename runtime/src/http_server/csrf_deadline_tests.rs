@@ -519,7 +519,7 @@ async fn guarded_body_wire_preserves_absolute_deadline_and_strict_precedence() {
                     let observed = Arc::clone(&observed);
                     let ledger = Arc::clone(&service_ledger);
                     let context = ResponseContext {
-                        profile: ResponseProfile::default(),
+                        profile: response_public::ResponseProfile::default(),
                         producer: Arc::clone(&producer),
                         fallback: Arc::clone(&fallback),
                     };
