@@ -4,7 +4,9 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import https from 'node:https';
-import { createHash } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, X509Certificate } from 'node:crypto';
+import fs from 'node:fs';
+import tls from 'node:tls';
 
 const VERSIONS = { chromium: '156.0.8078.4', firefox: '157.0', webkit: '27.2' };
 const TLS_ERROR = {
@@ -525,7 +527,537 @@ export function webkitCertificateWitness(page, context, browser, probeURL, until
   };
 }
 
-export async function probeEngine(name, browserType, config, checkpoint = () => {}, readinessTiming) {
+const WRONG_HOST = 'sf08-wronghost.invalid';
+const PEER_CERTIFICATE_CODE = 'ERR_SSL_SSL/TLS_ALERT_BAD_CERTIFICATE';
+const HOST_PROFILE = Object.freeze({ hostname: WRONG_HOST, code: PEER_CERTIFICATE_CODE });
+const CA_PROFILE = Object.freeze({ hostname: 'localhost', code: 'ERR_SSL_TLSV1_ALERT_UNKNOWN_CA' });
+const WEBKIT_CONSOLE_RESOURCE_ERROR = 'Failed to load resource: Unacceptable TLS certificate';
+const webkitConsoleResetEndpoints = new WeakMap();
+// Failure-only fixed vocabulary. These facts never authorize a TLS result.
+const HOST_FAILURE_STAGES = Object.freeze({
+  credential: 'engine_wrong_host_one_shot_credential',
+  setup: 'engine_wrong_host_one_shot_setup',
+  navigation: 'engine_wrong_host_one_shot_navigation',
+  request: 'engine_wrong_host_one_shot_request',
+  console_missing: 'engine_wrong_host_one_shot_console_missing',
+  console_malformed: 'engine_wrong_host_one_shot_console_malformed',
+  response: 'engine_wrong_host_one_shot_response',
+  peer_legacy_certificate: 'engine_wrong_host_one_shot_peer_legacy_certificate',
+  peer_connection_reset: 'engine_wrong_host_one_shot_peer_connection_reset',
+  peer_handshake_timeout: 'engine_wrong_host_one_shot_peer_handshake_timeout',
+  peer_no_native_code: 'engine_wrong_host_one_shot_peer_no_native_code',
+  peer_non_error: 'engine_wrong_host_one_shot_peer_non_error',
+  peer_other_code: 'engine_wrong_host_one_shot_peer_other_code',
+  peer_other: 'engine_wrong_host_one_shot_peer_other',
+  peer_binding: 'engine_wrong_host_one_shot_peer_binding',
+  socket: 'engine_wrong_host_one_shot_socket',
+  socket_eof: 'engine_wrong_host_one_shot_socket_eof',
+  socket_close_unproved: 'engine_wrong_host_one_shot_socket_close_unproved',
+  socket_error_reset_raw: 'engine_wrong_host_one_shot_socket_error_reset_raw',
+  socket_error_reset_tls: 'engine_wrong_host_one_shot_socket_error_reset_tls',
+  socket_error_other: 'engine_wrong_host_one_shot_socket_error_other',
+  socket_destroy_error: 'engine_wrong_host_one_shot_socket_destroy_error',
+  lifecycle: 'engine_wrong_host_one_shot_lifecycle',
+  deadline: 'engine_wrong_host_one_shot_deadline',
+  join: 'engine_wrong_host_one_shot_join',
+  cleanup: 'engine_wrong_host_one_shot_cleanup',
+  unknown: 'engine_wrong_host_one_shot_unknown',
+});
+const CA_FAILURE_STAGES = Object.freeze({
+  credential: 'engine_wrong_ca_one_shot_credential',
+  setup: 'engine_wrong_ca_one_shot_setup',
+  navigation: 'engine_wrong_ca_one_shot_navigation',
+  request: 'engine_wrong_ca_one_shot_request',
+  console_missing: 'engine_wrong_ca_one_shot_console_missing',
+  console_malformed: 'engine_wrong_ca_one_shot_console_malformed',
+  response: 'engine_wrong_ca_one_shot_response',
+  peer_legacy_certificate: 'engine_wrong_ca_one_shot_peer_legacy_certificate',
+  peer_connection_reset: 'engine_wrong_ca_one_shot_peer_connection_reset',
+  peer_handshake_timeout: 'engine_wrong_ca_one_shot_peer_handshake_timeout',
+  peer_no_native_code: 'engine_wrong_ca_one_shot_peer_no_native_code',
+  peer_non_error: 'engine_wrong_ca_one_shot_peer_non_error',
+  peer_other_code: 'engine_wrong_ca_one_shot_peer_other_code',
+  peer_other: 'engine_wrong_ca_one_shot_peer_other',
+  peer_binding: 'engine_wrong_ca_one_shot_peer_binding',
+  socket: 'engine_wrong_ca_one_shot_socket',
+  socket_eof: 'engine_wrong_ca_one_shot_socket_eof',
+  socket_close_unproved: 'engine_wrong_ca_one_shot_socket_close_unproved',
+  socket_error_reset_raw: 'engine_wrong_ca_one_shot_socket_error_reset_raw',
+  socket_error_reset_tls: 'engine_wrong_ca_one_shot_socket_error_reset_tls',
+  socket_error_other: 'engine_wrong_ca_one_shot_socket_error_other',
+  socket_destroy_error: 'engine_wrong_ca_one_shot_socket_destroy_error',
+  lifecycle: 'engine_wrong_ca_one_shot_lifecycle',
+  deadline: 'engine_wrong_ca_one_shot_deadline',
+  join: 'engine_wrong_ca_one_shot_join',
+  cleanup: 'engine_wrong_ca_one_shot_cleanup',
+  unknown: 'engine_wrong_ca_one_shot_unknown',
+});
+function peerCodeFingerprintKind(kind) {
+  return typeof kind === 'string' && kind.length === 81 && /^peer_code_sha256_[a-f0-9]{64}$/.test(kind);
+}
+function hostDiagnosticKind(kind) {
+  return typeof kind === 'string' && (Object.hasOwn(HOST_FAILURE_STAGES, kind) || peerCodeFingerprintKind(kind));
+}
+function hostFirstDiagnostic(observer) {
+  let seen = false;
+  return kind => {
+    if (seen || !hostDiagnosticKind(kind)) return;
+    seen = true;
+    try { if (typeof observer === 'function') observer(kind); } catch {}
+  };
+}
+
+const ownedHostCredentials = new WeakMap();
+function hostBudget(until) {
+  const remaining = Math.floor(until - performance.now());
+  if (!Number.isFinite(remaining) || remaining < 1 || remaining > 10000) refuse();
+  return remaining;
+}
+async function hostWithin(operation, until) {
+  let timer;
+  try {
+    const remaining = hostBudget(until);
+    return await Promise.race([Promise.resolve(operation),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(REFUSED)), remaining); })]);
+  } finally { clearTimeout(timer); }
+}
+
+// Only fixed children of two fd-pinned owned directories are read. No key is
+// accepted from JSON/env, serialized, or included in an error or diagnostic.
+export function readWebkitWrongHostCredentials(work, caPath, caPEM, io = fs) {
+  return readWebkitCredentials(work, caPath, caPEM, io, HOST_PROFILE);
+}
+
+export function readWebkitWrongCACredentials(work, wrongCAPEM, mainCAPEM, io = fs) {
+  return readWebkitCredentials(work, path.join(work, 'negative', 'ca.pem'), wrongCAPEM, io, CA_PROFILE, mainCAPEM);
+}
+
+function readWebkitCredentials(work, caPath, caPEM, io, profile, mainCAPEM) {
+  let rootFD, ownedFD, cert, key, caBytes, result, bad = false;
+  const uid = typeof process.getuid === 'function' ? BigInt(process.getuid()) : -1n;
+  const directory = info => {
+    if (!info.isDirectory() || info.uid !== uid || (info.mode & 0o7777n) !== 0o700n) refuse();
+    return info;
+  };
+  const identity = (a, b) => a.dev === b.dev && a.ino === b.ino;
+  const same = (a, b) => ['dev', 'ino', 'mode', 'uid', 'nlink', 'size', 'mtimeNs', 'ctimeNs'].every(name => a[name] === b[name]);
+  const flags = io.constants.O_RDONLY | io.constants.O_NONBLOCK | io.constants.O_NOFOLLOW;
+  try {
+    if (process.platform !== 'linux' || uid < 0n || typeof work !== 'string' ||
+        !path.isAbsolute(work) || path.normalize(work) !== work || typeof caPath !== 'string' ||
+        !Buffer.isBuffer(caPEM) || caPEM.length < 1 || caPEM.length > 16384) refuse();
+    const child = path.basename(path.dirname(caPath));
+    if ((profile === HOST_PROFILE ? !/^owned-[A-Za-z0-9_-]+$/.test(child) : child !== 'negative') ||
+        caPath !== path.join(work, child, 'ca.pem')) refuse();
+    rootFD = io.openSync(work, flags | io.constants.O_DIRECTORY);
+    const root = directory(io.fstatSync(rootFD, { bigint: true }));
+    ownedFD = io.openSync(`/proc/self/fd/${rootFD}/${child}`, flags | io.constants.O_DIRECTORY);
+    const owned = directory(io.fstatSync(ownedFD, { bigint: true }));
+    if (owned.dev !== root.dev) refuse();
+    const checkDirectories = () => {
+      if (!identity(root, directory(io.fstatSync(rootFD, { bigint: true }))) ||
+          !identity(root, directory(io.lstatSync(work, { bigint: true }))) ||
+          !identity(owned, directory(io.fstatSync(ownedFD, { bigint: true }))) ||
+          !identity(owned, directory(io.lstatSync(path.join(work, child), { bigint: true })))) refuse();
+    };
+    const read = name => {
+      checkDirectories();
+      let fd, data;
+      try {
+        const fixed = `/proc/self/fd/${ownedFD}/${name}`;
+        fd = io.openSync(fixed, flags);
+        const before = io.fstatSync(fd, { bigint: true });
+        const regular = info => info.isFile() && info.uid === uid && info.dev === owned.dev &&
+          (info.mode & 0o7777n) === 0o600n && info.nlink === 1n && info.size > 0n && info.size <= 16384n;
+        if (!regular(before) || !same(before, io.lstatSync(fixed, { bigint: true }))) refuse();
+        data = Buffer.alloc(16385);
+        let size = 0, count;
+        while (size < data.length && (count = io.readSync(fd, data, size, data.length - size, null)) !== 0) size += count;
+        const after = io.fstatSync(fd, { bigint: true });
+        if (!regular(after) || !same(before, after) || !same(after, io.lstatSync(fixed, { bigint: true })) ||
+            BigInt(size) !== before.size) refuse();
+        checkDirectories();
+        return data.subarray(0, size);
+      } catch { data?.fill(0); refuse(); }
+      finally { if (fd !== undefined) { try { io.closeSync(fd); } catch { data?.fill(0); refuse(); } } }
+    };
+    caBytes = read('ca.pem'); cert = read('leaf.pem'); key = read('leaf.key');
+    const authority = new X509Certificate(caPEM), loadedCA = new X509Certificate(caBytes), leaf = new X509Certificate(cert);
+    const now = Date.now();
+    const live = certificate => Number.isFinite(Date.parse(certificate.validFrom)) &&
+      Number.isFinite(Date.parse(certificate.validTo)) && Date.parse(certificate.validFrom) <= now && now < Date.parse(certificate.validTo);
+    if (profile === CA_PROFILE) {
+      if (!Buffer.isBuffer(mainCAPEM) || mainCAPEM.length < 1 || mainCAPEM.length > 16384) refuse();
+      const main = new X509Certificate(mainCAPEM);
+      if (!main.ca || !main.verify(main.publicKey) || !live(main) || main.raw.equals(authority.raw) ||
+          main.subject === authority.subject || main.issuer === authority.issuer ||
+          main.publicKey.export({ type: 'spki', format: 'der' })
+            .equals(authority.publicKey.export({ type: 'spki', format: 'der' }))) refuse();
+    }
+    const hostOptions = { subject: 'never', wildcards: false, partialWildcards: false, multiLabelWildcards: false, singleLabelSubdomains: false };
+    if (!authority.raw.equals(loadedCA.raw) || !authority.ca || !authority.verify(authority.publicKey) ||
+        !live(authority) || leaf.ca || !live(leaf) || !leaf.checkIssued(authority) || !leaf.verify(authority.publicKey) ||
+        !Array.isArray(leaf.keyUsage) || !leaf.keyUsage.includes('1.3.6.1.5.5.7.3.1') ||
+        leaf.subjectAltName !== 'DNS:localhost, DNS:app.example.invalid, IP Address:127.0.0.1' ||
+        !leaf.checkHost('localhost', hostOptions) || !leaf.checkHost('app.example.invalid', hostOptions) ||
+        !leaf.checkIP('127.0.0.1') || leaf.checkHost(WRONG_HOST, hostOptions) !== undefined ||
+        !createPublicKey(createPrivateKey(key)).export({ type: 'spki', format: 'der' })
+          .equals(leaf.publicKey.export({ type: 'spki', format: 'der' }))) refuse();
+    checkDirectories();
+    result = Object.freeze({ get cert() { return cert; }, get key() { return key; },
+      release() { key?.fill(0); key = null; cert = null; }, toJSON() { refuse(); } });
+  } catch { bad = true; }
+  finally {
+    caBytes?.fill(0);
+    for (const fd of [ownedFD, rootFD]) if (fd !== undefined) { try { io.closeSync(fd); } catch { bad = true; } }
+  }
+  if (bad || !result) { key?.fill(0); refuse(); }
+  ownedHostCredentials.set(result, profile);
+  return result;
+}
+
+// The native dependency is fixed in the browser stage. Its optional explicit
+// argument exists only for the source-bound unit controls, never receipt data.
+export async function createWebkitWrongHostEndpoint(credentials, until, native = tls, diagnose) {
+  return createWebkitCertificateEndpoint(credentials, until, native, diagnose, HOST_PROFILE);
+}
+
+export async function createWebkitWrongCAEndpoint(credentials, until, native = tls, diagnose) {
+  return createWebkitCertificateEndpoint(credentials, until, native, diagnose, CA_PROFILE);
+}
+
+async function createWebkitCertificateEndpoint(credentials, until, native, diagnose, profile) {
+  const note = hostFirstDiagnostic(diagnose);
+  const failure = kind => {
+    const remaining = Math.floor(until - performance.now());
+    note(!Number.isFinite(remaining) || remaining < 1 || remaining > 10000 ? 'deadline' : kind);
+  };
+  if (ownedHostCredentials.get(credentials) !== profile) { failure('setup'); refuse(); }
+  ownedHostCredentials.delete(credentials);
+  let server, secureContext, timer, port, rawTuple, sniSocket, bad = false,
+    connections = 0, sniCount = 0, alerts = 0, peer = false, consoleResetObservation = false,
+    consoleResetTerminal = false, resetMirror = null, ready = false, closing = false, closedEvent = false,
+    closeCallback = false, joined = false, used = false, destroyPending = false;
+  const sockets = new Set(), listeners = [];
+  let readyResolve, readyReject, joinedResolve;
+  const listening = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+  const join = new Promise(resolve => { joinedResolve = resolve; });
+  const tuple = socket => {
+    if (socket.remoteAddress !== '127.0.0.1' || socket.localAddress !== '127.0.0.1' ||
+        !Number.isInteger(socket.remotePort) || socket.remotePort < 1 || socket.remotePort > 65535 ||
+        socket.localPort !== port) refuse();
+    return [socket.remoteAddress, socket.remotePort, socket.localAddress, socket.localPort];
+  };
+  const sameTuple = (a, b) => a && b && a.every((value, index) => value === b[index]);
+  const listen = (target, event, callback) => { target.on(event, callback); listeners.push({ target, event, callback }); };
+  const complete = () => {
+    if (!joined && !destroyPending && closeCallback && closedEvent && sockets.size === 0 && server?.listening === false) {
+      joined = true; clearTimeout(timer);
+      for (const { target, event, callback } of listeners) target.off(event, callback);
+      listeners.length = 0; secureContext = null; resetMirror = null; credentials.release(); joinedResolve(true);
+    }
+  };
+  const stopAccepting = () => {
+    if (closing) return;
+    closing = true;
+    try { server.close(error => { if (error) { failure('join'); bad = true; } closeCallback = true; complete(); }); }
+    catch { failure('join'); bad = true; readyReject(new Error(REFUSED)); }
+  };
+  const socketErrorKind = (error, socket) => {
+    try {
+      if (error?.code !== 'ECONNRESET') return 'socket_error_other';
+      return socket instanceof native.TLSSocket ? 'socket_error_reset_tls' : 'socket_error_reset_raw';
+    } catch { return 'socket_error_other'; }
+  };
+  const mirrorTupleBound = socket => {
+    // Node can clear local socket metadata before emitting the mirrored Error.
+    // Identity still comes from the previously checked raw/SNI socket and E/S,
+    // never from missing fields. Any conflicting field remains a veto.
+    const current = [socket.remoteAddress, socket.remotePort, socket.localAddress, socket.localPort];
+    return !!rawTuple && rawTuple.length === 4 && (sameTuple(rawTuple, current) ||
+      (socket.destroyed === true && current[2] === undefined && current[3] === undefined &&
+        current.every((value, index) => value === undefined || value === rawTuple[index])));
+  };
+  // TLS callbacks may still be on the native handshake stack. Keep the veto
+  // synchronous, but destroy the owned raw/TLS wrappers in one later turn.
+  // Join and credential release wait for the complete destruction batch.
+  const destroy = () => {
+    if (destroyPending || joined) return;
+    destroyPending = true;
+    setImmediate(() => {
+      try { for (const socket of sockets) { try { socket.destroy(); } catch { failure('socket_destroy_error'); bad = true; } } }
+      finally { destroyPending = false; complete(); }
+    });
+  };
+  const veto = (kind = 'socket') => { failure(kind); bad = true; stopAccepting(); destroy(); };
+  const own = socket => {
+    if (sockets.has(socket)) return;
+    sockets.add(socket);
+    listen(socket, 'close', () => {
+      sockets.delete(socket);
+      if (!peer && !consoleResetTerminal) { failure('socket_close_unproved'); bad = true; }
+      complete();
+    });
+    listen(socket, 'end', () => veto('socket_eof'));
+    listen(socket, 'error', error => {
+      if (peer) return;
+      try {
+        hostBudget(until);
+        // Node forwards this same Error to tlsClientError before this owned
+        // listener runs. Consume that notification once, never a new error.
+        if (consoleResetObservation && consoleResetTerminal && !bad && resetMirror &&
+            !resetMirror.seen && resetMirror.error === error && resetMirror.socket === socket &&
+            alerts === 1 && connections === 1 && sniCount === 1 && socket === sniSocket &&
+            socket instanceof native.TLSSocket && error instanceof Error && error.code === 'ECONNRESET' &&
+            mirrorTupleBound(socket)) {
+          resetMirror.seen = true; return;
+        }
+      } catch {}
+      veto(socketErrorKind(error, socket));
+    });
+  };
+  try {
+    const remaining = hostBudget(until);
+    secureContext = native.createSecureContext({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2' });
+    server = native.createServer({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2',
+      ALPNProtocols: ['http/1.1'], handshakeTimeout: remaining,
+      SNICallback(name, callback) {
+        try {
+          hostBudget(until);
+          sniCount = Math.min(2, sniCount + 1);
+          if (sniCount !== 1 || name !== profile.hostname || !(this instanceof native.TLSSocket) ||
+              connections !== 1 || !sameTuple(rawTuple, tuple(this))) refuse();
+          sniSocket = this; own(this); listen(this, 'data', () => veto('response'));
+          callback(null, secureContext);
+        } catch { veto('peer_binding'); callback(new Error(REFUSED)); }
+      } });
+    listen(server, 'connection', socket => {
+      connections = Math.min(2, connections + 1);
+      own(socket);
+      try {
+        hostBudget(until);
+        if (connections !== 1) refuse();
+        rawTuple = tuple(socket);
+        stopAccepting(); // One-shot: subsequent accepted callbacks still veto.
+      } catch { veto('peer_binding'); }
+    });
+    listen(server, 'secureConnection', socket => { own(socket); veto('response'); });
+    listen(server, 'tlsClientError', (error, socket) => {
+      alerts = Math.min(2, alerts + 1);
+      try {
+        hostBudget(until);
+        if (alerts !== 1 || connections !== 1 || sniCount !== 1 || socket !== sniSocket ||
+            !(socket instanceof native.TLSSocket) || !(error instanceof Error) ||
+            error.code !== profile.code || bad) refuse();
+        peer = true; destroy();
+      } catch {
+        // The alternative terminal is observed privately and accepted only by
+        // the probe after its independent exact console and request witnesses.
+        let boundReset = false;
+        try {
+          hostBudget(until);
+          boundReset = consoleResetObservation && !bad && alerts === 1 && connections === 1 &&
+            sniCount === 1 && socket === sniSocket && socket instanceof native.TLSSocket &&
+            error instanceof Error && error.code === 'ECONNRESET';
+        } catch {}
+        if (boundReset) {
+          consoleResetTerminal = true; resetMirror = { error, socket, seen: false };
+          destroy(); return;
+        }
+        // Inspect only a rejected event, never widen the exact acceptance code.
+        let kind = 'peer_other';
+        try {
+          if (alerts !== 1 || connections !== 1 || sniCount !== 1 || socket !== sniSocket ||
+              !(socket instanceof native.TLSSocket)) kind = 'peer_binding';
+          else if (!(error instanceof Error)) kind = 'peer_non_error';
+          else {
+            hostBudget(until);
+            const code = error.code;
+            if (code === 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE') kind = 'peer_legacy_certificate';
+            else if (code === 'ECONNRESET') kind = 'peer_connection_reset';
+            else if (code === 'ERR_TLS_HANDSHAKE_TIMEOUT') kind = 'peer_handshake_timeout';
+            else if (code === undefined || code === null) kind = 'peer_no_native_code';
+            else if (typeof code === 'string' && code.length <= 128 &&
+                code.match(/^ERR_SSL_[A-Z0-9_/]+$/)?.[0] === code)
+              kind = 'peer_code_sha256_' + createHash('sha256').update(code).digest('hex');
+            else if (typeof code === 'string' || typeof code === 'number' || typeof code === 'boolean' ||
+                typeof code === 'bigint' || typeof code === 'symbol') kind = 'peer_other_code';
+          }
+        } catch {}
+        veto(kind);
+      }
+    });
+    listen(server, 'error', () => { readyReject(new Error(REFUSED)); veto('setup'); });
+    listen(server, 'close', () => { closedEvent = true; complete(); });
+    listen(server, 'listening', () => {
+      try {
+        hostBudget(until);
+        const address = server.address();
+        if (!address || address.address !== '127.0.0.1' || address.family !== 'IPv4' ||
+            !Number.isInteger(address.port) || address.port < 1024 || address.port > 65535) refuse();
+        port = address.port; ready = true; readyResolve();
+      } catch { readyReject(new Error(REFUSED)); veto('setup'); }
+    });
+    timer = setTimeout(() => veto('deadline'), remaining);
+    server.listen({ host: '127.0.0.1', port: 0, exclusive: true });
+    await hostWithin(listening, until);
+  } catch {
+    failure('setup'); bad = true; clearTimeout(timer);
+    if (server) { stopAccepting(); destroy(); try { await hostWithin(join, until); } catch {} }
+    if (!server) credentials.release();
+    refuse();
+  }
+  const endpoint = Object.freeze({ url: `https://${profile.hostname}:${port}/`,
+    async finish() {
+      if (used) { failure('peer_binding'); return false; }
+      used = true;
+      try { await hostWithin(join, until); hostBudget(until); }
+      catch { veto('join'); return false; }
+      const proved = ready && joined && peer && !bad && connections === 1 && sniCount === 1 && alerts === 1;
+      if (!proved && !bad) {
+        if (!ready) failure('setup');
+        else if (!joined || !closedEvent || !closeCallback || sockets.size !== 0) failure('join');
+        else failure('peer_binding');
+      }
+      return proved;
+    },
+    async close() {
+      stopAccepting(); destroy();
+      try { await hostWithin(join, until); hostBudget(until); return joined; }
+      catch { failure('join'); return false; }
+    } });
+  webkitConsoleResetEndpoints.set(endpoint, {
+    arm() { consoleResetObservation = true; },
+    resetObserved() { return consoleResetTerminal; },
+    async finish() {
+      if (used) { failure('peer_binding'); return false; }
+      used = true;
+      try { await hostWithin(join, until); hostBudget(until); }
+      catch { veto('join'); return false; }
+      const proved = ready && joined && (peer || consoleResetTerminal) && !bad &&
+        connections === 1 && sniCount === 1 && alerts === 1;
+      if (!proved && !bad) {
+        if (!ready) failure('setup');
+        else if (!joined || !closedEvent || !closeCallback || sockets.size !== 0) failure('join');
+        else failure('peer_binding');
+      }
+      return proved;
+    },
+  });
+  return endpoint;
+}
+
+// An independent proof branch. It never clears the original witness's poison.
+// Cancellation gains no authority; only the separately joined native peer fact
+// plus every bound-request/lifecycle/deadline condition can complete this probe.
+export async function probeWebkitWrongHost(browser, factory, until, diagnose) {
+  return probeWebkitCertificate(browser, factory, until, diagnose, HOST_PROFILE);
+}
+
+export async function probeWebkitWrongCA(browser, factory, until, diagnose) {
+  return probeWebkitCertificate(browser, factory, until, diagnose, CA_PROFILE);
+}
+
+async function probeWebkitCertificate(browser, factory, until, diagnose, profile) {
+  let firstFailure, phase = 'setup';
+  const note = hostFirstDiagnostic(kind => { firstFailure = kind; });
+  const failure = kind => {
+    const remaining = Math.floor(until - performance.now());
+    note(!Number.isFinite(remaining) || remaining < 1 || remaining > 10000 ? 'deadline' : kind);
+  };
+  let context, page, endpoint, bad = false, requests = 0, failed, good = false;
+  const listeners = [];
+  const listen = (target, event, callback) => { target.on(event, callback); listeners.push({ target, event, callback }); };
+  const live = () => {
+    hostBudget(until);
+    if (bad || page.isClosed() || !browser.isConnected()) { failure('lifecycle'); refuse(); }
+  };
+  try {
+    hostBudget(until);
+    if (typeof factory !== 'function') refuse();
+    context = await hostWithin(browser.newContext({ ignoreHTTPSErrors: false, serviceWorkers: 'block' }), until);
+    page = await hostWithin(context.newPage(), until);
+    for (const event of ['close', 'crash']) listen(page, event, () => { failure('lifecycle'); bad = true; });
+    listen(context, 'close', () => { failure('lifecycle'); bad = true; });
+    listen(browser, 'disconnected', () => { failure('lifecycle'); bad = true; });
+    listen(page, 'response', () => { failure('response'); bad = true; });
+    const frame = page.mainFrame();
+    if (!frame) refuse();
+    endpoint = await hostWithin(Promise.resolve(factory(until, note)), until);
+    const url = new URL(endpoint.url);
+    if (url.protocol !== 'https:' || url.hostname !== profile.hostname || url.username || url.password ||
+        url.pathname !== '/' || url.search || url.hash || url.origin + '/' !== endpoint.url ||
+        Number(url.port) < 1024 || Number(url.port) > 65535 || typeof endpoint.finish !== 'function' ||
+        typeof endpoint.close !== 'function') refuse();
+    const consoleReset = webkitConsoleResetEndpoints.get(endpoint);
+    consoleReset?.arm();
+    let consoleEvents = 0, consoleCertificateProof = false;
+    listen(page, 'console', message => {
+      consoleEvents = Math.min(2, consoleEvents + 1);
+      try { live(); }
+      catch { failure('deadline'); bad = true; return; }
+      try {
+        if (consoleEvents !== 1) { failure('console_malformed'); bad = true; return; }
+        const type = message.type();
+        const text = message.text();
+        const location = message.location();
+        const args = message.args();
+        if (type !== 'error' || text !== WEBKIT_CONSOLE_RESOURCE_ERROR || !location ||
+            location.url !== endpoint.url || !Array.isArray(args) || args.length !== 0) {
+          failure('console_malformed'); bad = true; return;
+        }
+        consoleCertificateProof = true;
+      } catch { failure('console_malformed'); bad = true; }
+    });
+    listen(page, 'requestfailed', request => {
+      requests = Math.min(2, requests + 1);
+      try {
+        live();
+        if (requests !== 1 || request.url() !== endpoint.url || request.isNavigationRequest() !== true ||
+            request.frame() !== frame) refuse();
+        const failure = request.failure();
+        if (!failure || !['Operation was cancelled', 'Unacceptable TLS certificate'].includes(failure.errorText)) refuse();
+        failed = request;
+      } catch { failure('request'); bad = true; }
+    });
+    live();
+    phase = 'navigation';
+    let navigationError;
+    try { await hostWithin(page.goto(endpoint.url, { waitUntil: 'load', timeout: hostBudget(until) }), until); failure('response'); bad = true; }
+    catch (error) { navigationError = error; }
+    if (!(navigationError instanceof Error) || navigationError.name !== 'Error') refuse();
+    live();
+    phase = requests !== 1 || !failed ? 'request' : 'response';
+    if (requests !== 1 || !failed || await hostWithin(failed.response(), until) !== null) refuse();
+    live();
+    phase = 'peer_binding';
+    const finished = consoleReset
+      ? await hostWithin(consoleReset.finish(), until)
+      : await hostWithin(endpoint.finish(), until);
+    if (consoleReset?.resetObserved() && !consoleCertificateProof) {
+      failure(consoleEvents === 0 ? 'console_missing' : 'console_malformed');
+      refuse();
+    }
+    if (finished !== true) refuse();
+    live();
+    good = true;
+  } catch { failure(phase); good = false; }
+  finally {
+    if (endpoint) { try { if (await hostWithin(endpoint.close(), until) !== true) good = false; if (!good) failure('join'); } catch { failure('join'); good = false; } }
+    // Lifecycle vetoes remain armed through actual endpoint join. Detach only
+    // these owned callbacks before intentional page/context teardown.
+    for (const { target, event, callback } of listeners) { try { target.off(event, callback); } catch { failure('cleanup'); good = false; } }
+    if (page) { try { await hostWithin(page.close(), until); } catch { failure('cleanup'); good = false; } }
+    if (context) { try { await hostWithin(context.close(), until); } catch { failure('cleanup'); good = false; } }
+    try { hostBudget(until); } catch { failure('deadline'); good = false; }
+  }
+  if (!(good && !bad)) {
+    try { if (typeof diagnose === 'function') diagnose(firstFailure ?? 'unknown'); } catch {}
+  }
+  return good && !bad;
+}
+
+export async function probeEngine(name, browserType, config, checkpoint = () => {}, readinessTiming, wrongHostFactory, wrongCAFactory) {
   if (!Object.hasOwn(VERSIONS, name)) refuse();
   let browser;
   let failed = true;
@@ -560,6 +1092,18 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
       }
       for (const reason of ['ca', 'host']) {
         checkpoint(reason === 'ca' ? 'engine_wrong_ca' : 'engine_wrong_host', name);
+        const factory = reason === 'host' ? wrongHostFactory : wrongCAFactory;
+        if (name === 'webkit' && factory !== undefined) {
+          let detail = 'unknown';
+          const probe = reason === 'host' ? probeWebkitWrongHost : probeWebkitWrongCA;
+          const stages = reason === 'host' ? HOST_FAILURE_STAGES : CA_FAILURE_STAGES;
+          if (!await probe(browser, factory, performance.now() + 10000,
+            kind => { if (hostDiagnosticKind(kind)) detail = kind; })) {
+            checkpoint(peerCodeFingerprintKind(detail) ? `engine_wrong_${reason}_one_shot_${detail}` : stages[detail], name);
+            refuse();
+          }
+          continue;
+        }
         if (reason === 'host') checkpoint('engine_wrong_host_page_open', name);
         const page = await context.newPage();
         let rejected = false;
@@ -619,7 +1163,10 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
   }
 }
 
-export async function runPreflight(browserTypes, provisioned, ready, negative, checkpoint = () => {}) {
+export async function runPreflight(browserTypes, provisioned, ready, negative, checkpoint = () => {}, wrongHostFactory, wrongCAFactory) {
+  // The production entrypoint never falls back to either legacy WebKit path.
+  // Direct probeEngine controls still exercise that original strict oracle.
+  if (typeof wrongHostFactory !== 'function' || typeof wrongCAFactory !== 'function') refuse();
   // Read-only guard child. This cannot provision or alter any host trust store.
   // Browser process containment, timeout/descendant reaping is the outer capsule's job.
   checkpoint('guard', 'none');
@@ -640,6 +1187,6 @@ export async function runPreflight(browserTypes, provisioned, ready, negative, c
     if (!refusedHost) refuse();
   } catch { refuse(); }
   const results = [];
-  for (const name of Object.keys(VERSIONS)) results.push(await probeEngine(name, browserTypes[name], config, checkpoint));
+  for (const name of Object.keys(VERSIONS)) results.push(await probeEngine(name, browserTypes[name], config, checkpoint, undefined, wrongHostFactory, wrongCAFactory));
   return { schema_version: 1, transport_preflight_passed: true, engines: results };
 }

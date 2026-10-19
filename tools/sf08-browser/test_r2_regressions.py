@@ -98,6 +98,77 @@ class R2Tests(unittest.TestCase):
         self.assertIn('O_EXCL',node)
         for stage in f.STAGES:self.assertIn("'"+stage+"'",node)
 
+    def test_one_shot_failure_categories_are_finite_webkit_only_and_not_acceptance(self):
+        categories = {'credential', 'setup', 'navigation', 'request', 'response',
+                      'console_missing', 'console_malformed',
+                      'peer_legacy_certificate', 'peer_connection_reset', 'peer_handshake_timeout',
+                      'peer_no_native_code', 'peer_non_error', 'peer_other_code', 'peer_other', 'peer_binding',
+                      'socket', 'socket_eof', 'socket_close_unproved', 'socket_error_reset_raw',
+                      'socket_error_reset_tls', 'socket_error_other', 'socket_destroy_error',
+                      'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'}
+        prefix = 'engine_wrong_host_one_shot_'
+        expected = {prefix + category for category in categories}
+        self.assertEqual({stage for stage in f.STAGES if stage.startswith(prefix)}, expected)
+        for stage in expected:
+            value = {'schema_version': 1, 'stage': stage, 'engine': 'webkit'}
+            self.assertEqual(f.validate(value), value)
+            for engine in ('none', 'chromium', 'firefox'):
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                    f.validate({**value, 'engine': engine})
+            with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                f.validate({**value, 'accepted': True})
+        for suffix in ('', 'PRIVATE_SENTINEL', 'peer_other_extra', 'https://private.invalid/'):
+            with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$') as caught:
+                f.validate({'schema_version': 1, 'stage': prefix + suffix, 'engine': 'webkit'})
+            self.assertNotIn('PRIVATE_SENTINEL', str(caught.exception))
+
+    def test_wrong_ca_one_shot_categories_are_finite_webkit_only_and_not_acceptance(self):
+        categories = {'credential', 'setup', 'navigation', 'request', 'response',
+                      'console_missing', 'console_malformed',
+                      'peer_legacy_certificate', 'peer_connection_reset', 'peer_handshake_timeout',
+                      'peer_no_native_code', 'peer_non_error', 'peer_other_code', 'peer_other', 'peer_binding',
+                      'socket', 'socket_eof', 'socket_close_unproved', 'socket_error_reset_raw',
+                      'socket_error_reset_tls', 'socket_error_other', 'socket_destroy_error',
+                      'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'}
+        prefix = 'engine_wrong_ca_one_shot_'
+        expected = {prefix + category for category in categories}
+        self.assertEqual({stage for stage in f.STAGES if stage.startswith(prefix)}, expected)
+        node=(c.HERE/'browser_stage.mjs').read_text()
+        for stage in expected:
+            self.assertIn("'" + stage + "'", node)
+            value = {'schema_version': 1, 'stage': stage, 'engine': 'webkit'}
+            self.assertEqual(f.validate(value), value)
+            for engine in ('none', 'chromium', 'firefox'):
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                    f.validate({**value, 'engine': engine})
+            with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                f.validate({**value, 'accepted': True})
+        for suffix in ('', 'PRIVATE_SENTINEL', 'peer_other_extra', 'https://private.invalid/'):
+            with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$') as caught:
+                f.validate({'schema_version': 1, 'stage': prefix + suffix, 'engine': 'webkit'})
+            self.assertNotIn('PRIVATE_SENTINEL', str(caught.exception))
+
+    def test_native_peer_fingerprint_checkpoints_are_exact_webkit_only(self):
+        for role in ('ca', 'host'):
+            prefix = f'engine_wrong_{role}_one_shot_peer_code_sha256_'
+            value = {'schema_version': 1, 'stage': prefix + 'a' * 64, 'engine': 'webkit'}
+            self.assertEqual(f.validate(value), value)
+            self.assertNotIn(value['stage'], f.STAGES)
+            for engine in ('none', 'chromium', 'firefox'):
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                    f.validate({**value, 'engine': engine})
+            for suffix in ('', 'a' * 63, 'a' * 65, 'A' * 64, 'g' * 64,
+                           'a' * 64 + '\n', 'a' * 64 + '\r', 'a' * 64 + '\u2028', 'a' * 64 + '\u2029', 'a' * 64 + '_PRIVATE_SENTINEL', 'https://private.invalid/'):
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$') as caught:
+                    f.validate({**value, 'stage': prefix + suffix})
+                self.assertNotIn('PRIVATE_SENTINEL', str(caught.exception))
+            for extra in ({'accepted': True}, {'code': 'ERR_SSL_PRIVATE'}):
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                    f.validate({**value, **extra})
+            for wrong_role in ('ca_extra', 'host_extra', 'other'):
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                    f.validate({**value, 'stage': f'engine_wrong_{wrong_role}_one_shot_peer_code_sha256_' + 'a' * 64})
+
     def test_webkit_witness_checkpoints_are_bounded_and_webkit_only(self):
         self.assertEqual(len(f.WEBKIT_WITNESS_DIAGNOSTICS), 25)
         self.assertEqual({value for value in f.WEBKIT_WITNESS_DIAGNOSTICS

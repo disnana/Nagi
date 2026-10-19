@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { stage, businessConfig, trustEnv, FAILURE_STAGES } from './browser_stage.mjs';
+import { stage, businessConfig, trustEnv, FAILURE_STAGES, checkedFailure } from './browser_stage.mjs';
 const IMAGE = 'sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9';
 const home = '/run/nagi-sf08/trust-unit/home';
 const ca = Buffer.from('synthetic-public-main-ca');
@@ -181,4 +181,115 @@ test('wrong-host diagnosis stays closed and limits WebKit detail labels to WebKi
     assert.equal(FAILURE_STAGES.includes(stage), true);
     assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
   }
+});
+
+
+test('both one-shot factories are private dependency identities and never serialized into business', async () => {
+  let hostCalls = 0, caCalls = 0;
+  const hostFactory = () => { hostCalls++; throw new Error('private host key sentinel'); };
+  const caFactory = () => { caCalls++; throw new Error('private CA key sentinel'); };
+  const f = fake({ wrongHostFactory: hostFactory, wrongCAFactory: caFactory,
+    preflight: async (_b, _p, _r, _n, _c, selectedHost, selectedCA) => {
+    assert.equal(selectedHost, hostFactory); assert.equal(selectedCA, caFactory); return receipt();
+  } });
+  const value = input(); value.wrongHostFactory = 'caller-controlled-sentinel';
+  value.wrongCAFactory = 'caller-controlled-CA-sentinel'; value.leaf_key = 'caller-key-sentinel';
+  value.wrong_ca_key = 'caller-CA-key-sentinel';
+  await stage(value, f.deps);
+  assert.equal(hostCalls, 0, 'preflight owns the sole host attempt');
+  assert.equal(caCalls, 0, 'preflight owns the sole CA attempt');
+  assert.equal(JSON.stringify(f.calls.config).includes('sentinel'), false);
+  assert.equal(JSON.stringify(f.calls.child.env).includes('caller-key-sentinel'), false);
+  assert.equal(JSON.stringify(f.calls.child.env).includes('caller-CA-key-sentinel'), false);
+});
+
+test('default wrong-host factory reads bound work and ready CA and fails closed before business', async () => {
+  let callerInvoked = false;
+  const value = input(); value.wrongHostFactory = () => { callerInvoked = true; };
+  const f = fake({ preflight: async (_b, _p, _r, _n, _c, factory) => {
+    assert.equal(typeof factory, 'function');
+    await factory(performance.now() + 10000);
+    assert.fail('nonexistent owned credential directory must refuse');
+  } });
+  await assert.rejects(stage(value, f.deps), /^Error: SF08 browser trust preflight refused$/);
+  assert.equal(callerInvoked, false);
+  assert.deepEqual([...f.calls], ['native']);
+});
+
+test('default wrong-CA factory reads bound work and both CA roles and fails closed before business', async () => {
+  let callerInvoked = false;
+  const value = input(); value.wrongCAFactory = () => { callerInvoked = true; };
+  const f = fake({ preflight: async (_b, _p, _r, _n, _c, _hostFactory, caFactory) => {
+    assert.equal(typeof caFactory, 'function');
+    const rows = [];
+    await caFactory(performance.now() + 10000, value => rows.push(value));
+    assert.deepEqual(rows, ['credential']);
+    assert.fail('nonexistent owned wrong-CA credential directory must refuse');
+  } });
+  await assert.rejects(stage(value, f.deps), /^Error: SF08 browser trust preflight refused$/);
+  assert.equal(callerInvoked, false);
+  assert.deepEqual([...f.calls], ['native']);
+});
+
+
+test('one-shot checkpoint vocabulary is finite WebKit-only with no dynamic fields', () => {
+  const categories = ['credential', 'setup', 'navigation', 'request', 'console_missing', 'console_malformed',
+    'response', 'peer_legacy_certificate',
+    'peer_connection_reset', 'peer_handshake_timeout', 'peer_no_native_code', 'peer_non_error',
+    'peer_other_code', 'peer_other', 'peer_binding', 'socket', 'socket_eof', 'socket_close_unproved',
+    'socket_error_reset_raw', 'socket_error_reset_tls', 'socket_error_other', 'socket_destroy_error',
+    'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
+  const actual = FAILURE_STAGES.filter(stage => stage.startsWith('engine_wrong_host_one_shot_'));
+  assert.deepEqual(actual, categories.map(category => 'engine_wrong_host_one_shot_' + category));
+  for (const stage of actual) {
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+    for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+  }
+  for (const stage of ['engine_wrong_host_one_shot_PRIVATE_SENTINEL', 'engine_wrong_host_one_shot_peer_legacy_certificate_SUFFIX',
+    'engine_wrong_host_one_shot_ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'engine_wrong_host_one_shot_accepted'])
+    assert.throws(() => checkedFailure(stage, 'webkit'), /^Error: SF08 checkpoint refused$/);
+});
+
+test('wrong-CA one-shot checkpoint vocabulary is finite WebKit-only with no dynamic fields', () => {
+  const categories = ['credential', 'setup', 'navigation', 'request', 'console_missing', 'console_malformed',
+    'response', 'peer_legacy_certificate',
+    'peer_connection_reset', 'peer_handshake_timeout', 'peer_no_native_code', 'peer_non_error',
+    'peer_other_code', 'peer_other', 'peer_binding', 'socket', 'socket_eof', 'socket_close_unproved',
+    'socket_error_reset_raw', 'socket_error_reset_tls', 'socket_error_other', 'socket_destroy_error',
+    'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
+  const actual = FAILURE_STAGES.filter(stage => stage.startsWith('engine_wrong_ca_one_shot_'));
+  assert.deepEqual(actual, categories.map(category => 'engine_wrong_ca_one_shot_' + category));
+  for (const stage of actual) {
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+    for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+  }
+  for (const stage of ['engine_wrong_ca_one_shot_PRIVATE_SENTINEL', 'engine_wrong_ca_one_shot_peer_other_SUFFIX',
+    'engine_wrong_ca_one_shot_ERR_SSL_TLSV1_ALERT_UNKNOWN_CA', 'engine_wrong_ca_one_shot_accepted'])
+    assert.throws(() => checkedFailure(stage, 'webkit'), /^Error: SF08 checkpoint refused$/);
+});
+
+test('credential failure diagnostic is fixed and callback error never changes stage refusal', async () => {
+  for (const throwing of [false, true]) {
+    const rows = [], f = fake({ preflight: async (_b, _p, _r, _n, _c, factory) => {
+      await factory(performance.now() + 10000, value => { rows.push(value); if (throwing) throw new Error('PRIVATE_SENTINEL'); });
+    } });
+    await assert.rejects(stage(input(), f.deps), /^Error: SF08 browser trust preflight refused$/);
+    assert.deepEqual(rows, ['credential']); assert.deepEqual([...f.calls], ['native']);
+  }
+});
+
+test('native peer fingerprint checkpoints allow only two exact WebKit digest forms', () => {
+  for (const role of ['ca', 'host']) {
+    const prefix = `engine_wrong_${role}_one_shot_peer_code_sha256_`;
+    const stage = prefix + 'a'.repeat(64);
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+    assert.equal(FAILURE_STAGES.includes(stage), false, 'static stage vocabulary stays unchanged');
+    for (const engine of ['none', 'chromium', 'firefox'])
+      assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+    for (const suffix of ['', 'a'.repeat(63), 'a'.repeat(65), 'A'.repeat(64), 'g'.repeat(64),
+      'a'.repeat(64) + '\n', 'a'.repeat(64) + '\r', 'a'.repeat(64) + '\u2028', 'a'.repeat(64) + '\u2029', 'a'.repeat(64) + '_PRIVATE_SENTINEL', 'https://private.invalid/'])
+      assert.throws(() => checkedFailure(prefix + suffix, 'webkit'), /^Error: SF08 checkpoint refused$/);
+  }
+  for (const role of ['ca_extra', 'host_extra', 'other'])
+    assert.throws(() => checkedFailure(`engine_wrong_${role}_one_shot_peer_code_sha256_${'a'.repeat(64)}`, 'webkit'), /^Error: SF08 checkpoint refused$/);
 });

@@ -5,7 +5,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import https from 'node:https';
-import { runPreflight, settings } from './preflight.mjs';
+import { runPreflight, settings, readWebkitWrongHostCredentials, createWebkitWrongHostEndpoint,
+  readWebkitWrongCACredentials, createWebkitWrongCAEndpoint } from './preflight.mjs';
 
 export function trustEnv(home, inherited) {
   return { ...inherited, HOME: home, XDG_DATA_HOME: home + '/.local/share',
@@ -66,7 +67,25 @@ export async function stage(input, deps = {}) {
   const browsers = deps.browsers ?? await import(pathToFileURL(input.playwright_module).href);
   checkpoint('native_wrong_ca', 'none');
   await (deps.nativeNegative ?? nativeWrongCA)(config.negative.ca, config.caPEM);
-  const receipt = await (deps.preflight ?? runPreflight)(browsers, provisioned, input.ready, negative, checkpoint);
+  const wrongHostFactory = deps.wrongHostFactory ?? ((until, diagnose) => {
+    let credentials;
+    try { credentials = readWebkitWrongHostCredentials(input.work, input.ready.ca, config.caPEM); }
+    catch {
+      try { if (typeof diagnose === 'function') diagnose('credential'); } catch {}
+      throw new Error('SF08 browser trust preflight refused');
+    }
+    return createWebkitWrongHostEndpoint(credentials, until, undefined, diagnose);
+  });
+  const wrongCAFactory = deps.wrongCAFactory ?? ((until, diagnose) => {
+    let credentials;
+    try { credentials = readWebkitWrongCACredentials(input.work, config.wrongCAPEM, config.caPEM); }
+    catch {
+      try { if (typeof diagnose === 'function') diagnose('credential'); } catch {}
+      throw new Error('SF08 browser trust preflight refused');
+    }
+    return createWebkitWrongCAEndpoint(credentials, until, undefined, diagnose);
+  });
+  const receipt = await (deps.preflight ?? runPreflight)(browsers, provisioned, input.ready, negative, checkpoint, wrongHostFactory, wrongCAFactory);
   if (JSON.stringify(receipt) !== JSON.stringify({ schema_version: 1, transport_preflight_passed: true,
     engines: ['chromium', 'firefox', 'webkit'].map(engine => ({ engine, positive_sans: 3,
       wrong_ca_refused: true, wrong_host_refused: true })) })) throw new Error('SF08 preflight failed');
@@ -155,7 +174,38 @@ export const WEBKIT_WITNESS_DIAGNOSTICS = Object.freeze([
   'response_query_timeout',
   'certificate_event'
 ]);
-export const FAILURE_STAGES = ['none','settings','native_wrong_ca','guard','native_positive','native_wrong_host',
+export const FAILURE_STAGES = [
+  'engine_wrong_ca_one_shot_credential', 'engine_wrong_ca_one_shot_setup',
+  'engine_wrong_ca_one_shot_navigation', 'engine_wrong_ca_one_shot_request',
+  'engine_wrong_ca_one_shot_console_missing', 'engine_wrong_ca_one_shot_console_malformed',
+  'engine_wrong_ca_one_shot_response', 'engine_wrong_ca_one_shot_peer_legacy_certificate',
+  'engine_wrong_ca_one_shot_peer_connection_reset', 'engine_wrong_ca_one_shot_peer_handshake_timeout',
+  'engine_wrong_ca_one_shot_peer_no_native_code', 'engine_wrong_ca_one_shot_peer_non_error',
+  'engine_wrong_ca_one_shot_peer_other_code',
+  'engine_wrong_ca_one_shot_peer_other', 'engine_wrong_ca_one_shot_peer_binding',
+  'engine_wrong_ca_one_shot_socket',
+  'engine_wrong_ca_one_shot_socket_eof', 'engine_wrong_ca_one_shot_socket_close_unproved',
+  'engine_wrong_ca_one_shot_socket_error_reset_raw', 'engine_wrong_ca_one_shot_socket_error_reset_tls',
+  'engine_wrong_ca_one_shot_socket_error_other', 'engine_wrong_ca_one_shot_socket_destroy_error',
+  'engine_wrong_ca_one_shot_lifecycle',
+  'engine_wrong_ca_one_shot_deadline', 'engine_wrong_ca_one_shot_join',
+  'engine_wrong_ca_one_shot_cleanup', 'engine_wrong_ca_one_shot_unknown',
+  'engine_wrong_host_one_shot_credential', 'engine_wrong_host_one_shot_setup',
+  'engine_wrong_host_one_shot_navigation', 'engine_wrong_host_one_shot_request',
+  'engine_wrong_host_one_shot_console_missing', 'engine_wrong_host_one_shot_console_malformed',
+  'engine_wrong_host_one_shot_response', 'engine_wrong_host_one_shot_peer_legacy_certificate',
+  'engine_wrong_host_one_shot_peer_connection_reset', 'engine_wrong_host_one_shot_peer_handshake_timeout',
+  'engine_wrong_host_one_shot_peer_no_native_code', 'engine_wrong_host_one_shot_peer_non_error',
+  'engine_wrong_host_one_shot_peer_other_code',
+  'engine_wrong_host_one_shot_peer_other', 'engine_wrong_host_one_shot_peer_binding',
+  'engine_wrong_host_one_shot_socket',
+  'engine_wrong_host_one_shot_socket_eof', 'engine_wrong_host_one_shot_socket_close_unproved',
+  'engine_wrong_host_one_shot_socket_error_reset_raw', 'engine_wrong_host_one_shot_socket_error_reset_tls',
+  'engine_wrong_host_one_shot_socket_error_other', 'engine_wrong_host_one_shot_socket_destroy_error',
+  'engine_wrong_host_one_shot_lifecycle',
+  'engine_wrong_host_one_shot_deadline', 'engine_wrong_host_one_shot_join',
+  'engine_wrong_host_one_shot_cleanup', 'engine_wrong_host_one_shot_unknown',
+'none','settings','native_wrong_ca','guard','native_positive','native_wrong_host',
   'engine_launch','engine_positive','engine_positive_ca','engine_positive_host','engine_positive_timeout',
   'engine_positive_response','engine_positive_tls_unknown','engine_positive_unknown',
   'engine_wrong_ca','engine_wrong_ca_response_received','engine_wrong_ca_bad_signature',
@@ -195,11 +245,14 @@ const WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES = [
   'engine_wrong_host_webkit_shape_oversize','engine_wrong_host_webkit_shape_access_failed'];
 export const FAILURE_ENGINES = ['none','chromium','firefox','webkit'];
 export function checkedFailure(stage, engine) {
-  if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage)) || !FAILURE_ENGINES.includes(engine) ||
+  const peerFingerprint = typeof stage === 'string' && stage.length <= 108 &&
+    stage.match(/^engine_wrong_(?:ca|host)_one_shot_peer_code_sha256_[a-f0-9]{64}$/)?.[0] === stage;
+  if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage) && !peerFingerprint) || !FAILURE_ENGINES.includes(engine) ||
       (stage.startsWith('engine_') !== (engine !== 'none')) ||
       (FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'firefox') ||
       (WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||
       (WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||
+      ((stage.startsWith('engine_wrong_host_one_shot_') || stage.startsWith('engine_wrong_ca_one_shot_')) && engine !== 'webkit') ||
       (WEBKIT_WITNESS_STAGES.has(stage) && engine !== 'webkit') ||
       (['engine_wrong_ca_bad_signature','engine_wrong_ca_other_tls'].includes(stage) && engine !== 'firefox') ||
       (stage === 'engine_wrong_ca_hostname' && engine === 'webkit')) throw new Error('SF08 checkpoint refused');

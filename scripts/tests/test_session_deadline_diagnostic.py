@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import io
 import json
 import pathlib
@@ -540,7 +541,8 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
         self.assertEqual(record["suites"]["browser"]["inventory_status"], "inventory_invalid")
 
     def test_unknown_failed_rows_and_stdout_blocks_never_enter_sanitized_output(self):
-        secret_name = "secret_credential_value"
+        unknown_case_sentinel = "unregistered_case_PRIVATE_SENTINEL"
+        # Public synthetic test bytes, never a real credential or captured log.
         marker = (
             "session_deadline_diag status=504 phase=1 event=1 db=4 exit=1 polls=1 begins=1 "
             "commands=0 commits=0 budget_ms=20 entry_remaining_ms=19 "
@@ -548,9 +550,9 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
         )
 
         known = "pending_guarded_authorizer_expires_at_bound_session_and_recovers_permit"
-        unknown_cases = (set(diag.SESSION_CASES) - {known}) | {secret_name}
+        unknown_cases = (set(diag.SESSION_CASES) - {known}) | {unknown_case_sentinel}
         unknown_row_log = cargo_log(
-            unknown_cases, failed={secret_name}, markers={secret_name: [marker]}
+            unknown_cases, failed={unknown_case_sentinel}, markers={unknown_case_sentinel: [marker]}
         )
         record, status = parse_both(session_raw=unknown_row_log, session_exit=101)
         rendered = json.dumps(record)
@@ -558,14 +560,14 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
         self.assertEqual(record["status"], "diagnostic_invalid")
         self.assertEqual(record["suites"]["session"]["failed_cases"], [])
         self.assertEqual(record["suites"]["session"]["session_deadline"], [])
-        self.assertNotIn(secret_name, rendered)
+        self.assertNotIn(unknown_case_sentinel, rendered)
 
         known_failure = cargo_log(
             diag.SESSION_CASES, failed={known}, markers={known: [marker]}
         ).decode()
         unknown_stdout = known_failure.replace(
             "test result: FAILED.",
-            f"---- {secret_name} stdout ----\n{marker}\nfailures:\ntest result: FAILED.",
+            f"---- {unknown_case_sentinel} stdout ----\n{marker}\nfailures:\ntest result: FAILED.",
             1,
         ).encode()
         record, status = parse_both(session_raw=unknown_stdout, session_exit=101)
@@ -574,7 +576,7 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
         self.assertEqual(record["status"], "diagnostic_invalid")
         self.assertEqual(record["suites"]["session"]["session_deadline"][0]["test"], known)
         self.assertEqual(len(record["suites"]["session"]["session_deadline"]), 1)
-        self.assertNotIn(secret_name, rendered)
+        self.assertNotIn(unknown_case_sentinel, rendered)
 
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
@@ -589,7 +591,7 @@ class SessionDeadlineDiagnosticTests(unittest.TestCase):
             self.assertIn("status=diagnostic_invalid", stdout.getvalue())
             self.assertEqual(stderr.getvalue(), "")
             cli_json = output.read_text(encoding="utf-8")
-            self.assertNotIn(secret_name, cli_json)
+            self.assertNotIn(unknown_case_sentinel, cli_json)
             self.assertNotIn("PRIVATE_SENTINEL", cli_json)
 
     def test_duplicate_browser_marker_and_nonfailed_context_are_rejected(self):
@@ -1108,6 +1110,402 @@ class SessionVerdictStdoutTests(unittest.TestCase):
         over_limit_line = diag.closed_verdict_line(over_limit)
         self.assertTrue(over_limit_line.startswith("session_deadline_verdict status=diagnostic_invalid "))
         self.assertTrue(over_limit_line.endswith("markers=over_limit"))
+
+
+class SessionNativeCallSupplementTests(unittest.TestCase):
+    CASE = diag.CSRF_REUSABLE_CASE
+    UNSEEN = diag.NATIVE_CALL_UNSEEN_US
+
+    @classmethod
+    def marker(cls, **changes):
+        values = {
+            "status": 504, "origin": 0, "terminal": 0, "diagnostic_valid": 1,
+            "native_call_state": 2, "generation": 1, "call_enter_us": 123,
+            "call_return_us": cls.UNSEEN, "native_state": 1, "commit_result": 0,
+            "settled_us": cls.UNSEEN, "begins": 1, "commits": 0,
+            "selected_deadline_passed": 1,
+        }
+        values.update(changes)
+        return (f"{diag.NATIVE_CALL_PREFIX} status={values['status']} " + " ".join(
+            f"{name}={values[name]}" for name in diag.NATIVE_CALL_FIELDS[1:]))
+
+    def failed_record(self, raw, cargo_exit=101):
+        browser = cargo_log(diag.BROWSER_CASES)
+        return diag.diagnose(raw, "valid", cargo_exit, browser, "valid", 0)
+
+    def test_closed_parser_accepts_all_visible_states_and_emits_fixed_facts(self):
+        markers = [
+            self.marker(origin=1, terminal=5, native_call_state=1, call_enter_us=self.UNSEEN,
+                        call_return_us=self.UNSEEN, native_state=4),
+            self.marker(),
+            self.marker(origin=1, terminal=6, native_call_state=3, call_return_us=456),
+            self.marker(native_call_state=4, call_return_us=456, native_state=2,
+                        commit_result=1, commits=1),
+            self.marker(origin=3, terminal=2, native_call_state=4, call_return_us=456,
+                        native_state=7, commit_result=2, settled_us=789, commits=1),
+            self.marker(diagnostic_valid=0, native_call_state=0, generation=0,
+                        call_enter_us=self.UNSEEN, call_return_us=self.UNSEEN,
+                        native_state=0, commit_result=0, settled_us=self.UNSEEN,
+                        begins=0, commits=0, selected_deadline_passed=0),
+        ]
+        for line in markers:
+            with self.subTest(line=line):
+                parsed = diag.parse_native_call_marker(line)
+                self.assertIsNotNone(parsed)
+                self.assertTrue(diag._native_call_fact_valid(parsed))
+                self.assertEqual(set(parsed), set(diag.NATIVE_CALL_FIELDS))
+
+    def test_checkout_returned_settlement_cannot_precede_observed_native_return(self):
+        impossible = self.marker(native_call_state=4, call_enter_us=10, call_return_us=20,
+                                 native_state=7, commit_result=1, settled_us=1, commits=1)
+        self.assertIsNone(diag.parse_native_call_marker(impossible))
+        equal = self.marker(native_call_state=4, call_enter_us=10, call_return_us=20,
+                            native_state=7, commit_result=1, settled_us=20, commits=1)
+        self.assertIsNotNone(diag.parse_native_call_marker(equal))
+
+    def test_closed_parser_refuses_suffix_types_ranges_and_state_conflicts(self):
+        good = self.marker()
+        bad = [
+            good + " secret=PRIVATE_SENTINEL", "prefix " + good, good + "\n",
+            good.replace("status=504", "status=200"),
+            good.replace("origin=0 terminal=0", "origin=0 terminal=1"),
+            good.replace("origin=0 terminal=0", "origin=1 terminal=7"),
+            good.replace("native_call_state=2", "native_call_state=02"),
+            good.replace("generation=1", "generation=1023"),
+            good.replace("call_return_us=60000001", "call_return_us=true"),
+            good.replace("call_return_us=60000001", "call_return_us=60000002"),
+            good.replace("call_return_us=60000001", "call_return_us=122"),
+            good.replace("native_state=1", "native_state=2"),
+            good.replace("settled_us=60000001", "settled_us=1"),
+            good.replace("selected_deadline_passed=1", "selected_deadline_passed=true"),
+            good + " " + ("x" * diag.NATIVE_CALL_LINE_LIMIT),
+        ]
+        for line in bad:
+            with self.subTest(line=line[:100]):
+                self.assertIsNone(diag.parse_native_call_marker(line))
+
+        unavailable = self.marker(diagnostic_valid=0, native_call_state=0, generation=0,
+                                  call_enter_us=self.UNSEEN, call_return_us=self.UNSEEN,
+                                  native_state=0, commit_result=0, settled_us=self.UNSEEN,
+                                  begins=0, commits=0, selected_deadline_passed=0)
+        for corrupt in [unavailable.replace("selected_deadline_passed=0", "selected_deadline_passed=1"),
+                        unavailable.replace("call_enter_us=60000001", "call_enter_us=0")]:
+            self.assertIsNone(diag.parse_native_call_marker(corrupt))
+
+    def test_projection_is_failed_case_scoped_and_preserves_duplicate_multiset(self):
+        marker = self.marker()
+        raw = cargo_log(diag.SESSION_CASES, failed={self.CASE}, markers={self.CASE: [marker, marker]})
+        record, status = self.failed_record(raw)
+        self.assertEqual((record["status"], status), ("tests_failed", 1))
+        lines = diag.session_native_call_lines(raw, 101, record)
+        self.assertEqual(len(lines), 2)
+        facts = [json.loads(line.split("=", 1)[1]) for line in lines]
+        self.assertEqual(facts[0], facts[1])
+        self.assertEqual((facts[0]["suite"], facts[0]["test"], facts[0]["native_call_state"]),
+                         ("session", self.CASE, 2))
+        self.assertEqual(set(facts[0]), {"suite", "test", *diag.NATIVE_CALL_FIELDS})
+        self.assertTrue(all(len(line.encode("ascii")) <= 4096 for line in lines))
+        self.assertNotIn("PRIVATE_SENTINEL", "\n".join(lines))
+
+        other = next(iter(diag.SESSION_CASES - {self.CASE}))
+        unbound = cargo_log(diag.SESSION_CASES, failed={other}, markers={other: [marker]})
+        unbound_record, _ = self.failed_record(unbound)
+        self.assertEqual(diag.session_native_call_lines(unbound, 101, unbound_record),
+                         ["session_native_call=unavailable"])
+        self.assertEqual(diag.session_native_call_lines(raw, 101, None),
+                         ["session_native_call=unavailable"])
+        self.assertEqual(diag.session_native_call_lines(raw, 0, record),
+                         ["session_native_call=unavailable"])
+        without_marker = cargo_log(diag.SESSION_CASES, failed={self.CASE})
+        no_marker_record, _ = self.failed_record(without_marker)
+        self.assertEqual(diag.session_native_call_lines(without_marker, 101, no_marker_record),
+                         ["session_native_call=unavailable"])
+
+    def test_malformed_inventory_source_and_sensitive_suffix_never_escape(self):
+        marker = self.marker()
+        cases = [
+            cargo_log(diag.SESSION_CASES, failed={self.CASE},
+                      markers={self.CASE: [marker + " cookie=PRIVATE_SENTINEL"]}),
+            cargo_log(diag.SESSION_CASES, failed={self.CASE},
+                      markers={self.CASE: [marker + "\n" + marker + " path=/private/PRIVATE_SENTINEL"]}),
+            cargo_log(diag.SESSION_CASES, failed={self.CASE}, markers={self.CASE: [marker]}) +
+                (f"---- {self.CASE} stdout ----\n{marker}\n".encode()),
+        ]
+        for raw in cases:
+            with self.subTest(raw_length=len(raw)):
+                record, _ = self.failed_record(raw)
+                lines = diag.session_native_call_lines(raw, 101, record)
+                self.assertEqual(lines, ["session_native_call=unavailable"])
+                self.assertNotIn("PRIVATE_SENTINEL", "\n".join(lines))
+
+        valid = cargo_log(diag.SESSION_CASES, failed={self.CASE}, markers={self.CASE: [marker]})
+        record, _ = self.failed_record(valid)
+        with mock.patch.object(diag, "_csrf_source_current", return_value=False):
+            self.assertEqual(diag.session_native_call_lines(valid, 101, record),
+                             ["session_native_call=unavailable"])
+        self.assertEqual(diag.session_native_call_lines(valid + b"x" * diag.RAW_LIMIT, 101, record),
+                         ["session_native_call=unavailable"])
+        self.assertEqual(diag.session_native_call_lines(b"\xffPRIVATE_SENTINEL", 101, record),
+                         ["session_native_call=unavailable"])
+
+    def test_cli_keeps_v2_bytes_and_failure_exit_while_printing_bounded_facts(self):
+        raw = cargo_log(diag.SESSION_CASES, failed={self.CASE}, markers={self.CASE: [self.marker()]})
+        expected, expected_status = self.failed_record(raw)
+        expected_bytes = (json.dumps(expected, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii")
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+            (root / "session-deadline-session.raw").write_bytes(raw)
+            (root / "session-deadline-browser.raw").write_bytes(cargo_log(diag.BROWSER_CASES))
+            output = root / "record.json"
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                status = diag.main(["diag", str(root), "101", "0", str(output)])
+            self.assertEqual((status, expected_status), (1, 1))
+            self.assertEqual(output.read_bytes(), expected_bytes)
+            lines = stdout.getvalue().splitlines()
+            self.assertEqual(lines[0], diag.closed_verdict_line(expected))
+            self.assertEqual(lines[-1].split("=", 1)[0], "session_native_call")
+            fact = json.loads(lines[-1].split("=", 1)[1])
+            self.assertEqual(fact["test"], self.CASE)
+            self.assertNotIn("PRIVATE_SENTINEL", stdout.getvalue())
+
+    def test_projection_caps_fact_count_and_emits_only_a_fixed_unavailable_line(self):
+        raw = cargo_log(diag.SESSION_CASES, failed={self.CASE},
+                        markers={self.CASE: [self.marker()] * (diag.NATIVE_CALL_FACT_LIMIT + 1)})
+        record, _ = self.failed_record(raw)
+        self.assertEqual(diag.session_native_call_lines(raw, 101, record),
+                         ["session_native_call=unavailable"])
+
+
+class BrowserNativeCallSupplementTests(unittest.TestCase):
+    CASE = "public_login_claims_once_then_named_verifier_issue_and_appended_cookies"
+
+    def browser_raw(self, markers=None, failed=None):
+        return cargo_log(diag.BROWSER_CASES, failed=failed or {self.CASE},
+                         markers=markers or {self.CASE: [SessionNativeCallSupplementTests.marker(origin=2)]})
+
+    def test_browser_cli_preserves_v2_bytes_and_failure_exit_with_bound_numeric_fact(self):
+        raw = self.browser_raw()
+        expected, verdict = parse_both(browser_raw=raw, browser_exit=101)
+        self.assertEqual((expected['status'], verdict), ('tests_failed', 1))
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+            (root/'session-deadline-session.raw').write_bytes(cargo_log(diag.SESSION_CASES))
+            (root/'session-deadline-browser.raw').write_bytes(raw)
+            output = root/'record.json'; stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = diag.main(['diag', str(root), '0', '101', str(output)])
+            self.assertEqual(code, 1)
+            self.assertEqual(output.read_bytes(), (json.dumps(expected, sort_keys=True, separators=(',', ':'))+'\n').encode('ascii'))
+            lines = [line for line in stdout.getvalue().splitlines() if line.startswith('session_native_call=')]
+            self.assertEqual(len(lines), 1, 'browser native-call evidence must survive the real CLI')
+            fact = json.loads(lines[0].split('=', 1)[1])
+            self.assertEqual((fact['suite'], fact['test'], fact['origin']), ('browser', self.CASE, 2))
+            self.assertEqual(set(fact), {'suite', 'test', *diag.NATIVE_CALL_FIELDS})
+            self.assertLessEqual(len(lines[0].encode('ascii')), 4096)
+
+    def test_browser_projection_keeps_failed_case_identity_and_duplicate_multiset(self):
+        other = 'committed_claim_stays_consumed_on_verifier_error_panic_and_deadline'
+        marker = SessionNativeCallSupplementTests.marker(origin=2)
+        raw = self.browser_raw({self.CASE: [marker, marker], other: [marker]}, {self.CASE, other})
+        record, _ = parse_both(browser_raw=raw, browser_exit=101)
+        lines = diag.session_native_call_lines(raw, 101, record, suite_name='browser')
+        facts = [json.loads(line.split('=', 1)[1]) for line in lines]
+        self.assertCountEqual([fact['test'] for fact in facts], [self.CASE, self.CASE, other])
+        duplicates = [fact for fact in facts if fact['test'] == self.CASE]
+        self.assertEqual(duplicates[0], duplicates[1])
+
+    def test_browser_source_unknown_case_unbound_marker_and_sensitive_suffix_refuse(self):
+        marker = SessionNativeCallSupplementTests.marker(origin=2)
+        raw = self.browser_raw(); record, _ = parse_both(browser_raw=raw, browser_exit=101)
+        with mock.patch.object(diag, '_browser_native_call_source_current', return_value=False):
+            self.assertEqual(diag.session_native_call_lines(raw, 101, record, suite_name='browser'), ['session_native_call=unavailable'])
+        for candidate in [raw + (marker+'\n').encode(),
+                          raw.replace(marker.encode(), (marker+' secret=PRIVATE_SENTINEL').encode()),
+                          raw.replace(self.CASE.encode(), b'unknown_case_sentinel'),
+                          self.browser_raw({self.CASE: [marker]*(diag.NATIVE_CALL_FACT_LIMIT+1)})]:
+            result, _ = parse_both(browser_raw=candidate, browser_exit=101)
+            lines = diag.session_native_call_lines(candidate, 101, result, suite_name='browser')
+            self.assertEqual(lines, ['session_native_call=unavailable'])
+            self.assertNotIn('PRIVATE_SENTINEL', '\n'.join(lines))
+        self.assertEqual(diag.session_native_call_lines(raw, 101, record, suite_name='unknown_case_sentinel'), ['session_native_call=unavailable'])
+
+
+class ReusableCsrfFailureSupplementTests(unittest.TestCase):
+    CASE = 'one_reusable_token_admits_two_distinct_actual_requests'
+    PARALLEL = ('csrf_public_assertion_diag phase=ParallelReplies status_one=200 status_two=504 '
+                'checked_calls=None calls_at_failure=1 checked_rows=None')
+    GUARDED = ('csrf_guarded_deadline_diag status=504 phase=12 event=1 db=4 exit=1 '
+               'polls=2 begins=1 commands=0 commits=0 budget_ms=1000 entry_remaining_ms=999 '
+               'phase_remaining_ms=980 exit_remaining_ms=0 selected_deadline_passed=1 terminal=5')
+    LOCATION = ("thread 'one_reusable_token_admits_two_distinct_actual_requests' panicked at "
+                'runtime/tests/session_csrf_public_api.rs:936:5:')
+
+    def sample(self, markers=None, exact=False, failed=True):
+        raw = cargo_log({self.CASE} if exact else diag.SESSION_CASES,
+                        failed={self.CASE} if failed else set(),
+                        markers={self.CASE: markers or [self.LOCATION, self.PARALLEL, self.GUARDED]})
+        raw = raw.replace(b"thread 'test' panicked at /private/path: token=PRIVATE_SENTINEL\n", b'')
+        record = None if exact else parse_both(session_raw=raw, session_exit=101 if failed else 0)[0]
+        return raw, record
+
+    def test_current_unknown_failure_has_closed_source_location_and_unassigned_deadline_fact(self):
+        raw, record = self.sample()
+        observed = diag.csrf_reusable_observation(raw, 101, record=record)
+        self.assertEqual(observed['location'], {'file': 'session_csrf_public_api.rs', 'line': 936, 'column': 5})
+        self.assertEqual(observed['assertion']['status_two'], 504)
+        self.assertIsNone(observed['assertion']['checked_calls'])
+        self.assertEqual(len(observed['guarded']), 1)
+        self.assertNotIn('request', observed['guarded'][0])
+        rendered = diag.csrf_reusable_line(observed)
+        self.assertTrue(rendered.startswith('csrf_reusable_failure={'))
+        self.assertLessEqual(len(rendered.encode('ascii')), 4096)
+        self.assertNotIn('/workspace', rendered)
+
+    def test_readiness_source_pin_and_exact_line_bound(self):
+        source = pathlib.Path(diag.__file__).resolve().parents[2] / 'runtime/tests/session_csrf_public_api.rs'
+        canonical = source.read_bytes().replace(b'\r\n', b'\n')
+        self.assertEqual(hashlib.sha256(canonical).hexdigest(), diag.CSRF_REUSABLE_SOURCE)
+        self.assertEqual(len(canonical.splitlines()), 1249)
+        raw, record = self.sample()
+        observed = diag.csrf_reusable_observation(raw, 101, record=record)
+        for line, valid in [(1249, True), (1250, False)]:
+            candidate = dict(observed, location={'file': 'session_csrf_public_api.rs', 'line': line, 'column': 1})
+            self.assertEqual(diag.csrf_reusable_line(candidate) != 'csrf_reusable_failure unavailable', valid)
+
+    def test_two_identical_guarded_observations_are_a_multiset_not_request_correlation(self):
+        marker = self.PARALLEL.replace('status_one=200', 'status_one=504')
+        raw, record = self.sample([self.LOCATION, marker, self.GUARDED, self.GUARDED])
+        observed = diag.csrf_reusable_observation(raw, 101, record=record)
+        self.assertEqual(len(observed['guarded']), 2)
+        self.assertEqual(observed['guarded'][0], observed['guarded'][1])
+        raw, record = self.sample([self.LOCATION, self.PARALLEL, self.GUARDED, self.GUARDED])
+        self.assertIsNone(diag.csrf_reusable_observation(raw, 101, record=record))
+
+    def test_rust_thread_id_suffix_is_bounded_and_never_persisted(self):
+        raw, record = self.sample([self.LOCATION, self.PARALLEL, self.GUARDED])
+        baseline = diag.csrf_reusable_line(diag.csrf_reusable_observation(raw, 101, record=record))
+        for identifier in ['7', '4294967295', '18446744073709551615']:
+            location = self.LOCATION.replace("' panicked", f"' ({identifier}) panicked")
+            raw, record = self.sample([location, self.PARALLEL, self.GUARDED])
+            observed = diag.csrf_reusable_observation(raw, 101, record=record)
+            self.assertEqual(observed['location']['line'], 936)
+            self.assertEqual(diag.csrf_reusable_line(observed), baseline)
+        for identifier in ['0', '07', '1' * 21, 'PRIVATE_SENTINEL']:
+            raw, record = self.sample([self.LOCATION.replace("' panicked", f"' ({identifier}) panicked")])
+            self.assertIsNone(diag.csrf_reusable_observation(raw, 101, record=record))
+
+    def test_setup_and_shutdown_panics_do_not_fabricate_response_statuses(self):
+        for line in [224, 543, 1200]:
+            with self.subTest(line=line):
+                raw, record = self.sample([self.LOCATION.replace(':936:', f':{line}:')])
+                observed = diag.csrf_reusable_observation(raw, 101, record=record)
+                self.assertEqual(observed['location']['line'], line)
+                self.assertIsNone(observed['assertion'])
+                self.assertEqual(observed['guarded'], [])
+
+    def test_duplicate_malformed_wrong_location_and_sensitive_suffix_are_refused(self):
+        bad_lists = [
+            [self.LOCATION, self.LOCATION, self.PARALLEL],
+            [self.LOCATION, self.PARALLEL, self.PARALLEL],
+            [self.LOCATION.replace(':936:', ':1250:'), self.PARALLEL],
+            [self.LOCATION.replace('session_csrf_public_api.rs', 'foreign.rs'), self.PARALLEL],
+            [self.LOCATION, self.PARALLEL + ' token=PRIVATE_SENTINEL'],
+            [self.LOCATION, self.PARALLEL.replace('checked_calls=None', 'checked_calls=Some(2)')],
+            [self.LOCATION, self.GUARDED.replace('terminal=5', 'terminal=99')],
+            [self.LOCATION, self.GUARDED.replace('budget_ms=1000', 'budget_ms=0600')],
+            [self.LOCATION, self.GUARDED] * 3,
+        ]
+        for markers in bad_lists:
+            with self.subTest(markers=markers):
+                raw, record = self.sample(markers)
+                observed = diag.csrf_reusable_observation(raw, 101, record=record)
+                self.assertIsNone(observed)
+                self.assertNotIn('PRIVATE_SENTINEL', diag.csrf_reusable_line(observed))
+
+    def test_source_change_invalid_records_nonfailure_and_incomplete_inputs_are_refused(self):
+        raw, record = self.sample()
+        with mock.patch.object(diag, '_csrf_source_current', return_value=False):
+            self.assertIsNone(diag.csrf_reusable_observation(raw, 101, record=record))
+        for altered in [None, {}, {'status': 'tests_failed'}]:
+            self.assertIsNone(diag.csrf_reusable_observation(raw, 101, record=altered))
+        self.assertIsNone(diag.csrf_reusable_observation(raw, 0, record=record))
+        self.assertIsNone(diag.csrf_reusable_observation(raw + b'\xff', 101, record=record))
+        self.assertIsNone(diag.csrf_reusable_observation(b'x' * (diag.RAW_LIMIT + 1), 101, record=record))
+        observed = diag.csrf_reusable_observation(raw, 101, record=record)
+        observed['injected'] = 'PRIVATE_SENTINEL'
+        self.assertEqual(diag.csrf_reusable_line(observed), 'csrf_reusable_failure unavailable')
+
+    def test_exact_inventory_is_separate_and_normal_v2_remains_unchanged(self):
+        raw, _ = self.sample(exact=True)
+        self.assertIsNone(diag.csrf_reusable_observation(raw, 101, record=parse_both(session_raw=raw, session_exit=101)[0]))
+        observed = diag.csrf_reusable_observation(raw, 101, execution='exact')
+        self.assertEqual(observed['execution'], 'exact')
+        self.assertEqual(observed['status'], 'observed')
+        passed, _ = self.sample(exact=True, failed=False)
+        accepted = diag.csrf_reusable_observation(passed, 0, execution='exact')
+        self.assertEqual(accepted['status'], 'tests_passed')
+        self.assertIsNone(accepted['location'])
+        self.assertIsNone(diag.csrf_reusable_observation(raw, 0, execution='exact'))
+
+    def test_cli_preserves_v2_json_and_failed_exit_while_adding_one_bounded_line(self):
+        raw, baseline = self.sample()
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+            (root / 'session-deadline-session.raw').write_bytes(raw)
+            (root / 'session-deadline-browser.raw').write_bytes(cargo_log(diag.BROWSER_CASES))
+            output = root / 'result.json'
+            console = io.StringIO()
+            with contextlib.redirect_stdout(console):
+                status = diag.main(['diag', str(root), '101', '0', str(output)])
+            self.assertEqual(status, 1)
+            self.assertEqual(json.loads(output.read_text()), baseline)
+            lines = console.getvalue().splitlines()
+            self.assertEqual(len(lines), 3)
+            self.assertTrue(lines[1].startswith('csrf_reusable_failure={'))
+            self.assertEqual(lines[2], 'session_native_call=unavailable')
+            self.assertNotIn('PRIVATE_SENTINEL', console.getvalue())
+
+    def test_exact_cli_requires_one_actual_case_and_preserves_cargo_failure(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = pathlib.Path(folder) / 'raw'
+            for failed, expected in [(False, 0), (True, 1)]:
+                raw, _ = self.sample(exact=True, failed=failed)
+                source.write_bytes(raw)
+                console = io.StringIO()
+                with contextlib.redirect_stdout(console):
+                    status = diag.main(['diag', '--csrf-reusable-only', str(source), '101' if failed else '0'])
+                self.assertEqual(status, expected)
+                self.assertEqual(len(console.getvalue().splitlines()), 1)
+                self.assertNotIn('PRIVATE_SENTINEL', console.getvalue())
+            source.write_bytes(cargo_log(set()))
+            console = io.StringIO()
+            with contextlib.redirect_stdout(console):
+                status = diag.main(['diag', '--csrf-reusable-only', str(source), '0'])
+            self.assertEqual(status, 1)
+            self.assertEqual(console.getvalue(), 'csrf_reusable_failure unavailable\n')
+
+    def test_token_failure_and_closed_shape_corruptions(self):
+        token = 'csrf_public_assertion_diag phase=TokenReply status=503 body_bytes=12 set_cookie_count=0'
+        raw, record = self.sample([self.LOCATION.replace(':936:', ':519:'), token])
+        observed = diag.csrf_reusable_observation(raw, 101, record=record)
+        self.assertEqual(observed['assertion']['phase'], 'TokenReply')
+        self.assertEqual(observed['assertion']['status'], 503)
+        raw_with_guarded, record_with_guarded = self.sample([
+            self.LOCATION.replace(':936:', ':519:'), token, self.GUARDED])
+        self.assertIsNone(diag.csrf_reusable_observation(raw_with_guarded, 101, record=record_with_guarded))
+        changed = dict(observed, guarded=[dict(zip(diag._CSRF_GUARDED_KEYS,
+            map(int, diag._CSRF_GUARDED.fullmatch(self.GUARDED).groups())))])
+        self.assertEqual(diag.csrf_reusable_line(changed), 'csrf_reusable_failure unavailable')
+        for key, value in [('schema_version', True), ('guarded', [None]), ('location', {}),
+                           ('execution', 'foreign'), ('source_sha256', 'PRIVATE_SENTINEL')]:
+            changed = dict(observed, **{key: value})
+            self.assertEqual(diag.csrf_reusable_line(changed), 'csrf_reusable_failure unavailable')
+        for marker in [token.replace('status=503 body_bytes=12', 'status=200 body_bytes=60'),
+                       token.replace('set_cookie_count=0', 'set_cookie_count=99999'),
+                       token + ' token=PRIVATE_SENTINEL']:
+            raw, record = self.sample([self.LOCATION, marker])
+            self.assertIsNone(diag.csrf_reusable_observation(raw, 101, record=record))
 
 
 if __name__ == "__main__":

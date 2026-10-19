@@ -169,3 +169,234 @@ fn closed_numeric_line_and_poisoned_record_cannot_expose_payload() {
     .is_err());
     assert!(o.closed(504).is_none());
 }
+
+#[test]
+fn native_call_stamps_distinguish_call_wait_publication_lag_and_published_result() {
+    let o = observer();
+    let guard = o.native_finish();
+    guard.commit_enter();
+    guard.call_enter();
+    assert!(o
+        .native_call_for_test()
+        .contains("diagnostic_valid=1 native_call_state=2 generation=1"));
+    guard.call_return();
+    let retained = o.closed(504).unwrap();
+    assert!(CallClosed::new(retained, Origin::Session, 0)
+        .to_string()
+        .contains("native_call_state=3"));
+    guard.commit_return(true);
+    assert!(o.native_call_for_test().contains("native_call_state=4"));
+    assert!(CallClosed::new(retained, Origin::Session, 0)
+        .to_string()
+        .contains("native_call_state=3"));
+}
+
+#[test]
+fn native_call_snapshot_refuses_publication_and_next_begin_during_read() {
+    let o = observer();
+    let guard = o.native_finish();
+    guard.commit_enter();
+    guard.call_enter();
+    let mixed = o
+        .closed_after_copy(504, || {
+            guard.call_return();
+            guard.commit_return(true);
+        })
+        .unwrap();
+    let unavailable = CallClosed::new(mixed, Origin::Session, 0).to_string();
+    assert!(unavailable.contains("diagnostic_valid=0 native_call_state=0 generation=0 call_enter_us=60000001 call_return_us=60000001 native_state=0 commit_result=0 settled_us=60000001 begins=0 commits=0 selected_deadline_passed=0"));
+    guard.checkout_returned();
+    let mut next = None;
+    let mixed = o
+        .closed_after_copy(504, || {
+            next = Some(o.native_finish());
+        })
+        .unwrap();
+    assert!(CallClosed::new(mixed, Origin::Session, 0)
+        .to_string()
+        .contains("diagnostic_valid=0 native_call_state=0"));
+    // Late generation1 completion cannot overwrite either generation2 word.
+    let current_entry = o.0.native_call_enter.load(Ordering::Acquire);
+    let current_return = o.0.native_call_return.load(Ordering::Acquire);
+    guard.call_enter();
+    guard.call_return();
+    assert_eq!(o.0.native_call_enter.load(Ordering::Acquire), current_entry);
+    assert_eq!(
+        o.0.native_call_return.load(Ordering::Acquire),
+        current_return
+    );
+    assert!(o
+        .native_call_for_test()
+        .contains("diagnostic_valid=1 native_call_state=1 generation=2"));
+    drop(next);
+}
+
+#[test]
+fn native_call_tag_range_order_duplicate_and_record_changes_are_unavailable() {
+    for mode in [0, 1, 2, 3, 4, 5] {
+        let o = observer();
+        let guard = o.native_finish();
+        guard.commit_enter();
+        guard.call_enter();
+        match mode {
+            0 => {
+                o.0.native_call_return
+                    .store(tagged(2, 10), Ordering::Release)
+            }
+            1 => {
+                o.0.native_call_return
+                    .store(tagged(1, INVALID_US), Ordering::Release)
+            }
+            2 => {
+                o.0.native_call_enter
+                    .store(tagged(1, UNSEEN_US), Ordering::Release)
+            }
+            3 => {
+                guard.call_enter();
+            }
+            4 => {
+                o.0.native_call_enter
+                    .store(tagged(1, 50), Ordering::Release);
+                o.0.native_call_return
+                    .store(tagged(1, 49), Ordering::Release);
+            }
+            5 => {
+                o.0.native_call_return
+                    .store((u64::from(u32::MAX) << 32) | 10, Ordering::Release)
+            }
+            _ => unreachable!(),
+        }
+        if mode == 2 {
+            guard.call_return();
+        }
+        assert!(o
+            .native_call_for_test()
+            .contains("diagnostic_valid=0 native_call_state=0"));
+    }
+    let o = observer();
+    let guard = o.native_finish();
+    guard.commit_enter();
+    guard.call_enter();
+    guard.call_return();
+    let mixed = o
+        .closed_after_copy(504, || o.update(|r| r.commits += 1))
+        .unwrap();
+    assert!(CallClosed::new(mixed, Origin::Session, 0)
+        .to_string()
+        .contains("diagnostic_valid=0"));
+    let mixed = o
+        .closed_after_copy(504, || {
+            o.update(|r| r.phase = super::super::Phase::Business)
+        })
+        .unwrap();
+    assert!(CallClosed::new(mixed, Origin::Session, 0)
+        .to_string()
+        .contains("diagnostic_valid=0"));
+}
+
+#[test]
+fn native_call_supplement_is_finite_numeric_failure_only_and_keeps_legacy_shape() {
+    let o = observer();
+    let guard = o.native_finish();
+    guard.commit_enter();
+    guard.call_enter();
+    guard.call_return();
+    let output = o.native_call_for_test();
+    assert!(output.len() < 512);
+    let expected = [
+        "status",
+        "origin",
+        "terminal",
+        "diagnostic_valid",
+        "native_call_state",
+        "generation",
+        "call_enter_us",
+        "call_return_us",
+        "native_state",
+        "commit_result",
+        "settled_us",
+        "begins",
+        "commits",
+        "selected_deadline_passed",
+    ];
+    let mut fields = output
+        .strip_prefix("session_native_call_diag ")
+        .unwrap()
+        .split(' ');
+    for name in expected {
+        let (key, value) = fields.next().unwrap().split_once('=').unwrap();
+        assert_eq!(key, name);
+        assert!(!value.is_empty() && value.bytes().all(|b| b.is_ascii_digit()));
+    }
+    assert!(fields.next().is_none());
+    assert!(o.closed(200).is_none());
+    assert!(o.closed(403).is_none());
+    assert!(!o.native_finish_for_test().contains("native_call"));
+}
+
+#[test]
+fn native_call_second_lock_poison_keeps_original_terminal_and_unavailable_supplement() {
+    let o = observer();
+    let guard = o.native_finish();
+    guard.commit_enter();
+    guard.call_enter();
+    let poison = o.clone();
+    let terminal = o
+        .closed_after_copy(504, || {
+            assert!(std::thread::spawn(move || {
+                let _held = poison.0.record.lock().unwrap();
+                panic!("private second-read poison seam");
+            })
+            .join()
+            .is_err());
+        })
+        .unwrap();
+    assert!(Closed::new(terminal, Origin::Session, 0)
+        .to_string()
+        .contains("native_state=1 commit_result=0"));
+    assert!(CallClosed::new(terminal, Origin::Session, 0)
+        .to_string()
+        .contains("diagnostic_valid=0 native_call_state=0 generation=0"));
+    assert!(
+        o.closed(504).is_none(),
+        "initial-read poison keeps the original no-snapshot behavior"
+    );
+}
+
+#[test]
+fn native_call_checkout_settlement_cannot_precede_independent_return() {
+    for settled in [0, 1, 19, 20, 21, LIMIT_US] {
+        let o = observer();
+        let guard = o.native_finish();
+        guard.commit_enter();
+        guard.commit_return(true);
+        guard.checkout_returned();
+        o.update(|r| {
+            r.native.commit_enter_us = 0;
+            r.native.commit_return_us = 20;
+            r.native.settled_us = settled;
+        });
+        o.0.native_call_enter
+            .store(tagged(1, 10), Ordering::Release);
+        o.0.native_call_return
+            .store(tagged(1, 20), Ordering::Release);
+        let line = o.native_call_for_test();
+        assert_eq!(
+            line.contains("diagnostic_valid=1 native_call_state=4"),
+            settled >= 20,
+            "settlement must not precede independently observed return"
+        );
+        if settled < 20 {
+            assert!(line.contains("diagnostic_valid=0 native_call_state=0 generation=0"));
+        }
+    }
+    // Rollback/no-COMMIT settlement has no independent return and remains state1.
+    let o = observer();
+    let guard = o.native_finish();
+    guard.cleanup_eof_enter();
+    guard.cleanup_return(true);
+    guard.checkout_returned();
+    assert!(o
+        .native_call_for_test()
+        .contains("diagnostic_valid=1 native_call_state=1"));
+}

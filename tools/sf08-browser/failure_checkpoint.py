@@ -1,4 +1,5 @@
 """Failure-only closed facts. No raw child output, exceptions or paths."""
+import re
 PHASES = {'binding','scope','capacity','ready','tls','negative','provision','browser','report',
           'stop_ack','close','ownership','cancelled','timeout','unexpected'}
 STAGES = {'none','settings','native_wrong_ca','guard','native_positive','native_wrong_host',
@@ -24,7 +25,39 @@ STAGES = {'none','settings','native_wrong_ca','guard','native_positive','native_
           'engine_wrong_host_webkit_no_fixed_token','engine_wrong_host_webkit_cancelled_present',
           'engine_wrong_host_webkit_shape_non_error','engine_wrong_host_webkit_shape_non_string',
           'engine_wrong_host_webkit_shape_oversize','engine_wrong_host_webkit_shape_access_failed','engine_close',
-          'business_config','business','receipt','input'}
+          'business_config','business','receipt','input',
+          'engine_wrong_host_one_shot_credential','engine_wrong_host_one_shot_setup',
+          'engine_wrong_host_one_shot_navigation','engine_wrong_host_one_shot_request',
+          'engine_wrong_host_one_shot_console_missing','engine_wrong_host_one_shot_console_malformed',
+          'engine_wrong_host_one_shot_response','engine_wrong_host_one_shot_peer_legacy_certificate',
+          'engine_wrong_host_one_shot_peer_connection_reset','engine_wrong_host_one_shot_peer_handshake_timeout',
+          'engine_wrong_host_one_shot_peer_no_native_code','engine_wrong_host_one_shot_peer_non_error',
+          'engine_wrong_host_one_shot_peer_other_code',
+          'engine_wrong_host_one_shot_peer_other','engine_wrong_host_one_shot_peer_binding',
+          'engine_wrong_host_one_shot_socket','engine_wrong_host_one_shot_socket_eof',
+          'engine_wrong_host_one_shot_socket_close_unproved',
+          'engine_wrong_host_one_shot_socket_error_reset_raw',
+          'engine_wrong_host_one_shot_socket_error_reset_tls',
+          'engine_wrong_host_one_shot_socket_error_other',
+          'engine_wrong_host_one_shot_socket_destroy_error','engine_wrong_host_one_shot_lifecycle',
+          'engine_wrong_host_one_shot_deadline','engine_wrong_host_one_shot_join',
+          'engine_wrong_host_one_shot_cleanup','engine_wrong_host_one_shot_unknown',
+          'engine_wrong_ca_one_shot_credential','engine_wrong_ca_one_shot_setup',
+          'engine_wrong_ca_one_shot_navigation','engine_wrong_ca_one_shot_request',
+          'engine_wrong_ca_one_shot_console_missing','engine_wrong_ca_one_shot_console_malformed',
+          'engine_wrong_ca_one_shot_response','engine_wrong_ca_one_shot_peer_legacy_certificate',
+          'engine_wrong_ca_one_shot_peer_connection_reset','engine_wrong_ca_one_shot_peer_handshake_timeout',
+          'engine_wrong_ca_one_shot_peer_no_native_code','engine_wrong_ca_one_shot_peer_non_error',
+          'engine_wrong_ca_one_shot_peer_other_code',
+          'engine_wrong_ca_one_shot_peer_other','engine_wrong_ca_one_shot_peer_binding',
+          'engine_wrong_ca_one_shot_socket','engine_wrong_ca_one_shot_socket_eof',
+          'engine_wrong_ca_one_shot_socket_close_unproved',
+          'engine_wrong_ca_one_shot_socket_error_reset_raw',
+          'engine_wrong_ca_one_shot_socket_error_reset_tls',
+          'engine_wrong_ca_one_shot_socket_error_other',
+          'engine_wrong_ca_one_shot_socket_destroy_error','engine_wrong_ca_one_shot_lifecycle',
+          'engine_wrong_ca_one_shot_deadline','engine_wrong_ca_one_shot_join',
+          'engine_wrong_ca_one_shot_cleanup','engine_wrong_ca_one_shot_unknown'}
 WEBKIT_WITNESS_DIAGNOSTICS = frozenset({
     'missing_event','duplicate_event','foreign_request_url','foreign_request_non_navigation',
     'foreign_request_frame','not_certificate',
@@ -74,12 +107,16 @@ def validate(value, *, outer=False):
     keys = {'schema_version','stage','engine'} | ({'phase'} if outer else set())
     if (type(value) is not dict or set(value) != keys or type(value['schema_version']) is not int
             or value['schema_version'] != 1 or type(value['stage']) is not str
-            or (value['stage'] not in STAGES and value['stage'] not in WEBKIT_WITNESS_STAGES)
+            or (value['stage'] not in STAGES and value['stage'] not in WEBKIT_WITNESS_STAGES
+                and not (len(value['stage']) <= 108 and re.fullmatch(
+                    r'engine_wrong_(?:ca|host)_one_shot_peer_code_sha256_[a-f0-9]{64}', value['stage'])))
             or type(value['engine']) is not str or value['engine'] not in ENGINES
             or (value['stage'].startswith('engine_') != (value['engine'] != 'none'))
             or (value['stage'] in FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES and value['engine'] != 'firefox')
             or (value['stage'] in WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES and value['engine'] != 'webkit')
             or (value['stage'] in WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES and value['engine'] != 'webkit')
+            or (value['stage'].startswith('engine_wrong_host_one_shot_') and value['engine'] != 'webkit')
+            or (value['stage'].startswith('engine_wrong_ca_one_shot_') and value['engine'] != 'webkit')
             or (value['stage'] in WEBKIT_WITNESS_STAGES and value['engine'] != 'webkit')
             or (value['stage'] in {'engine_wrong_ca_bad_signature','engine_wrong_ca_other_tls'}
                 and value['engine'] != 'firefox')

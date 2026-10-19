@@ -1,6 +1,7 @@
 """Strict sanitizer for opt-in Session and BrowserLogin public-test failures."""
 from __future__ import annotations
 
+import hashlib
 import json
 import pathlib
 import re
@@ -1259,7 +1260,368 @@ def closed_verdict_line(record: object, delivery: bool = False) -> str:
     return line if len(line.encode("ascii")) <= VERDICT_LINE_LIMIT else unavailable
 
 
+CSRF_REUSABLE_CASE = "one_reusable_token_admits_two_distinct_actual_requests"
+CSRF_REUSABLE_SOURCE = "e6214e0267d6d8a713578c0c173c9ca18bfc11c910f34f51d4ce3a8875457467"
+BROWSER_NATIVE_CALL_SOURCE = "4999e44ad29bf7777a9f92d349eee025c9d3c1112162b7cc7d0524c74e745050"
+NATIVE_CALL_PREFIX = "session_native_call_diag"
+NATIVE_CALL_LINE_LIMIT = 4096
+NATIVE_CALL_FACT_LIMIT = 16
+NATIVE_CALL_LIMIT_US = 60_000_000
+NATIVE_CALL_UNSEEN_US = NATIVE_CALL_LIMIT_US + 1
+NATIVE_CALL_FIELDS = (
+    "status", "origin", "terminal", "diagnostic_valid", "native_call_state", "generation",
+    "call_enter_us", "call_return_us", "native_state", "commit_result", "settled_us",
+    "begins", "commits", "selected_deadline_passed",
+)
+NATIVE_CALL_DECIMAL = r"(?:0|[1-9][0-9]{0,7})"
+NATIVE_CALL_MARKER = re.compile(
+    rf"{NATIVE_CALL_PREFIX} status=504 " +
+    " ".join(name + r"=(" + NATIVE_CALL_DECIMAL + r")" for name in NATIVE_CALL_FIELDS[1:]) + r"\Z"
+)
+_CSRF_PANIC = re.compile(
+    rf"thread '{CSRF_REUSABLE_CASE}'(?: \([1-9][0-9]{{0,19}}\))? panicked at "
+    r"(?:[^\r\n]{0,2048}[/\\])?runtime[/\\]tests[/\\]session_csrf_public_api\.rs:"
+    r"([1-9][0-9]{0,3}):([1-9][0-9]{0,3}):\Z"
+)
+_CSRF_OPTION_COUNT = r"(?:None|Some\((?:0|[1-9][0-9]{0,3})\))"
+_CSRF_PARALLEL = re.compile(
+    rf"csrf_public_assertion_diag phase=ParallelReplies status_one=({STATUS}) status_two=({STATUS}) "
+    rf"checked_calls=({_CSRF_OPTION_COUNT}) calls_at_failure=({CLAIM_COUNT}) checked_rows=({_CSRF_OPTION_COUNT})\Z"
+)
+_CSRF_TOKEN = re.compile(
+    rf"csrf_public_assertion_diag phase=TokenReply status=({STATUS}) body_bytes=({DEC}) set_cookie_count=({DEC})\Z"
+)
+_CSRF_GUARDED_KEYS = (
+    "phase", "event", "db", "exit", "polls", "begins", "commands", "commits", "budget_ms",
+    "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "selected_deadline_passed", "terminal",
+)
+_CSRF_GUARDED = re.compile("csrf_guarded_deadline_diag status=504 " +
+    " ".join(name + "=(" + DEC + ")" for name in _CSRF_GUARDED_KEYS) + r"\Z")
+
+
+def _csrf_source_current() -> bool:
+    source = pathlib.Path(__file__).resolve().parents[2] / "runtime/tests/session_csrf_public_api.rs"
+    try:
+        if source.is_symlink() or not source.is_file():
+            return False
+        with source.open("rb") as stream:
+            raw = stream.read(65537)
+        if len(raw) > 65536:
+            return False
+        canonical = raw.decode("utf-8", errors="strict").replace("\r\n", "\n").encode("utf-8")
+        return hashlib.sha256(canonical).hexdigest() == CSRF_REUSABLE_SOURCE
+    except (OSError, UnicodeError):
+        return False
+
+
+def _browser_native_call_source_current() -> bool:
+    source = pathlib.Path(__file__).resolve().parents[2] / "runtime/tests/browser_login_public_api.rs"
+    try:
+        if source.is_symlink() or not source.is_file():
+            return False
+        with source.open("rb") as stream:
+            raw = stream.read(65537)
+        if len(raw) > 65536:
+            return False
+        canonical = raw.decode("utf-8", errors="strict").replace("\r\n", "\n").encode("utf-8")
+        return hashlib.sha256(canonical).hexdigest() == BROWSER_NATIVE_CALL_SOURCE
+    except (OSError, UnicodeError):
+        return False
+
+
+def _native_call_fact_valid(value) -> bool:
+    if (type(value) is not dict or set(value) != set(NATIVE_CALL_FIELDS) or
+            any(type(value[key]) is not int for key in NATIVE_CALL_FIELDS)):
+        return False
+    if (value["status"] != 504 or value["origin"] not in range(4) or
+            value["diagnostic_valid"] not in (0, 1) or
+            value["native_call_state"] not in range(5) or
+            value["generation"] not in range(1024) or
+            value["call_enter_us"] not in range(NATIVE_CALL_UNSEEN_US + 1) or
+            value["call_return_us"] not in range(NATIVE_CALL_UNSEEN_US + 1) or
+            value["native_state"] not in range(8) or value["commit_result"] not in range(3) or
+            value["settled_us"] not in range(NATIVE_CALL_UNSEEN_US + 1) or
+            value["begins"] not in range(1024) or value["commits"] not in range(1024) or
+            value["selected_deadline_passed"] not in (0, 1)):
+        return False
+    origin, terminal = value["origin"], value["terminal"]
+    if ((origin in (0, 2) and terminal != 0) or
+            (origin == 1 and terminal not in range(7)) or
+            (origin == 3 and terminal not in range(1, 5))):
+        return False
+
+    state = value["native_call_state"]
+    entered, returned = value["call_enter_us"], value["call_return_us"]
+    native_state, result, settled = value["native_state"], value["commit_result"], value["settled_us"]
+    if value["diagnostic_valid"] == 0:
+        return (state == value["generation"] == native_state == result == value["begins"] ==
+                value["commits"] == value["selected_deadline_passed"] == 0 and
+                entered == returned == settled == NATIVE_CALL_UNSEEN_US)
+
+    if not (1 <= state <= 4 and 1 <= value["generation"] <= 1022 and
+            value["generation"] == value["begins"]):
+        return False
+    if ((native_state == 7) != (settled <= NATIVE_CALL_LIMIT_US) or
+            (native_state == 2 and result != 1) or (native_state == 3 and result != 2) or
+            (native_state != 7 and settled != NATIVE_CALL_UNSEEN_US)):
+        return False
+    if state == 1:
+        return (entered == returned == NATIVE_CALL_UNSEEN_US and result == 0 and
+                native_state not in (2, 3))
+    if state == 2:
+        return (entered <= NATIVE_CALL_LIMIT_US and returned == NATIVE_CALL_UNSEEN_US and
+                native_state == 1 and result == 0 and settled == NATIVE_CALL_UNSEEN_US)
+    if state == 3:
+        return (entered <= returned <= NATIVE_CALL_LIMIT_US and native_state == 1 and
+                result == 0 and settled == NATIVE_CALL_UNSEEN_US)
+    return (entered <= returned <= NATIVE_CALL_LIMIT_US and 2 <= native_state <= 7 and
+            result in (1, 2) and (native_state != 7 or settled >= returned))
+
+
+def parse_native_call_marker(line: str) -> dict | None:
+    try:
+        if type(line) is not str or len(line.encode("utf-8", errors="strict")) > NATIVE_CALL_LINE_LIMIT:
+            return None
+    except UnicodeError:
+        return None
+    match = NATIVE_CALL_MARKER.fullmatch(line)
+    if match is None:
+        return None
+    value = {"status": 504, **dict(zip(NATIVE_CALL_FIELDS[1:], map(int, match.groups())))}
+    return value if _native_call_fact_valid(value) else None
+
+
+def _native_call_output_valid(value) -> bool:
+    return (type(value) is dict and set(value) == {"suite", "test", *NATIVE_CALL_FIELDS} and
+            type(value.get("suite")) is str and value["suite"] in ("session", "browser") and
+            type(value.get("test")) is str and
+            value["test"] in ({CSRF_REUSABLE_CASE} if value["suite"] == "session" else BROWSER_CASES) and
+            _native_call_fact_valid({key: value[key] for key in NATIVE_CALL_FIELDS}))
+
+
+def _csrf_assertion_valid(value) -> bool:
+    if value is None:
+        return True
+    if type(value) is not dict:
+        return False
+    if type(value.get("phase")) is not str:
+        return False
+    if value.get("phase") == "TokenReply":
+        return (set(value) == {"phase", "status", "body_bytes", "set_cookie_count"} and
+                all(type(value[k]) is int for k in ("status", "body_bytes", "set_cookie_count")) and
+                100 <= value["status"] <= 599 and 0 <= value["body_bytes"] <= 8193 and
+                0 <= value["set_cookie_count"] <= 65 and
+                (value["status"] != 200 or value["body_bytes"] != 60))
+    if value.get("phase") != "ParallelReplies" or set(value) != {
+            "phase", "status_one", "status_two", "checked_calls", "calls_at_failure", "checked_rows"}:
+        return False
+    if (any(type(value[k]) is not int or not 100 <= value[k] <= 599 for k in ("status_one", "status_two")) or
+            type(value["calls_at_failure"]) is not int or not 0 <= value["calls_at_failure"] <= 1023 or
+            any(value[k] is not None and (type(value[k]) is not int or not 0 <= value[k] <= 1023)
+                for k in ("checked_calls", "checked_rows"))):
+        return False
+    statuses_ok = value["status_one"] == value["status_two"] == 200
+    if not statuses_ok:
+        return value["checked_calls"] is None and value["checked_rows"] is None
+    if value["checked_calls"] is None:
+        return False
+    if value["checked_calls"] != 2:
+        return value["checked_rows"] is None
+    return value["checked_rows"] is not None and value["checked_rows"] != 1
+
+
+def _csrf_guarded_valid(value) -> bool:
+    return (type(value) is dict and set(value) == set(_CSRF_GUARDED_KEYS) and
+            all(type(v) is int and 0 <= v <= 60000 for v in value.values()) and
+            value["phase"] in {*range(9), 10, 11, 12, 13, 14} and value["event"] <= 2 and
+            value["db"] <= 14 and value["exit"] <= 4 and value["terminal"] <= 9 and
+            value["selected_deadline_passed"] <= 1 and
+            max(value[k] for k in ("polls", "begins", "commands", "commits")) <= 1023 and
+            value["commits"] <= value["begins"] and
+            value["exit_remaining_ms"] <= value["phase_remaining_ms"] <=
+            value["entry_remaining_ms"] <= value["budget_ms"])
+
+
+def _csrf_observation_valid(value) -> bool:
+    if (type(value) is not dict or set(value) != {"schema_version", "execution", "case", "source_sha256",
+            "status", "location", "assertion", "guarded"} or type(value["schema_version"]) is not int or
+            value["schema_version"] != 1 or
+            any(type(value[key]) is not str for key in ("execution", "case", "source_sha256", "status")) or
+            value["execution"] not in ("suite", "exact") or
+            value["case"] != "reusable_token_parallel" or value["source_sha256"] != CSRF_REUSABLE_SOURCE or
+            type(value["guarded"]) is not list or len(value["guarded"]) > 2 or
+            not all(_csrf_guarded_valid(fact) for fact in value["guarded"]) or
+            not _csrf_assertion_valid(value["assertion"])):
+        return False
+    if value["status"] == "tests_passed":
+        return value["execution"] == "exact" and value["location"] is None and value["assertion"] is None and not value["guarded"]
+    location = value["location"]
+    if (value["status"] != "observed" or type(location) is not dict or
+            set(location) != {"file", "line", "column"} or type(location["file"]) is not str or
+            location["file"] != "session_csrf_public_api.rs" or
+            type(location["line"]) is not int or not 1 <= location["line"] <= 1249 or
+            type(location["column"]) is not int or not 1 <= location["column"] <= 4096):
+        return False
+    assertion = value["assertion"]
+    if assertion and assertion["phase"] == "TokenReply":
+        return not value["guarded"]
+    if assertion and assertion["phase"] == "ParallelReplies":
+        return len(value["guarded"]) <= sum(assertion[k] == 504 for k in ("status_one", "status_two"))
+    return True
+
+
+def csrf_reusable_observation(raw, cargo_exit, *, record=None, execution="suite") -> dict | None:
+    """Failure-only supplement; never changes v2 JSON, runtime, or the test verdict."""
+    if (execution not in ("suite", "exact") or type(cargo_exit) is not int or
+            cargo_exit not in (0, 101) or type(raw) is not bytes or len(raw) > RAW_LIMIT or
+            not _csrf_source_current()):
+        return None
+    if execution == "suite":
+        if not _closed_record_shape(record, False) or record["status"] != "tests_failed":
+            return None
+        suite = record["suites"]["session"]
+        if (suite["input_status"] != "valid" or suite["inventory_status"] != "failed" or
+                suite["diagnostic_status"] != "valid" or suite["cargo_exit"] != cargo_exit or
+                CSRF_REUSABLE_CASE not in suite["failed_cases"]):
+            return None
+    expected = SESSION_CASES if execution == "suite" else {CSRF_REUSABLE_CASE}
+    inventory, text = _suite_structure("session", raw, "valid", cargo_exit, expected=expected)
+    if inventory["inventory_status"] not in ("passed", "failed") or text is None:
+        return None
+    if execution == "suite" and any(inventory[key] != suite[key] for key in
+            ("running_count", "passed_count", "failed_count", "ignored_count", "failed_cases")):
+        return None
+    blocks, invalid = _test_output_blocks(text)
+    if invalid or any(name not in inventory["failed_cases"] for name in blocks):
+        return None
+    result = {"schema_version": 1, "execution": execution, "case": "reusable_token_parallel",
+              "source_sha256": CSRF_REUSABLE_SOURCE, "status": "observed", "location": None,
+              "assertion": None, "guarded": []}
+    if execution == "exact" and cargo_exit == 0 and inventory["inventory_status"] == "passed" and not blocks:
+        result["status"] = "tests_passed"
+        return result
+    if cargo_exit != 101 or CSRF_REUSABLE_CASE not in inventory["failed_cases"]:
+        return None
+    for line in blocks.get(CSRF_REUSABLE_CASE, "").splitlines():
+        if "panicked at " in line:
+            match = _CSRF_PANIC.fullmatch(line)
+            if match is None or result["location"] is not None:
+                return None
+            result["location"] = {"file": "session_csrf_public_api.rs", "line": int(match[1]), "column": int(match[2])}
+        elif "csrf_public_assertion_diag" in line:
+            if result["assertion"] is not None:
+                return None
+            if match := _CSRF_PARALLEL.fullmatch(line):
+                one, two, calls, at_failure, rows = match.groups()
+                option = lambda text: None if text == "None" else int(text[5:-1])
+                result["assertion"] = {"phase": "ParallelReplies", "status_one": int(one), "status_two": int(two),
+                    "checked_calls": option(calls), "calls_at_failure": int(at_failure), "checked_rows": option(rows)}
+            elif match := _CSRF_TOKEN.fullmatch(line):
+                result["assertion"] = {"phase": "TokenReply", **dict(zip(
+                    ("status", "body_bytes", "set_cookie_count"), map(int, match.groups())))}
+            else:
+                return None
+        elif "csrf_guarded_deadline_diag" in line:
+            match = _CSRF_GUARDED.fullmatch(line)
+            if match is None or len(result["guarded"]) == 2:
+                return None
+            result["guarded"].append(dict(zip(_CSRF_GUARDED_KEYS, map(int, match.groups()))))
+    return result if _csrf_observation_valid(result) else None
+
+
+def csrf_reusable_line(record) -> str:
+    if not _csrf_observation_valid(record):
+        return "csrf_reusable_failure unavailable"
+    # All strings are closed enum/source constants; rebuild only validated fields.
+    clean = {"schema_version": 1, "execution": record["execution"], "case": "reusable_token_parallel",
+             "source_sha256": CSRF_REUSABLE_SOURCE, "status": record["status"], "location": None,
+             "assertion": None, "guarded": [{key: fact[key] for key in _CSRF_GUARDED_KEYS}
+                                            for fact in record["guarded"]]}
+    if record["location"] is not None:
+        clean["location"] = {"file": "session_csrf_public_api.rs", "line": record["location"]["line"],
+                             "column": record["location"]["column"]}
+    if record["assertion"] is not None:
+        keys = (("phase", "status", "body_bytes", "set_cookie_count")
+                if record["assertion"]["phase"] == "TokenReply" else
+                ("phase", "status_one", "status_two", "checked_calls", "calls_at_failure", "checked_rows"))
+        clean["assertion"] = {key: record["assertion"][key] for key in keys}
+    line = "csrf_reusable_failure=" + json.dumps(clean, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    return line if len(line.encode("ascii")) <= 4096 else "csrf_reusable_failure unavailable"
+
+
+def session_native_call_lines(raw, cargo_exit, record, *, suite_name="session") -> list[str]:
+    """Project bounded facts only from source-pinned failed test stdout blocks."""
+    unavailable = ["session_native_call=unavailable"]
+    if type(suite_name) is not str or suite_name not in ("session", "browser"):
+        return unavailable
+    allowed = {CSRF_REUSABLE_CASE} if suite_name == "session" else BROWSER_CASES
+    source_current = _csrf_source_current if suite_name == "session" else _browser_native_call_source_current
+    record_eligible = (type(cargo_exit) is int and cargo_exit == 101 and
+                       _closed_record_shape(record, False) and record["status"] == "tests_failed" and
+                       source_current())
+    if record_eligible:
+        suite = record["suites"][suite_name]
+        record_eligible = (suite["input_status"] == "valid" and suite["inventory_status"] == "failed" and
+                           suite["diagnostic_status"] == "valid" and suite["cargo_exit"] == 101 and
+                           bool(allowed.intersection(suite["failed_cases"])))
+    if type(raw) is not bytes or len(raw) > RAW_LIMIT:
+        return unavailable if record_eligible else []
+    try:
+        text = raw.decode("utf-8", errors="strict").replace("\r\n", "\n")
+    except UnicodeDecodeError:
+        return unavailable if record_eligible else []
+    occurrences = [line for line in text.splitlines() if NATIVE_CALL_PREFIX in line]
+    if not occurrences:
+        return unavailable if record_eligible and suite_name == "session" else []
+
+    if not record_eligible:
+        return unavailable
+
+    inventory, verified_text = _suite_structure(suite_name, raw, "valid", cargo_exit)
+    if verified_text is None or inventory["inventory_status"] != "failed":
+        return unavailable
+    comparable = ("input_status", "inventory_status", "cargo_exit", "running_count", "passed_count",
+                  "failed_count", "ignored_count", "failed_cases")
+    if any(inventory[key] != suite[key] for key in comparable):
+        return unavailable
+    blocks, duplicate_header = _test_output_blocks(verified_text)
+    if (duplicate_header or any(name not in inventory["failed_cases"] for name in blocks) or
+            not allowed.intersection(inventory["failed_cases"])):
+        return unavailable
+
+    target_pairs = [(name, line) for name, block in blocks.items() if name in allowed
+                    for line in block.splitlines() if NATIVE_CALL_PREFIX in line]
+    target_lines = [line for _, line in target_pairs]
+    if (not target_lines or occurrences != target_lines or len(target_lines) > NATIVE_CALL_FACT_LIMIT or
+            any(len(line.encode("utf-8")) > NATIVE_CALL_LINE_LIMIT for line in target_lines)):
+        return unavailable
+    facts = [parse_native_call_marker(line) for line in target_lines]
+    if any(fact is None for fact in facts):
+        return unavailable
+
+    output_lines = []
+    for (test_name, _), fact in zip(target_pairs, facts):
+        clean = {"suite": suite_name, "test": test_name,
+                 **{key: fact[key] for key in NATIVE_CALL_FIELDS}}
+        if not _native_call_output_valid(clean):
+            return unavailable
+        line = "session_native_call=" + json.dumps(clean, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+        if len(line.encode("ascii")) > NATIVE_CALL_LINE_LIMIT:
+            return unavailable
+        output_lines.append(line)
+    return output_lines
+
+
 def main(argv: list[str]) -> int:
+    if len(argv) == 4 and argv[1] == "--csrf-reusable-only":
+        try:
+            cargo_exit = int(argv[3])
+        except ValueError:
+            return 2
+        raw, input_status = _read_bounded(pathlib.Path(argv[2]))
+        observed = csrf_reusable_observation(raw, cargo_exit, execution="exact") if input_status == "valid" else None
+        print(csrf_reusable_line(observed))
+        return 0 if observed and observed["status"] == "tests_passed" else 1
     if len(argv) == 6 and argv[1] == "--delivery":
         case = argv[2]
         if case not in DELIVERY_CASES:
@@ -1306,6 +1668,12 @@ def main(argv: list[str]) -> int:
             print("browser_login_phase=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
         for fact in record["suites"]["browser"]["assertion"]:
             print("browser_login_assertion=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
+        if CSRF_REUSABLE_CASE in record["suites"]["session"]["failed_cases"]:
+            print(csrf_reusable_line(csrf_reusable_observation(session_raw, session_exit, record=record)))
+            for line in session_native_call_lines(session_raw, session_exit, record):
+                print(line)
+        for line in session_native_call_lines(browser_raw, browser_exit, record, suite_name="browser"):
+            print(line)
     return status
 
 
