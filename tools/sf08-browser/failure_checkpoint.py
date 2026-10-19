@@ -27,7 +27,13 @@ STAGES = {'none','settings','native_wrong_ca','guard','native_positive','native_
           'business_config','business','receipt','input'}
 WEBKIT_WITNESS_DIAGNOSTICS = frozenset({
     'missing_event','duplicate_event','foreign_request_url','foreign_request_non_navigation',
-    'foreign_request_frame','not_certificate','malformed','http_response','lifecycle','error_shape',
+    'foreign_request_frame','not_certificate',
+    'not_certificate_empty','not_certificate_oversize','not_certificate_cancelled',
+    'not_certificate_provisional_cancelled','not_certificate_certificate_form',
+    'not_certificate_certificate_token','not_certificate_dns_token',
+    'not_certificate_connection_token','not_certificate_cancel_token',
+    'not_certificate_tls_token','not_certificate_multiple_tokens',
+    'malformed','http_response','lifecycle','error_shape',
     'deadline','response_query_fault','response_query_timeout','certificate_event'})
 WEBKIT_WITNESS_BASE_STAGES = frozenset({
     'engine_wrong_ca_unknown','engine_wrong_ca_response_received','engine_wrong_ca_no_response',

@@ -374,6 +374,36 @@ function nativeTLSGet(origin, ca) {
   });
 }
 
+function webkitNonCertificateDiagnostic(errorText, probeURL) {
+  // Failure-only lexical facts, never certificate evidence. The original
+  // request remains poisoned for every branch below; no raw text is retained.
+  if (errorText.length > 8192) return 'not_certificate_oversize';
+  if (errorText.length === 0) return 'not_certificate_empty';
+  if (errorText === 'Operation was cancelled') return 'not_certificate_cancelled';
+  if (errorText === 'Provisional navigation canceled.') return 'not_certificate_provisional_cancelled';
+  const certificate = TLS_ERROR.webkit.ca;
+  for (const prefix of ['page.goto: ', 'page.goto: Protocol error (Playwright.navigate): ']) {
+    if (errorText === prefix + certificate || errorText === prefix + certificate + ' at ' + probeURL)
+      return 'not_certificate_certificate_form';
+  }
+  const matches = [];
+  const certificateToken = containsFixedToken(errorText, certificate);
+  if (certificateToken) matches.push('certificate_token');
+  if (['Name or service not known', 'Temporary failure in name resolution',
+    'No address associated with hostname', 'Could not resolve host']
+    .some(token => containsFixedToken(errorText, token))) matches.push('dns_token');
+  if (['Connection refused', 'Connection reset by peer', 'Could not connect',
+    'Connection terminated unexpectedly']
+    .some(token => containsFixedToken(errorText, token))) matches.push('connection_token');
+  if (['Operation was cancelled', 'Provisional navigation canceled.']
+    .some(token => containsFixedToken(errorText, token))) matches.push('cancel_token');
+  // The certificate phrase already includes TLS; count it as one token family.
+  if (!certificateToken && ['TLS', 'SSL'].some(token => containsFixedToken(errorText, token)))
+    matches.push('tls_token');
+  if (matches.length > 1) return 'not_certificate_multiple_tokens';
+  return matches.length === 1 ? 'not_certificate_' + matches[0] : 'not_certificate';
+}
+
 // Playwright 1.64.1 preserves Network.loadingFailed.errorText in request.failure
 // separately from the provisional navigation error used by page.goto. Generic
 // cancellation is never evidence: this alternative requires the exact failed
@@ -433,7 +463,11 @@ export function webkitCertificateWitness(page, context, browser, probeURL, until
         }
         const errorText = failure.errorText;
         if (typeof errorText !== 'string') { poisoned = true; diagnose('malformed'); return; }
-        if (errorText !== TLS_ERROR.webkit.ca) { poisoned = true; diagnose('not_certificate'); return; }
+        if (errorText !== TLS_ERROR.webkit.ca) {
+          poisoned = true;
+          diagnose(webkitNonCertificateDiagnostic(errorText, probeURL));
+          return;
+        }
         failed = request;
       } catch { poisoned = true; diagnose('malformed'); }
     }, true);

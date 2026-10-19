@@ -121,8 +121,27 @@ test('WebKit witness exposes only fixed failure facts', async () => {
       run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
     { label: 'foreign_request_frame', make: () => certificateWitnessFixture({ frame: () => ({}) }),
       run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
-    { label: 'not_certificate', make: () => certificateWitnessFixture({ failure: () => ({ errorText: 'Operation was cancelled' }) }),
+    { label: 'not_certificate', make: () => certificateWitnessFixture({ failure: () => ({ errorText: 'PRIVATE_SENTINEL' }) }),
       run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    ...[
+      ['not_certificate_empty', ''],
+      ['not_certificate_oversize', 'PRIVATE_SENTINEL'.repeat(8193)],
+      ['not_certificate_cancelled', 'Operation was cancelled'],
+      ['not_certificate_provisional_cancelled', 'Provisional navigation canceled.'],
+      ['not_certificate_certificate_form', 'page.goto: Unacceptable TLS certificate at ' + negative.caOrigin + '/'],
+      ['not_certificate_certificate_token', 'PRIVATE_SENTINEL Unacceptable TLS certificate'],
+      ['not_certificate_dns_token', 'PRIVATE_SENTINEL Name or service not known'],
+      ['not_certificate_connection_token', 'PRIVATE_SENTINEL Connection refused'],
+      ['not_certificate_cancel_token', 'PRIVATE_SENTINEL Operation was cancelled'],
+      ['not_certificate_tls_token', 'PRIVATE_SENTINEL TLS handshake failure'],
+      ['not_certificate_multiple_tokens', 'PRIVATE_SENTINEL TLS Connection refused'],
+    ].map(([label, errorText]) => ({ label,
+      make: () => certificateWitnessFixture({ failure: () => ({ errorText }) }),
+      run: async f => {
+        f.page.emit('requestfailed', f.request);
+        assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false);
+      },
+    })),
     { label: 'malformed', make: () => certificateWitnessFixture({ failure: () => null }),
       run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
     { label: 'http_response', make: () => certificateWitnessFixture(), run: async f => {
@@ -161,6 +180,35 @@ test('WebKit witness exposes only fixed failure facts', async () => {
     assert.doesNotMatch(JSON.stringify({ diagnostic: f.witness.diagnostic() }),
       /PRIVATE_SENTINEL|private\.invalid|Unacceptable|Operation|https?:/);
     f.witness.stop();
+  }
+});
+
+test('WebKit non-certificate categories preserve every refusal and leak no request text', async () => {
+  const certificate = 'Unacceptable TLS certificate';
+  const url = negative.caOrigin + '/';
+  for (const [errorText, diagnostic] of [
+    ['page.goto: ' + certificate, 'not_certificate_certificate_form'],
+    ['page.goto: Protocol error (Playwright.navigate): ' + certificate, 'not_certificate_certificate_form'],
+    ['page.goto: Protocol error (Playwright.navigate): ' + certificate + ' at ' + url,
+      'not_certificate_certificate_form'],
+    ['page.goto: ' + certificate + ' at https://private.invalid/PRIVATE_SENTINEL',
+      'not_certificate_certificate_token'],
+    [certificate + '_SUFFIX', 'not_certificate_tls_token'],
+    ['PREFIX_' + certificate, 'not_certificate_tls_token'],
+    ['Connection refused_SUFFIX PRIVATE_SENTINEL', 'not_certificate'],
+    ['PREFIX_Name or service not known PRIVATE_SENTINEL', 'not_certificate'],
+    [certificate + ' PRIVATE_SENTINEL Name or service not known', 'not_certificate_multiple_tokens'],
+    ['Operation was cancelled PRIVATE_SENTINEL TLS', 'not_certificate_multiple_tokens'],
+    ['PRIVATE_SENTINEL https://private.invalid/?token=secret', 'not_certificate'],
+  ]) {
+    const f = certificateWitnessFixture({ failure: () => ({ errorText }) });
+    f.page.emit('requestfailed', f.request);
+    assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false);
+    assert.equal(f.witness.diagnostic(), diagnostic);
+    const stages = ['engine_wrong_ca_webkit_cancelled_first_line', 'engine_wrong_host_webkit_cancelled_present']
+      .map(base => checkedFailure(witnessStage(base, diagnostic), 'webkit'));
+    assert.doesNotMatch(JSON.stringify(stages), /PRIVATE_SENTINEL|private\.invalid|secret|https?:|Operation|Unacceptable/);
+    assert.equal(f.witness.stop(), false); // Poisoning remains mandatory.
   }
 });
 

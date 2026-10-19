@@ -99,7 +99,14 @@ class R2Tests(unittest.TestCase):
         for stage in f.STAGES:self.assertIn("'"+stage+"'",node)
 
     def test_webkit_witness_checkpoints_are_bounded_and_webkit_only(self):
-        self.assertEqual(len(f.WEBKIT_WITNESS_DIAGNOSTICS), 14)
+        self.assertEqual(len(f.WEBKIT_WITNESS_DIAGNOSTICS), 25)
+        self.assertEqual({value for value in f.WEBKIT_WITNESS_DIAGNOSTICS
+                          if value.startswith('not_certificate_')}, {
+            'not_certificate_empty','not_certificate_oversize','not_certificate_cancelled',
+            'not_certificate_provisional_cancelled','not_certificate_certificate_form',
+            'not_certificate_certificate_token','not_certificate_dns_token',
+            'not_certificate_connection_token','not_certificate_cancel_token',
+            'not_certificate_tls_token','not_certificate_multiple_tokens'})
         self.assertEqual(len(f.WEBKIT_WITNESS_STAGES),
                          len(f.WEBKIT_WITNESS_BASE_STAGES) * len(f.WEBKIT_WITNESS_DIAGNOSTICS))
         node=(c.HERE/'browser_stage.mjs').read_text()
