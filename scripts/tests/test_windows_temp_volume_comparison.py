@@ -37,7 +37,8 @@ class VolumeTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.repo = Path(self.tmp.name) / 'private-sentinel-repo'
+        # Bind fixture Cargo IDs and fake volume roots to the identity helpers resolve.
+        self.repo = Path(self.tmp.name).resolve(strict=True) / 'private-sentinel-repo'
         self.target = self.repo / 'target'
         self.exe = self.target / 'debug/deps/session_csrf_public_api-unit.exe'
         self.exe.parent.mkdir(parents=True)
@@ -91,6 +92,37 @@ class VolumeTests(unittest.TestCase):
         encoded = json.dumps(result)
         for forbidden in ['PRIVATE_SENTINEL', 'private-sentinel-', 'volume-A', 'volume-B', str(self.repo)]:
             self.assertNotIn(forbidden, encoded)
+
+    def test_fixture_paths_and_volume_roots_share_the_canonical_temp_identity(self):
+        self.assertEqual(self.repo, Path(self.tmp.name).resolve(strict=True) / 'private-sentinel-repo')
+        expected_package = 'path+' + (self.repo / 'runtime').resolve(strict=True).as_uri() + '#nagi-runtime@0.2.0'
+        self.assertEqual(self.artifact['package_id'], expected_package)
+        self.assertEqual(Path(self.native.temp_root()).resolve(strict=True), self.original)
+
+    def test_unresolved_alias_package_identity_refuses_when_metadata_paths_resolve_to_fixture(self):
+        # Model a short-path alias without relying on symlink creation privileges.
+        alias_repo = self.repo.parent / (self.repo.name + '-short')
+        alias_runtime = alias_repo / 'runtime'
+        artifact = copy.deepcopy(self.artifact)
+        artifact['package_id'] = 'path+' + alias_runtime.as_uri() + '#nagi-runtime@0.2.0'
+        artifact['manifest_path'] = str(alias_runtime / 'Cargo.toml')
+        artifact['target']['src_path'] = str(alias_runtime / 'tests/session_csrf_public_api.rs')
+        self.write_messages([artifact, {'reason': 'build-finished', 'success': True}])
+
+        original_resolve = Path.resolve
+        def canonicalize_alias(path, strict=False):
+            try:
+                relative = path.relative_to(alias_repo)
+            except ValueError:
+                return original_resolve(path, strict=strict)
+            return original_resolve(self.repo / relative, strict=strict)
+
+        with mock.patch.object(Path, 'resolve', autospec=True, side_effect=canonicalize_alias):
+            self.assertEqual(Path(artifact['manifest_path']).resolve(strict=True), self.repo / 'runtime/Cargo.toml')
+            self.assertEqual(Path(artifact['target']['src_path']).resolve(strict=True), self.repo / 'runtime/tests/session_csrf_public_api.rs')
+            with self.assertRaises(h.Refused) as caught:
+                h.select_binary(alias_repo, self.target, self.messages, 0)
+        self.assertEqual(caught.exception.reason, 'artifact_refused')
 
     def test_fixed_pair_preserves_failed_A_and_runs_B_exactly_once(self):
         result, code = self.run_pair()
