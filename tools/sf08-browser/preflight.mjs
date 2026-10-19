@@ -766,8 +766,8 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
   };
   try {
     const remaining = hostBudget(until);
-    secureContext = native.createSecureContext({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2' });
-    server = native.createServer({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2',
+    secureContext = native.createSecureContext({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2', maxVersion: 'TLSv1.2' });
+    server = native.createServer({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2', maxVersion: 'TLSv1.2',
       ALPNProtocols: ['http/1.1'], handshakeTimeout: remaining,
       SNICallback(name, callback) {
         try {

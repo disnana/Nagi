@@ -1043,8 +1043,8 @@ async function hostPeerFixture(options = {}, api = hostProof) {
     ? api.readWebkitWrongCACredentials(files.work, files.ca, files.mainCA)
     : api.readWebkitWrongHostCredentials(files.work, files.caPath, files.ca);
   options.credentialsSeen?.(credentials);
-  let server, nativeOptions;
-  const native = { TLSSocket: HostTLS, createSecureContext: () => { if (options.setupFailure) throw new Error('PRIVATE_SENTINEL'); return {}; }, createServer(opts) {
+  let server, secureContextOptions, nativeOptions;
+  const native = { TLSSocket: HostTLS, createSecureContext(opts) { secureContextOptions = opts; if (options.setupFailure) throw new Error('PRIVATE_SENTINEL'); return {}; }, createServer(opts) {
     nativeOptions = opts; server = new EventEmitter(); server.listening = false;
     server.address = () => ({ address: '127.0.0.1', family: 'IPv4', port: 33005 });
     server.listen = () => { if (options.listenFailure) throw new Error('PRIVATE_SENTINEL'); server.listening = true; queueMicrotask(() => server.emit('listening')); return server; };
@@ -1063,7 +1063,8 @@ async function hostPeerFixture(options = {}, api = hostProof) {
   function alert(code = profile.code, peer = socket, error = Object.assign(new Error('PRIVATE_SENTINEL'), { code })) {
     server.emit('tlsClientError', error, peer);
   }
-  return { endpoint, server, raw, socket, connect, sni, alert, until, profile, files, credentials };
+  return { endpoint, server, raw, socket, connect, sni, alert, until, profile, files, credentials,
+    secureContextOptions, nativeOptions };
 }
 function hostBrowser(options = {}) {
   const role = options.role ?? 'host';
@@ -1342,6 +1343,24 @@ test('one-shot CA credentials are role sealed and exact peer code alone can sett
     assert.equal(await rejected.endpoint.finish(), false); await rejected.endpoint.close();
     assert.deepEqual(rows, [expected]); assert.equal(JSON.stringify(rows).includes('PRIVATE_SENTINEL'), false);
   }
+});
+test('R11 bound wrong-CA TLS profile pins both native contexts to TLS 1.2 and keeps reset fail-closed', async () => {
+  caAPI();
+  const accepted = await hostPeerFixture({ role: 'ca' });
+  for (const options of [accepted.secureContextOptions, accepted.nativeOptions]) {
+    assert.equal(options.minVersion, 'TLSv1.2');
+    assert.equal(options.maxVersion, 'TLSv1.2');
+  }
+  assert.deepEqual(accepted.nativeOptions.ALPNProtocols, ['http/1.1']);
+  accepted.connect(); accepted.sni('localhost'); accepted.alert('ERR_SSL_TLSV1_ALERT_UNKNOWN_CA');
+  assert.equal(await accepted.endpoint.finish(), true);
+  assert.equal(await accepted.endpoint.close(), true);
+
+  const resetRows = [], reset = await hostPeerFixture({ role: 'ca', diagnose: value => resetRows.push(value) });
+  reset.connect(); reset.sni('localhost'); reset.alert('ECONNRESET');
+  assert.equal(await reset.endpoint.finish(), false);
+  assert.equal(await reset.endpoint.close(), true);
+  assert.deepEqual(resetRows, ['peer_connection_reset']);
 });
 test('one-shot CA request lifecycle deadline join and host-binding vetoes remain strict', async () => {
   caAPI();

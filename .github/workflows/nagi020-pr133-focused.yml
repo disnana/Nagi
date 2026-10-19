@@ -1,4 +1,4 @@
-name: PR133 focused release blockers
+name: PR133 isolated causal comparisons
 
 on:
   push:
@@ -9,11 +9,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr133-blocker-discrimination-${{ github.ref }}
+  group: pr133-causal-comparisons-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  windows-pool-readiness-observation:
+  windows-temp-volume-observation:
     if: github.ref == 'refs/heads/test/nagi020-pr133-ci-repair-20261019'
     runs-on: windows-latest
     timeout-minutes: 40
@@ -24,6 +24,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Check comparison collector and actual platform before compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B -m unittest discover -s scripts/tests -p test_windows_temp_volume_comparison.py
+          python -B -m unittest discover -s scripts/tests -p test_session_deadline_diagnostic.py
+          python -B scripts/ci/windows_temp_volume_comparison.py --check-platform
       - uses: actions/cache@v4
         with:
           path: |
@@ -34,26 +41,20 @@ jobs:
           restore-keys: |
             nagi-pr133-csrf-windows-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
             nagi-rust-v1-package-windows-x86_64-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
-      - name: Check closed collector before native execution
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -B -m unittest discover -s scripts/tests -p test_session_deadline_diagnostic.py
-          rustc --version
-          cargo --version
-      - name: Calibrate cold versus ready workers then observe unchanged default-parallel suites once
+      - name: Select one compiled executable and compare fixed original versus runner temp placement
         shell: bash
         env:
           CARGO_TERM_COLOR: never
         run: |
           set -euo pipefail
-          trap 'rm -f "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"' EXIT
+          trap 'rm -f "$RUNNER_TEMP/pr133-volume-cargo.json" "$RUNNER_TEMP/pr133-volume-browser.raw"' EXIT
           capture() {
             local destination="$1"
-            shift
+            local limit="$2"
+            shift 2
             set +e
-            "$@" 2>&1 | python -c 'import sys
-          remaining=256*1024+1
+            "$@" | python -c 'import sys
+          remaining=int(sys.argv[1])+1
           while True:
            data=sys.stdin.buffer.read(8192)
            if not data:
@@ -61,7 +62,7 @@ jobs:
            if remaining:
             sys.stdout.buffer.write(data[:remaining])
             remaining-=min(remaining,len(data))
-          sys.stdout.buffer.flush()' > "$destination"
+          sys.stdout.buffer.flush()' "$limit" > "$destination"
             local statuses=("${PIPESTATUS[@]}")
             probe_rc=${statuses[0]}
             if [ "${statuses[1]}" -ne 0 ]; then
@@ -70,25 +71,35 @@ jobs:
             fi
             set -e
           }
-          failures=0
-          env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib native_finish
-          env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests::pool_readiness_tests
-          capture "$RUNNER_TEMP/session-deadline-session.raw" env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api
-          session_rc=$probe_rc
-          printf 'csrf_probe=auth_cfg_full_default_parallel cargo_exit=%s\n' "$session_rc"
-          capture "$RUNNER_TEMP/session-deadline-browser.raw" env RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api
+          capture "$RUNNER_TEMP/pr133-volume-cargo.json" 16777216 env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api --no-run --message-format=json
+          cargo_rc=$probe_rc
+          if [ "$cargo_rc" -ne 0 ]; then
+            printf 'volume_comparison_compile=failed\n'
+            exit "$cargo_rc"
+          fi
+          # Browser raw is bounded and private. The same one execution is used
+          # for both closed v2 records; no browser retry per Session arm.
+          capture "$RUNNER_TEMP/pr133-volume-browser.raw" 262144 bash -c 'env RUSTFLAGS="--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag" cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1'
           browser_rc=$probe_rc
-          printf 'csrf_probe=actual_browser_login_supplement cargo_exit=%s\n' "$browser_rc"
-          if ! python -B scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "$session_rc" "$browser_rc" "$RUNNER_TEMP/session-deadline-diagnostic.json"; then failures=1; fi
-          exit "$failures"
-      - name: Preserve only sanitized fixed-schema Session diagnostics
+          python -B scripts/ci/windows_temp_volume_comparison.py \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --target-root "$GITHUB_WORKSPACE/target" \
+            --cargo-json "$RUNNER_TEMP/pr133-volume-cargo.json" \
+            --cargo-exit-code "$cargo_rc" \
+            --browser-raw "$RUNNER_TEMP/pr133-volume-browser.raw" \
+            --browser-exit-code "$browser_rc" \
+            --output-dir "$RUNNER_TEMP/pr133-temp-volume-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - name: Preserve only closed comparison and original v2 records
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr133-focused-windows-session
-          path: ${{ runner.temp }}/session-deadline-diagnostic.json
+          name: pr133-windows-temp-volume-comparison
+          path: |
+            ${{ runner.temp }}/pr133-temp-volume-${{ github.run_id }}-${{ github.run_attempt }}/comparison.json
+            ${{ runner.temp }}/pr133-temp-volume-${{ github.run_id }}-${{ github.run_attempt }}/A.v2.json
+            ${{ runner.temp }}/pr133-temp-volume-${{ github.run_id }}-${{ github.run_attempt }}/B.v2.json
           if-no-files-found: ignore
 
-  strict-browser-tls:
+  strict-browser-tls12-diagnostic:
     if: github.ref == 'refs/heads/test/nagi020-pr133-ci-repair-20261019'
     uses: ./.github/workflows/sf08-browser.yml
