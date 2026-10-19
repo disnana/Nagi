@@ -139,6 +139,7 @@ class VolumeTests(unittest.TestCase):
         self.assertTrue(all(call[3] == 30 for call in runs))
         self.assertTrue(result['order_confound'])
         self.assertEqual(result['causality'], 'unproven')
+        self.assertNotIn('collector_failure', result)
         self.assert_private(result)
 
 
@@ -206,6 +207,7 @@ class VolumeTests(unittest.TestCase):
         self.assertEqual(result['status'], 'tests_passed')
         self.assertEqual([arm['arm'] for arm in result['arms']], ['B', 'A'])
         self.assertEqual(result['causality'], 'unproven')
+        self.assertNotIn('collector_failure', result)
         self.b_failed = True
         result, code = self.run_pair()
         self.assertEqual(code, 1)
@@ -267,13 +269,123 @@ class VolumeTests(unittest.TestCase):
 
     def test_collector_output_must_remain_existing_closed_shapes(self):
         for name, changed in [('csrf_reusable_observation', {'PRIVATE_SENTINEL': 'private-sentinel-path'}),
-                              ('session_native_call_lines', ['session_native_call=PRIVATE_SENTINEL'])]:
+                              ('session_native_call_lines', ['session_native_call=PRIVATE_SENTINEL']),
+                              ('session_native_call_lines', None),
+                              ('session_native_call_lines', ['session_native_call=unavailable'] * (diag.NATIVE_CALL_FACT_LIMIT + 1)),
+                              ('session_native_call_lines', [None]),
+                              ('session_native_call_lines', ['PRIVATE_SENTINEL']),
+                              ('session_native_call_lines', ['session_native_call={"PRIVATE_SENTINEL":"private-sentinel-path"}'])]:
             self.calls.clear()
             with mock.patch.object(diag, name, return_value=changed):
                 result, code = self.run_pair()
             self.assertEqual(code, 1)
             self.assertEqual(result['reason'], 'collector_refused')
+            self.assertEqual(result['collector_failure']['stage'], 'csrf' if name == 'csrf_reusable_observation' else 'native')
+            self.assertEqual(result['collector_failure']['exit'], 0)
             self.assert_private(result)
+
+    def test_incomplete_A_records_refusal_stage_without_claiming_an_arm_verdict(self):
+        original = self.capture
+        def capture(argv, **kwargs):
+            value = original(argv, **kwargs)
+            if argv == [str(self.exe)] and kwargs['env']['TMP'] == str(self.original):
+                value.raw = b'running 11 tests\nPRIVATE_SENTINEL\n'
+            return value
+        result, code = self.run_pair(capture=capture)
+        self.assertEqual((code, result['status'], result['reason']), (1, 'infra_failed', 'collector_refused'))
+        self.assertEqual([arm['arm'] for arm in result['arms']], ['B'])
+        failure = result['collector_failure']
+        self.assertEqual({key: failure[key] for key in ('arm', 'stage', 'exit', 'record_shape_valid', 'record_status')},
+                         {'arm': 'A', 'stage': 'record', 'exit': 101, 'record_shape_valid': True,
+                          'record_status': 'diagnostic_invalid'})
+        self.assertEqual(failure['session'], {'input_status': 'valid', 'diagnostic_status': 'valid',
+            'inventory_status': 'incomplete', 'running_count': 11, 'passed_count': None,
+            'failed_count': None, 'ignored_count': None, 'failed_cases': []})
+        self.assertEqual(result['cleanup'], 'removed')
+        self.assert_private(result)
+
+    def test_collector_refusals_identify_each_fixed_stage_and_both_arms(self):
+        original_diagnose = diag.diagnose
+        cases = [('suite', 'diagnose'), ('csrf', 'csrf_reusable_observation'),
+                 ('native', 'session_native_call_lines')]
+        for arm in ('B', 'A'):
+            for stage, method in cases:
+                self.calls.clear()
+                self.b_failed = True
+                native = diag.session_native_call_lines
+                csrf = diag.csrf_reusable_observation
+                count = 0
+                def changed(*args, **kwargs):
+                    nonlocal count
+                    if method == 'diagnose' and args[0] is None:
+                        return original_diagnose(*args, **kwargs)
+                    count += 1
+                    selected = count == (1 if arm == 'B' else 2)
+                    if method == 'diagnose':
+                        record, code = original_diagnose(*args, **kwargs)
+                        if selected: record['suites']['session']['ignored_count'] = 1
+                        return record, code
+                    if selected:
+                        return {'PRIVATE_SENTINEL': 'private-sentinel-path'} if stage == 'csrf' else ['session_native_call=PRIVATE_SENTINEL']
+                    return (csrf if stage == 'csrf' else native)(*args, **kwargs)
+                with mock.patch.object(diag, method, side_effect=changed):
+                    result, code = self.run_pair()
+                self.assertEqual((code, result['status'], result['reason']), (1, 'infra_failed', 'collector_refused'))
+                failure = result['collector_failure']
+                self.assertEqual((failure['arm'], failure['stage'], failure['exit']), (arm, stage, 101))
+                self.assertEqual(failure['session']['failed_cases'], [diag.CSRF_REUSABLE_CASE])
+                self.assertEqual([item['arm'] for item in result['arms']], [] if arm == 'B' else ['B'])
+                self.assert_private(result)
+
+    def test_malformed_refusal_record_rebuilds_only_bounded_known_inventory_fields(self):
+        original = diag.diagnose
+        for counts in [(True, -1, 12, 10**100), (0, 11, 1, None)]:
+            def diagnose(*args, **kwargs):
+                record, code = original(*args, **kwargs)
+                if args[0] is not None:
+                    record['PRIVATE_SENTINEL'] = {'path': 'private-sentinel-path'}
+                    record['status'] = ['PRIVATE_SENTINEL']
+                    suite = record['suites']['session']
+                    suite.update(input_status={'PRIVATE_SENTINEL': True}, diagnostic_status='PRIVATE_SENTINEL',
+                        inventory_status='PRIVATE_SENTINEL', failed_cases=[diag.CSRF_REUSABLE_CASE,
+                        'PRIVATE_SENTINEL', {'PRIVATE_SENTINEL': True}, diag.CSRF_REUSABLE_CASE],
+                        extra='PRIVATE_SENTINEL')
+                    suite.update(zip(('running_count', 'passed_count', 'failed_count', 'ignored_count'), counts))
+                return record, code
+            with mock.patch.object(diag, 'diagnose', side_effect=diagnose):
+                result, code = self.run_pair()
+            self.assertEqual((code, result['status'], result['reason']), (1, 'infra_failed', 'collector_refused'))
+            failure = result['collector_failure']
+            self.assertEqual(set(failure), {'arm', 'stage', 'exit', 'record_shape_valid', 'record_status', 'session'})
+            self.assertEqual((failure['stage'], failure['record_shape_valid'], failure['record_status']), ('record', False, None))
+            expected = {key: None for key in ('input_status', 'diagnostic_status', 'inventory_status')}
+            expected.update(zip(('running_count', 'passed_count', 'failed_count', 'ignored_count'),
+                [number if type(number) is int and 0 <= number <= 11 else None for number in counts]))
+            expected['failed_cases'] = [diag.CSRF_REUSABLE_CASE]
+            self.assertEqual(failure['session'], expected)
+            self.assertLess(len(json.dumps(failure)), 2048)
+            self.assert_private(result)
+
+    def test_noncollector_refusal_and_bad_record_containers_never_project_raw_values(self):
+        original = diag.diagnose
+        unknown_case, _ = original(raw_log(diag.SESSION_CASES), 'valid', 0,
+                                  raw_log(diag.BROWSER_CASES), 'valid', 0)
+        unknown_case['suites']['session']['failed_cases'] = ['PRIVATE_SENTINEL']
+        for broken in [None, ['PRIVATE_SENTINEL'], {'suites': ['PRIVATE_SENTINEL']},
+                       {'suites': {'session': 'PRIVATE_SENTINEL'}},
+                       {'suites': {'session': {'failed_cases': ['PRIVATE_SENTINEL'] * 12}}}, unknown_case]:
+            def diagnose(*args, **kwargs):
+                return (broken, 1) if args[0] is not None else original(*args, **kwargs)
+            with mock.patch.object(diag, 'diagnose', side_effect=diagnose):
+                result, code = self.run_pair()
+            self.assertEqual((code, result['reason']), (1, 'collector_refused'))
+            self.assertEqual(result['collector_failure']['session']['failed_cases'], [])
+            self.assert_private(result)
+        self.bind = b'PRIVATE_SENTINEL'
+        result, code = self.run_pair()
+        self.assertEqual((code, result['reason']), (1, 'temp_binding'))
+        self.assertNotIn('collector_failure', result)
+        self.assert_private(result)
 
     def test_cargo_json_requires_single_exact_target_and_success(self):
         fields = [

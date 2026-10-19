@@ -103,7 +103,9 @@ class R2Tests(unittest.TestCase):
                       'console_missing', 'console_malformed',
                       'peer_legacy_certificate', 'peer_connection_reset', 'peer_handshake_timeout',
                       'peer_no_native_code', 'peer_non_error', 'peer_other_code', 'peer_other', 'peer_binding',
-                      'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'}
+                      'socket', 'socket_eof', 'socket_close_unproved', 'socket_error_reset_raw',
+                      'socket_error_reset_tls', 'socket_error_other', 'socket_destroy_error',
+                      'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'}
         prefix = 'engine_wrong_host_one_shot_'
         expected = {prefix + category for category in categories}
         self.assertEqual({stage for stage in f.STAGES if stage.startswith(prefix)}, expected)
@@ -125,7 +127,9 @@ class R2Tests(unittest.TestCase):
                       'console_missing', 'console_malformed',
                       'peer_legacy_certificate', 'peer_connection_reset', 'peer_handshake_timeout',
                       'peer_no_native_code', 'peer_non_error', 'peer_other_code', 'peer_other', 'peer_binding',
-                      'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'}
+                      'socket', 'socket_eof', 'socket_close_unproved', 'socket_error_reset_raw',
+                      'socket_error_reset_tls', 'socket_error_other', 'socket_destroy_error',
+                      'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'}
         prefix = 'engine_wrong_ca_one_shot_'
         expected = {prefix + category for category in categories}
         self.assertEqual({stage for stage in f.STAGES if stage.startswith(prefix)}, expected)

@@ -1785,7 +1785,7 @@ test('one-shot diagnostics retain first native veto across setup socket response
   const setup = [];
   await assert.rejects(hostPeerFixture({ setupFailure: true, diagnose: value => setup.push(value) }), /^Error: SF08 browser trust preflight refused$/);
   assert.deepEqual(setup, ['setup']);
-  for (const [mode, expected] of [['socket', 'socket'], ['response', 'response'], ['binding', 'peer_binding'], ['join', 'join'], ['deadline', 'deadline']]) {
+  for (const [mode, expected] of [['socket', 'socket_eof'], ['response', 'response'], ['binding', 'peer_binding'], ['join', 'join'], ['deadline', 'deadline']]) {
     const rows = [], f = await hostPeerFixture({ closeError: mode === 'join', budget: mode === 'deadline' ? 35 : 1000,
       diagnose: value => rows.push(value) });
     if (mode !== 'deadline') {
@@ -1799,6 +1799,45 @@ test('one-shot diagnostics retain first native veto across setup socket response
   }
 });
 
+test('one-shot socket event diagnostics identify the first veto and always refuse', { timeout: 5000 }, async () => {
+  const cases = [
+    { event: 'eof', expected: 'socket_eof' },
+    { event: 'close', expected: 'socket_close_unproved' },
+    { event: 'raw-reset', expected: 'socket_error_reset_raw' },
+    { event: 'tls-reset', expected: 'socket_error_reset_tls' },
+    { event: 'other-error', expected: 'socket_error_other' },
+    { event: 'destroy-throws', expected: 'socket_destroy_error', budget: 80 },
+  ];
+  for (const item of cases) {
+    const rows = [];
+    const f = await hostPeerFixture({ role: 'ca', budget: item.budget ?? 1000,
+      diagnose: value => rows.push(value) });
+    f.connect(); f.sni();
+    if (item.event === 'eof') f.raw.emit('end');
+    if (item.event === 'close') { f.raw.emit('close'); f.socket.emit('close'); }
+    if (item.event === 'raw-reset') f.raw.emit('error', Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' }));
+    if (item.event === 'tls-reset') f.socket.emit('error', Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' }));
+    if (item.event === 'other-error') {
+      const error = new Error('PRIVATE_SENTINEL');
+      Object.defineProperty(error, 'code', { get() { throw new Error('CODE_SENTINEL'); } });
+      f.raw.emit('error', error);
+    }
+    if (item.event === 'destroy-throws') f.raw.destroy = () => { throw new Error('PRIVATE_SENTINEL'); };
+    if (item.event === 'destroy-throws') assert.equal(await f.endpoint.close(), false, item.event);
+    else {
+      assert.equal(await f.endpoint.finish(), false, item.event);
+      await f.endpoint.close();
+    }
+    assert.deepEqual(rows, [item.expected], item.event);
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_SENTINEL|CODE_SENTINEL|ECONNRESET/);
+  }
+
+  const throwing = await hostPeerFixture({ role: 'ca', diagnose: () => { throw new Error('PRIVATE_SENTINEL'); } });
+  throwing.connect(); throwing.sni(); throwing.raw.emit('end');
+  assert.equal(await throwing.endpoint.finish(), false, 'observer failure cannot create certificate proof');
+  await throwing.endpoint.close();
+});
+
 test('one-shot failure checkpoint emits only its fixed WebKit category and cannot expose caller facts', async () => {
   const stages = [], type = fake('webkit', 'normal');
   await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
@@ -1807,6 +1846,18 @@ test('one-shot failure checkpoint emits only its fixed WebKit category and canno
   assert.deepEqual(stages.at(-1), { schema_version: 1, stage: 'engine_wrong_host_one_shot_credential', engine: 'webkit' });
   assert.equal(stages.filter(row => row.stage.startsWith('engine_wrong_host_one_shot_')).length, 1);
   assert.equal(JSON.stringify(stages).includes('PRIVATE_SENTINEL'), false);
+});
+
+test('wrong-CA socket event category reaches its fixed checkpoint and stays refused', async () => {
+  const type = fake('webkit', 'normal', { reason: 'ca', requestCertificate: true });
+  const checkpoints = [];
+  const endpoint = { url: negative.caOrigin + '/', async finish() { return false; }, async close() { return true; } };
+  await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
+    (stage, engine) => checkpoints.push({ stage, engine }), undefined, undefined,
+    async (_until, diagnose) => { diagnose('socket_eof'); return endpoint; }),
+  /^Error: SF08 browser trust preflight refused$/);
+  assert.deepEqual(checkpoints.at(-1), { stage: 'engine_wrong_ca_one_shot_socket_eof', engine: 'webkit' });
+  assert.equal(type.trace.closed && type.trace.contextClosed, true);
 });
 
 test('wrong-CA one-shot checkpoint retains its fixed category and skips legacy navigation', async () => {
@@ -1993,7 +2044,7 @@ test('one-shot fingerprint preserves binding first veto deadline and callback pr
       f.alert(code);
     } else f.alert(code);
     assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
-    assert.deepEqual(rows, [mode === 'binding' ? 'peer_binding' : mode === 'duplicate' ? 'peer_connection_reset' : mode]);
+    assert.deepEqual(rows, [mode === 'binding' ? 'peer_binding' : mode === 'duplicate' ? 'peer_connection_reset' : mode === 'socket' ? 'socket_eof' : mode]);
   }
   for (const accepted of [true, false]) {
     const f = await hostPeerFixture({ diagnose: () => { throw new Error('PRIVATE_SENTINEL'); } });

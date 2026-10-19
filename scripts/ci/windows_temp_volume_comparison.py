@@ -41,6 +41,12 @@ class Refused(Exception):
         super().__init__('Windows temp-volume comparison refused')
 
 
+class CollectorRefused(Refused):
+    def __init__(self, failure):
+        super().__init__('collector_refused')
+        self.failure = failure
+
+
 class NativeWindows:
     """Three read-only Win32 APIs; no raw path, volume ID or WinError is rendered."""
     def __init__(self, kernel32=None):
@@ -293,30 +299,62 @@ def _source_bound(repo, collector):
 def _closed_arm(label, captured, browser, browser_exit, collector):
     raw, code = captured['raw'], captured['returncode']
     record, _ = collector.diagnose(raw, 'valid', code, browser, 'valid', browser_exit)
-    if not collector._closed_record_shape(record, False) or record['status'] not in {'passed', 'tests_failed'}:
-        raise Refused('collector_refused')
+    shape_valid = collector._closed_record_shape(record, False)
+    def refuse(stage):
+        # A refused record is never serialized. Rebuild only this failure-only
+        # inventory witness; it cannot turn an invalid v2 record into an arm.
+        status = record.get('status') if type(record) is dict else None
+        suites = record.get('suites') if type(record) is dict else None
+        suite = suites.get('session') if type(suites) is dict else None
+        suite = suite if type(suite) is dict else {}
+        clean = {}
+        enums = {
+            'input_status': {'valid', 'missing', 'oversize', 'invalid_utf8'},
+            'diagnostic_status': {'valid', 'invalid'},
+            'inventory_status': {'unavailable', 'input_unavailable', 'invalid_exit_code',
+                'no_test_execution', 'zero_tests', 'invalid_running_count', 'incomplete',
+                'inventory_invalid', 'ignored_tests', 'failed', 'invalid_zero_exit_failure',
+                'nonzero_after_passing_tests', 'passed'},
+        }
+        for key, allowed in enums.items():
+            value = suite.get(key)
+            clean[key] = value if type(value) is str and value in allowed else None
+        for key in ('running_count', 'passed_count', 'failed_count', 'ignored_count'):
+            value = suite.get(key)
+            clean[key] = value if type(value) is int and 0 <= value <= 11 else None
+        failed = suite.get('failed_cases')
+        clean['failed_cases'] = (sorted({case for case in failed
+            if type(case) is str and case in collector.SESSION_CASES})
+            if type(failed) is list and len(failed) <= 11 else [])
+        raise CollectorRefused({'arm': label, 'stage': stage, 'exit': code,
+            'record_shape_valid': shape_valid,
+            'record_status': status if type(status) is str and status in
+                {'diagnostic_invalid', 'tests_failed', 'passed', 'tests_not_run_or_incomplete'} else None,
+            'session': clean}) from None
+    if not shape_valid or record['status'] not in {'passed', 'tests_failed'}:
+        refuse('record')
     suite = record['suites']['session']
     if (suite['input_status'] != 'valid' or suite['diagnostic_status'] != 'valid' or
             suite['inventory_status'] not in {'passed', 'failed'} or suite['running_count'] != 11 or
             suite['passed_count'] + suite['failed_count'] != 11 or suite['ignored_count'] != 0):
-        raise Refused('collector_refused')
+        refuse('suite')
     observed = collector.csrf_reusable_observation(raw, code, record=record)
     if observed is not None and not collector._csrf_observation_valid(observed):
-        raise Refused('collector_refused')
+        refuse('csrf')
     native = collector.session_native_call_lines(raw, code, record)
     if type(native) is not list or len(native) > collector.NATIVE_CALL_FACT_LIMIT:
-        raise Refused('collector_refused')
+        refuse('native')
     for line in native:
         if line == 'session_native_call=unavailable':
             continue
         if type(line) is not str or not line.startswith('session_native_call='):
-            raise Refused('collector_refused')
+            refuse('native')
         try:
             fact = json.loads(line.removeprefix('session_native_call='))
         except (ValueError, TypeError):
-            raise Refused('collector_refused') from None
+            refuse('native')
         if not collector._native_call_output_valid(fact):
-            raise Refused('collector_refused')
+            refuse('native')
     return {'arm': label, 'elapsed_ms': captured['elapsed_ms'], 'v2': record,
             'reusable_failure': observed,
             'native_calls': native}
@@ -397,6 +435,9 @@ def compare(*, repo, target_root, messages, cargo_exit, browser_raw, browser_exi
             result['arms'].append(_closed_arm(label, captured, browser, browser_exit, collector))
         result['status'] = 'tests_passed' if all(arm['v2']['status'] == 'passed' for arm in result['arms']) else 'tests_failed'
         result['reason'] = 'complete'
+    except CollectorRefused as error:
+        result['reason'] = error.reason
+        result['collector_failure'] = error.failure
     except Refused as error:
         result['reason'] = error.reason
     except Exception:

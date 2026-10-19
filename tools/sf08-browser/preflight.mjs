@@ -551,6 +551,12 @@ const HOST_FAILURE_STAGES = Object.freeze({
   peer_other: 'engine_wrong_host_one_shot_peer_other',
   peer_binding: 'engine_wrong_host_one_shot_peer_binding',
   socket: 'engine_wrong_host_one_shot_socket',
+  socket_eof: 'engine_wrong_host_one_shot_socket_eof',
+  socket_close_unproved: 'engine_wrong_host_one_shot_socket_close_unproved',
+  socket_error_reset_raw: 'engine_wrong_host_one_shot_socket_error_reset_raw',
+  socket_error_reset_tls: 'engine_wrong_host_one_shot_socket_error_reset_tls',
+  socket_error_other: 'engine_wrong_host_one_shot_socket_error_other',
+  socket_destroy_error: 'engine_wrong_host_one_shot_socket_destroy_error',
   lifecycle: 'engine_wrong_host_one_shot_lifecycle',
   deadline: 'engine_wrong_host_one_shot_deadline',
   join: 'engine_wrong_host_one_shot_join',
@@ -574,6 +580,12 @@ const CA_FAILURE_STAGES = Object.freeze({
   peer_other: 'engine_wrong_ca_one_shot_peer_other',
   peer_binding: 'engine_wrong_ca_one_shot_peer_binding',
   socket: 'engine_wrong_ca_one_shot_socket',
+  socket_eof: 'engine_wrong_ca_one_shot_socket_eof',
+  socket_close_unproved: 'engine_wrong_ca_one_shot_socket_close_unproved',
+  socket_error_reset_raw: 'engine_wrong_ca_one_shot_socket_error_reset_raw',
+  socket_error_reset_tls: 'engine_wrong_ca_one_shot_socket_error_reset_tls',
+  socket_error_other: 'engine_wrong_ca_one_shot_socket_error_other',
+  socket_destroy_error: 'engine_wrong_ca_one_shot_socket_destroy_error',
   lifecycle: 'engine_wrong_ca_one_shot_lifecycle',
   deadline: 'engine_wrong_ca_one_shot_deadline',
   join: 'engine_wrong_ca_one_shot_join',
@@ -751,6 +763,12 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
     try { server.close(error => { if (error) { failure('join'); bad = true; } closeCallback = true; complete(); }); }
     catch { failure('join'); bad = true; readyReject(new Error(REFUSED)); }
   };
+  const socketErrorKind = (error, socket) => {
+    try {
+      if (error?.code !== 'ECONNRESET') return 'socket_error_other';
+      return socket instanceof native.TLSSocket ? 'socket_error_reset_tls' : 'socket_error_reset_raw';
+    } catch { return 'socket_error_other'; }
+  };
   // TLS callbacks may still be on the native handshake stack. Keep the veto
   // synchronous, but destroy the owned raw/TLS wrappers in one later turn.
   // Join and credential release wait for the complete destruction batch.
@@ -758,7 +776,7 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
     if (destroyPending || joined) return;
     destroyPending = true;
     setImmediate(() => {
-      try { for (const socket of sockets) { try { socket.destroy(); } catch { failure('socket'); bad = true; } } }
+      try { for (const socket of sockets) { try { socket.destroy(); } catch { failure('socket_destroy_error'); bad = true; } } }
       finally { destroyPending = false; complete(); }
     });
   };
@@ -768,11 +786,11 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
     sockets.add(socket);
     listen(socket, 'close', () => {
       sockets.delete(socket);
-      if (!peer && !consoleResetTerminal) { failure('socket'); bad = true; }
+      if (!peer && !consoleResetTerminal) { failure('socket_close_unproved'); bad = true; }
       complete();
     });
-    listen(socket, 'end', () => veto('socket'));
-    listen(socket, 'error', () => { if (!peer) veto(); });
+    listen(socket, 'end', () => veto('socket_eof'));
+    listen(socket, 'error', error => { if (!peer) veto(socketErrorKind(error, socket)); });
   };
   try {
     const remaining = hostBudget(until);

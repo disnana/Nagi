@@ -236,7 +236,9 @@ test('one-shot checkpoint vocabulary is finite WebKit-only with no dynamic field
   const categories = ['credential', 'setup', 'navigation', 'request', 'console_missing', 'console_malformed',
     'response', 'peer_legacy_certificate',
     'peer_connection_reset', 'peer_handshake_timeout', 'peer_no_native_code', 'peer_non_error',
-    'peer_other_code', 'peer_other', 'peer_binding', 'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
+    'peer_other_code', 'peer_other', 'peer_binding', 'socket', 'socket_eof', 'socket_close_unproved',
+    'socket_error_reset_raw', 'socket_error_reset_tls', 'socket_error_other', 'socket_destroy_error',
+    'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
   const actual = FAILURE_STAGES.filter(stage => stage.startsWith('engine_wrong_host_one_shot_'));
   assert.deepEqual(actual, categories.map(category => 'engine_wrong_host_one_shot_' + category));
   for (const stage of actual) {
@@ -252,7 +254,9 @@ test('wrong-CA one-shot checkpoint vocabulary is finite WebKit-only with no dyna
   const categories = ['credential', 'setup', 'navigation', 'request', 'console_missing', 'console_malformed',
     'response', 'peer_legacy_certificate',
     'peer_connection_reset', 'peer_handshake_timeout', 'peer_no_native_code', 'peer_non_error',
-    'peer_other_code', 'peer_other', 'peer_binding', 'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
+    'peer_other_code', 'peer_other', 'peer_binding', 'socket', 'socket_eof', 'socket_close_unproved',
+    'socket_error_reset_raw', 'socket_error_reset_tls', 'socket_error_other', 'socket_destroy_error',
+    'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
   const actual = FAILURE_STAGES.filter(stage => stage.startsWith('engine_wrong_ca_one_shot_'));
   assert.deepEqual(actual, categories.map(category => 'engine_wrong_ca_one_shot_' + category));
   for (const stage of actual) {
