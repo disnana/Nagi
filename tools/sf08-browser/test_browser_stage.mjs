@@ -234,7 +234,8 @@ test('default wrong-CA factory reads bound work and both CA roles and fails clos
 
 test('one-shot checkpoint vocabulary is finite WebKit-only with no dynamic fields', () => {
   const categories = ['credential', 'setup', 'navigation', 'request', 'response', 'peer_legacy_certificate',
-    'peer_other', 'peer_binding', 'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
+    'peer_connection_reset', 'peer_handshake_timeout', 'peer_no_native_code', 'peer_non_error',
+    'peer_other_code', 'peer_other', 'peer_binding', 'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
   const actual = FAILURE_STAGES.filter(stage => stage.startsWith('engine_wrong_host_one_shot_'));
   assert.deepEqual(actual, categories.map(category => 'engine_wrong_host_one_shot_' + category));
   for (const stage of actual) {
@@ -248,7 +249,8 @@ test('one-shot checkpoint vocabulary is finite WebKit-only with no dynamic field
 
 test('wrong-CA one-shot checkpoint vocabulary is finite WebKit-only with no dynamic fields', () => {
   const categories = ['credential', 'setup', 'navigation', 'request', 'response', 'peer_legacy_certificate',
-    'peer_other', 'peer_binding', 'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
+    'peer_connection_reset', 'peer_handshake_timeout', 'peer_no_native_code', 'peer_non_error',
+    'peer_other_code', 'peer_other', 'peer_binding', 'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
   const actual = FAILURE_STAGES.filter(stage => stage.startsWith('engine_wrong_ca_one_shot_'));
   assert.deepEqual(actual, categories.map(category => 'engine_wrong_ca_one_shot_' + category));
   for (const stage of actual) {

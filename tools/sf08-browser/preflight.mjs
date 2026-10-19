@@ -539,6 +539,11 @@ const HOST_FAILURE_STAGES = Object.freeze({
   request: 'engine_wrong_host_one_shot_request',
   response: 'engine_wrong_host_one_shot_response',
   peer_legacy_certificate: 'engine_wrong_host_one_shot_peer_legacy_certificate',
+  peer_connection_reset: 'engine_wrong_host_one_shot_peer_connection_reset',
+  peer_handshake_timeout: 'engine_wrong_host_one_shot_peer_handshake_timeout',
+  peer_no_native_code: 'engine_wrong_host_one_shot_peer_no_native_code',
+  peer_non_error: 'engine_wrong_host_one_shot_peer_non_error',
+  peer_other_code: 'engine_wrong_host_one_shot_peer_other_code',
   peer_other: 'engine_wrong_host_one_shot_peer_other',
   peer_binding: 'engine_wrong_host_one_shot_peer_binding',
   socket: 'engine_wrong_host_one_shot_socket',
@@ -555,6 +560,11 @@ const CA_FAILURE_STAGES = Object.freeze({
   request: 'engine_wrong_ca_one_shot_request',
   response: 'engine_wrong_ca_one_shot_response',
   peer_legacy_certificate: 'engine_wrong_ca_one_shot_peer_legacy_certificate',
+  peer_connection_reset: 'engine_wrong_ca_one_shot_peer_connection_reset',
+  peer_handshake_timeout: 'engine_wrong_ca_one_shot_peer_handshake_timeout',
+  peer_no_native_code: 'engine_wrong_ca_one_shot_peer_no_native_code',
+  peer_non_error: 'engine_wrong_ca_one_shot_peer_non_error',
+  peer_other_code: 'engine_wrong_ca_one_shot_peer_other_code',
   peer_other: 'engine_wrong_ca_one_shot_peer_other',
   peer_binding: 'engine_wrong_ca_one_shot_peer_binding',
   socket: 'engine_wrong_ca_one_shot_socket',
@@ -794,13 +804,19 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
         try {
           if (alerts !== 1 || connections !== 1 || sniCount !== 1 || socket !== sniSocket ||
               !(socket instanceof native.TLSSocket)) kind = 'peer_binding';
-          else if (error instanceof Error) {
+          else if (!(error instanceof Error)) kind = 'peer_non_error';
+          else {
             hostBudget(until);
             const code = error.code;
             if (code === 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE') kind = 'peer_legacy_certificate';
+            else if (code === 'ECONNRESET') kind = 'peer_connection_reset';
+            else if (code === 'ERR_TLS_HANDSHAKE_TIMEOUT') kind = 'peer_handshake_timeout';
+            else if (code === undefined || code === null) kind = 'peer_no_native_code';
             else if (typeof code === 'string' && code.length <= 128 &&
                 code.match(/^ERR_SSL_[A-Z0-9_/]+$/)?.[0] === code)
               kind = 'peer_code_sha256_' + createHash('sha256').update(code).digest('hex');
+            else if (typeof code === 'string' || typeof code === 'number' || typeof code === 'boolean' ||
+                typeof code === 'bigint' || typeof code === 'symbol') kind = 'peer_other_code';
           }
         } catch {}
         veto(kind);
@@ -832,7 +848,13 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
       used = true;
       try { await hostWithin(join, until); hostBudget(until); }
       catch { veto('join'); return false; }
-      return ready && joined && peer && !bad && connections === 1 && sniCount === 1 && alerts === 1;
+      const proved = ready && joined && peer && !bad && connections === 1 && sniCount === 1 && alerts === 1;
+      if (!proved && !bad) {
+        if (!ready) failure('setup');
+        else if (!joined || !closedEvent || !closeCallback || sockets.size !== 0) failure('join');
+        else failure('peer_binding');
+      }
+      return proved;
     },
     async close() {
       stopAccepting(); destroy();
@@ -904,7 +926,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     phase = requests !== 1 || !failed ? 'request' : 'response';
     if (requests !== 1 || !failed || await hostWithin(failed.response(), until) !== null) refuse();
     live();
-    phase = 'peer_other';
+    phase = 'peer_binding';
     if (await hostWithin(endpoint.finish(), until) !== true) refuse();
     live();
     good = true;

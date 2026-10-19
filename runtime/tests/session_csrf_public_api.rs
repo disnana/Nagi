@@ -917,6 +917,16 @@ async fn finite_origin_and_header_refusals_preserve_existing_token_and_capacity(
 #[tokio::test]
 async fn one_reusable_token_admits_two_distinct_actual_requests() {
     let f = Fixture::new(2, 176).await;
+    // Case-local readiness trial: two held empty Deferred checkouts force both
+    // native workers ready before HTTP admission, without SQL or a read lock.
+    let first = sqlite::begin(&f.pool, sqlite::BeginMode::Deferred)
+        .await
+        .unwrap();
+    let second = sqlite::begin(&f.pool, sqlite::BeginMode::Deferred)
+        .await
+        .unwrap();
+    sqlite::rollback(first).await.unwrap();
+    sqlite::rollback(second).await.unwrap();
     let s = Server::new(&f).await;
     let cookie = request(&s, "POST", "/issue", "Authorization: Bearer owned\r\n", b"")
         .await

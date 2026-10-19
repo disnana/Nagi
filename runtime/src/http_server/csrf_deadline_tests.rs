@@ -7,6 +7,8 @@ use tokio::sync::Notify;
 // Keep these in the existing SF03 deadline CI filter on every target.
 #[path = "csrf_body_deadline_tests.rs"]
 mod body_selection_tests;
+#[path = "csrf_pool_readiness_tests.rs"]
+mod pool_readiness_tests;
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 struct Fixture {

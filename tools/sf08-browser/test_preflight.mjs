@@ -1372,7 +1372,7 @@ test('one-shot CA request lifecycle deadline join and host-binding vetoes remain
   const diagnostic = hostBrowser({ role: 'ca', peer: false }), rows = [];
   assert.equal(await probeWebkitWrongCA(diagnostic.browser, diagnostic.factory,
     performance.now() + 1000, value => rows.push(value)), false);
-  assert.deepEqual(rows, ['peer_other']);
+  assert.deepEqual(rows, ['peer_binding']);
 });
 test('one-shot CA endpoint rejects missing or foreign SNI TCP identity and lifecycle facts', async () => {
   caAPI();
@@ -1527,7 +1527,7 @@ test('one-shot diagnostics report one fixed failure and never report success', a
     [{ missing: true }, 'request'], [{ foreignURL: true }, 'request'], [{ text: 'PRIVATE_SENTINEL' }, 'request'],
     [{ response: async () => undefined }, 'response'],
     [{ error: Object.assign(new Error('PRIVATE_SENTINEL'), { name: 'TimeoutError' }) }, 'navigation'],
-    [{ duringJoin: ({ page }) => page.emit('crash') }, 'lifecycle'], [{ peer: false }, 'peer_other'],
+    [{ duringJoin: ({ page }) => page.emit('crash') }, 'lifecycle'], [{ peer: false }, 'peer_binding'],
     [{ join: false }, 'join'], [{ closeError: true }, 'cleanup'],
   ];
   for (const [options, expected] of cases) {
@@ -1550,7 +1550,8 @@ test('one-shot diagnostics report one fixed failure and never report success', a
 
 test('one-shot diagnostics separate legacy peer code from binding and other errors without accepting it', async () => {
   for (const [code, expected] of [['ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'peer_legacy_certificate'],
-    ['ECONNRESET', 'peer_other'], ['PRIVATE_SENTINEL_ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'peer_other']]) {
+    ['ECONNRESET', 'peer_connection_reset'], ['ERR_TLS_HANDSHAKE_TIMEOUT', 'peer_handshake_timeout'],
+    ['PRIVATE_SENTINEL_ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'peer_other_code']]) {
     const rows = [], f = await hostPeerFixture({ diagnose: value => rows.push(value) });
     f.connect(); f.sni(); f.alert(code);
     assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
@@ -1561,6 +1562,82 @@ test('one-shot diagnostics separate legacy peer code from binding and other erro
   f.connect(); f.sni('PRIVATE_SENTINEL'); f.alert('ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE');
   assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
   assert.deepEqual(rows, ['peer_binding'], 'first veto wins over later peer detail');
+});
+
+test('one-shot native peer classifies fixed non-SSL error facts without accepting or echoing them', async () => {
+  const cases = [
+    ['ECONNRESET', 'peer_connection_reset'],
+    ['ERR_TLS_HANDSHAKE_TIMEOUT', 'peer_handshake_timeout'],
+    ['ECONNREFUSED', 'peer_other_code'],
+    ['PRIVATE_SENTINEL', 'peer_other_code'],
+    ['ERR_SSL_PRIVATE\n', 'peer_other_code'],
+    [7, 'peer_other_code'],
+    [true, 'peer_other_code'],
+    [Symbol('PRIVATE_SENTINEL'), 'peer_other_code'],
+    [undefined, 'peer_no_native_code'],
+    [null, 'peer_no_native_code'],
+  ];
+  for (const role of ['ca', 'host']) {
+    for (const [code, expected] of cases) {
+      const rows = [], f = await hostPeerFixture({ role, diagnose: value => rows.push(value) });
+      f.connect(); f.sni();
+      const error = new Error('PRIVATE_SENTINEL');
+      Object.defineProperty(error, 'code', { value: code });
+      f.server.emit('tlsClientError', error, f.socket);
+      assert.equal(await f.endpoint.finish(), false, `${role}:${expected} cannot prove refusal`);
+      await f.endpoint.close();
+      assert.deepEqual(rows, [expected], `${role}:${String(expected)}`);
+      assert.equal(JSON.stringify(rows).includes('PRIVATE_SENTINEL'), false);
+    }
+    const noCodeRows = [], noCode = await hostPeerFixture({ role, diagnose: value => noCodeRows.push(value) });
+    noCode.connect(); noCode.sni();
+    noCode.server.emit('tlsClientError', new Error('PRIVATE_SENTINEL'), noCode.socket);
+    assert.equal(await noCode.endpoint.finish(), false);
+    await noCode.endpoint.close();
+    assert.deepEqual(noCodeRows, ['peer_no_native_code']);
+
+    const nonErrorRows = [], nonError = await hostPeerFixture({ role, diagnose: value => nonErrorRows.push(value) });
+    let nonErrorCodeReads = 0;
+    const notError = { get code() { nonErrorCodeReads++; throw new Error('PRIVATE_SENTINEL'); } };
+    nonError.connect(); nonError.sni(); nonError.server.emit('tlsClientError', notError, nonError.socket);
+    assert.equal(await nonError.endpoint.finish(), false);
+    await nonError.endpoint.close();
+    assert.equal(nonErrorCodeReads, 0, 'non-Error payload properties are never read');
+    assert.deepEqual(nonErrorRows, ['peer_non_error']);
+
+    let objectCodeCoercions = 0;
+    const objectRows = [], objectCode = await hostPeerFixture({ role, diagnose: value => objectRows.push(value) });
+    objectCode.connect(); objectCode.sni();
+    objectCode.server.emit('tlsClientError', Object.assign(new Error('PRIVATE_SENTINEL'), {
+      code: { toString() { objectCodeCoercions++; throw new Error('PRIVATE_SENTINEL'); } },
+    }), objectCode.socket);
+    assert.equal(await objectCode.endpoint.finish(), false);
+    await objectCode.endpoint.close();
+    assert.equal(objectCodeCoercions, 0, 'non-primitive codes are never coerced');
+    assert.deepEqual(objectRows, ['peer_other']);
+  }
+
+  const bindingRows = [], binding = await hostPeerFixture({ role: 'ca', diagnose: value => bindingRows.push(value) });
+  binding.connect(); binding.sni('sf08-wronghost.invalid');
+  binding.alert('ECONNRESET');
+  assert.equal(await binding.endpoint.finish(), false);
+  await binding.endpoint.close();
+  assert.deepEqual(bindingRows, ['peer_binding'], 'the initial binding veto wins');
+
+  const deadlineRows = [], deadline = await hostPeerFixture({ role: 'ca', budget: 35, diagnose: value => deadlineRows.push(value) });
+  deadline.connect(); deadline.sni();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  deadline.alert('ECONNRESET');
+  assert.equal(await deadline.endpoint.finish(), false);
+  await deadline.endpoint.close();
+  assert.deepEqual(deadlineRows, ['deadline'], 'late non-SSL facts cannot replace the deadline veto');
+});
+
+test('one-shot finish labels missing peer facts as binding failure without claiming proof', async () => {
+  const rows = [], f = await hostPeerFixture({ role: 'ca', diagnose: value => rows.push(value) });
+  assert.equal(await f.endpoint.close(), true);
+  assert.equal(await f.endpoint.finish(), false);
+  assert.deepEqual(rows, ['peer_binding']);
 });
 
 test('one-shot diagnostics cannot turn callback throws or malformed facts into successful evidence', async () => {
@@ -1631,14 +1708,15 @@ test('one-shot diagnostic observer exceptions cannot change valid native peer pr
     assert.equal(await f.endpoint.finish(), accepted); await f.endpoint.close();
     assert.equal(calls, accepted ? 0 : 1);
   }
-  for (const value of [undefined, null, {}, 'PRIVATE_SENTINEL', 1]) {
+  for (const [value, expected] of [[undefined, 'peer_other'], [null, 'peer_no_native_code'],
+    [{}, 'peer_other'], ['PRIVATE_SENTINEL', 'peer_other_code'], [1, 'peer_other_code']]) {
     const rows = [], f = await hostPeerFixture({ diagnose: value => rows.push(value) });
     f.connect(); f.sni();
     const error = new Error('PRIVATE_SENTINEL');
     Object.defineProperty(error, 'code', { get() { if (value === undefined) throw new Error('PRIVATE_SENTINEL'); return value; } });
     f.server.emit('tlsClientError', error, f.socket);
     assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
-    assert.deepEqual(rows, ['peer_other']);
+    assert.deepEqual(rows, [expected]);
   }
 });
 
@@ -1765,11 +1843,11 @@ test('one-shot fingerprint hashes only bounded native SSL code on rejected bound
   assert.equal(privateReads, 0, 'native message/stack/reason must never be accessed');
   assert.deepEqual(privateRows, ['peer_code_sha256_' + createHash('sha256').update(privateError.code).digest('hex')]);
   for (const code of ['ERR_SSL_' + 'A'.repeat(121), 'ERR_SSL_PRIVATE\n', 'ERR_SSL_PRIVATE\r', 'ERR_SSL_PRIVATE\u2028', 'ERR_SSL_é', 'ERR_SSL_bad',
-    'ERR_SSL_PRIVATE https://private.invalid/', 'ECONNRESET', '', null, 3, {}]) {
+    'ERR_SSL_PRIVATE https://private.invalid/', 'ECONNREFUSED', '', 3, true, Symbol('PRIVATE_SENTINEL'), {}]) {
     const rows = [], f = await hostPeerFixture({ diagnose: value => rows.push(value) });
     f.connect(); f.sni(); f.alert(code);
     assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
-    assert.deepEqual(rows, ['peer_other']);
+    assert.deepEqual(rows, [typeof code === 'object' ? 'peer_other' : 'peer_other_code']);
   }
   const boundaryCode = 'ERR_SSL_' + 'A'.repeat(120), rows = [];
   assert.equal(boundaryCode.length, 128);
@@ -1792,7 +1870,7 @@ test('one-shot fingerprint preserves binding first veto deadline and callback pr
       f.alert(code);
     } else f.alert(code);
     assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
-    assert.deepEqual(rows, [mode === 'binding' ? 'peer_binding' : mode === 'duplicate' ? 'peer_other' : mode]);
+    assert.deepEqual(rows, [mode === 'binding' ? 'peer_binding' : mode === 'duplicate' ? 'peer_connection_reset' : mode]);
   }
   for (const accepted of [true, false]) {
     const f = await hostPeerFixture({ diagnose: () => { throw new Error('PRIVATE_SENTINEL'); } });

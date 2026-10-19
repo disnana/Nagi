@@ -190,6 +190,10 @@ impl Observer {
         NativeFinish::start(self)
     }
     #[cfg(test)]
+    pub(crate) fn admission_window_for_test(&self) -> (Instant, Instant) {
+        (self.0.admitted, self.0.security_until)
+    }
+    #[cfg(test)]
     pub(crate) fn native_finish_for_test(&self) -> String {
         native_finish::Closed::new(
             self.closed(504).expect("unpoisoned test observer"),

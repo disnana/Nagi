@@ -387,3 +387,73 @@ pub(crate) fn logout_test_pool(path: std::path::PathBuf, fault: LogoutTestFault)
         acquire: Duration::from_secs(1),
     }
 }
+
+// Private HTTP cold-start calibration reuses the adapter's existing worker gate.
+#[cfg(test)]
+pub(crate) struct HttpStartupTest {
+    gate: std::sync::Arc<session::Gate>,
+    released: std::sync::atomic::AtomicBool,
+    observer: adapter::Observer,
+}
+#[cfg(test)]
+impl HttpStartupTest {
+    pub(crate) async fn wait(&self) {
+        self.gate.wait().await;
+    }
+    pub(crate) fn release(&self) {
+        if !self
+            .released
+            .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            // A native watchdog failure may already have dropped the receiver.
+            // Still proceed to the explicit close/join checks on that path.
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.gate.release()));
+        }
+    }
+    pub(crate) fn created(&self) -> usize {
+        self.observer.snapshot().created
+    }
+    pub(crate) fn idle(&self, pool: &Pool) -> usize {
+        pool.adapter.available()
+    }
+    pub(crate) fn all_joined(&self) -> bool {
+        let s = self.observer.snapshot();
+        s.created == s.joined && s.created == s.native_closed && s.pending_workers == 0
+    }
+}
+#[cfg(test)]
+impl Drop for HttpStartupTest {
+    fn drop(&mut self) {
+        self.release();
+    }
+}
+#[cfg(test)]
+pub(crate) fn http_startup_test_pool(path: std::path::PathBuf) -> (Pool, HttpStartupTest) {
+    let gate = std::sync::Arc::new(session::Gate::new());
+    let adapter = adapter::Adapter::with_capacity(
+        session::Config {
+            path: Some(path),
+            queue_capacity: Some(4),
+            busy: Duration::from_secs(1),
+            ..Default::default()
+        },
+        adapter::AdapterSeams {
+            target_worker: Some(2),
+            startup: Some(std::sync::Arc::clone(&gate)),
+            ..Default::default()
+        },
+        2,
+    );
+    let control = HttpStartupTest {
+        gate,
+        released: std::sync::atomic::AtomicBool::new(false),
+        observer: adapter.observer(),
+    };
+    (
+        Pool {
+            adapter,
+            acquire: Duration::from_secs(1),
+        },
+        control,
+    )
+}
