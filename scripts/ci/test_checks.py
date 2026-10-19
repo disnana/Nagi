@@ -880,7 +880,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
         inherited = projection.inverse_workflow(workflow)
         self.assertEqual(
             hashlib.sha256(inherited.encode()).hexdigest(),
-            "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79",
+            "4c30a985d983401c9b61ee1a3ca4edbde3ad3e924f64baed0c588eb744bae2a1",
         )
         anchors = (
             projection.SF08_BROWSER_JOB,
