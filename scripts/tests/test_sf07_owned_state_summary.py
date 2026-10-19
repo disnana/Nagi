@@ -171,14 +171,16 @@ class OwnedStateSummaryTests(unittest.TestCase):
             self.assertEqual(result.stdout.replace(b"\r\n", b"\n"), b"sf07_owned_state scope=lock state=invalid\n")
             self.assertEqual(result.stderr, b"")
 
-    def test_unchanged_83_modes_remain_required_beside_new_exact_filters(self):
+    def test_historical_83_case_inventory_remains_beside_new_exact_filters(self):
         spec = importlib.util.spec_from_file_location("old83", ROOT / "scripts/ci/sf07_checkpoint_summary.py")
         summary = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(summary)
-        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 84)
-        self.assertEqual(summary.EXPECTED["wire"][-1],
-                         "http_server::response_budget::finalize::tests::security_fallback_catalog_and_last_body_view_keep_finite_credit")
-        self.assertEqual(hashlib.sha256(json.dumps({**summary.EXPECTED, "wire": summary.EXPECTED["wire"][:-1]}, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
+        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 85)
+        self.assertEqual(summary.EXPECTED["wire"][-2:], (
+            "http_server::response_budget::finalize::tests::security_fallback_catalog_and_last_body_view_keep_finite_credit",
+            "http_server::response_budget::wire::tests::closed_transport_and_internal_bodies_keep_independent_finite_fallback_credit",
+        ))
+        self.assertEqual(hashlib.sha256(json.dumps({**summary.EXPECTED, "wire": summary.EXPECTED["wire"][:-2]}, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
                          "643c31aa2c66ac769a3cd478c5bdd57f324f058ba9a314352927b0e63dc4409d")
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         p = projection()

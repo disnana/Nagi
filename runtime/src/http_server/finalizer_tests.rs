@@ -58,8 +58,31 @@ fn managed_values_are_reasserted_from_owned_representation() {
         .headers
         .append(b"x-content-type-options", b"none")
         .unwrap();
+    for (name, value) in [
+        (b"Content-Length".as_slice(), b"999".as_slice()),
+        (b"TRANSFER-ENCODING", b"chunked"),
+        (b"aCcEsS-CoNtRoL-AlLoW-OrIgIn", b"https://stale.invalid"),
+        (b"Set-Cookie", b"stale=value"),
+    ] {
+        response.produced.headers.append(name, value).unwrap();
+    }
     let response = response.into_http(false);
     managed(&response);
+    for name in [
+        "content-type",
+        "content-security-policy",
+        "x-content-type-options",
+    ] {
+        assert_eq!(response.headers().get_all(name).iter().count(), 1);
+    }
+    for name in [
+        "content-length",
+        "transfer-encoding",
+        "access-control-allow-origin",
+        "set-cookie",
+    ] {
+        assert!(!response.headers().contains_key(name));
+    }
     assert_eq!(
         response.headers()[names::CONTENT_TYPE],
         "text/plain; charset=utf-8"

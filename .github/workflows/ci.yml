@@ -45,6 +45,13 @@ jobs:
     with:
       release_version: ${{ needs.release-plan.outputs.jetbrains_version }}
 
+  sf08-browser:
+    needs: [changes, release-plan]
+    if: >-
+      always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
+      (needs.changes.outputs.full_checks == 'true' || needs.release-plan.outputs.package_nagi == 'true')
+    uses: ./.github/workflows/sf08-browser.yml
+
   linux:
     needs: changes
     if: needs.changes.outputs.full_checks == 'true'
@@ -342,7 +349,7 @@ jobs:
           python - <<'PY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 5, 'sf02-unsafe-session.log': 3, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
+          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 7, 'sf02-public-api.log': 5, 'sf02-unsafe-session.log': 3, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
           for name, count in expected.items():
               text = (root / name).read_text(encoding="utf-8")
               pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
@@ -852,7 +859,7 @@ jobs:
           import hashlib, pathlib
           expected = {
               'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
-              'runtime/src/http_server/tests.rs': 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584',
+              'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
               'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
@@ -1441,7 +1448,7 @@ jobs:
           python - <<'PY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 5, 'sf02-unsafe-session.log': 3, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
+          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 7, 'sf02-public-api.log': 5, 'sf02-unsafe-session.log': 3, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
           for name, count in expected.items():
               text = (root / name).read_text(encoding="utf-8")
               pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
@@ -1798,7 +1805,7 @@ jobs:
           import hashlib, pathlib
           expected = {
               'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
-              'runtime/src/http_server/tests.rs': 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584',
+              'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
               'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
@@ -1999,7 +2006,7 @@ jobs:
   ready:
     name: Ready to merge
     if: github.event_name == 'pull_request' && always()
-    needs: [changes, linux, rust-1-88, jetbrains, release-plan, vscode-package, nagi-package]
+    needs: [changes, linux, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -2012,17 +2019,20 @@ jobs:
         run: python scripts/ci/gate.py
 
   publish-release:
-    needs: [linux, rust-1-88, release-plan, jetbrains, vscode-package, nagi-package]
+    needs: [changes, linux, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package]
     if: >-
       always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       (
-        (needs.linux.result == 'success' && needs.rust-1-88.result == 'success') ||
+        (needs.linux.result == 'success' && needs.rust-1-88.result == 'success' &&
+         needs.sf08-browser.result == 'success') ||
         (needs.release-plan.outputs.release_jetbrains == 'true' &&
          needs.release-plan.outputs.release_nagi != 'true' &&
          needs.release-plan.outputs.release_vscode != 'true' &&
          needs.linux.result == 'skipped' &&
-         needs.rust-1-88.result == 'skipped')
+         needs.rust-1-88.result == 'skipped' &&
+         needs.sf08-browser.result == 'skipped')
       ) && needs.release-plan.result == 'success' &&
+      needs.changes.result == 'success' &&
       (needs.jetbrains.result == 'success' || needs.jetbrains.result == 'skipped') &&
       (needs.vscode-package.result == 'success' || needs.vscode-package.result == 'skipped') &&
       (needs.nagi-package.result == 'success' || needs.nagi-package.result == 'skipped') &&

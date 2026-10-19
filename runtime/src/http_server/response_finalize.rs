@@ -404,6 +404,14 @@ impl PreparedResponse {
         }
         // The final typed plan is complete before the one native conversion.
         let plan = self.plan.complete()?;
+        // Internal stale values must not precede the canonical managed plan.
+        // Keep all earlier HTML and Session delivery invariant checks intact.
+        // Only the charged source Vec is filtered; no native map removal,
+        // clone, allocation, or early release of its reservation is needed.
+        self.produced
+            .headers
+            .entries
+            .retain(|h| !reserved_user_header(&h.name, false));
         let mut wire = self.produced.into_wire()?;
         plan.apply(&mut wire)?;
         Ok(wire)
@@ -782,31 +790,33 @@ impl Produced {
         {
             return Err(Diagnostic::HeaderLimit);
         }
-        let reserved = [
-            "content-length",
-            "transfer-encoding",
-            "content-type",
-            "set-cookie",
-            "cache-control",
-            "vary",
-            "www-authenticate",
-            "content-security-policy",
-            "content-security-policy-report-only",
-            "x-content-type-options",
-            "x-frame-options",
-            "strict-transport-security",
-            "clear-site-data",
-        ];
-        if reserved.iter().any(|r| name.eq_ignore_ascii_case(r))
-            || name
-                .get(..15)
-                .is_some_and(|n| n.eq_ignore_ascii_case("access-control-"))
-            || (html && name.eq_ignore_ascii_case("content-encoding"))
-        {
+        if reserved_user_header(name.as_bytes(), html) {
             return Err(Diagnostic::HeaderLimit);
         }
         self.headers.append(name.as_bytes(), value)
     }
+}
+fn reserved_user_header(name: &[u8], html: bool) -> bool {
+    let reserved: &[&[u8]] = &[
+        b"content-length",
+        b"transfer-encoding",
+        b"content-type",
+        b"set-cookie",
+        b"cache-control",
+        b"vary",
+        b"www-authenticate",
+        b"content-security-policy",
+        b"content-security-policy-report-only",
+        b"x-content-type-options",
+        b"x-frame-options",
+        b"strict-transport-security",
+        b"clear-site-data",
+    ];
+    reserved.iter().any(|r| name.eq_ignore_ascii_case(r))
+        || name
+            .get(..15)
+            .is_some_and(|n| n.eq_ignore_ascii_case(b"access-control-"))
+        || (html && name.eq_ignore_ascii_case(b"content-encoding"))
 }
 fn token(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b)

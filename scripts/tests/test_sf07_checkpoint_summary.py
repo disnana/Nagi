@@ -32,11 +32,11 @@ class SummaryTests(unittest.TestCase):
                 self.assertEqual(summary.classify(raw, mode), "passed")
 
     def test_old_gate_rejects_complete_crlf_native_rows(self):
-        # Reproduce the published ok$ Windows defect using its twelve wire names.
+        # Reproduce the published ok$ Windows defect using all thirteen wire tests.
         names = [n for n in summary.EXPECTED["wire"] if "::wire::tests::" in n]
         lf = "".join("test " + n + " ... ok\n" for n in names)
         old = r"(?m)^test http_server::response_budget::wire::tests::[^ ]+ \.\.\. ok$"
-        self.assertEqual(len(re.findall(old, lf)), 12)
+        self.assertEqual(len(re.findall(old, lf)), 13)
         self.assertEqual(len(re.findall(old, lf.replace("\n", "\r\n"))), 0)
 
     def test_lone_cr_invalid_utf8_and_oversize_are_rejected(self):
@@ -125,16 +125,16 @@ class SummaryTests(unittest.TestCase):
         wire |= native("runtime/src/http_server/response_finalize_tests.rs", "http_server::response_budget::finalize::tests::")
         self.assertEqual(set(summary.EXPECTED["wire"]), wire)
         self.assertEqual(set(summary.EXPECTED["quota"]), quota)
-        self.assertEqual((len(wire), len(quota)), (39, 9))
+        self.assertEqual((len(wire), len(quota)), (40, 9))
 
-    def test_previous_59_names_and_new_20_are_exact_and_required(self):
+    def test_previous_59_names_and_current_inventory_are_exact_and_required(self):
         import hashlib
         import json
         old = {k: list(summary.EXPECTED[k]) for k in ("wire", "quota", "transport", "request", "rate-startup")}
         old["wire"] = old["wire"][:22]
         old["transport"] = old["transport"][:8]
         self.assertEqual(hashlib.sha256(json.dumps(old, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), '91fc28d8e6cff5efe7f56b95eae0b838766c1835eee0f5fbb0d34f3a65a71552')
-        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 84)
+        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 85)
         paths = {
             "catalog-retained": ("runtime/src/security_sf07_private/quota_retention_tests.rs", "security_sf07_private::quota::retained_catalog_tests::"),
             "transport": ("runtime/src/http_server/response_send_tests.rs", "http_server::response_send::tests::"),
@@ -276,7 +276,7 @@ def run_browser_cli(mode, raw):
 
 class BrowserCounterProfileTests(unittest.TestCase):
     def test_independent_inventory_keeps_original_sf07_expectation_count(self):
-        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 84)
+        self.assertEqual(sum(map(len, summary.EXPECTED.values())), 85)
         self.assertEqual(len(summary.BROWSER_COUNTER_CASES), 10)
         self.assertEqual(len(summary.BROWSER_COUNTER_PROFILES["browser-counter-strict"]), 1)
         self.assertEqual(len(summary.BROWSER_COUNTER_PROFILES["browser-counter-wire"]), 1)

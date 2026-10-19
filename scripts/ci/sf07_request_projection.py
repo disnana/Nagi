@@ -101,7 +101,7 @@ HISTORICAL_HTTP_AFTER = '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea
 HTTP_AFTER = 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31'
 TESTS_BEFORE = '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173'
 HISTORICAL_TESTS_AFTER = '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f'
-TESTS_AFTER = 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584'
+TESTS_AFTER = '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8'
 SOURCE_LINE = '          python -B scripts/tests/test_sf07_request_source.py\n'
 NATIVE_LINE = '          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request\n'
 RATE_SOURCE_LINE = '          python -B scripts/tests/test_sf07_rate_source.py\n'
@@ -176,7 +176,83 @@ PRIVATE_CORE_COLOR_BASELINE = '          cargo test --locked -p nagi-runtime --l
 RELEASE_PROFILE_CI_STEPS = ('      - name: Measure bounded SF07 response and rate profile\n        shell: bash\n        run: |\n          set -euo pipefail\n          python -B scripts/tests/test_sf07_profile_summary.py\n          cargo test --locked -p nagi-runtime --test sf07_small_profile --no-run\n          cargo test --locked -p nagi-runtime --test sf07_small_profile -- --list > "$RUNNER_TEMP/sf07-profile-list.log"\n          python - <<\'PYSF07LIST\'\n          import os,pathlib,re\n          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"sf07-profile-list.log").read_text()\n          if re.findall(r"(?m)^([a-z0-9_]+): test$",text) != ["response_profile_reports_closed_measurements"]:\n              raise SystemExit("sf07_profile_inventory=invalid")\n          PYSF07LIST\n          set +e\n          cargo test --locked -p nagi-runtime --test sf07_small_profile response_profile_reports_closed_measurements -- --exact --show-output > "$RUNNER_TEMP/sf07-profile-native.log" 2>&1\n          profile_rc=$?\n          set -e\n          python -B scripts/ci/sf07_profile_summary.py --cargo-exit-code "$profile_rc" < "$RUNNER_TEMP/sf07-profile-native.log"\n', '      - name: Validate production SF06 with isolated owned DNS and TLS\n        shell: bash\n        run: |\n          set -euo pipefail\n          python -B scripts/tests/test_sf06_owned_network.py\n          NAGI_SF06_NAMESPACE_PROBE=1 python -B scripts/tests/test_sf06_owned_network.py HostedLifecycleProbe.test_namespace_eof_reaps_setsid_descendant\n          set +e\n          cargo test --locked -p nagi-runtime --test http_client_production_profile --no-run --message-format=json > "$RUNNER_TEMP/sf06-profile-build.jsonl"\n          compile_rc=$?\n          set -e\n          binary=$(SF06_COMPILE_RC="$compile_rc" python - <<\'PYSF06BUILD\'\n          import json,os,pathlib,sys\n          rows=[json.loads(line) for line in (pathlib.Path(os.environ["RUNNER_TEMP"])/"sf06-profile-build.jsonl").read_text().splitlines() if line.strip()]\n          if os.environ["SF06_COMPILE_RC"] != "0":\n              for row in rows:\n                  message=row.get("message",{})\n                  if row.get("reason")=="compiler-message" and message.get("level")=="error":\n                      print("sf06_profile_compile_error="+json.dumps({"code":message.get("code"),"message":message.get("message","")[:400]}),file=sys.stderr)\n              raise SystemExit(1)\n          paths=[row["executable"] for row in rows if row.get("reason")=="compiler-artifact" and row.get("target",{}).get("name")=="http_client_production_profile" and row.get("executable")]\n          if len(paths)!=1 or "\\n" in paths[0] or "\\r" in paths[0]:\n              raise SystemExit("sf06_profile_binary_inventory=invalid")\n          print(paths[0])\n          PYSF06BUILD\n          )\n          python -B scripts/ci/sf06_owned_network.py --binary "$binary" --source-sha "$GITHUB_SHA"\n')
 
 
+SF08_BROWSER_JOB = """  sf08-browser:
+    needs: [changes, release-plan]
+    if: >-
+      always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
+      (needs.changes.outputs.full_checks == 'true' || needs.release-plan.outputs.package_nagi == 'true')
+    uses: ./.github/workflows/sf08-browser.yml
+
+"""
+READY_NEEDS_WITH_SF08 = (
+    "    needs: [changes, linux, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package]\n"
+)
+READY_NEEDS_WITHOUT_SF08 = (
+    "    needs: [changes, linux, rust-1-88, jetbrains, release-plan, vscode-package, nagi-package]\n"
+)
+PUBLISH_NEEDS_WITH_SF08 = (
+    "    needs: [changes, linux, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package]\n"
+)
+PUBLISH_NEEDS_WITHOUT_SF08 = (
+    "    needs: [linux, rust-1-88, release-plan, jetbrains, vscode-package, nagi-package]\n"
+)
+PUBLISH_IF_WITH_SF08 = """    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      (
+        (needs.linux.result == 'success' && needs.rust-1-88.result == 'success' &&
+         needs.sf08-browser.result == 'success') ||
+        (needs.release-plan.outputs.release_jetbrains == 'true' &&
+         needs.release-plan.outputs.release_nagi != 'true' &&
+         needs.release-plan.outputs.release_vscode != 'true' &&
+         needs.linux.result == 'skipped' &&
+         needs.rust-1-88.result == 'skipped' &&
+         needs.sf08-browser.result == 'skipped')
+      ) && needs.release-plan.result == 'success' &&
+      needs.changes.result == 'success' &&
+      (needs.jetbrains.result == 'success' || needs.jetbrains.result == 'skipped') &&
+      (needs.vscode-package.result == 'success' || needs.vscode-package.result == 'skipped') &&
+      (needs.nagi-package.result == 'success' || needs.nagi-package.result == 'skipped') &&
+      (needs.release-plan.outputs.release_jetbrains != 'true' || needs.jetbrains.result == 'success') &&
+      (needs.release-plan.outputs.release_vscode != 'true' || needs.vscode-package.result == 'success') &&
+      (needs.release-plan.outputs.release_nagi != 'true' || needs.nagi-package.result == 'success') &&
+      (needs.release-plan.outputs.release_vscode == 'true' || needs.release-plan.outputs.release_nagi == 'true' || needs.release-plan.outputs.release_jetbrains == 'true')
+"""
+PUBLISH_IF_WITHOUT_SF08 = """    if: >-
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      (
+        (needs.linux.result == 'success' && needs.rust-1-88.result == 'success') ||
+        (needs.release-plan.outputs.release_jetbrains == 'true' &&
+         needs.release-plan.outputs.release_nagi != 'true' &&
+         needs.release-plan.outputs.release_vscode != 'true' &&
+         needs.linux.result == 'skipped' &&
+         needs.rust-1-88.result == 'skipped')
+      ) && needs.release-plan.result == 'success' &&
+      (needs.jetbrains.result == 'success' || needs.jetbrains.result == 'skipped') &&
+      (needs.vscode-package.result == 'success' || needs.vscode-package.result == 'skipped') &&
+      (needs.nagi-package.result == 'success' || needs.nagi-package.result == 'skipped') &&
+      (needs.release-plan.outputs.release_jetbrains != 'true' || needs.jetbrains.result == 'success') &&
+      (needs.release-plan.outputs.release_vscode != 'true' || needs.vscode-package.result == 'success') &&
+      (needs.release-plan.outputs.release_nagi != 'true' || needs.nagi-package.result == 'success') &&
+      (needs.release-plan.outputs.release_vscode == 'true' || needs.release-plan.outputs.release_nagi == 'true' || needs.release-plan.outputs.release_jetbrains == 'true')
+"""
+
+
 def inverse_workflow(source):
+    for added, inherited, label in (
+        (SF08_BROWSER_JOB, '', 'SF08 browser reusable job'),
+        (READY_NEEDS_WITH_SF08, READY_NEEDS_WITHOUT_SF08, 'ready dependencies'),
+        (PUBLISH_NEEDS_WITH_SF08, PUBLISH_NEEDS_WITHOUT_SF08, 'publish dependencies'),
+        (PUBLISH_IF_WITH_SF08, PUBLISH_IF_WITHOUT_SF08, 'publish condition'),
+    ):
+        if source.count(added) != 1:
+            raise ValueError(f'{label} inverse mismatch')
+        source = source.replace(added, inherited, 1)
+    # Add the real deferred-touch deadline regression without replacing any
+    # historical source digest or accepting a missing/duplicated registration.
+    current_session_inventory = "'sf02-http-bridge.log': 7"
+    if source.count(current_session_inventory) != 2:
+        raise ValueError("Session HTTP bridge inventory mismatch")
+    source = source.replace(current_session_inventory, "'sf02-http-bridge.log': 6")
     for addition in RELEASE_PROFILE_CI_STEPS:
         if source.count(addition) != 1:
             raise ValueError("release profile workflow registration mismatch")
@@ -295,6 +371,15 @@ def inverse_private_assertion(source):
 
 
 def inverse_collector(source):
+    # The reviewed Session fixture separates deferred SQL wait from mapper
+    # finalization. Rebind only its exact source and relocated HEAD assertion;
+    # keep the historical helper digest and all other controls unchanged.
+    current_session = '8c7bdabff12f8b9e08c2ea9eae0ac3e05bf3c5f0afaf0e31e875d6a1488d2821'
+    current_assertions = 'assertions = {282: 1, 283: 2, 284: 3, 285: 4, 495: 5}'
+    if source.count(current_session) != 1 or source.count(current_assertions) != 1:
+        raise ValueError('Session fixture collector binding mismatch')
+    source = source.replace(current_session, '46c1ec095b7cf7e3879ce5a0cde4511192d7550ac0d31e5ec3747b63f3012cd1')
+    source = source.replace(current_assertions, 'assertions = {282: 1, 283: 2, 284: 3, 285: 4, 424: 5}')
     source = inverse_private_assertion(source)
     source = inverse_private_pair_control(source)
     for added, inherited in SESSION_NATIVE_COLLECTOR_INVERSE:

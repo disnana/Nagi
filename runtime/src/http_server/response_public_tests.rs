@@ -11,6 +11,97 @@ use tokio::{
 };
 
 type SecurityRefusalCase = (fn() -> Failure, u16, &'static [u8]);
+
+#[test]
+fn transport_refusals_keep_legacy_bodies_head_lengths_and_typed_fault_replacement() {
+    for (status, body) in [
+        (
+            Status::INTERNAL_SERVER_ERROR,
+            b"Internal Server Error".as_slice(),
+        ),
+        (Status::REQUEST_TIMEOUT, b"Request Timeout".as_slice()),
+        (Status::CONTENT_TOO_LARGE, b"Payload Too Large".as_slice()),
+    ] {
+        for head in [false, true] {
+            for fault in [false, true] {
+                let mut limits = limits_fixture(256, 1);
+                limits.fallback_responses = 2;
+                let options =
+                    with_response_limits(capacity(default_options(), 1, 1).unwrap(), limits)
+                        .unwrap();
+                let runtime = RuntimeResponses::checked(&options, 0).unwrap();
+                let context = runtime.context();
+                let mut response = transport(&context, status, head, true);
+                if fault {
+                    response
+                        .headers
+                        .as_mut()
+                        .unwrap()
+                        .inject_fault(Diagnostic::HeaderLimit);
+                }
+                let ledger = response_send::SendLedger::new(
+                    Arc::clone(&runtime.producer),
+                    Arc::clone(&runtime.fallback),
+                );
+                let native = response.transfer_native(&ledger, head).unwrap();
+                assert_eq!(native.status(), status.0);
+                assert_eq!(
+                    native.body().bytes.as_ref(),
+                    if head { b"".as_slice() } else { body }
+                );
+                assert_eq!(native.headers()[names::CONNECTION], "close");
+                assert_eq!(
+                    native.headers()[names::CONTENT_SECURITY_POLICY],
+                    CONTENT_SECURITY_POLICY
+                );
+                assert_eq!(native.headers()[names::X_CONTENT_TYPE_OPTIONS], "nosniff");
+                if head {
+                    assert_eq!(
+                        native.headers()[names::CONTENT_LENGTH].to_str().unwrap(),
+                        body.len().to_string()
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn representation_internal_fault_and_replacement_keep_internal_error_body() {
+    for head in [false, true] {
+        let mut limits = limits_fixture(256, 1);
+        limits.fallback_responses = 2;
+        let options =
+            with_response_limits(capacity(default_options(), 1, 1).unwrap(), limits).unwrap();
+        let runtime = RuntimeResponses::checked(&options, 0).unwrap();
+        let context = runtime.context();
+        let mut response = text(&context, Status::CREATED, "owned").unwrap();
+        response.body_kind = BodyKind::Html;
+        response
+            .produced
+            .headers
+            .append(b"content-encoding", b"gzip")
+            .unwrap();
+        let response = response.into_http(false);
+        assert_eq!(response.status(), Status::INTERNAL_SERVER_ERROR.0);
+        assert_eq!(response.body().bytes.as_ref(), b"internal error");
+        let replacement = response.replacement(Status::INTERNAL_SERVER_ERROR, head, true);
+        drop(response);
+        assert_eq!(replacement.status(), Status::INTERNAL_SERVER_ERROR.0);
+        assert_eq!(
+            replacement.body().bytes.as_ref(),
+            if head {
+                b"".as_slice()
+            } else {
+                b"internal error".as_slice()
+            }
+        );
+        if head {
+            assert_eq!(replacement.headers()[names::CONTENT_LENGTH], "14");
+        }
+    }
+}
+
 fn stable_security_refusal_cases() -> [SecurityRefusalCase; 6] {
     [
         (Failure::invalid_credential, 401, b"invalid credential"),

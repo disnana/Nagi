@@ -44,6 +44,7 @@ EXPECTED = {
         'http_server::response_budget::finalize::tests::hidden_vec_capacity_and_empty_work_are_checked_before_copy_or_headers',
         'http_server::response_budget::finalize::tests::fallback_sf_includes_actual_quota_receipt_and_refuses_one_byte_over_budget',
         'http_server::response_budget::finalize::tests::security_fallback_catalog_and_last_body_view_keep_finite_credit',
+        'http_server::response_budget::wire::tests::closed_transport_and_internal_bodies_keep_independent_finite_fallback_credit',
     ),
     'quota': (
         'security_sf07_private::quota::tests::q01_two_resource_partial_full_is_atomic',
@@ -101,7 +102,7 @@ EXPECTED = {
 
 
 # BrowserLogin comparison profiles are an independent fixed inventory. They do
-# not alter the inherited SF07 native 83-case expectation table.
+# not alter the current SF07 native 85-case expectation table.
 BROWSER_COUNTER_CASES = (
     "public_login_claims_once_then_named_verifier_issue_and_appended_cookies",
     "input_and_strict_json_rejections_do_not_consume_or_call_verifier",

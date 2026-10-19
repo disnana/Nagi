@@ -1,5 +1,7 @@
 """Exercise complete Git ranges and the required-check result contract."""
 import copy
+import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -601,6 +603,7 @@ class GateTests(unittest.TestCase):
             "changes": {"result": "success", "outputs": {"full_checks": full, "jetbrains_checks": jetbrains}},
             "linux": {"result": "success" if full == "true" else "skipped"},
             "rust-1-88": {"result": "success" if full == "true" else "skipped"},
+            "sf08-browser": {"result": "success" if full == "true" or package_nagi == "true" else "skipped"},
             "jetbrains": {"result": "success" if jetbrains == "true" or package_jetbrains == "true" else "skipped"},
             "release-plan": {"result": "success", "outputs": {
                 "package_nagi": package_nagi, "package_vscode": package_vscode,
@@ -620,6 +623,53 @@ class GateTests(unittest.TestCase):
                                               jetbrains=jetbrains, package_jetbrains=package_jetbrains):
                                 needs = self.needs(full, nagi, vscode, package_jetbrains, jetbrains)
                                 self.assertEqual(gate.errors(needs), [])
+
+    def test_sf08_browser_selector_is_full_checks_or_nagi_package(self):
+        for full, package_nagi, expected in (
+            ("false", "false", "skipped"),
+            ("true", "false", "success"),
+            ("false", "true", "success"),
+            ("true", "true", "success"),
+        ):
+            with self.subTest(full=full, package_nagi=package_nagi):
+                needs = self.needs(full=full, package_nagi=package_nagi)
+                self.assertEqual(needs["sf08-browser"]["result"], expected)
+                self.assertEqual(gate.errors(needs), [])
+
+    def test_sf08_browser_selected_result_must_succeed_including_missing_or_cancelled(self):
+        for full, package_nagi in (("true", "false"), ("false", "true")):
+            for result in ("failure", "cancelled", "skipped", ""):
+                with self.subTest(full=full, package_nagi=package_nagi, result=result):
+                    needs = self.needs(full=full, package_nagi=package_nagi)
+                    needs["sf08-browser"]["result"] = result
+                    self.assertIn(f"sf08-browser: {result}, expected success", gate.errors(needs))
+            with self.subTest(full=full, package_nagi=package_nagi, result="missing"):
+                needs = self.needs(full=full, package_nagi=package_nagi)
+                del needs["sf08-browser"]
+                self.assertIn("sf08-browser: missing, expected success", gate.errors(needs))
+
+    def test_sf08_browser_unselected_result_must_be_skipped(self):
+        for result in ("failure", "cancelled", "success", ""):
+            with self.subTest(result=result):
+                needs = self.needs(full="false", package_nagi="false",
+                                   package_vscode="true", package_jetbrains="true",
+                                   jetbrains="true")
+                needs["sf08-browser"]["result"] = result
+                self.assertIn(f"sf08-browser: {result}, expected skipped", gate.errors(needs))
+        needs = self.needs(full="false", package_nagi="false")
+        del needs["sf08-browser"]
+        self.assertIn("sf08-browser: missing, expected skipped", gate.errors(needs))
+
+    def test_sf08_browser_invalid_selector_plans_fail_closed(self):
+        for value in (None, "", "TRUE", True, False):
+            with self.subTest(selector="full_checks", value=value):
+                needs = self.needs(full="false")
+                needs["changes"]["outputs"]["full_checks"] = value
+                self.assertIn("sf08-browser: missing or invalid selector", gate.errors(needs))
+            with self.subTest(selector="package_nagi", value=value):
+                needs = self.needs(full="false", package_nagi=value)
+                needs["release-plan"]["outputs"]["package_nagi"] = value
+                self.assertIn("sf08-browser: missing or invalid selector", gate.errors(needs))
 
     def test_failed_or_canceled_detection_cannot_make_checks_optional(self):
         for result in ("failure", "cancelled", "skipped", ""):
@@ -780,15 +830,73 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(ready)
         self.assertIsNotNone(publish)
         self.assertIn("rust-1-88", ready.group("body"))
+        self.assertIn("sf08-browser", ready.group("body"))
         publish_block = publish.group("body")
         dependencies = re.search(r"^    needs: \[([^\]]+)\]$", publish_block, re.MULTILINE)
         self.assertIsNotNone(dependencies)
-        self.assertIn("rust-1-88", [name.strip() for name in dependencies.group(1).split(",")])
+        dependency_names = [name.strip() for name in dependencies.group(1).split(",")]
+        self.assertIn("changes", dependency_names)
+        self.assertIn("rust-1-88", dependency_names)
+        self.assertIn("sf08-browser", dependency_names)
+        self.assertIn("needs.changes.result == 'success'", publish_block)
         self.assertIn("needs.rust-1-88.result == 'success'", publish_block)
         self.assertIn("needs.rust-1-88.result == 'skipped'", publish_block)
+        self.assertIn("needs.sf08-browser.result == 'success'", publish_block)
+        self.assertIn("needs.sf08-browser.result == 'skipped'", publish_block)
         self.assertIn("needs.release-plan.outputs.release_jetbrains == 'true'", publish_block)
         self.assertIn("needs.release-plan.outputs.release_nagi != 'true'", publish_block)
         self.assertIn("needs.release-plan.outputs.release_vscode != 'true'", publish_block)
+
+    def test_sf08_browser_job_selector_and_standalone_triggers_are_exact(self):
+        workflow = self.workflow_path.read_text(encoding="utf-8")
+        job = re.search(r"(?ms)^  sf08-browser:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", workflow)
+        self.assertIsNotNone(job, "SF08 reusable job missing")
+        block = job.group("body")
+        self.assertIn("needs: [changes, release-plan]", block)
+        self.assertIn("needs.changes.result == 'success'", block)
+        self.assertIn("needs.release-plan.result == 'success'", block)
+        self.assertIn(
+            "(needs.changes.outputs.full_checks == 'true' || needs.release-plan.outputs.package_nagi == 'true')",
+            block,
+        )
+        self.assertIn("uses: ./.github/workflows/sf08-browser.yml", block)
+
+        browser_path = self.workflow_path.with_name("sf08-browser.yml")
+        browser_workflow = browser_path.read_text(encoding="utf-8")
+        trigger = re.search(r"(?ms)^on:\n(?P<events>.*?)(?=^permissions:\n)", browser_workflow)
+        self.assertIsNotNone(trigger)
+        self.assertEqual(trigger.group("events"), "  workflow_dispatch:\n  workflow_call:\n")
+        self.assertIn("timeout-minutes: 60", browser_workflow)
+        self.assertIn("playwright@sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9", browser_workflow)
+
+    def test_sf08_release_projection_inverse_is_exact_and_refuses_mutations(self):
+        projection_path = self.workflow_path.parents[2] / "scripts/ci/sf07_request_projection.py"
+        spec = importlib.util.spec_from_file_location("sf07_projection_for_ci", projection_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        projection = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(projection)
+        workflow = self.workflow_path.read_text(encoding="utf-8")
+        inherited = projection.inverse_workflow(workflow)
+        self.assertEqual(
+            hashlib.sha256(inherited.encode()).hexdigest(),
+            "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79",
+        )
+        anchors = (
+            projection.SF08_BROWSER_JOB,
+            projection.READY_NEEDS_WITH_SF08,
+            projection.PUBLISH_NEEDS_WITH_SF08,
+            projection.PUBLISH_IF_WITH_SF08,
+        )
+        for anchor in anchors:
+            with self.subTest(anchor=anchor[:32]):
+                self.assertEqual(workflow.count(anchor), 1)
+                mutations = (workflow.replace(anchor, "", 1),
+                             workflow.replace(anchor, anchor + anchor, 1),
+                             workflow.replace(anchor, anchor.replace("sf08-browser", "sf08-other", 1), 1))
+                for changed in mutations:
+                    with self.assertRaises(ValueError):
+                        projection.inverse_workflow(changed)
 
 
 class JetBrainsWorkflowTests(unittest.TestCase):
@@ -913,7 +1021,10 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         publish = re.search(r"^  publish-release:\n((?: {4,}[^\n]*\n|\n)+)", text, re.MULTILINE)
         self.assertIsNotNone(publish)
         block = publish.group(1)
-        self.assertIn("needs: [linux, rust-1-88, release-plan, jetbrains, vscode-package, nagi-package]", block)
+        self.assertIn("needs: [changes, linux, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package]", block)
+        self.assertIn("needs.changes.result == 'success'", block)
+        self.assertIn("needs.sf08-browser.result == 'success'", block)
+        self.assertIn("needs.sf08-browser.result == 'skipped'", block)
         self.assertIn("needs.release-plan.outputs.release_jetbrains != 'true' || needs.jetbrains.result == 'success'", block)
         self.assertIn("needs.release-plan.outputs.release_nagi != 'true'", block)
         self.assertIn("needs.release-plan.outputs.release_vscode != 'true'", block)

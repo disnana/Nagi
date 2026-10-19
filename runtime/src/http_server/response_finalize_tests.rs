@@ -71,7 +71,7 @@ fn security_fallback_catalog_and_last_body_view_keep_finite_credit() {
             b"security service failure".as_slice(),
         ),
     ];
-    assert_eq!(FallbackStatus::all().len(), 23);
+    assert_eq!(FallbackStatus::all().len(), 24);
     for (kind, code, body) in cases {
         assert!(FallbackStatus::all()
             .iter()

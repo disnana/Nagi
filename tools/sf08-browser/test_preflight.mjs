@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { settings, probeEngine, firefoxCAReadiness, firefoxWorkerReadiness } from './preflight.mjs';
-import { checkedFailure, FAILURE_STAGES } from './browser_stage.mjs';
+import { EventEmitter } from 'node:events';
+import { settings, probeEngine, firefoxCAReadiness, firefoxWorkerReadiness, webkitCertificateWitness } from './preflight.mjs';
+import { checkedFailure, FAILURE_STAGES, WEBKIT_WITNESS_DIAGNOSTICS, WEBKIT_WITNESS_STAGE_LIST } from './browser_stage.mjs';
 
 const CA = Buffer.from('unit-ca-only-not-a-certificate');
 const provisioned = { schema_version: 1, stores_provisioned: true, browser_trust_verified: false,
@@ -19,19 +20,219 @@ const messages = { chromium: ['net::ERR_CERT_AUTHORITY_INVALID', 'net::ERR_CERT_
   webkit: ['Unacceptable TLS certificate', 'Unacceptable TLS certificate'] };
 const versions = { chromium: '156.0.8078.4', firefox: '157.0', webkit: '27.2' };
 
+function certificateWitnessFixture(overrides = {}, until = performance.now() + 10000) {
+  const page = new EventEmitter(), context = new EventEmitter(), browser = new EventEmitter();
+  const frame = {}, url = negative.caOrigin + '/';
+  page.mainFrame = () => frame;
+  page.isClosed = () => false;
+  browser.isConnected = () => true;
+  const request = { url: () => url, frame: () => frame, isNavigationRequest: () => true,
+    failure: () => ({ errorText: messages.webkit[0] }), response: async () => null, ...overrides };
+  const witness = webkitCertificateWitness(page, context, browser, url, until);
+  return { page, context, browser, request, witness };
+}
+
+const witnessStage = (stage, diagnostic) => `${stage}_witness_${diagnostic}`;
+
+test('WebKit certificate event proves one bound failed navigation, never cancellation alone', async () => {
+  const f = certificateWitnessFixture();
+  f.page.emit('requestfailed', f.request);
+  assert.equal(await f.witness.refused(new Error('Operation was cancelled')), true);
+  assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false);
+  assert.equal(f.page.listenerCount('requestfailed'), 0);
+  assert.equal(f.witness.stop(), true);
+  for (const target of [f.page, f.context, f.browser]) assert.equal(target.eventNames().length, 0);
+  f.page.emit('requestfailed', f.request); // Teardown cannot provide more evidence.
+});
+
+test('WebKit certificate witness rejects missing duplicate foreign or malformed evidence', async () => {
+  for (const [label, overrides] of [
+    ['wrong URL', { url: () => negative.hostOrigin + '/' }],
+    ['subresource', { isNavigationRequest: () => false }],
+    ['subframe', { frame: () => ({}) }],
+    ['null failure', { failure: () => null }],
+    ['generic cancellation', { failure: () => ({ errorText: 'Operation was cancelled' }) }],
+    ['network failure', { failure: () => ({ errorText: 'net::ERR_CONNECTION_REFUSED' }) }],
+    ['token suffix', { failure: () => ({ errorText: messages.webkit[0] + ' PRIVATE_SENTINEL' }) }],
+    ['nonstring', { failure: () => ({ errorText: 1 }) }],
+    ['failure getter throws', { failure: () => Object.defineProperty({}, 'errorText', {
+      get() { throw new Error('PRIVATE_SENTINEL'); },
+    }) }],
+    ['method throws', { frame: () => { throw new Error('PRIVATE_SENTINEL'); } }],
+    ['HTTP response', { response: async () => ({ status: () => 200 }) }],
+    ['response query throws', { response: () => { throw new Error('PRIVATE_SENTINEL'); } }],
+  ]) {
+    const f = certificateWitnessFixture(overrides);
+    f.page.emit('requestfailed', f.request);
+    assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false, label);
+    f.witness.stop();
+  }
+  for (const count of [0, 2]) {
+    const f = certificateWitnessFixture();
+    for (let i = 0; i < count; i++) f.page.emit('requestfailed', f.request);
+    assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false);
+    f.witness.stop();
+  }
+});
+
+test('WebKit certificate witness keeps response closure timeout and original deadline vetoes', async () => {
+  for (const event of ['response', 'close', 'crash', 'context-close', 'disconnected']) {
+    const f = certificateWitnessFixture();
+    f.page.emit('requestfailed', f.request);
+    if (event === 'context-close') f.context.emit('close');
+    else if (event === 'disconnected') f.browser.emit(event);
+    else f.page.emit(event);
+    assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false, event);
+    f.witness.stop();
+  }
+  for (const error of [Object.assign(new Error('PRIVATE_SENTINEL'), { name: 'TimeoutError' }),
+                       { message: 'Unacceptable TLS certificate' }]) {
+    const f = certificateWitnessFixture(); f.page.emit('requestfailed', f.request);
+    assert.equal(await f.witness.refused(error), false); f.witness.stop();
+  }
+  const expired = certificateWitnessFixture({}, performance.now() - 1);
+  expired.page.emit('requestfailed', expired.request);
+  assert.equal(await expired.witness.refused(new Error('Operation was cancelled')), false);
+  expired.witness.stop();
+  const late = certificateWitnessFixture();
+  late.witness.stop(); late.page.emit('requestfailed', late.request);
+  assert.equal(await late.witness.refused(new Error('Operation was cancelled')), false);
+  const stopped = certificateWitnessFixture(); stopped.page.emit('requestfailed', stopped.request);
+  stopped.witness.stop();
+  assert.equal(await stopped.witness.refused(new Error('Operation was cancelled')), false);
+  const pending = certificateWitnessFixture({ response: () => new Promise(() => {}) }, performance.now() + 25);
+  pending.page.emit('requestfailed', pending.request);
+  assert.equal(await pending.witness.refused(new Error('Operation was cancelled')), false);
+  pending.witness.stop();
+});
+
+test('WebKit witness exposes only fixed failure facts', async () => {
+  const cases = [
+    { label: 'missing_event', make: () => certificateWitnessFixture(), run: async f => {
+      assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+    } },
+    { label: 'duplicate_event', make: () => certificateWitnessFixture(), run: async f => {
+      f.page.emit('requestfailed', f.request); f.page.emit('requestfailed', f.request);
+      assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+    } },
+    { label: 'foreign_request_url', make: () => certificateWitnessFixture({ url: () => negative.hostOrigin + '/PRIVATE_SENTINEL' }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'foreign_request_non_navigation', make: () => certificateWitnessFixture({ isNavigationRequest: () => false }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'foreign_request_frame', make: () => certificateWitnessFixture({ frame: () => ({}) }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'not_certificate', make: () => certificateWitnessFixture({ failure: () => ({ errorText: 'PRIVATE_SENTINEL' }) }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    ...[
+      ['not_certificate_empty', ''],
+      ['not_certificate_oversize', 'PRIVATE_SENTINEL'.repeat(8193)],
+      ['not_certificate_cancelled', 'Operation was cancelled'],
+      ['not_certificate_provisional_cancelled', 'Provisional navigation canceled.'],
+      ['not_certificate_certificate_form', 'page.goto: Unacceptable TLS certificate at ' + negative.caOrigin + '/'],
+      ['not_certificate_certificate_token', 'PRIVATE_SENTINEL Unacceptable TLS certificate'],
+      ['not_certificate_dns_token', 'PRIVATE_SENTINEL Name or service not known'],
+      ['not_certificate_connection_token', 'PRIVATE_SENTINEL Connection refused'],
+      ['not_certificate_cancel_token', 'PRIVATE_SENTINEL Operation was cancelled'],
+      ['not_certificate_tls_token', 'PRIVATE_SENTINEL TLS handshake failure'],
+      ['not_certificate_multiple_tokens', 'PRIVATE_SENTINEL TLS Connection refused'],
+    ].map(([label, errorText]) => ({ label,
+      make: () => certificateWitnessFixture({ failure: () => ({ errorText }) }),
+      run: async f => {
+        f.page.emit('requestfailed', f.request);
+        assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false);
+      },
+    })),
+    { label: 'malformed', make: () => certificateWitnessFixture({ failure: () => null }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'http_response', make: () => certificateWitnessFixture(), run: async f => {
+      f.page.emit('response', { url: () => 'https://private.invalid/PRIVATE_SENTINEL' });
+      assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+      const queried = certificateWitnessFixture({ response: async () => ({ status: () => 200 }) });
+      queried.page.emit('requestfailed', queried.request);
+      assert.equal(await queried.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+      assert.equal(queried.witness.diagnostic(), 'http_response');
+      queried.witness.stop();
+    } },
+    { label: 'lifecycle', make: () => certificateWitnessFixture(), run: async f => {
+      f.context.emit('close'); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+    } },
+    { label: 'error_shape', make: () => certificateWitnessFixture(), run: async f => {
+      assert.equal(await f.witness.refused(Object.assign(new Error('PRIVATE_SENTINEL'), { name: 'TimeoutError' })), false);
+    } },
+    { label: 'deadline', make: () => certificateWitnessFixture({}, performance.now() - 1), run: async f => {
+      f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+    } },
+    { label: 'response_query_fault', make: () => certificateWitnessFixture({ response: () => { throw new Error('PRIVATE_SENTINEL'); } }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'response_query_timeout', make: () => certificateWitnessFixture({ response: () => new Promise(() => {}) }, performance.now() + 20),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'certificate_event', make: () => certificateWitnessFixture(), run: async f => {
+      f.page.emit('requestfailed', f.request);
+      assert.equal(await f.witness.refused(new Error('Operation was cancelled')), true);
+    } },
+  ];
+  assert.equal(WEBKIT_WITNESS_DIAGNOSTICS.length, cases.length);
+  for (const item of cases) {
+    const f = item.make();
+    await item.run(f);
+    assert.equal(f.witness.diagnostic(), item.label);
+    assert.equal(WEBKIT_WITNESS_DIAGNOSTICS.includes(f.witness.diagnostic()), true);
+    assert.doesNotMatch(JSON.stringify({ diagnostic: f.witness.diagnostic() }),
+      /PRIVATE_SENTINEL|private\.invalid|Unacceptable|Operation|https?:/);
+    f.witness.stop();
+  }
+});
+
+test('WebKit non-certificate categories preserve every refusal and leak no request text', async () => {
+  const certificate = 'Unacceptable TLS certificate';
+  const url = negative.caOrigin + '/';
+  for (const [errorText, diagnostic] of [
+    ['page.goto: ' + certificate, 'not_certificate_certificate_form'],
+    ['page.goto: Protocol error (Playwright.navigate): ' + certificate, 'not_certificate_certificate_form'],
+    ['page.goto: Protocol error (Playwright.navigate): ' + certificate + ' at ' + url,
+      'not_certificate_certificate_form'],
+    ['page.goto: ' + certificate + ' at https://private.invalid/PRIVATE_SENTINEL',
+      'not_certificate_certificate_token'],
+    [certificate + '_SUFFIX', 'not_certificate_tls_token'],
+    ['PREFIX_' + certificate, 'not_certificate_tls_token'],
+    ['Connection refused_SUFFIX PRIVATE_SENTINEL', 'not_certificate'],
+    ['PREFIX_Name or service not known PRIVATE_SENTINEL', 'not_certificate'],
+    [certificate + ' PRIVATE_SENTINEL Name or service not known', 'not_certificate_multiple_tokens'],
+    ['Operation was cancelled PRIVATE_SENTINEL TLS', 'not_certificate_multiple_tokens'],
+    ['PRIVATE_SENTINEL https://private.invalid/?token=secret', 'not_certificate'],
+  ]) {
+    const f = certificateWitnessFixture({ failure: () => ({ errorText }) });
+    f.page.emit('requestfailed', f.request);
+    assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false);
+    assert.equal(f.witness.diagnostic(), diagnostic);
+    const stages = ['engine_wrong_ca_webkit_cancelled_first_line', 'engine_wrong_host_webkit_cancelled_present']
+      .map(base => checkedFailure(witnessStage(base, diagnostic), 'webkit'));
+    assert.doesNotMatch(JSON.stringify(stages), /PRIVATE_SENTINEL|private\.invalid|secret|https?:|Operation|Unacceptable/);
+    assert.equal(f.witness.stop(), false); // Poisoning remains mandatory.
+  }
+});
+
 function fake(name, mode, fault) {
   const trace = { urls: [], timeouts: [], closed: false, pageClosed: 0, contextClosed: false };
   const config = fault?.config ?? settings(provisioned, ready, negative);
   return { trace, async launch(options) {
     trace.launch = options;
+    const browserEvents = new EventEmitter();
     return { version: () => mode === 'version' ? 'unexpected' : versions[name],
+      on: browserEvents.on.bind(browserEvents), off: browserEvents.off.bind(browserEvents),
+      isConnected: () => !trace.closed,
       async close() { trace.closed = true; },
       async newContext(options) {
         trace.context = options;
-        return { async close() { trace.contextClosed = true; }, async newPage() {
+        const contextEvents = new EventEmitter();
+        return { on: contextEvents.on.bind(contextEvents), off: contextEvents.off.bind(contextEvents),
+          async close() { trace.contextClosed = true; }, async newPage() {
           if (fault?.reason === 'host' && fault.kind === 'page-open' && trace.urls.length === 4)
             throw new Error('PRIVATE_SENTINEL');
-          return { async close() {
+          const pageEvents = new EventEmitter(), frame = {};
+          return { on: pageEvents.on.bind(pageEvents), off: pageEvents.off.bind(pageEvents),
+            mainFrame: () => frame, isClosed: () => false,
+            async close() {
             trace.pageClosed++;
             if (fault?.reason === 'host' && fault.kind === 'page-close' &&
                 trace.urls.at(-1) === config.negative.host + '/') throw new Error('PRIVATE_SENTINEL');
@@ -41,6 +242,12 @@ function fake(name, mode, fault) {
             if (url.startsWith(config.negative.ca) || url.startsWith(config.negative.host)) {
               const reason = url.startsWith(config.negative.ca) ? 'ca' : 'host';
               const token = messages[name][reason === 'ca' ? 0 : 1];
+              if (fault?.reason === reason && fault.requestCertificate) {
+                pageEvents.emit('requestfailed', {
+                  url: () => url, isNavigationRequest: () => true, frame: () => frame,
+                  failure: () => ({ errorText: messages.webkit[0] }), response: async () => null,
+                });
+              }
               if (mode === 'accepted') return { status: () => 200 };
               if (mode === 'network') throw new Error('net::ERR_CONNECTION_REFUSED PRIVATE_SENTINEL');
               if (fault && fault.reason === reason) {
@@ -52,6 +259,7 @@ function fake(name, mode, fault) {
                 if (fault.kind === 'protocol-wrapper') throw new Error(
                   'page.goto: Protocol error (browsingContext.navigate): ' + (fault.token ?? token) + ' at ' + url);
                 if (fault.kind === 'raw-error') throw new Error(fault.message);
+                if (fault.kind === 'named-error') throw Object.assign(new Error(fault.message), { name: fault.errorName });
                 if (fault.kind === 'raw-non-error') throw { message: fault.message };
                 if (fault.kind === 'message-getter-throws') {
                   const error = new Error();
@@ -112,6 +320,36 @@ function fake(name, mode, fault) {
       } };
   } };
 }
+
+test('WebKit probe uses the bound certificate event without accepting cancellation or HTTP', async () => {
+  for (const reason of ['ca', 'host']) {
+    const type = fake('webkit', 'normal', { reason, kind: 'cancelled', requestCertificate: true });
+    const checkpoints = [];
+    const result = await probeEngine('webkit', type, settings(provisioned, ready, negative),
+      (stage, engine) => checkpoints.push({ stage, engine }));
+    assert.equal(result.wrong_ca_refused, true);
+    assert.equal(result.wrong_host_refused, true);
+    assert.equal(checkpoints.some(item => item.stage.includes('_witness_')), false);
+    assert.equal(type.trace.urls.length, 5);
+    assert.equal(type.trace.closed, true);
+    assert.equal(type.trace.contextClosed, true);
+    for (const fault of [
+      { reason, kind: 'cancelled' },
+      { reason, kind: 'timeout', requestCertificate: true },
+      ...['TimeoutError', 'TargetClosedError', 'AbortError'].map(errorName => ({
+        reason, kind: 'named-error', message: messages.webkit[0], errorName, requestCertificate: true,
+      })),
+      { reason, kind: 'raw-non-error', message: messages.webkit[0], requestCertificate: true },
+      { reason, kind: 'resolved-response', requestCertificate: true },
+      { reason, kind: 'null-response', requestCertificate: true },
+    ]) {
+      const refused = fake('webkit', 'normal', fault);
+      await assert.rejects(probeEngine('webkit', refused, settings(provisioned, ready, negative)));
+      assert.equal(refused.trace.closed, true);
+      assert.equal(refused.trace.contextClosed, true);
+    }
+  }
+});
 
 test('strict endpoint/profile settings and CA hash binding', () => {
   assert.equal(settings(provisioned, ready, negative).origins.length, 3);
@@ -471,7 +709,7 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
       (stage, engine) => events.push({ stage, engine })),
     /^Error: SF08 browser trust preflight refused$/);
     assert.deepEqual(events.at(-1), { stage: name === 'webkit'
-      ? 'engine_wrong_ca_webkit_no_fixed_token' : 'engine_wrong_ca_unknown', engine: name });
+      ? witnessStage('engine_wrong_ca_webkit_no_fixed_token', 'missing_event') : 'engine_wrong_ca_unknown', engine: name });
     assert.doesNotMatch(JSON.stringify(events), /SEC_ERROR|SSL_ERROR|PRIVATE_SENTINEL/);
   }
 });
@@ -616,14 +854,16 @@ test('WebKit wrong-CA diagnostics remain failure-only and emit fixed labels', as
     const events = [];
     await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
       (stage, engine) => events.push({ stage, engine })), /^Error: SF08 browser trust preflight refused$/);
-    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_' + item.outcome, engine: 'webkit' });
+    assert.deepEqual(events.at(-1), { stage: witnessStage('engine_wrong_ca_' + item.outcome,
+      item.kind === 'raw-non-error' ? 'error_shape' : 'missing_event'), engine: 'webkit' });
     assert.equal(type.trace.contextClosed && type.trace.closed, true);
     assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|Unacceptable|Protocol|certificate/);
   }
 });
 
 test('new WebKit failure checkpoints refuse other engines', () => {
-  for (const suffix of ['webkit_protocol_form', 'webkit_token_present', 'webkit_no_fixed_token', 'webkit_cancelled_present',
+  for (const suffix of ['webkit_protocol_form', 'webkit_token_present', 'webkit_no_fixed_token',
+    'webkit_cancelled_first_line', 'webkit_cancelled_call_log', 'webkit_cancelled_other',
     'webkit_shape_non_error', 'webkit_shape_non_string', 'webkit_shape_oversize', 'webkit_shape_access_failed']) {
     const stage = 'engine_wrong_ca_' + suffix;
     assert.equal(FAILURE_STAGES.includes(stage), true);
@@ -632,40 +872,73 @@ test('new WebKit failure checkpoints refuse other engines', () => {
       assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
     }
   }
+  const unknown = witnessStage('engine_wrong_host_webkit_no_fixed_token', 'missing_event');
+  const cancelled = witnessStage('engine_wrong_host_webkit_cancelled_present', 'missing_event');
+  assert.ok(WEBKIT_WITNESS_STAGE_LIST.includes(unknown));
+  assert.ok(WEBKIT_WITNESS_STAGE_LIST.includes(cancelled));
+  assert.notEqual(unknown, cancelled);
+  for (const base of ['engine_wrong_ca_unknown','engine_wrong_ca_webkit_cancelled_first_line',
+    'engine_wrong_host_unknown','engine_wrong_host_webkit_cancelled_present']) {
+    for (const diagnostic of WEBKIT_WITNESS_DIAGNOSTICS) {
+      const stage = witnessStage(base, diagnostic);
+      assert.ok(WEBKIT_WITNESS_STAGE_LIST.includes(stage), stage);
+      assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+      for (const engine of ['none','chromium','firefox']) {
+        assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+      }
+    }
+  }
+  for (const stage of [witnessStage('engine_wrong_host_webkit_cancelled_present', 'private_token'),
+    'engine_wrong_host_webkit_cancelled_present_witness_unknown']) {
+    assert.throws(() => checkedFailure(stage, 'webkit'), /^Error: SF08 checkpoint refused$/);
+  }
 });
 
 
-test('WebKit cancellation phrase is a failure-only lexical observation', async () => {
-  for (const message of ['page.goto: Operation was cancelled',
-    'page.goto: Protocol error (Playwright.navigate): Operation was cancelled',
-    'failure\nCall log: Operation was cancelled PRIVATE_SENTINEL']) {
+test('WebKit wrong-CA cancellation labels distinguish first-line and call-log text only', async () => {
+  const url = negative.caOrigin + '/';
+  const cases = [
+    { message: 'Operation was cancelled', outcome: 'webkit_cancelled_first_line' },
+    { message: 'page.goto: Operation was cancelled', outcome: 'webkit_cancelled_first_line' },
+    { message: 'page.goto: Protocol error (Playwright.navigate): Operation was cancelled at ' + url,
+      outcome: 'webkit_cancelled_first_line' },
+    { message: 'failure\nCall log: Operation was cancelled PRIVATE_SENTINEL',
+      outcome: 'webkit_cancelled_call_log' },
+    { message: 'Navigation failed\nCall log:\n  - Operation was cancelled PRIVATE_SENTINEL',
+      outcome: 'webkit_cancelled_call_log' },
+    { message: 'failure\nOperation was cancelled PRIVATE_SENTINEL', outcome: 'webkit_cancelled_other' },
+    { message: 'Operation was cancelled_SUFFIX PRIVATE_SENTINEL', outcome: 'webkit_no_fixed_token' },
+    { message: 'PRIVATE_SENTINEL https://private.invalid/?token=secret', outcome: 'webkit_no_fixed_token' },
+  ];
+  for (const { message, outcome } of cases) {
     const type = fake('webkit', undefined, { reason: 'ca', kind: 'raw-error', message });
     const events = [];
     await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
       (stage, engine) => events.push({ stage, engine })), /^Error: SF08 browser trust preflight refused$/);
-    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_webkit_cancelled_present', engine: 'webkit' });
+    const stage = witnessStage('engine_wrong_ca_' + outcome, 'missing_event');
+    assert.deepEqual(events.at(-1), { stage, engine: 'webkit' });
     assert.deepEqual(checkedFailure(events.at(-1).stage, 'webkit'),
-      { schema_version: 1, stage: 'engine_wrong_ca_webkit_cancelled_present', engine: 'webkit' });
+      { schema_version: 1, stage, engine: 'webkit' });
     assert.equal(type.trace.contextClosed && type.trace.closed, true);
-    assert.doesNotMatch(JSON.stringify(events), /Operation|cancelled PRIVATE|PRIVATE_SENTINEL|Call log/);
+    assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|secret|Operation|Call log/);
   }
 });
 
 test('WebKit wrong-host failures receive bounded labels without changing acceptance', async () => {
   const cases = [
-    { kind: 'resolved-response', stage: 'engine_wrong_host_response_received' },
-    { kind: 'null-response', stage: 'engine_wrong_host_no_response' },
-    { kind: 'timeout', stage: 'engine_wrong_host_timeout' },
-    { kind: 'webkit-protocol', stage: 'engine_wrong_host_webkit_protocol_form' },
+    { kind: 'resolved-response', stage: witnessStage('engine_wrong_host_response_received', 'missing_event') },
+    { kind: 'null-response', stage: witnessStage('engine_wrong_host_no_response', 'missing_event') },
+    { kind: 'timeout', stage: witnessStage('engine_wrong_host_timeout', 'error_shape') },
+    { kind: 'webkit-protocol', stage: witnessStage('engine_wrong_host_webkit_protocol_form', 'missing_event') },
     { kind: 'raw-error', message: 'Navigation failed\nCall log: Unacceptable TLS certificate',
-      stage: 'engine_wrong_host_webkit_token_present' },
-    { kind: 'cancelled', stage: 'engine_wrong_host_webkit_cancelled_present' },
-    { kind: 'unknown', stage: 'engine_wrong_host_webkit_no_fixed_token' },
-    { kind: 'non-error', stage: 'engine_wrong_host_webkit_shape_non_error' },
-    { kind: 'oversized', stage: 'engine_wrong_host_webkit_shape_oversize' },
-    { kind: 'message-non-string', stage: 'engine_wrong_host_webkit_shape_non_string' },
-    { kind: 'message-missing', stage: 'engine_wrong_host_webkit_shape_non_string' },
-    { kind: 'message-getter-throws', stage: 'engine_wrong_host_webkit_shape_access_failed' },
+      stage: witnessStage('engine_wrong_host_webkit_token_present', 'missing_event') },
+    { kind: 'cancelled', stage: witnessStage('engine_wrong_host_webkit_cancelled_present', 'missing_event') },
+    { kind: 'unknown', stage: witnessStage('engine_wrong_host_webkit_no_fixed_token', 'missing_event') },
+    { kind: 'non-error', stage: witnessStage('engine_wrong_host_webkit_shape_non_error', 'error_shape') },
+    { kind: 'oversized', stage: witnessStage('engine_wrong_host_webkit_shape_oversize', 'missing_event') },
+    { kind: 'message-non-string', stage: witnessStage('engine_wrong_host_webkit_shape_non_string', 'missing_event') },
+    { kind: 'message-missing', stage: witnessStage('engine_wrong_host_webkit_shape_non_string', 'missing_event') },
+    { kind: 'message-getter-throws', stage: witnessStage('engine_wrong_host_webkit_shape_access_failed', 'missing_event') },
     { kind: 'page-open', stage: 'engine_wrong_host_page_open' },
     { kind: 'page-close', stage: 'engine_wrong_host_page_close' },
   ];
@@ -678,7 +951,7 @@ test('WebKit wrong-host failures receive bounded labels without changing accepta
     assert.deepEqual(events.at(-1), { stage: item.stage, engine: 'webkit' });
     assert.deepEqual(checkedFailure(item.stage, 'webkit'),
       { schema_version: 1, stage: item.stage, engine: 'webkit' });
-    if (item.stage.startsWith('engine_wrong_host_webkit_')) {
+    if (item.stage.startsWith('engine_wrong_host_webkit_') || item.stage.includes('_witness_')) {
       for (const engine of ['none', 'chromium', 'firefox']) {
         assert.throws(() => checkedFailure(item.stage, engine), /^Error: SF08 checkpoint refused$/);
       }

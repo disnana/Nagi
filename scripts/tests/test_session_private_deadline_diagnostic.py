@@ -307,7 +307,7 @@ class HeadFinalizerObservationTests(unittest.TestCase):
             self.assertEqual(result["assertions"][0], {"source": 1, "line": 282,
                                                        "column": 5, "assertion": 1})
             self.assertNotIn("SECRET", json.dumps(result))
-        for line, assertion in ((283, 2), (284, 3), (285, 4), (424, 5)):
+        for line, assertion in ((283, 2), (284, 3), (285, 4), (495, 5)):
             result = diag.collect("head_finalizer", raw("head_finalizer",
                 [witness(3, 1)] + self.sample(line=line, actual="SECRET_cookie"), True), 101)
             self.assertEqual(result["assertions"][0], {"source": 1, "line": line,

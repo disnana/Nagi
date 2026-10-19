@@ -44,7 +44,9 @@ function expectedTLSFailure(error, name, reason, probeURL) {
   return exactTLSFailureToken(error, TLS_ERROR[name][reason], probeURL);
 }
 
-// Failure-only facts; expectedTLSFailure remains the sole acceptance oracle.
+// Navigation-error classification only. The probe may additionally require a
+// strictly bound certificate-specific requestfailed witness; these diagnostic
+// labels themselves never authorize a rejection.
 function wrongCAFailureOutcome(error, name, probeURL) {
   try {
     if (!(error instanceof Error)) return 'unknown';
@@ -69,6 +71,17 @@ function wrongCAFailureOutcome(error, name, probeURL) {
 function isASCIIIdentifierUnit(unit) {
   return unit >= 48 && unit <= 57 || unit >= 65 && unit <= 90 ||
     unit >= 97 && unit <= 122 || unit === 95;
+}
+
+function containsFixedToken(message, token, start = 0) {
+  let index = message.indexOf(token, start);
+  while (index >= 0) {
+    const end = index + token.length;
+    if ((index === 0 || !isASCIIIdentifierUnit(message.charCodeAt(index - 1))) &&
+        (end === message.length || !isASCIIIdentifierUnit(message.charCodeAt(end)))) return true;
+    index = message.indexOf(token, index + 1);
+  }
+  return false;
 }
 
 // Failure-only lexical observation. This does not authenticate the source of a
@@ -132,14 +145,15 @@ function webkitWrongCADiagnosticOutcome(error, probeURL) {
       index = message.indexOf(token, index + 1);
     }
     const cancelled = 'Operation was cancelled';
-    index = message.indexOf(cancelled);
-    while (index >= 0) {
-      const end = index + cancelled.length;
-      if ((index === 0 || !isASCIIIdentifierUnit(message.charCodeAt(index - 1))) &&
-          (end === message.length || !isASCIIIdentifierUnit(message.charCodeAt(end))))
-        return 'webkit_cancelled_present';
-      index = message.indexOf(cancelled, index + 1);
-    }
+    const firstLineForms = [cancelled, 'page.goto: ' + cancelled,
+      'page.goto: Protocol error (Playwright.navigate): ' + cancelled,
+      'page.goto: Protocol error (Playwright.navigate): ' + cancelled + ' at ' + probeURL];
+    if (firstLineForms.includes(firstLine)) return 'webkit_cancelled_first_line';
+    const callLogMarker = '\nCall log:';
+    const callLog = message.indexOf(callLogMarker);
+    if (callLog >= 0 && containsFixedToken(message, cancelled, callLog + callLogMarker.length))
+      return 'webkit_cancelled_call_log';
+    if (containsFixedToken(message, cancelled)) return 'webkit_cancelled_other';
     return 'webkit_no_fixed_token';
   } catch {
     return 'webkit_shape_access_failed';
@@ -211,7 +225,9 @@ function wrongCAFailureStage(outcome) {
     case 'shape_access_failed': return 'engine_wrong_ca_shape_access_failed';
     case 'webkit_protocol_form': return 'engine_wrong_ca_webkit_protocol_form';
     case 'webkit_token_present': return 'engine_wrong_ca_webkit_token_present';
-    case 'webkit_cancelled_present': return 'engine_wrong_ca_webkit_cancelled_present';
+    case 'webkit_cancelled_first_line': return 'engine_wrong_ca_webkit_cancelled_first_line';
+    case 'webkit_cancelled_call_log': return 'engine_wrong_ca_webkit_cancelled_call_log';
+    case 'webkit_cancelled_other': return 'engine_wrong_ca_webkit_cancelled_other';
     case 'webkit_no_fixed_token': return 'engine_wrong_ca_webkit_no_fixed_token';
     case 'webkit_shape_non_error': return 'engine_wrong_ca_webkit_shape_non_error';
     case 'webkit_shape_non_string': return 'engine_wrong_ca_webkit_shape_non_string';
@@ -358,6 +374,157 @@ function nativeTLSGet(origin, ca) {
   });
 }
 
+function webkitNonCertificateDiagnostic(errorText, probeURL) {
+  // Failure-only lexical facts, never certificate evidence. The original
+  // request remains poisoned for every branch below; no raw text is retained.
+  if (errorText.length > 8192) return 'not_certificate_oversize';
+  if (errorText.length === 0) return 'not_certificate_empty';
+  if (errorText === 'Operation was cancelled') return 'not_certificate_cancelled';
+  if (errorText === 'Provisional navigation canceled.') return 'not_certificate_provisional_cancelled';
+  const certificate = TLS_ERROR.webkit.ca;
+  for (const prefix of ['page.goto: ', 'page.goto: Protocol error (Playwright.navigate): ']) {
+    if (errorText === prefix + certificate || errorText === prefix + certificate + ' at ' + probeURL)
+      return 'not_certificate_certificate_form';
+  }
+  const matches = [];
+  const certificateToken = containsFixedToken(errorText, certificate);
+  if (certificateToken) matches.push('certificate_token');
+  if (['Name or service not known', 'Temporary failure in name resolution',
+    'No address associated with hostname', 'Could not resolve host']
+    .some(token => containsFixedToken(errorText, token))) matches.push('dns_token');
+  if (['Connection refused', 'Connection reset by peer', 'Could not connect',
+    'Connection terminated unexpectedly']
+    .some(token => containsFixedToken(errorText, token))) matches.push('connection_token');
+  if (['Operation was cancelled', 'Provisional navigation canceled.']
+    .some(token => containsFixedToken(errorText, token))) matches.push('cancel_token');
+  // The certificate phrase already includes TLS; count it as one token family.
+  if (!certificateToken && ['TLS', 'SSL'].some(token => containsFixedToken(errorText, token)))
+    matches.push('tls_token');
+  if (matches.length > 1) return 'not_certificate_multiple_tokens';
+  return matches.length === 1 ? 'not_certificate_' + matches[0] : 'not_certificate';
+}
+
+// Playwright 1.64.1 preserves Network.loadingFailed.errorText in request.failure
+// separately from the provisional navigation error used by page.goto. Generic
+// cancellation is never evidence: this alternative requires the exact failed
+// main-document request and a certificate-specific network failure, no response,
+// and no closure/crash. It never retries or extends the original probe budget.
+export function webkitCertificateWitness(page, context, browser, probeURL, until) {
+  let active = true, poisoned = false, ended = false, stopped = false, attempted = false,
+    failed = null, count = 0, diagnosis = null;
+  const diagnose = (value, override = false) => {
+    if (override || diagnosis === null) diagnosis = value;
+  };
+  const installed = [];
+  const listen = (target, event, fn, network = false) => {
+    target.on(event, fn);
+    installed.push({ target, event, fn, network });
+  };
+  const detach = onlyNetwork => {
+    for (let i = installed.length - 1; i >= 0; i--) {
+      const item = installed[i];
+      if (onlyNetwork && !item.network) continue;
+      try { item.target.off(item.event, item.fn); }
+      catch { poisoned = true; diagnose('lifecycle'); }
+      installed.splice(i, 1);
+    }
+  };
+  const vetoed = () => {
+    if (poisoned) return true;
+    if (ended) { diagnose('lifecycle'); return true; }
+    try {
+      if (page.isClosed() || !browser.isConnected()) { diagnose('lifecycle'); return true; }
+      return false;
+    } catch { diagnose('lifecycle'); return true; }
+  };
+  try {
+    const frame = page.mainFrame();
+    if (!frame) throw new Error(REFUSED);
+    listen(page, 'requestfailed', request => {
+      if (!active) return;
+      count++;
+      if (count !== 1) {
+        poisoned = true;
+        diagnose('duplicate_event', true);
+        return;
+      }
+      try {
+        const url = request?.url();
+        if (typeof url !== 'string') { poisoned = true; diagnose('malformed'); return; }
+        if (url !== probeURL) { poisoned = true; diagnose('foreign_request_url'); return; }
+        const navigation = request.isNavigationRequest();
+        if (typeof navigation !== 'boolean') { poisoned = true; diagnose('malformed'); return; }
+        if (navigation !== true) { poisoned = true; diagnose('foreign_request_non_navigation'); return; }
+        const requestFrame = request.frame();
+        if (requestFrame !== frame) { poisoned = true; diagnose('foreign_request_frame'); return; }
+        const failure = request.failure();
+        if (failure === null || (typeof failure !== 'object' && typeof failure !== 'function')) {
+          poisoned = true; diagnose('malformed'); return;
+        }
+        const errorText = failure.errorText;
+        if (typeof errorText !== 'string') { poisoned = true; diagnose('malformed'); return; }
+        if (errorText !== TLS_ERROR.webkit.ca) {
+          poisoned = true;
+          diagnose(webkitNonCertificateDiagnostic(errorText, probeURL));
+          return;
+        }
+        failed = request;
+      } catch { poisoned = true; diagnose('malformed'); }
+    }, true);
+    // A fresh page has no previous HTTP traffic. Even a redirect is a veto.
+    listen(page, 'response', () => { if (active) { poisoned = true; diagnose('http_response', true); } }, true);
+    for (const event of ['close', 'crash']) listen(page, event, () => { ended = true; diagnose('lifecycle', true); });
+    listen(context, 'close', () => { ended = true; diagnose('lifecycle', true); });
+    listen(browser, 'disconnected', () => { ended = true; diagnose('lifecycle', true); });
+  } catch { poisoned = true; diagnose('malformed'); }
+  return {
+    vetoed,
+    async refused(error) {
+      if (stopped || attempted) { diagnose('error_shape'); return false; }
+      attempted = true;
+      // Freeze navigation observations before querying the already failed
+      // request; teardown or delayed events cannot become evidence.
+      active = false;
+      detach(true);
+      let timer;
+      try {
+        let errorShape = false;
+        try { errorShape = !(error instanceof Error) || error.name !== 'Error'; }
+        catch { errorShape = true; }
+        if (errorShape) { diagnose('error_shape'); return false; }
+        if (vetoed()) return false;
+        if (count !== 1) { diagnose(count === 0 ? 'missing_event' : 'duplicate_event'); return false; }
+        if (!failed) { diagnose('malformed'); return false; }
+        const remaining = Math.floor(until - performance.now());
+        if (!Number.isFinite(remaining) || remaining < 1 || remaining > 10000) {
+          diagnose('deadline');
+          return false;
+        }
+        const responseResult = await Promise.race([
+          Promise.resolve(failed.response()).then(value => ({ kind: value === null ? 'none' :
+            value === undefined ? 'malformed' : 'response' }), () => ({ kind: 'fault' })),
+          new Promise(resolve => { timer = setTimeout(() => resolve({ kind: 'timeout' }), remaining); }),
+        ]);
+        if (responseResult.kind === 'response') { diagnose('http_response', true); return false; }
+        if (responseResult.kind === 'malformed') { diagnose('malformed'); return false; }
+        if (responseResult.kind === 'fault') { diagnose('response_query_fault'); return false; }
+        if (responseResult.kind === 'timeout') { diagnose('response_query_timeout'); return false; }
+        if (!(performance.now() < until)) { diagnose('deadline'); return false; }
+        if (vetoed()) return false;
+        return responseResult.kind === 'none';
+      } catch { diagnose('response_query_fault'); return false; }
+      finally { clearTimeout(timer); }
+    },
+    diagnostic() {
+      if (diagnosis !== null) return diagnosis;
+      if (count === 0) return 'missing_event';
+      if (count > 1) return 'duplicate_event';
+      return failed ? 'certificate_event' : 'malformed';
+    },
+    stop() { active = false; detach(false); const good = !vetoed(); stopped = true; return good; },
+  };
+}
+
 export async function probeEngine(name, browserType, config, checkpoint = () => {}, readinessTiming) {
   if (!Object.hasOwn(VERSIONS, name)) refuse();
   let browser;
@@ -398,6 +565,9 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
         let rejected = false;
         let failureOutcome = 'unknown';
         const probeURL = config.negative[reason] + '/';
+        const witness = name === 'webkit'
+          ? webkitCertificateWitness(page, context, browser, probeURL, performance.now() + 10000)
+          : null;
         try {
           const response = await page.goto(probeURL, { waitUntil: 'load', timeout: 10000 });
           if (reason === 'ca') failureOutcome = response === null || response === undefined
@@ -420,13 +590,19 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
             } catch { rejected = false; }
             if (!rejected) failureOutcome = wrongHostFailureOutcome(error, name, probeURL);
           }
+          if (!rejected && witness) rejected = await witness.refused(error);
+          // Mandatory lifecycle/timeout vetoes also apply to the original
+          // exact TLS-message path, not only the alternative event witness.
+          if (witness && (!(error instanceof Error) || error.name !== 'Error' || witness.vetoed()))
+            rejected = false;
         } finally {
+          if (witness && !witness.stop()) rejected = false;
           if (reason === 'host') checkpoint('engine_wrong_host_page_close', name);
           await page.close();
         }
         if (!rejected) {
-          if (reason === 'ca') checkpoint(wrongCAFailureStage(failureOutcome), name);
-          else checkpoint(wrongHostFailureStage(failureOutcome), name);
+          const stage = reason === 'ca' ? wrongCAFailureStage(failureOutcome) : wrongHostFailureStage(failureOutcome);
+          checkpoint(witness ? `${stage}_witness_${witness.diagnostic()}` : stage, name);
           refuse();
         }
       }

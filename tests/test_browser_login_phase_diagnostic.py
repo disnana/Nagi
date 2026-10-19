@@ -89,6 +89,51 @@ PUBLIC_RECORD_TYPES = {
 
 
 class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
+    def test_failed_case_keeps_only_bounded_whitelisted_panic_locations(self):
+        for source in ("runtime/tests/browser_login_public_api.rs",
+                       r"runtime\tests\browser_login_public_api.rs"):
+            with self.subTest(source=source):
+                raw = "\n".join([
+                    f"thread '{diagnostic.CASE}' (42) panicked at {source}:123:7:",
+                    "private-cookie=do-not-publish body=secret panic payload",
+                    "test " + diagnostic.CASE + " ... FAILED", FAIL_SUMMARY])
+                document, result = run_text(raw, cargo_exit=101)
+                self.assertEqual(result, 1)
+                self.assertTrue(document["capture_valid"])
+                self.assertEqual(document["failure_locations"], [{"line": 123, "column": 7}])
+                for private in (source, "private-cookie", "do-not-publish", "secret"):
+                    self.assertNotIn(private, json.dumps(document))
+
+    def test_panic_location_refuses_other_cases_paths_and_unbounded_numbers(self):
+        valid = f"thread '{diagnostic.CASE}' panicked at runtime/tests/browser_login_public_api.rs:123:7:"
+        for line in (valid.replace(diagnostic.CASE, "another_test"),
+                     valid.replace("runtime/tests/", "/private/runtime/tests/"),
+                     valid.replace(".rs:123:7:", ".rs:0:7:"),
+                     valid.replace(".rs:123:7:", ".rs:1000000:7:"),
+                     valid.replace(".rs:123:7:", ".rs:123:1000000:"),
+                     valid + " secret=do-not-publish", "private prefix " + valid):
+            with self.subTest(line=line):
+                document, result = run_text("\n".join([
+                    line, "test " + diagnostic.CASE + " ... FAILED", FAIL_SUMMARY]), 101)
+                self.assertEqual(result, 1)
+                self.assertEqual(document["failure_locations"], [])
+                self.assertNotIn("do-not-publish", json.dumps(document))
+
+    def test_panic_location_never_turns_failure_into_success_or_survives_invalid_capture(self):
+        line = f"thread '{diagnostic.CASE}' panicked at runtime/tests/browser_login_public_api.rs:123:7:"
+        for end, code, extra in ((PASS_SUMMARY, 0, "ok"),
+                                 (FAIL_SUMMARY, 101, "another")):
+            raw = "\n".join([line, observer_line(1), observer_line(2),
+                              "test " + (diagnostic.CASE if extra == "ok" else extra)
+                              + " ... " + ("ok" if code == 0 else "FAILED"), end])
+            document, result = run_text(raw, code)
+            self.assertEqual(result, 0 if code == 0 else 1)
+            self.assertEqual(document["failure_locations"], [])
+        raw = "\n".join([line] * 100 + ["test " + diagnostic.CASE + " ... FAILED", FAIL_SUMMARY])
+        document, result = run_text(raw, 101)
+        self.assertEqual(result, 1)
+        self.assertLessEqual(len(document["failure_locations"]), 10)
+
     def assert_public_records_closed(self, records):
         for record in records:
             expected_types = PUBLIC_RECORD_TYPES[record["case"]]
@@ -114,9 +159,9 @@ class BrowserLoginPhaseDiagnosticTests(unittest.TestCase):
         self.assertEqual(document["case"], diagnostic.CASE)
         self.assertEqual(
             set(document),
-            {"schema", "case", "command", "cargo_exit", "capture_valid", "test_summary", "observer_records_seen", "invalid_reason_counts", "records", "public_api_records"},
+            {"schema", "case", "command", "cargo_exit", "capture_valid", "test_summary", "observer_records_seen", "invalid_reason_counts", "records", "public_api_records", "failure_locations"},
         )
-        self.assertEqual(document["schema"], "nagi-browser-login-phase-diagnostic-v3")
+        self.assertEqual(document["schema"], "nagi-browser-login-phase-diagnostic-v4")
         self.assertEqual(set(document["invalid_reason_counts"]), set(diagnostic.INVALID_REASON_NAMES))
         self.assertTrue(all(type(n) is int and 0 <= n <= diagnostic.INVALID_REASON_LIMIT
                             for n in document["invalid_reason_counts"].values()))

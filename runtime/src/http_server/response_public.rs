@@ -287,7 +287,19 @@ impl Response {
         match prepared {
             Ok(wire) => HttpResponse::from_wire(status, wire, fallback),
             Err(error) => {
-                HttpResponse::terminal(fallback, refusal_status(self.status, error), head, true)
+                let status = refusal_status(self.status, error);
+                // An owned representation/budget fault keeps the established
+                // internal-error body; transport panics use their legacy body.
+                let reason =
+                    (status == Status::INTERNAL_SERVER_ERROR).then_some(FallbackStatus::Internal);
+                HttpResponse::terminal_profile_reason(
+                    fallback,
+                    status,
+                    PolicySource::Public,
+                    head,
+                    true,
+                    reason,
+                )
             }
         }
     }
@@ -457,6 +469,9 @@ impl HttpResponse {
         reason: Option<FallbackStatus>,
     ) -> Self {
         let reason = reason.unwrap_or_else(|| {
+            if status == Status::INTERNAL_SERVER_ERROR {
+                return FallbackStatus::TransportInternal;
+            }
             FallbackStatus::all()
                 .into_iter()
                 .find(|reason| reason.code() == status.0.as_u16())
@@ -475,6 +490,7 @@ impl HttpResponse {
                 );
                 response.source = source;
                 response.dependencies = vary::Dependencies::source(source);
+                response.terminal_reason = Some(reason);
                 response
             }
             None => Self {
@@ -572,7 +588,9 @@ impl HttpResponse {
     pub(super) fn replacement(&self, status: Status, head: bool, close: bool) -> Self {
         let status = self.runtime_refusal.unwrap_or(status);
         let mut replacement = match self.terminal_reason {
-            Some(reason @ FallbackStatus::Security(_)) if reason.code() == status.0.as_u16() => {
+            Some(reason @ (FallbackStatus::Security(_) | FallbackStatus::Internal))
+                if reason.code() == status.0.as_u16() =>
+            {
                 Self::terminal_profile_reason(
                     Arc::clone(&self.fallback),
                     status,
