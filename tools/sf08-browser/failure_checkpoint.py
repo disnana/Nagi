@@ -1,4 +1,5 @@
 """Failure-only closed facts. No raw child output, exceptions or paths."""
+import re
 PHASES = {'binding','scope','capacity','ready','tls','negative','provision','browser','report',
           'stop_ack','close','ownership','cancelled','timeout','unexpected'}
 STAGES = {'none','settings','native_wrong_ca','guard','native_positive','native_wrong_host',
@@ -88,7 +89,9 @@ def validate(value, *, outer=False):
     keys = {'schema_version','stage','engine'} | ({'phase'} if outer else set())
     if (type(value) is not dict or set(value) != keys or type(value['schema_version']) is not int
             or value['schema_version'] != 1 or type(value['stage']) is not str
-            or (value['stage'] not in STAGES and value['stage'] not in WEBKIT_WITNESS_STAGES)
+            or (value['stage'] not in STAGES and value['stage'] not in WEBKIT_WITNESS_STAGES
+                and not (len(value['stage']) <= 108 and re.fullmatch(
+                    r'engine_wrong_(?:ca|host)_one_shot_peer_code_sha256_[a-f0-9]{64}', value['stage'])))
             or type(value['engine']) is not str or value['engine'] not in ENGINES
             or (value['stage'].startswith('engine_') != (value['engine'] != 'none'))
             or (value['stage'] in FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES and value['engine'] != 'firefox')

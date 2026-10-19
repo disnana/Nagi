@@ -269,3 +269,19 @@ test('credential failure diagnostic is fixed and callback error never changes st
     assert.deepEqual(rows, ['credential']); assert.deepEqual([...f.calls], ['native']);
   }
 });
+
+test('native peer fingerprint checkpoints allow only two exact WebKit digest forms', () => {
+  for (const role of ['ca', 'host']) {
+    const prefix = `engine_wrong_${role}_one_shot_peer_code_sha256_`;
+    const stage = prefix + 'a'.repeat(64);
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+    assert.equal(FAILURE_STAGES.includes(stage), false, 'static stage vocabulary stays unchanged');
+    for (const engine of ['none', 'chromium', 'firefox'])
+      assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+    for (const suffix of ['', 'a'.repeat(63), 'a'.repeat(65), 'A'.repeat(64), 'g'.repeat(64),
+      'a'.repeat(64) + '\n', 'a'.repeat(64) + '\r', 'a'.repeat(64) + '\u2028', 'a'.repeat(64) + '\u2029', 'a'.repeat(64) + '_PRIVATE_SENTINEL', 'https://private.invalid/'])
+      assert.throws(() => checkedFailure(prefix + suffix, 'webkit'), /^Error: SF08 checkpoint refused$/);
+  }
+  for (const role of ['ca_extra', 'host_extra', 'other'])
+    assert.throws(() => checkedFailure(`engine_wrong_${role}_one_shot_peer_code_sha256_${'a'.repeat(64)}`, 'webkit'), /^Error: SF08 checkpoint refused$/);
+});

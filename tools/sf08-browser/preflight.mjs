@@ -564,10 +564,16 @@ const CA_FAILURE_STAGES = Object.freeze({
   cleanup: 'engine_wrong_ca_one_shot_cleanup',
   unknown: 'engine_wrong_ca_one_shot_unknown',
 });
+function peerCodeFingerprintKind(kind) {
+  return typeof kind === 'string' && kind.length === 81 && /^peer_code_sha256_[a-f0-9]{64}$/.test(kind);
+}
+function hostDiagnosticKind(kind) {
+  return typeof kind === 'string' && (Object.hasOwn(HOST_FAILURE_STAGES, kind) || peerCodeFingerprintKind(kind));
+}
 function hostFirstDiagnostic(observer) {
   let seen = false;
   return kind => {
-    if (seen || typeof kind !== 'string' || !Object.hasOwn(HOST_FAILURE_STAGES, kind)) return;
+    if (seen || !hostDiagnosticKind(kind)) return;
     seen = true;
     try { if (typeof observer === 'function') observer(kind); } catch {}
   };
@@ -788,8 +794,14 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
         try {
           if (alerts !== 1 || connections !== 1 || sniCount !== 1 || socket !== sniSocket ||
               !(socket instanceof native.TLSSocket)) kind = 'peer_binding';
-          else if (error instanceof Error && error.code === 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE')
-            kind = 'peer_legacy_certificate';
+          else if (error instanceof Error) {
+            hostBudget(until);
+            const code = error.code;
+            if (code === 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE') kind = 'peer_legacy_certificate';
+            else if (typeof code === 'string' && code.length <= 128 &&
+                code.match(/^ERR_SSL_[A-Z0-9_/]+$/)?.[0] === code)
+              kind = 'peer_code_sha256_' + createHash('sha256').update(code).digest('hex');
+          }
         } catch {}
         veto(kind);
       }
@@ -953,8 +965,8 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
           const probe = reason === 'host' ? probeWebkitWrongHost : probeWebkitWrongCA;
           const stages = reason === 'host' ? HOST_FAILURE_STAGES : CA_FAILURE_STAGES;
           if (!await probe(browser, factory, performance.now() + 10000,
-            kind => { if (typeof kind === 'string' && Object.hasOwn(HOST_FAILURE_STAGES, kind)) detail = kind; })) {
-            checkpoint(stages[detail], name);
+            kind => { if (hostDiagnosticKind(kind)) detail = kind; })) {
+            checkpoint(peerCodeFingerprintKind(detail) ? `engine_wrong_${reason}_one_shot_${detail}` : stages[detail], name);
             refuse();
           }
           continue;

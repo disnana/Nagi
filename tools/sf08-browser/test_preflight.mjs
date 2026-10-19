@@ -1742,3 +1742,84 @@ test('server-created setup failure retains credentials until its actual close an
   assert.equal(observedClose, true);
   assert.equal(key.every(byte => byte === 0), true);
 });
+
+test('one-shot fingerprint hashes only bounded native SSL code on rejected bound peer events', async () => {
+  const code = 'ERR_SSL_TLSV1_ALERT_ACCESS_DENIED';
+  const kind = 'peer_code_sha256_' + createHash('sha256').update(code).digest('hex');
+  for (const role of ['ca', 'host']) {
+    const rows = [], f = await hostPeerFixture({ role, diagnose: value => rows.push(value) });
+    f.connect(); f.sni(); f.alert(code);
+    assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
+    assert.deepEqual(rows, [kind]);
+    assert.equal(JSON.stringify(rows).includes(code), false);
+    assert.equal(JSON.stringify(rows).includes('PRIVATE_SENTINEL'), false);
+  }
+  const privateRows = [], privatePeer = await hostPeerFixture({ diagnose: value => privateRows.push(value) });
+  const privateError = new Error(); let privateReads = 0;
+  for (const field of ['message', 'stack', 'reason']) Object.defineProperty(privateError, field, {
+    get() { privateReads++; throw new Error('PRIVATE_SENTINEL'); }
+  });
+  privateError.code = 'ERR_SSL_SSL/TLS_ALERT_ACCESS_DENIED';
+  privatePeer.connect(); privatePeer.sni(); privatePeer.alert(undefined, undefined, privateError);
+  assert.equal(await privatePeer.endpoint.finish(), false); await privatePeer.endpoint.close();
+  assert.equal(privateReads, 0, 'native message/stack/reason must never be accessed');
+  assert.deepEqual(privateRows, ['peer_code_sha256_' + createHash('sha256').update(privateError.code).digest('hex')]);
+  for (const code of ['ERR_SSL_' + 'A'.repeat(121), 'ERR_SSL_PRIVATE\n', 'ERR_SSL_PRIVATE\r', 'ERR_SSL_PRIVATE\u2028', 'ERR_SSL_é', 'ERR_SSL_bad',
+    'ERR_SSL_PRIVATE https://private.invalid/', 'ECONNRESET', '', null, 3, {}]) {
+    const rows = [], f = await hostPeerFixture({ diagnose: value => rows.push(value) });
+    f.connect(); f.sni(); f.alert(code);
+    assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
+    assert.deepEqual(rows, ['peer_other']);
+  }
+  const boundaryCode = 'ERR_SSL_' + 'A'.repeat(120), rows = [];
+  assert.equal(boundaryCode.length, 128);
+  const boundary = await hostPeerFixture({ diagnose: value => rows.push(value) });
+  boundary.connect(); boundary.sni(); boundary.alert(boundaryCode);
+  assert.equal(await boundary.endpoint.finish(), false); await boundary.endpoint.close();
+  assert.deepEqual(rows, ['peer_code_sha256_' + createHash('sha256').update(boundaryCode).digest('hex')]);
+});
+
+test('one-shot fingerprint preserves binding first veto deadline and callback proof neutrality', async () => {
+  const code = 'ERR_SSL_TLSV1_ALERT_ACCESS_DENIED';
+  for (const mode of ['binding', 'socket', 'duplicate', 'deadline']) {
+    const rows = [], f = await hostPeerFixture({ budget: mode === 'deadline' ? 35 : 1000, diagnose: value => rows.push(value) });
+    f.connect(); f.sni();
+    if (mode === 'binding') f.sni('PRIVATE_SENTINEL');
+    if (mode === 'socket') f.raw.emit('end');
+    if (mode === 'duplicate') f.alert('ECONNRESET');
+    if (mode === 'deadline') {
+      await new Promise(resolve => setTimeout(resolve, 40));
+      f.alert(code);
+    } else f.alert(code);
+    assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
+    assert.deepEqual(rows, [mode === 'binding' ? 'peer_binding' : mode === 'duplicate' ? 'peer_other' : mode]);
+  }
+  for (const accepted of [true, false]) {
+    const f = await hostPeerFixture({ diagnose: () => { throw new Error('PRIVATE_SENTINEL'); } });
+    f.connect(); f.sni(); f.alert(accepted ? undefined : code);
+    assert.equal(await f.endpoint.finish(), accepted); await f.endpoint.close();
+  }
+});
+
+test('one-shot fingerprint propagates only exact digest kinds and only on failed probes', async () => {
+  const kind = 'peer_code_sha256_' + 'a'.repeat(64);
+  for (const role of ['ca', 'host']) {
+    const stages = [], type = fake('webkit', 'normal'), f = hostBrowser({ role, peer: false });
+    const factory = async (_until, diagnose) => { diagnose(kind); diagnose('setup'); return f.endpoint; };
+    await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
+      (stage, engine) => stages.push(checkedFailure(stage, engine)), undefined,
+      role === 'host' ? factory : undefined, role === 'ca' ? factory : undefined));
+    assert.deepEqual(stages.at(-1), { schema_version: 1, stage: `engine_wrong_${role}_one_shot_${kind}`, engine: 'webkit' });
+  }
+  for (const first of [kind + '\n', kind + '\r', kind + '\u2028', kind + '0', kind.toUpperCase(), 'peer_code_sha256_' + 'g'.repeat(64), 'PRIVATE_SENTINEL']) {
+    const f = hostBrowser(), rows = [];
+    const factory = async (_until, diagnose) => { diagnose(first); diagnose('setup'); throw new Error('PRIVATE_SENTINEL'); };
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, factory, performance.now() + 1000, value => rows.push(value)), false);
+    assert.deepEqual(rows, ['setup']);
+  }
+  const f = hostBrowser(), rows = [];
+  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, async (_until, diagnose) => {
+    diagnose(kind); return f.endpoint;
+  }, performance.now() + 1000, value => rows.push(value)), true);
+  assert.deepEqual(rows, []);
+});
