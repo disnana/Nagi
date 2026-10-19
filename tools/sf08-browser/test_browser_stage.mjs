@@ -182,3 +182,30 @@ test('wrong-host diagnosis stays closed and limits WebKit detail labels to WebKi
     assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
   }
 });
+
+
+test('wrong-host factory is private dependency identity and never serialized into business', async () => {
+  let calls = 0;
+  const factory = () => { calls++; throw new Error('private key sentinel'); };
+  const f = fake({ wrongHostFactory: factory, preflight: async (_b, _p, _r, _n, _c, selected) => {
+    assert.equal(selected, factory); return receipt();
+  } });
+  const value = input(); value.wrongHostFactory = 'caller-controlled-sentinel'; value.leaf_key = 'caller-key-sentinel';
+  await stage(value, f.deps);
+  assert.equal(calls, 0, 'preflight owns the sole attempt');
+  assert.equal(JSON.stringify(f.calls.config).includes('sentinel'), false);
+  assert.equal(JSON.stringify(f.calls.child.env).includes('caller-key-sentinel'), false);
+});
+
+test('default wrong-host factory reads bound work and ready CA and fails closed before business', async () => {
+  let callerInvoked = false;
+  const value = input(); value.wrongHostFactory = () => { callerInvoked = true; };
+  const f = fake({ preflight: async (_b, _p, _r, _n, _c, factory) => {
+    assert.equal(typeof factory, 'function');
+    await factory(performance.now() + 10000);
+    assert.fail('nonexistent owned credential directory must refuse');
+  } });
+  await assert.rejects(stage(value, f.deps), /^Error: SF08 browser trust preflight refused$/);
+  assert.equal(callerInvoked, false);
+  assert.deepEqual([...f.calls], ['native']);
+});

@@ -111,6 +111,7 @@ def tls_probes(root, ready, owner, leader, budget):
     data = ready_ca_bytes(root, ready)
     # Same-fd verified bytes are the trust input; never reopen a CA path.
     context = ssl.create_default_context(cadata=data.decode('ascii'))
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     for key, host in (('app', 'localhost'), ('ui', 'app.example.invalid'), ('denied', '127.0.0.1')):
         deadline = time.monotonic() + 5
         budget.check(deadline)

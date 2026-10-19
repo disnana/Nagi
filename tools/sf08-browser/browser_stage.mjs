@@ -5,7 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import https from 'node:https';
-import { runPreflight, settings } from './preflight.mjs';
+import { runPreflight, settings, readWebkitWrongHostCredentials, createWebkitWrongHostEndpoint } from './preflight.mjs';
 
 export function trustEnv(home, inherited) {
   return { ...inherited, HOME: home, XDG_DATA_HOME: home + '/.local/share',
@@ -66,7 +66,9 @@ export async function stage(input, deps = {}) {
   const browsers = deps.browsers ?? await import(pathToFileURL(input.playwright_module).href);
   checkpoint('native_wrong_ca', 'none');
   await (deps.nativeNegative ?? nativeWrongCA)(config.negative.ca, config.caPEM);
-  const receipt = await (deps.preflight ?? runPreflight)(browsers, provisioned, input.ready, negative, checkpoint);
+  const wrongHostFactory = deps.wrongHostFactory ?? (until => createWebkitWrongHostEndpoint(
+    readWebkitWrongHostCredentials(input.work, input.ready.ca, config.caPEM), until));
+  const receipt = await (deps.preflight ?? runPreflight)(browsers, provisioned, input.ready, negative, checkpoint, wrongHostFactory);
   if (JSON.stringify(receipt) !== JSON.stringify({ schema_version: 1, transport_preflight_passed: true,
     engines: ['chromium', 'firefox', 'webkit'].map(engine => ({ engine, positive_sans: 3,
       wrong_ca_refused: true, wrong_host_refused: true })) })) throw new Error('SF08 preflight failed');

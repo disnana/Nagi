@@ -148,6 +148,23 @@ class CertificateRoleFixtureTests(unittest.TestCase):
         certificates.assert_called_once_with(owned, 'positive')
 
 
+class NativeTLSClientPolicyTests(unittest.TestCase):
+    def test_tls_probe_enforces_tls12_without_weakening_peer_verification(self):
+        context = core.ssl.SSLContext(core.ssl.PROTOCOL_TLS_CLIENT)
+        # Exercise the caller's explicit minimum independently of library defaults.
+        context.minimum_version = core.ssl.TLSVersion.MINIMUM_SUPPORTED
+        owner = NS(peek=lambda _leader: None)
+        budget = NS(check=lambda _deadline: None)
+        with patch.object(core, 'ready_ca_bytes', return_value=b'public-unit-ca'), \
+             patch.object(core.ssl, 'create_default_context', return_value=context), \
+             patch.object(core.socket, 'create_connection', side_effect=OSError('unit stop before network')):
+            with self.assertRaises(core.Rejected):
+                core.tls_probes(None, {'app': 'https://localhost:11001'}, owner, object(), budget)
+        self.assertEqual(context.minimum_version, core.ssl.TLSVersion.TLSv1_2)
+        self.assertTrue(context.check_hostname)
+        self.assertEqual(context.verify_mode, core.ssl.CERT_REQUIRED)
+
+
 class IntegrationTests(unittest.TestCase):
     def setUp(self):
         # Retained owned fake data only; no real CA/key/DB or input deletion.

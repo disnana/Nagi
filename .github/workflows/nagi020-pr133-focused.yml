@@ -1,4 +1,4 @@
-name: PR133 strict browser repair
+name: PR133 focused release blockers
 
 on:
   push:
@@ -16,3 +16,84 @@ jobs:
   strict-browser-tls:
     if: github.ref == 'refs/heads/test/nagi020-pr133-ci-repair-20261019'
     uses: ./.github/workflows/sf08-browser.yml
+
+  windows-csrf-comparison:
+    if: github.ref == 'refs/heads/test/nagi020-pr133-ci-repair-20261019'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        id: rust
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: nagi-pr133-csrf-windows-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: |
+            nagi-pr133-csrf-windows-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+            nagi-rust-v1-package-windows-x86_64-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+      - name: Check closed collector before native execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B -m unittest discover -s scripts/tests -p test_session_deadline_diagnostic.py
+          rustc --version
+          cargo --version
+      - name: Compare actual isolated and default-parallel Session CSRF executions once
+        shell: bash
+        env:
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$RUNNER_TEMP/csrf-auth-exact.raw" "$RUNNER_TEMP/csrf-normal-exact.raw" "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"' EXIT
+          capture() {
+            local destination="$1"
+            shift
+            set +e
+            "$@" 2>&1 | python -c 'import sys
+          remaining=256*1024+1
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$destination"
+            local statuses=("${PIPESTATUS[@]}")
+            probe_rc=${statuses[0]}
+            if [ "${statuses[1]}" -ne 0 ]; then
+              rm -f "$destination"
+              probe_rc=125
+            fi
+            set -e
+          }
+          failures=0
+          case_name=one_reusable_token_admits_two_distinct_actual_requests
+          capture "$RUNNER_TEMP/csrf-auth-exact.raw" env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api "$case_name" -- --exact
+          printf 'csrf_probe=auth_cfg_exact cargo_exit=%s\n' "$probe_rc"
+          if ! python -B scripts/ci/session_deadline_diagnostic.py --csrf-reusable-only "$RUNNER_TEMP/csrf-auth-exact.raw" "$probe_rc"; then failures=1; fi
+          capture "$RUNNER_TEMP/session-deadline-session.raw" env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api
+          session_rc=$probe_rc
+          printf 'csrf_probe=auth_cfg_full_default_parallel cargo_exit=%s\n' "$session_rc"
+          capture "$RUNNER_TEMP/csrf-normal-exact.raw" env RUSTFLAGS= cargo test --locked -p nagi-runtime --test session_csrf_public_api "$case_name" -- --exact
+          printf 'csrf_probe=normal_exact cargo_exit=%s\n' "$probe_rc"
+          if ! python -B scripts/ci/session_deadline_diagnostic.py --csrf-reusable-only "$RUNNER_TEMP/csrf-normal-exact.raw" "$probe_rc"; then failures=1; fi
+          capture "$RUNNER_TEMP/session-deadline-browser.raw" env RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api
+          browser_rc=$probe_rc
+          printf 'csrf_probe=actual_browser_login_supplement cargo_exit=%s\n' "$browser_rc"
+          if ! python -B scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "$session_rc" "$browser_rc" "$RUNNER_TEMP/session-deadline-diagnostic.json"; then failures=1; fi
+          exit "$failures"
+      - name: Preserve only sanitized fixed-schema Session diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr133-focused-windows-session
+          path: ${{ runner.temp }}/session-deadline-diagnostic.json
+          if-no-files-found: ignore

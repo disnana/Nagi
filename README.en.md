@@ -41,7 +41,7 @@ nagic --help
 
 The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) is available from the Marketplace or [GitHub Releases](https://github.com/disnana/Nagi/releases). [Nagi](editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm is available from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) or [GitHub Releases](https://github.com/disnana/Nagi/releases). For Marketplace installs, check the listing's Versions view for available versions and compatible IDE builds. The published GitHub 0.1.2 release includes one common `nagi-jetbrains-0.1.2.zip` and its `.sha256` for both IDEs. The minimum IDE builds for that ZIP are IDEA 2025.1.1 build 251.25410.109 and PyCharm 2025.1.1 build 251.25410.122. Marketplace installs directly to the compatible IDE; Release ZIPs are installed manually. Plugin 0.1.3 is an unreleased candidate. Published compiler 0.1.11 supports ordinary Check/Run, while candidate completion, diagnostics, and navigation require the matching compiler CI artifact built from the same PR source. See the [editor guide](docs/en/editor.md).
 
-The installer comes from main; the compiler comes from a published Release. These examples target Nagi 0.1.11, officially released on 2026-10-07. Verify your installed compiler with `nagic --version`. See [CHANGELOG](CHANGELOG.md) for changes and the [0.1.11 migration guide](docs/en/migration-0.1.11.md) for compatibility notes.
+The install scripts continue to download the published Nagi 0.1.11 release. This README also contains API examples from the unreleased 0.2.0 development source. To check or run those examples, use a compiler built from the same source revision or its matching CI artifact. Published 0.1.11 does not include these APIs. Verify the installed public release with `nagic --version`; for 0.1.11 compatibility, see the [0.1.11 migration guide](docs/en/migration-0.1.11.md).
 
 ### Uninstall
 
@@ -61,9 +61,9 @@ To preview removals, append `-WhatIf` to the PowerShell command or replace `bash
 
 Modified or unverifiable distributions are retained. Projects, Rust/Cargo, and the VS Code extension remain unchanged. See the [setup guide](docs/en/getting-started.md#uninstall) for details.
 
-## Run an example
+## Run the 0.2.0 candidate HTTP example
 
-Save this as `server.nagi`. It serves HTTP without a database.
+Save this as `server.nagi`. It is an HTTP sample with no database writes. Check and run it with a candidate compiler built from the same source revision or its matching CI artifact. Published 0.1.11 does not support these APIs.
 
 ```nagi
 import std.http.server as http
@@ -71,20 +71,32 @@ import std.http.server as http
 class State:
     greeting: str
 
-async def hello(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, view(state.greeting)))
+async def hello(request: http.Request, state: shared[State], policy: unit) -> Result[http.Response, Error]:
+    return http.text(http.response_context(view(request)), http.Status.OK, view(state.greeting))
 
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(greeting="Hello, Nagi!"))
-    app = try http.route(app, http.Method.GET, "/", hello)
-    return await http.serve(app, 8080, http.default_options())
+    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
+    route_policy = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/", route_policy)
+    limits = http.default_options()
+    limits = try http.authority(limits, "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+    # 明示的な有限予算の例。用途に応じて調整してください。
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    limits = try http.with_response_limits(limits, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    limits = try http.with_rate_limits(limits, rate_budget)
+    return await http.serve(app, 8080, limits)
+
 ```
 
 ```sh
 nagic run server.nagi
 ```
 
-Open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to receive `Hello, Nagi!`. Stop it with Ctrl+C. To build the compiler from source, run `cargo build --release --locked`, then use `./target/release/nagic`.
+Open [http://127.0.0.1:8080/](http://127.0.0.1:8080/) to receive `Hello, Nagi!`. Stop it with Ctrl+C. The budgets are illustrative; they are not capacity, SLA, or production-security recommendations. To build the compiler from the same repository revision, run `cargo build --release --locked` from its root, then use `./target/release/nagic run server.nagi`, or `.\target\release\nagic.exe run server.nagi` in Windows PowerShell. See the [0.2.0 migration guide](docs/en/migration-0.2.0.md) for API changes.
 
 See [HTTP](docs/en/http.md) and the [authentication example](test-nagi-code/library-examples/http-auth/README.en.md) for headers, JSON, custom errors, and shared state.
 
@@ -106,17 +118,18 @@ Applications normally use indentation-based High (`.nagi`). Low (`.low`) uses br
 
 Development will prioritize High and Rust integration while preserving Low compatibility. See [High and Low](docs/en/low-language.md) and [Rust integration](docs/en/modules-and-rust.md).
 
-## Current scope
+## Current scope (0.2.0 development source)
 
 | Available in this source | Main limits |
 |---|---|
-| Typed values, classes, enums, Lists, nullable values, Results, moves, views, and shared values | User-defined generics/traits and standard Map operations are unsupported; owned handling is incomplete |
+| Typed values, classes, enums, Lists, nullable values, Results, moves, views, and shared values | User-defined generic functions/traits and standard Map operations are unsupported. `owned[T]` has no general constructor or transparent operations |
 | HTTP, headers, response statuses, custom errors, and shared state | The standard server uses loopback HTTP/1. It has no public TLS, WebSocket, or streaming API |
-| JSON, SQLite, and explicit SQL/schema checks | Preflight checks are opt-in. Value types, NULL, and dynamic SQL are checked at runtime. Bind shapes are fixed. No standard PostgreSQL, pool, or transaction API |
+| JSON, SQLite Pool/Tx, typed Parameters, and opt-in SQL/schema checks | The SQLite API is in unreleased development source. SQL must be one direct literal statement and uses anonymous `?` placeholders. No standard PostgreSQL API |
 | Async/scopes, typed actors, and Supervisors | Tokio tasks within one process; no custom VM, hot code replacement, or distributed actors |
 | File imports, standard modules, Rust integration, and Low replacements | No direct use of arbitrary Rust types or stable external ABI |
 
-SQLite SQL literals support explicit [schema checks](docs/en/sql-check.md) for names, required result columns, and bind counts. Value types, NULL behavior, and consistency with the deployed schema are not guaranteed. Check the [CHANGELOG](CHANGELOG.md) for inclusion in published releases.
+SQLite uses fixed SQL literals passed to `sqlite.literal(...)` to create `Query` values, and typed `Parameters` for bind values. There is no request-derived SQL string factory. Explicit [schema preflight](docs/en/sql-check.md) checks the shape and schema names of direct Query constructors, required columns, and bind counts from direct Parameters builder chains. Actual value types, NULL, and numeric ranges remain runtime checks; preflight does not prove that the deployed database matches. See [SQLite Pools and Transactions](docs/en/sqlite-pool.md) for Pool/Tx details. This API is not included in published 0.1.11.
+
 
 Check the [reference](docs/en/README.md) for individual API conditions. [Ownership](docs/en/ownership.md) explains Nagi's and rustc's checks; the [introduction](docs/en/introduction.md#compiler-and-existing-libraries) describes the implementation foundations.
 
