@@ -10,7 +10,8 @@ import net from 'node:net';
 import { spawnSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as hostProof from './preflight.mjs';
-import { settings, probeEngine, firefoxCAReadiness, firefoxWorkerReadiness, webkitCertificateWitness } from './preflight.mjs';
+import { settings, probeEngine, firefoxCAReadiness, firefoxWorkerReadiness, webkitCertificateWitness,
+  probeWebkitWrongCA } from './preflight.mjs';
 import { checkedFailure, FAILURE_STAGES, WEBKIT_WITNESS_DIAGNOSTICS, WEBKIT_WITNESS_STAGE_LIST } from './browser_stage.mjs';
 
 const CA = Buffer.from('unit-ca-only-not-a-certificate');
@@ -972,9 +973,17 @@ test('WebKit wrong-host failures receive bounded labels without changing accepta
 
 // R1–R12: the one-shot proof adds evidence; it never accepts cancellation alone.
 let hostFiles;
+let caFiles;
+const TEST_HOST_PROFILE = { hostname: 'sf08-wronghost.invalid', code: 'ERR_SSL_SSL/TLS_ALERT_BAD_CERTIFICATE' };
+const TEST_CA_PROFILE = { hostname: 'localhost', code: 'ERR_SSL_TLSV1_ALERT_UNKNOWN_CA' };
 function hostAPI(api = hostProof) {
   for (const name of ['readWebkitWrongHostCredentials', 'createWebkitWrongHostEndpoint', 'probeWebkitWrongHost'])
     assert.equal(typeof api[name], 'function', 'one-shot proof implementation required');
+  return api;
+}
+function caAPI(api = hostProof) {
+  for (const name of ['readWebkitWrongCACredentials', 'createWebkitWrongCAEndpoint', 'probeWebkitWrongCA'])
+    assert.equal(typeof api[name], 'function', 'one-shot CA proof implementation required');
   return api;
 }
 function hostCertificateFiles() {
@@ -995,36 +1004,70 @@ function hostCertificateFiles() {
   });
   return hostFiles;
 }
+function wrongCACertificateFiles() {
+  if (caFiles) return caFiles;
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'sf08-one-shot-ca-'));
+  fs.chmodSync(work, 0o700);
+  const positive = path.join(work, 'owned-unit'), negativeDir = path.join(work, 'negative');
+  fs.mkdirSync(positive, { mode: 0o700 }); fs.chmodSync(positive, 0o700);
+  fs.mkdirSync(negativeDir, { mode: 0o700 }); fs.chmodSync(negativeDir, 0o700);
+  const script = 'import importlib.util,sys\nfrom pathlib import Path\ns=importlib.util.spec_from_file_location("fixed_fixture",sys.argv[1]);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);m.certificates(Path(sys.argv[2]),sys.argv[3])';
+  const fixture = fileURLToPath(new URL('./context/fixture.py', import.meta.url));
+  for (const [directory, role] of [[positive, 'positive'], [negativeDir, 'wrong-ca']]) {
+    const result = spawnSync('python3', ['-B', '-c', script, fixture, directory, role],
+      { stdio: 'ignore', timeout: 10000 });
+    assert.equal(result.status, 0, 'owned role certificate fixture unavailable');
+  }
+  const identity = fs.lstatSync(work);
+  caFiles = { work, positive, negative: negativeDir,
+    mainCA: fs.readFileSync(path.join(positive, 'ca.pem')),
+    ca: fs.readFileSync(path.join(negativeDir, 'ca.pem')),
+    caPath: path.join(negativeDir, 'ca.pem') };
+  process.once('exit', () => {
+    const current = fs.lstatSync(work);
+    if (current.dev === identity.dev && current.ino === identity.ino) fs.rmSync(work, { recursive: true });
+  });
+  return caFiles;
+}
 class HostRaw extends EventEmitter {
   constructor() { super(); this.remoteAddress = '127.0.0.1'; this.remotePort = 31001; this.localAddress = '127.0.0.1'; this.localPort = 33005; this.destroyed = false; }
   destroy() { if (!this.destroyed) { this.destroyed = true; queueMicrotask(() => this.emit('close')); } }
 }
 class HostTLS extends HostRaw {}
 async function hostPeerFixture(options = {}, api = hostProof) {
-  hostAPI(api);
-  const files = hostCertificateFiles();
-  const credentials = api.readWebkitWrongHostCredentials(files.work, files.caPath, files.ca);
+  const role = options.role ?? 'host';
+  const profile = role === 'ca' ? TEST_CA_PROFILE : TEST_HOST_PROFILE;
+  if (role === 'ca') caAPI(api); else hostAPI(api);
+  const files = role === 'ca' ? wrongCACertificateFiles() : hostCertificateFiles();
+  const credentials = role === 'ca'
+    ? api.readWebkitWrongCACredentials(files.work, files.ca, files.mainCA)
+    : api.readWebkitWrongHostCredentials(files.work, files.caPath, files.ca);
+  options.credentialsSeen?.(credentials);
   let server, nativeOptions;
   const native = { TLSSocket: HostTLS, createSecureContext: () => { if (options.setupFailure) throw new Error('PRIVATE_SENTINEL'); return {}; }, createServer(opts) {
     nativeOptions = opts; server = new EventEmitter(); server.listening = false;
     server.address = () => ({ address: '127.0.0.1', family: 'IPv4', port: 33005 });
-    server.listen = () => { server.listening = true; queueMicrotask(() => server.emit('listening')); return server; };
-    server.close = callback => { server.listening = false; if (!options.closeHang) queueMicrotask(() => { server.emit('close'); callback(options.closeError ? new Error('PRIVATE_SENTINEL') : undefined); }); return server; };
+    server.listen = () => { if (options.listenFailure) throw new Error('PRIVATE_SENTINEL'); server.listening = true; queueMicrotask(() => server.emit('listening')); return server; };
+    server.close = callback => { server.listening = false; if (!options.closeHang) queueMicrotask(() => { options.beforeServerClose?.(); server.emit('close'); callback(options.closeError ? new Error('PRIVATE_SENTINEL') : undefined); }); return server; };
     return server;
   } };
   const until = performance.now() + (options.budget ?? 1000);
-  const endpoint = await api.createWebkitWrongHostEndpoint(credentials, until, native, options.diagnose);
+  const endpoint = role === 'ca'
+    ? await api.createWebkitWrongCAEndpoint(credentials, until, native, options.diagnose)
+    : await api.createWebkitWrongHostEndpoint(credentials, until, native, options.diagnose);
   const raw = new HostRaw(), socket = new HostTLS();
   function connect() { server.emit('connection', raw); }
-  function sni(name = 'sf08-wronghost.invalid', receiver = socket) {
+  function sni(name = profile.hostname, receiver = socket) {
     nativeOptions.SNICallback.call(receiver, name, () => {});
   }
-  function alert(code = 'ERR_SSL_SSL/TLS_ALERT_BAD_CERTIFICATE', peer = socket) {
-    server.emit('tlsClientError', Object.assign(new Error('PRIVATE_SENTINEL'), { code }), peer);
+  function alert(code = profile.code, peer = socket, error = Object.assign(new Error('PRIVATE_SENTINEL'), { code })) {
+    server.emit('tlsClientError', error, peer);
   }
-  return { endpoint, server, raw, socket, connect, sni, alert, until };
+  return { endpoint, server, raw, socket, connect, sni, alert, until, profile, files, credentials };
 }
 function hostBrowser(options = {}) {
+  const role = options.role ?? 'host';
+  const profile = role === 'ca' ? TEST_CA_PROFILE : TEST_HOST_PROFILE;
   const browser = new EventEmitter(), context = new EventEmitter(), page = new EventEmitter(), frame = {};
   browser.isConnected = () => !options.disconnected; page.isClosed = () => false; page.mainFrame = () => frame;
   browser.newContext = async config => { assert.deepEqual(config, { ignoreHTTPSErrors: false, serviceWorkers: 'block' }); return context; };
@@ -1044,7 +1087,7 @@ function hostBrowser(options = {}) {
     if (options.resolved) return { status: () => 200 };
     throw options.error ?? new Error('Operation was cancelled');
   };
-  const endpoint = { url: 'https://sf08-wronghost.invalid:33005/',
+  const endpoint = { url: `https://${profile.hostname}:33005/`,
     async finish() { options.duringJoin?.({ browser, context, page }); return options.peer !== false; },
     async close() { return options.join !== false; } };
   return { browser, context, page, endpoint, factory: async () => endpoint,
@@ -1222,6 +1265,131 @@ test('one-shot R9 fixed owned credential files reject path mode link and crypto 
   const credentials = read(); assert.throws(() => JSON.stringify(credentials), /^Error: SF08 browser trust preflight refused$/);
   const heldKey = credentials.key; credentials.release(); assert.equal(heldKey.every(byte => byte === 0), true);
 });
+test('one-shot R9 CA role binds distinct source trust and fixed owned negative credentials', async () => {
+  caAPI(); const f = wrongCACertificateFiles();
+  const read = () => hostProof.readWebkitWrongCACredentials(f.work, f.ca, f.mainCA);
+  const negative = new X509Certificate(f.ca), main = new X509Certificate(f.mainCA);
+  assert.equal(negative.ca, true); assert.equal(main.ca, true);
+  assert.equal(negative.raw.equals(main.raw), false);
+  assert.notEqual(negative.subject, main.subject); assert.notEqual(negative.issuer, main.issuer);
+  assert.equal(negative.publicKey.export({ type: 'spki', format: 'der' })
+    .equals(main.publicKey.export({ type: 'spki', format: 'der' })), false);
+  assert.throws(() => hostProof.readWebkitWrongCACredentials(f.work, f.ca, f.ca), /^Error: SF08 browser trust preflight refused$/);
+  assert.throws(() => hostProof.readWebkitWrongCACredentials(f.work, f.mainCA, f.ca), /^Error: SF08 browser trust preflight refused$/);
+  assert.throws(() => hostProof.readWebkitWrongCACredentials(f.work, f.ca, Buffer.from('PRIVATE_SENTINEL')),
+    /^Error: SF08 browser trust preflight refused$/);
+  const altDir = path.join(f.positive, 'ca-role-negative-control'); fs.mkdirSync(altDir, { mode: 0o700 });
+  const runRoot = (key, subject, output) => {
+    const result = spawnSync('openssl', ['req', '-x509', '-key', key, '-out', output, '-days', '2',
+      '-subj', subject, '-addext', 'basicConstraints=critical,CA:TRUE',
+      '-addext', 'keyUsage=critical,keyCertSign,cRLSign'], { stdio: 'ignore', timeout: 10000 });
+    assert.equal(result.status, 0, 'local alternate CA control fixture unavailable');
+    return fs.readFileSync(output);
+  };
+  const sameName = runRoot(path.join(f.positive, 'ca.key'), '/CN=Nagi owned ephemeral SF08 wrong-ca CA', path.join(altDir, 'same-name.pem'));
+  const sameKey = runRoot(path.join(f.negative, 'ca.key'), '/CN=Different owned CA', path.join(altDir, 'same-key.pem'));
+  const sameNameCert = new X509Certificate(sameName), sameKeyCert = new X509Certificate(sameKey);
+  assert.notEqual(sameNameCert.raw.equals(negative.raw), true);
+  assert.equal(sameNameCert.subject, negative.subject); assert.equal(sameNameCert.issuer, negative.issuer);
+  assert.equal(sameKeyCert.publicKey.export({ type: 'spki', format: 'der' })
+    .equals(negative.publicKey.export({ type: 'spki', format: 'der' })), true);
+  assert.throws(() => hostProof.readWebkitWrongCACredentials(f.work, f.ca, sameName),
+    /^Error: SF08 browser trust preflight refused$/);
+  assert.throws(() => hostProof.readWebkitWrongCACredentials(f.work, f.ca, sameKey),
+    /^Error: SF08 browser trust preflight refused$/);
+  const negativeDirectory = f.negative, originalDirectoryMode = fs.statSync(negativeDirectory).mode & 0o7777;
+  try { fs.chmodSync(negativeDirectory, 0o755); assert.throws(read, /^Error: SF08 browser trust preflight refused$/); }
+  finally { fs.chmodSync(negativeDirectory, originalDirectoryMode); }
+  const caPath = path.join(negativeDirectory, 'ca.pem');
+  fs.linkSync(caPath, caPath + '.hard');
+  try { assert.throws(read, /^Error: SF08 browser trust preflight refused$/); }
+  finally { fs.unlinkSync(caPath + '.hard'); }
+  const credentials = read(); assert.throws(() => JSON.stringify(credentials), /^Error: SF08 browser trust preflight refused$/);
+  const heldKey = credentials.key; credentials.release(); assert.equal(heldKey.every(byte => byte === 0), true);
+});
+test('one-shot CA credentials are role sealed and exact peer code alone can settle', async () => {
+  caAPI();
+  const caFiles = wrongCACertificateFiles(), hostFiles = hostCertificateFiles();
+  const caCredentials = hostProof.readWebkitWrongCACredentials(caFiles.work, caFiles.ca, caFiles.mainCA);
+  const hostCredentials = hostProof.readWebkitWrongHostCredentials(hostFiles.work, hostFiles.caPath, hostFiles.ca);
+  await assert.rejects(hostProof.createWebkitWrongHostEndpoint(caCredentials, performance.now() + 1000),
+    /^Error: SF08 browser trust preflight refused$/);
+  await assert.rejects(hostProof.createWebkitWrongCAEndpoint(hostCredentials, performance.now() + 1000),
+    /^Error: SF08 browser trust preflight refused$/);
+  caCredentials.release(); hostCredentials.release();
+  const accepted = await hostPeerFixture({ role: 'ca' });
+  accepted.connect(); accepted.sni('localhost'); accepted.alert('ERR_SSL_TLSV1_ALERT_UNKNOWN_CA');
+  assert.equal(await accepted.endpoint.finish(), true);
+  assert.equal(await accepted.endpoint.finish(), false, 'native one-shot peer evidence is consumed once');
+  assert.equal(await accepted.endpoint.close(), true);
+  for (const code of ['ERR_SSL_SSL/TLS_ALERT_BAD_CERTIFICATE', 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE',
+    'ERR_SSL_SSLV3_ALERT_CERTIFICATE_UNKNOWN', 'ERR_SSL_TLSV1_ALERT_CERTIFICATE_UNKNOWN',
+    'ERR_SSL_TLSV1_ALERT_UNKNOWN_CA_SUFFIX', 'ECONNRESET', 'ERR_SSL_TLSV1_ALERT_UNKNOWN_CA']) {
+    if (code === 'ERR_SSL_TLSV1_ALERT_UNKNOWN_CA') continue;
+    const rejected = await hostPeerFixture({ role: 'ca' }); rejected.connect(); rejected.sni('localhost'); rejected.alert(code);
+    assert.equal(await rejected.endpoint.finish(), false, code); await rejected.endpoint.close();
+  }
+  for (const error of [{ code: 'ERR_SSL_TLSV1_ALERT_UNKNOWN_CA' },
+    Object.assign(new Error('PRIVATE_SENTINEL'), { code: 7 })]) {
+    const rejected = await hostPeerFixture({ role: 'ca' }); rejected.connect(); rejected.sni('localhost');
+    rejected.alert('ERR_SSL_TLSV1_ALERT_UNKNOWN_CA', rejected.socket, error);
+    assert.equal(await rejected.endpoint.finish(), false); await rejected.endpoint.close();
+  }
+  for (const [mode, code, expected] of [['legacy', 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'peer_legacy_certificate'],
+    ['binding_first', 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'peer_binding']]) {
+    const rows = [], rejected = await hostPeerFixture({ role: 'ca', diagnose: value => rows.push(value) });
+    rejected.connect(); rejected.sni(mode === 'binding_first' ? 'sf08-wronghost.invalid' : 'localhost'); rejected.alert(code);
+    assert.equal(await rejected.endpoint.finish(), false); await rejected.endpoint.close();
+    assert.deepEqual(rows, [expected]); assert.equal(JSON.stringify(rows).includes('PRIVATE_SENTINEL'), false);
+  }
+});
+test('one-shot CA request lifecycle deadline join and host-binding vetoes remain strict', async () => {
+  caAPI();
+  for (const options of [{ missing: true }, { duplicate: true }, { foreignURL: true },
+    { foreignFrame: true }, { nonNavigation: true }, { text: 'PRIVATE_SENTINEL' },
+    { httpResponse: true }, { response: async () => undefined }, { response: async () => ({}) },
+    { response: async () => { throw new Error('PRIVATE_SENTINEL'); } },
+    { response: () => new Promise(() => {}) },
+    { duringGoto: ({ page }) => page.emit('crash') },
+    { duringJoin: ({ page }) => page.emit('crash') },
+    { duringJoin: ({ context }) => context.emit('close') },
+    { duringJoin: ({ browser }) => browser.emit('disconnected') }, { join: false }, { closeError: true }]) {
+    const f = hostBrowser({ role: 'ca', ...options });
+    assert.equal(await probeWebkitWrongCA(f.browser, f.factory, performance.now() + 1000), false,
+      JSON.stringify(Object.keys(options)));
+    assert.equal(f.closed(), true);
+  }
+  for (const text of ['Operation was cancelled', 'Unacceptable TLS certificate']) {
+    const f = hostBrowser({ role: 'ca', text });
+    assert.equal(await probeWebkitWrongCA(f.browser, f.factory, performance.now() + 1000), true,
+      'bounded browser cancellation still requires the separately joined one-shot endpoint');
+  }
+  const wrongRole = hostBrowser();
+  assert.equal(await probeWebkitWrongCA(wrongRole.browser, wrongRole.factory, performance.now() + 1000), false,
+    'wrong-host endpoint cannot satisfy the CA hostname binding');
+  const expired = hostBrowser({ role: 'ca' });
+  assert.equal(await probeWebkitWrongCA(expired.browser, expired.factory, performance.now() - 1), false);
+  const diagnostic = hostBrowser({ role: 'ca', peer: false }), rows = [];
+  assert.equal(await probeWebkitWrongCA(diagnostic.browser, diagnostic.factory,
+    performance.now() + 1000, value => rows.push(value)), false);
+  assert.deepEqual(rows, ['peer_other']);
+});
+test('one-shot CA endpoint rejects missing or foreign SNI TCP identity and lifecycle facts', async () => {
+  caAPI();
+  for (const mode of ['no_sni', 'wrong_sni', 'duplicate_sni', 'duplicate_tcp', 'bad_receiver', 'wrong_tuple']) {
+    const f = await hostPeerFixture({ role: 'ca' }); f.connect();
+    if (mode === 'wrong_tuple') f.socket.remotePort++;
+    if (mode !== 'no_sni') f.sni(mode === 'wrong_sni' ? 'sf08-wronghost.invalid' : 'localhost',
+      mode === 'bad_receiver' ? {} : undefined);
+    if (mode === 'duplicate_sni') f.sni('localhost');
+    if (mode === 'duplicate_tcp') f.server.emit('connection', new HostRaw());
+    f.alert('ERR_SSL_TLSV1_ALERT_UNKNOWN_CA');
+    assert.equal(await f.endpoint.finish(), false, mode); await f.endpoint.close();
+  }
+  const noJoin = await hostPeerFixture({ role: 'ca', closeHang: true, budget: 35 });
+  noJoin.connect(); noJoin.sni('localhost'); noJoin.alert('ERR_SSL_TLSV1_ALERT_UNKNOWN_CA');
+  assert.equal(await noJoin.endpoint.finish(), false); assert.equal(await noJoin.endpoint.close(), false);
+});
 test('one-shot R10 Node post-handshake hostname close remains a refusal', { timeout: 10000 }, async () => {
   hostAPI(); const f = hostCertificateFiles();
   const endpoint = await hostProof.createWebkitWrongHostEndpoint(
@@ -1255,13 +1423,27 @@ test('one-shot R11 removing independent proof vetoes makes their negative contro
       'negative oracle detects removed veto');
   }
   for (const [anchor, replacement, action] of [
-    ['error.code !== PEER_CERTIFICATE_CODE || bad', 'bad', f => { f.connect(); f.sni(); f.alert('ECONNRESET'); }],
-    ['sniCount !== 1 || name !== WRONG_HOST || ', 'sniCount !== 1 || ', f => { f.connect(); f.sni('localhost'); f.alert(); }],
+    ['error.code !== profile.code || bad', 'bad', f => { f.connect(); f.sni(); f.alert('ECONNRESET'); }],
+    ['sniCount !== 1 || name !== profile.hostname || ', 'sniCount !== 1 || ', f => { f.connect(); f.sni('localhost'); f.alert(); }],
   ]) {
     const original = await hostPeerFixture(); action(original);
     assert.equal(await original.endpoint.finish(), false); await original.endpoint.close();
     const api = await mutant(anchor, replacement), changed = await hostPeerFixture({}, api); action(changed);
     assert.equal(await changed.endpoint.finish(), true, 'peer negative oracle detects removed veto'); await changed.endpoint.close();
+  }
+  for (const [anchor, replacement, action] of [
+    ['error.code !== profile.code || bad', 'bad', f => {
+      f.connect(); f.sni('localhost'); f.alert('ERR_SSL_SSL/TLS_ALERT_BAD_CERTIFICATE');
+    }],
+    ['sniCount !== 1 || name !== profile.hostname || ', 'sniCount !== 1 || ', f => {
+      f.connect(); f.sni('sf08-wronghost.invalid'); f.alert('ERR_SSL_TLSV1_ALERT_UNKNOWN_CA');
+    }],
+  ]) {
+    const original = await hostPeerFixture({ role: 'ca' }); action(original);
+    assert.equal(await original.endpoint.finish(), false); await original.endpoint.close();
+    const api = await mutant(anchor, replacement), changed = await hostPeerFixture({ role: 'ca' }, api); action(changed);
+    assert.equal(await changed.endpoint.finish(), true, 'CA role negative oracle detects removed exact-code/SNI veto');
+    await changed.endpoint.close();
   }
 });
 test('one-shot R12 source-bound integration and original certificate oracle stay strict', async () => {
@@ -1270,23 +1452,74 @@ test('one-shot R12 source-bound integration and original certificate oracle stay
   f.page.emit('requestfailed', f.request);
   assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false); f.witness.stop();
   for (const name of ['chromium', 'firefox', 'webkit']) {
-    const type = fake(name, 'normal'), dedicated = hostBrowser();
+    const type = fake(name, 'normal'), caDedicated = hostBrowser({ role: 'ca' }), hostDedicated = hostBrowser();
     const launch = type.launch.bind(type); let contexts = 0, factories = 0;
     type.launch = async options => {
       const browser = await launch(options), newContext = browser.newContext.bind(browser);
-      browser.newContext = options => ++contexts === 1 ? newContext(options) : dedicated.browser.newContext(options);
+      browser.newContext = options => {
+        contexts++;
+        return contexts === 1 ? newContext(options)
+          : contexts === 2 ? caDedicated.browser.newContext(options) : hostDedicated.browser.newContext(options);
+      };
       return browser;
     };
+    let caFactories = 0;
     const result = await probeEngine(name, type, settings(provisioned, ready, negative), () => {}, undefined,
-      async until => { factories++; assert.ok(until > performance.now() && until <= performance.now() + 10000); return dedicated.endpoint; });
+      async until => { factories++; assert.ok(until > performance.now() && until <= performance.now() + 10000); return hostDedicated.endpoint; },
+      async until => { caFactories++; assert.ok(until > performance.now() && until <= performance.now() + 10000); return caDedicated.endpoint; });
     assert.deepEqual(result, { engine: name, positive_sans: 3, wrong_ca_refused: true, wrong_host_refused: true });
     assert.deepEqual(type.trace.urls, [...settings(provisioned, ready, negative).origins.map(origin => origin + '/'),
-      negative.caOrigin + '/', ...(name === 'webkit' ? [] : [negative.hostOrigin + '/'])]);
+      ...(name === 'webkit' ? [] : [negative.caOrigin + '/', negative.hostOrigin + '/'])]);
     assert.equal(factories, name === 'webkit' ? 1 : 0);
-    assert.equal(contexts, name === 'webkit' ? 2 : 1);
-    if (name === 'webkit') assert.equal(dedicated.closed(), true);
+    assert.equal(caFactories, name === 'webkit' ? 1 : 0);
+    assert.equal(contexts, name === 'webkit' ? 3 : 1);
+    if (name === 'webkit') {
+      assert.equal(caDedicated.closed(), true); assert.equal(hostDedicated.closed(), true);
+      assert.equal(type.trace.urls.some(url => url === negative.caOrigin + '/' || url === negative.hostOrigin + '/'), false,
+        'both WebKit negatives use their selected one-shot endpoint directly');
+    }
   }
   await assert.rejects(hostProof.runPreflight({}, provisioned, ready, negative), /^Error: SF08 browser trust preflight refused$/);
+});
+
+test('WebKit CA one-shot failure has no legacy navigation or host fallback', async () => {
+  const type = fake('webkit', 'normal'), caDedicated = hostBrowser({ role: 'ca' }), hostDedicated = hostBrowser();
+  const launch = type.launch.bind(type); let contexts = 0, caFactories = 0, hostFactories = 0;
+  type.launch = async options => {
+    const browser = await launch(options), newContext = browser.newContext.bind(browser);
+    browser.newContext = options => {
+      contexts++;
+      return contexts === 1 ? newContext(options)
+        : contexts === 2 ? caDedicated.browser.newContext(options) : hostDedicated.browser.newContext(options);
+    };
+    return browser;
+  };
+  await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative), () => {}, undefined,
+    async () => { hostFactories++; return hostDedicated.endpoint; },
+    async () => { caFactories++; return hostDedicated.endpoint; }),
+  /^Error: SF08 browser trust preflight refused$/);
+  assert.equal(caFactories, 1); assert.equal(hostFactories, 0);
+  assert.deepEqual(type.trace.urls, settings(provisioned, ready, negative).origins.map(origin => origin + '/'));
+  assert.equal(caDedicated.closed(), true);
+  assert.equal(hostDedicated.closed(), false, 'host branch must not run after the selected CA proof fails');
+});
+
+test('omitting the CA factory preserves the legacy CA oracle while host one-shot stays selected', async () => {
+  const type = fake('webkit', 'normal'), hostDedicated = hostBrowser();
+  const launch = type.launch.bind(type); let contexts = 0, hostFactories = 0;
+  type.launch = async options => {
+    const browser = await launch(options), newContext = browser.newContext.bind(browser);
+    browser.newContext = options => ++contexts === 1 ? newContext(options) : hostDedicated.browser.newContext(options);
+    return browser;
+  };
+  const result = await probeEngine('webkit', type, settings(provisioned, ready, negative), () => {}, undefined,
+    async () => { hostFactories++; return hostDedicated.endpoint; });
+  assert.equal(result.wrong_ca_refused, true); assert.equal(result.wrong_host_refused, true);
+  assert.equal(hostFactories, 1);
+  assert.equal(type.trace.urls.includes(negative.caOrigin + '/'), true,
+    'compatibility control must exercise the old strict CA navigation when no CA factory exists');
+  assert.equal(type.trace.urls.includes(negative.hostOrigin + '/'), false);
+  assert.equal(hostDedicated.closed(), true);
 });
 
 test('one-shot diagnostics report one fixed failure and never report success', async () => {
@@ -1376,6 +1609,19 @@ test('one-shot failure checkpoint emits only its fixed WebKit category and canno
   assert.equal(JSON.stringify(stages).includes('PRIVATE_SENTINEL'), false);
 });
 
+test('wrong-CA one-shot checkpoint retains its fixed category and skips legacy navigation', async () => {
+  const stages = [], type = fake('webkit', 'normal');
+  await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
+    (stage, engine) => stages.push(checkedFailure(stage, engine)), undefined,
+    async () => { throw new Error('host branch must not precede CA'); },
+    async (_until, diagnose) => { diagnose('credential'); diagnose('PRIVATE_SENTINEL'); throw new Error('PRIVATE_SENTINEL'); }));
+  assert.deepEqual(stages.at(-1), { schema_version: 1,
+    stage: 'engine_wrong_ca_one_shot_credential', engine: 'webkit' });
+  assert.equal(stages.filter(row => row.stage.startsWith('engine_wrong_ca_one_shot_')).length, 1);
+  assert.deepEqual(type.trace.urls, settings(provisioned, ready, negative).origins.map(origin => origin + '/'));
+  assert.equal(JSON.stringify(stages).includes('PRIVATE_SENTINEL'), false);
+});
+
 
 test('one-shot diagnostic observer exceptions cannot change valid native peer proof or rejection', async () => {
   for (const accepted of [true, false]) {
@@ -1394,4 +1640,105 @@ test('one-shot diagnostic observer exceptions cannot change valid native peer pr
     assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
     assert.deepEqual(rows, ['peer_other']);
   }
+});
+
+test('one-shot real trusted CA handshake refuses without reentrant native teardown or child crash', { timeout: 10000 }, async () => {
+  const files = wrongCACertificateFiles();
+  const code = `
+import fs from 'node:fs';
+import { spawn } from 'node:child_process';
+import { readWebkitWrongCACredentials, createWebkitWrongCAEndpoint } from ${JSON.stringify(new URL('./preflight.mjs', import.meta.url).href)};
+const work = process.argv[1];
+const credentials = readWebkitWrongCACredentials(work, fs.readFileSync(work+'/negative/ca.pem'), fs.readFileSync(work+'/owned-unit/ca.pem'));
+const endpoint = await createWebkitWrongCAEndpoint(credentials, performance.now()+1500);
+const python = ${JSON.stringify('import socket,ssl,sys\nctx=ssl.create_default_context(cafile=sys.argv[2]);ctx.minimum_version=ssl.TLSVersion.TLSv1_2\nassert ctx.check_hostname and ctx.verify_mode==ssl.CERT_REQUIRED\ntry:\n wire=ctx.wrap_socket(socket.create_connection(("127.0.0.1",int(sys.argv[1])),timeout=1),server_hostname="localhost");wire.recv(1);wire.close()\nexcept (ssl.SSLError,ConnectionResetError):pass')};
+const child = spawn('python3', ['-B','-c',python,new URL(endpoint.url).port,work+'/negative/ca.pem'],{stdio:'ignore'});
+const exited = new Promise(resolve => { child.once('error',()=>resolve(false));child.once('close',(code,signal)=>resolve(code===0&&signal===null)); });
+const proved = await endpoint.finish(), joined = await endpoint.close(), childJoined = await exited;
+process.stdout.write(JSON.stringify({proved,joined,childJoined})+'\\n');
+`;
+  assert.equal(spawnSync(process.execPath, ['--input-type=module', '--check'], { input: code, stdio: ['pipe', 'ignore', 'ignore'], timeout: 1000 }).status, 0, 'native control script must parse before execution');
+  const result = await new Promise(resolve => {
+    const child = spawn(process.execPath, ['--input-type=module', '-e', code, files.work], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let output = '', tooLarge = false;
+    const timer = setTimeout(() => child.kill(), 5000);
+    child.stdout.on('data', chunk => { if (output.length+chunk.length > 1024) { tooLarge = true; child.kill(); } else output += chunk; });
+    child.once('error', () => { clearTimeout(timer); resolve({ code: null, signal: 'spawn-error', output: '' }); });
+    child.once('close', (code, signal) => { clearTimeout(timer); resolve({ code, signal, output, tooLarge }); });
+  });
+  assert.equal(result.code, 0, 'the owned native child must finish, including valid-certificate negative control');
+  assert.equal(result.signal, null);
+  assert.equal(result.tooLarge, false);
+  assert.deepEqual(JSON.parse(result.output), { proved: false, joined: true, childJoined: true });
+});
+
+
+test('deferred TLS teardown has no pending callback after successful finish or repeated close', async () => {
+  const nativeImmediate = globalThis.setImmediate;
+  let pending = 0, scheduled = 0;
+  globalThis.setImmediate = (callback, ...args) => {
+    pending++; scheduled++;
+    return nativeImmediate(() => { try { callback(...args); } finally { pending--; } });
+  };
+  try {
+    const f = await hostPeerFixture({ role: 'ca' });
+    const key = f.credentials.key;
+    f.connect(); f.sni(); f.alert();
+    assert.equal(await f.endpoint.finish(), true);
+    assert.equal(pending, 0);
+    assert.equal(key.every(byte => byte === 0), true);
+    const completed = scheduled;
+    assert.equal(await f.endpoint.close(), true);
+    assert.equal(await f.endpoint.close(), true);
+    assert.equal(pending, 0, 'completed close must not reserve another destruction callback');
+    assert.equal(scheduled, completed);
+  } finally { globalThis.setImmediate = nativeImmediate; }
+});
+
+test('TLS veto is synchronous while a single actual destruction batch owns join and key release', async () => {
+  const nativeImmediate = globalThis.setImmediate;
+  let pending = 0, maximum = 0, drains = 0;
+  globalThis.setImmediate = (callback, ...args) => {
+    pending++; maximum = Math.max(maximum, pending);
+    return nativeImmediate(() => { drains++; try { callback(...args); } finally { pending--; } });
+  };
+  try {
+    const f = await hostPeerFixture({ role: 'ca' }), key = f.credentials.key;
+    let closePromise, closedInsideBatch = false;
+    f.raw.destroy = function () { if (!this.destroyed) { this.destroyed = true; this.emit('close'); } };
+    f.socket.destroy = function () {
+      if (this.destroyed) return;
+      this.destroyed = true;
+      closePromise = f.endpoint.close();
+      f.server.emit('secureConnection', this); // Reentrant veto must never reenter destruction.
+      this.emit('close');
+      closedInsideBatch = true;
+      assert.equal(key.every(byte => byte === 0), false, 'last socket close must not release during the destruction batch');
+    };
+    f.connect(); f.sni();
+    f.server.emit('secureConnection', f.socket);
+    assert.equal(f.raw.destroyed, false);
+    assert.equal(f.socket.destroyed, false);
+    assert.equal(key.every(byte => byte === 0), false);
+    const finish = f.endpoint.finish();
+    assert.equal(await finish, false, 'valid TLS/HTTP cannot become certificate-refusal proof');
+    assert.equal(await closePromise, true);
+    assert.equal(closedInsideBatch, true);
+    assert.equal(key.every(byte => byte === 0), true);
+    assert.equal(pending, 0);
+    assert.equal(maximum, 1);
+    assert.equal(drains, 1);
+    assert.equal(await f.endpoint.close(), true);
+    assert.equal(pending, 0);
+  } finally { globalThis.setImmediate = nativeImmediate; }
+});
+
+test('server-created setup failure retains credentials until its actual close and destruction batch', async () => {
+  let key, observedClose = false;
+  await assert.rejects(hostPeerFixture({ role: 'ca', listenFailure: true,
+    credentialsSeen(credentials) { key = credentials.key; },
+    beforeServerClose() { observedClose = true; assert.equal(key.every(byte => byte === 0), false); },
+  }), /^Error: SF08 browser trust preflight refused$/);
+  assert.equal(observedClose, true);
+  assert.equal(key.every(byte => byte === 0), true);
 });

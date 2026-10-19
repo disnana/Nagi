@@ -184,17 +184,23 @@ test('wrong-host diagnosis stays closed and limits WebKit detail labels to WebKi
 });
 
 
-test('wrong-host factory is private dependency identity and never serialized into business', async () => {
-  let calls = 0;
-  const factory = () => { calls++; throw new Error('private key sentinel'); };
-  const f = fake({ wrongHostFactory: factory, preflight: async (_b, _p, _r, _n, _c, selected) => {
-    assert.equal(selected, factory); return receipt();
+test('both one-shot factories are private dependency identities and never serialized into business', async () => {
+  let hostCalls = 0, caCalls = 0;
+  const hostFactory = () => { hostCalls++; throw new Error('private host key sentinel'); };
+  const caFactory = () => { caCalls++; throw new Error('private CA key sentinel'); };
+  const f = fake({ wrongHostFactory: hostFactory, wrongCAFactory: caFactory,
+    preflight: async (_b, _p, _r, _n, _c, selectedHost, selectedCA) => {
+    assert.equal(selectedHost, hostFactory); assert.equal(selectedCA, caFactory); return receipt();
   } });
-  const value = input(); value.wrongHostFactory = 'caller-controlled-sentinel'; value.leaf_key = 'caller-key-sentinel';
+  const value = input(); value.wrongHostFactory = 'caller-controlled-sentinel';
+  value.wrongCAFactory = 'caller-controlled-CA-sentinel'; value.leaf_key = 'caller-key-sentinel';
+  value.wrong_ca_key = 'caller-CA-key-sentinel';
   await stage(value, f.deps);
-  assert.equal(calls, 0, 'preflight owns the sole attempt');
+  assert.equal(hostCalls, 0, 'preflight owns the sole host attempt');
+  assert.equal(caCalls, 0, 'preflight owns the sole CA attempt');
   assert.equal(JSON.stringify(f.calls.config).includes('sentinel'), false);
   assert.equal(JSON.stringify(f.calls.child.env).includes('caller-key-sentinel'), false);
+  assert.equal(JSON.stringify(f.calls.child.env).includes('caller-CA-key-sentinel'), false);
 });
 
 test('default wrong-host factory reads bound work and ready CA and fails closed before business', async () => {
@@ -204,6 +210,21 @@ test('default wrong-host factory reads bound work and ready CA and fails closed 
     assert.equal(typeof factory, 'function');
     await factory(performance.now() + 10000);
     assert.fail('nonexistent owned credential directory must refuse');
+  } });
+  await assert.rejects(stage(value, f.deps), /^Error: SF08 browser trust preflight refused$/);
+  assert.equal(callerInvoked, false);
+  assert.deepEqual([...f.calls], ['native']);
+});
+
+test('default wrong-CA factory reads bound work and both CA roles and fails closed before business', async () => {
+  let callerInvoked = false;
+  const value = input(); value.wrongCAFactory = () => { callerInvoked = true; };
+  const f = fake({ preflight: async (_b, _p, _r, _n, _c, _hostFactory, caFactory) => {
+    assert.equal(typeof caFactory, 'function');
+    const rows = [];
+    await caFactory(performance.now() + 10000, value => rows.push(value));
+    assert.deepEqual(rows, ['credential']);
+    assert.fail('nonexistent owned wrong-CA credential directory must refuse');
   } });
   await assert.rejects(stage(value, f.deps), /^Error: SF08 browser trust preflight refused$/);
   assert.equal(callerInvoked, false);
@@ -222,6 +243,20 @@ test('one-shot checkpoint vocabulary is finite WebKit-only with no dynamic field
   }
   for (const stage of ['engine_wrong_host_one_shot_PRIVATE_SENTINEL', 'engine_wrong_host_one_shot_peer_legacy_certificate_SUFFIX',
     'engine_wrong_host_one_shot_ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'engine_wrong_host_one_shot_accepted'])
+    assert.throws(() => checkedFailure(stage, 'webkit'), /^Error: SF08 checkpoint refused$/);
+});
+
+test('wrong-CA one-shot checkpoint vocabulary is finite WebKit-only with no dynamic fields', () => {
+  const categories = ['credential', 'setup', 'navigation', 'request', 'response', 'peer_legacy_certificate',
+    'peer_other', 'peer_binding', 'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
+  const actual = FAILURE_STAGES.filter(stage => stage.startsWith('engine_wrong_ca_one_shot_'));
+  assert.deepEqual(actual, categories.map(category => 'engine_wrong_ca_one_shot_' + category));
+  for (const stage of actual) {
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+    for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+  }
+  for (const stage of ['engine_wrong_ca_one_shot_PRIVATE_SENTINEL', 'engine_wrong_ca_one_shot_peer_other_SUFFIX',
+    'engine_wrong_ca_one_shot_ERR_SSL_TLSV1_ALERT_UNKNOWN_CA', 'engine_wrong_ca_one_shot_accepted'])
     assert.throws(() => checkedFailure(stage, 'webkit'), /^Error: SF08 checkpoint refused$/);
 });
 

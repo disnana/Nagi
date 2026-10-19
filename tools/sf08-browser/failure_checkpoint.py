@@ -31,7 +31,14 @@ STAGES = {'none','settings','native_wrong_ca','guard','native_positive','native_
           'engine_wrong_host_one_shot_peer_other','engine_wrong_host_one_shot_peer_binding',
           'engine_wrong_host_one_shot_socket','engine_wrong_host_one_shot_lifecycle',
           'engine_wrong_host_one_shot_deadline','engine_wrong_host_one_shot_join',
-          'engine_wrong_host_one_shot_cleanup','engine_wrong_host_one_shot_unknown'}
+          'engine_wrong_host_one_shot_cleanup','engine_wrong_host_one_shot_unknown',
+          'engine_wrong_ca_one_shot_credential','engine_wrong_ca_one_shot_setup',
+          'engine_wrong_ca_one_shot_navigation','engine_wrong_ca_one_shot_request',
+          'engine_wrong_ca_one_shot_response','engine_wrong_ca_one_shot_peer_legacy_certificate',
+          'engine_wrong_ca_one_shot_peer_other','engine_wrong_ca_one_shot_peer_binding',
+          'engine_wrong_ca_one_shot_socket','engine_wrong_ca_one_shot_lifecycle',
+          'engine_wrong_ca_one_shot_deadline','engine_wrong_ca_one_shot_join',
+          'engine_wrong_ca_one_shot_cleanup','engine_wrong_ca_one_shot_unknown'}
 WEBKIT_WITNESS_DIAGNOSTICS = frozenset({
     'missing_event','duplicate_event','foreign_request_url','foreign_request_non_navigation',
     'foreign_request_frame','not_certificate',
@@ -88,6 +95,7 @@ def validate(value, *, outer=False):
             or (value['stage'] in WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES and value['engine'] != 'webkit')
             or (value['stage'] in WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES and value['engine'] != 'webkit')
             or (value['stage'].startswith('engine_wrong_host_one_shot_') and value['engine'] != 'webkit')
+            or (value['stage'].startswith('engine_wrong_ca_one_shot_') and value['engine'] != 'webkit')
             or (value['stage'] in WEBKIT_WITNESS_STAGES and value['engine'] != 'webkit')
             or (value['stage'] in {'engine_wrong_ca_bad_signature','engine_wrong_ca_other_tls'}
                 and value['engine'] != 'firefox')
