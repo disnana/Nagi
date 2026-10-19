@@ -407,6 +407,77 @@ async fn session_authorizer_receives_real_metadata_and_foreign_grant_is_refused(
     fixture.stop().await;
 }
 #[tokio::test]
+async fn session_deferred_touch_wait_spends_handler_budget_before_business_error() {
+    let fixture = CookieFixture::new().await;
+    let original = fixture
+        .store
+        .foundation
+        .lookup_cookie_mode(&[&fixture.cookie], false, false)
+        .await
+        .unwrap();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let handler_calls = Arc::clone(&calls);
+    let (blocked, waiting) = oneshot::channel();
+    let blocked = Arc::new(std::sync::Mutex::new(Some(blocked)));
+    let pool = sqlite::clone_pool(&fixture.pool);
+    let app = route(
+        app_default(()),
+        Method::GET,
+        "/owned",
+        session_authorized_policy(session::clone_store(&fixture.store), move |scope, _, _| {
+            let pool = sqlite::clone_pool(&pool);
+            let blocked = Arc::clone(&blocked);
+            async move {
+                // Lookup has committed before this trusted authorizer runs.
+                // Hold a real writer until the response, so deferred touch
+                // cannot finish inside the unchanged 20ms handler budget.
+                let tx = sqlite::begin(&pool, sqlite::BeginMode::Immediate)
+                    .await
+                    .unwrap();
+                blocked.lock().unwrap().take().unwrap().send(tx).unwrap();
+                Grant::<()>::from_authorized(scope, 7)
+            }
+        }),
+        move |_, _, _| {
+            handler_calls.fetch_add(1, Ordering::SeqCst);
+            async { Err::<Response, Error>(Error::invalid("owned business error")) }
+        },
+    )
+    .unwrap();
+    let server = Server::new(app, options(4, 1000, 20, 1000).unwrap()).await;
+    let valid = format!("Cookie: {}\r\n", fixture.cookie);
+    let (blocker, reply) = {
+        let received = cookie_request(&server, "GET", &valid, "");
+        tokio::pin!(received);
+        let blocker = tokio::select! {
+            biased;
+            tx = waiting => tx.unwrap(),
+            _ = &mut received => panic!("response preceded authorizer barrier"),
+        };
+        (blocker, received.await)
+    };
+    // Release the real transaction and join before observing the settled row.
+    // Cancellation cannot promise that an already accepted Begin was undone.
+    sqlite::rollback(blocker).await.unwrap();
+    server.stop().await;
+    let settled = fixture
+        .store
+        .foundation
+        .lookup_cookie_mode(&[&fixture.cookie], false, false)
+        .await
+        .unwrap();
+    let row_unchanged = original.lineage == settled.lineage
+        && original.subject == settled.subject
+        && original.digest == settled.digest
+        && original.generation == settled.generation
+        && original.idle_ms == settled.idle_ms
+        && original.absolute_ms == settled.absolute_ms;
+    fixture.stop().await;
+    assert_private(&reply, 504);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert!(row_unchanged);
+}
+#[tokio::test]
 async fn session_head_mapper_panic_timeout_and_304_use_managed_finalizer() {
     let fixture = CookieFixture::new().await;
     let valid = format!("Cookie: {}\r\n", fixture.cookie);
@@ -424,24 +495,67 @@ async fn session_head_mapper_panic_timeout_and_304_use_managed_finalizer() {
     assert!(head.body.is_empty());
     server.stop().await;
     for (mode, status) in [(0, 400), (1, 500), (2, 504), (3, 500)] {
+        let touched = Arc::new(AtomicUsize::new(0));
+        let touch_completed = Arc::clone(&touched);
+        let entered = Arc::new(AtomicUsize::new(0));
+        let handler_entered = Arc::clone(&entered);
+        let dropped = Arc::new(AtomicUsize::new(0));
+        let handler_dropped = Arc::clone(&dropped);
+        struct HandlerDrop(Arc<AtomicUsize>);
+        impl Drop for HandlerDrop {
+            fn drop(&mut self) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+            }
+        }
         let app = route(
             app_default(()),
             Method::GET,
             "/owned",
-            session_authenticated_policy(session::clone_store(&fixture.store)),
-            move |request, _, _| async move {
-                match mode {
-                    0 => Err(Error::invalid("owned business error")),
-                    1 => panic!("owned handler panic"),
-                    2 => std::future::pending::<Result<Response, Error>>().await,
-                    _ => response_empty(&request, crate::http_server::status(304).unwrap()),
+            session_authorized_policy(session::clone_store(&fixture.store), move |scope, _, _| {
+                let touch_completed = Arc::clone(&touch_completed);
+                async move {
+                    // Isolate terminal mapping from native SQL latency:
+                    // complete this actual Session's deferred transaction in
+                    // preparation. The unchanged 20ms timer below covers the
+                    // handler/mapper, including the pending-handler case.
+                    // The separate DB-wait test keeps deferred touch charged
+                    // to that same budget on the ordinary production path.
+                    let touch = {
+                        scope
+                            .lease
+                            .checked_gate()?
+                            .http_touch
+                            .take()
+                            .expect("real Session lookup supplies deferred touch")
+                    };
+                    touch.apply(Arc::clone(&scope.lease)).await?;
+                    touch_completed.fetch_add(1, Ordering::SeqCst);
+                    Grant::<()>::from_authorized(scope, 7)
+                }
+            }),
+            move |request, _, _| {
+                let handler_entered = Arc::clone(&handler_entered);
+                let handler_dropped = Arc::clone(&handler_dropped);
+                async move {
+                    handler_entered.fetch_add(1, Ordering::SeqCst);
+                    let _drop = HandlerDrop(handler_dropped);
+                    match mode {
+                        0 => Err(Error::invalid("owned business error")),
+                        1 => panic!("owned handler panic"),
+                        2 => std::future::pending::<Result<Response, Error>>().await,
+                        _ => response_empty(&request, crate::http_server::status(304).unwrap()),
+                    }
                 }
             },
         )
         .unwrap();
         let server = Server::new(app, options(4, 1000, 20, 1000).unwrap()).await;
-        assert_private(&cookie_request(&server, "GET", &valid, "").await, status);
+        let reply = cookie_request(&server, "GET", &valid, "").await;
         server.stop().await;
+        assert_private(&reply, status);
+        assert_eq!(touched.load(Ordering::SeqCst), 1);
+        assert_eq!(entered.load(Ordering::SeqCst), 1);
+        assert_eq!(dropped.load(Ordering::SeqCst), 1);
     }
     fixture.stop().await;
 }

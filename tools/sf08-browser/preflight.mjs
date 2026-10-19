@@ -71,6 +71,17 @@ function isASCIIIdentifierUnit(unit) {
     unit >= 97 && unit <= 122 || unit === 95;
 }
 
+function containsFixedToken(message, token, start = 0) {
+  let index = message.indexOf(token, start);
+  while (index >= 0) {
+    const end = index + token.length;
+    if ((index === 0 || !isASCIIIdentifierUnit(message.charCodeAt(index - 1))) &&
+        (end === message.length || !isASCIIIdentifierUnit(message.charCodeAt(end)))) return true;
+    index = message.indexOf(token, index + 1);
+  }
+  return false;
+}
+
 // Failure-only lexical observation. This does not authenticate the source of a
 // code, alter the TLS oracle, or turn any new outcome into an accepted refusal.
 function firefoxWrongCADiagnosticOutcome(error) {
@@ -132,14 +143,15 @@ function webkitWrongCADiagnosticOutcome(error, probeURL) {
       index = message.indexOf(token, index + 1);
     }
     const cancelled = 'Operation was cancelled';
-    index = message.indexOf(cancelled);
-    while (index >= 0) {
-      const end = index + cancelled.length;
-      if ((index === 0 || !isASCIIIdentifierUnit(message.charCodeAt(index - 1))) &&
-          (end === message.length || !isASCIIIdentifierUnit(message.charCodeAt(end))))
-        return 'webkit_cancelled_present';
-      index = message.indexOf(cancelled, index + 1);
-    }
+    const firstLineForms = [cancelled, 'page.goto: ' + cancelled,
+      'page.goto: Protocol error (Playwright.navigate): ' + cancelled,
+      'page.goto: Protocol error (Playwright.navigate): ' + cancelled + ' at ' + probeURL];
+    if (firstLineForms.includes(firstLine)) return 'webkit_cancelled_first_line';
+    const callLogMarker = '\nCall log:';
+    const callLog = message.indexOf(callLogMarker);
+    if (callLog >= 0 && containsFixedToken(message, cancelled, callLog + callLogMarker.length))
+      return 'webkit_cancelled_call_log';
+    if (containsFixedToken(message, cancelled)) return 'webkit_cancelled_other';
     return 'webkit_no_fixed_token';
   } catch {
     return 'webkit_shape_access_failed';
@@ -211,7 +223,9 @@ function wrongCAFailureStage(outcome) {
     case 'shape_access_failed': return 'engine_wrong_ca_shape_access_failed';
     case 'webkit_protocol_form': return 'engine_wrong_ca_webkit_protocol_form';
     case 'webkit_token_present': return 'engine_wrong_ca_webkit_token_present';
-    case 'webkit_cancelled_present': return 'engine_wrong_ca_webkit_cancelled_present';
+    case 'webkit_cancelled_first_line': return 'engine_wrong_ca_webkit_cancelled_first_line';
+    case 'webkit_cancelled_call_log': return 'engine_wrong_ca_webkit_cancelled_call_log';
+    case 'webkit_cancelled_other': return 'engine_wrong_ca_webkit_cancelled_other';
     case 'webkit_no_fixed_token': return 'engine_wrong_ca_webkit_no_fixed_token';
     case 'webkit_shape_non_error': return 'engine_wrong_ca_webkit_shape_non_error';
     case 'webkit_shape_non_string': return 'engine_wrong_ca_webkit_shape_non_string';

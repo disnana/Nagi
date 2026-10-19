@@ -77,6 +77,8 @@ POST_OLD = """        let completion = future.as_mut().poll(cx);
             Ok(deadline) => deadline,
             Err(status) => return Poll::Ready(Err(status)),
         };
+        #[cfg(nagi_auth_stage_diag)]
+        deadline_observer::select_until(deadline);
         if let Poll::Ready(value) = completion {
             return Poll::Ready(Ok(value));
         }"""
@@ -87,7 +89,9 @@ POST_NEW = """        let completion = future.as_mut().poll(cx);
         let deadline = match live_until(owner, until) {
             Ok(deadline) => deadline,
             Err(status) => return Poll::Ready(Err(status)),
-        };"""
+        };
+        #[cfg(nagi_auth_stage_diag)]
+        deadline_observer::select_until(deadline);"""
 MUTANTS = (
     ("session_projection_omitted", SESSION, PROJECTION_OLD, PROJECTION_NEW,
      CASES[2], "projection_deadline_equality"),

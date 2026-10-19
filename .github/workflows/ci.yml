@@ -342,7 +342,7 @@ jobs:
           python - <<'PY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 5, 'sf02-unsafe-session.log': 3, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
+          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 7, 'sf02-public-api.log': 5, 'sf02-unsafe-session.log': 3, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
           for name, count in expected.items():
               text = (root / name).read_text(encoding="utf-8")
               pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
@@ -852,7 +852,7 @@ jobs:
           import hashlib, pathlib
           expected = {
               'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
-              'runtime/src/http_server/tests.rs': 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584',
+              'runtime/src/http_server/tests.rs': '4c744e65f03518ab7f2a871c0b001d6a4556f6d1efefe7633c287cd5d620b3e8',
               'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
@@ -1441,7 +1441,7 @@ jobs:
           python - <<'PY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 6, 'sf02-public-api.log': 5, 'sf02-unsafe-session.log': 3, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
+          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 7, 'sf02-public-api.log': 5, 'sf02-unsafe-session.log': 3, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
           for name, count in expected.items():
               text = (root / name).read_text(encoding="utf-8")
               pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
@@ -1798,7 +1798,7 @@ jobs:
           import hashlib, pathlib
           expected = {
               'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
-              'runtime/src/http_server/tests.rs': 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584',
+              'runtime/src/http_server/tests.rs': '4c744e65f03518ab7f2a871c0b001d6a4556f6d1efefe7633c287cd5d620b3e8',
               'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
               'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',

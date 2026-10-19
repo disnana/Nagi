@@ -623,7 +623,8 @@ test('WebKit wrong-CA diagnostics remain failure-only and emit fixed labels', as
 });
 
 test('new WebKit failure checkpoints refuse other engines', () => {
-  for (const suffix of ['webkit_protocol_form', 'webkit_token_present', 'webkit_no_fixed_token', 'webkit_cancelled_present',
+  for (const suffix of ['webkit_protocol_form', 'webkit_token_present', 'webkit_no_fixed_token',
+    'webkit_cancelled_first_line', 'webkit_cancelled_call_log', 'webkit_cancelled_other',
     'webkit_shape_non_error', 'webkit_shape_non_string', 'webkit_shape_oversize', 'webkit_shape_access_failed']) {
     const stage = 'engine_wrong_ca_' + suffix;
     assert.equal(FAILURE_STAGES.includes(stage), true);
@@ -635,19 +636,31 @@ test('new WebKit failure checkpoints refuse other engines', () => {
 });
 
 
-test('WebKit cancellation phrase is a failure-only lexical observation', async () => {
-  for (const message of ['page.goto: Operation was cancelled',
-    'page.goto: Protocol error (Playwright.navigate): Operation was cancelled',
-    'failure\nCall log: Operation was cancelled PRIVATE_SENTINEL']) {
+test('WebKit wrong-CA cancellation labels distinguish first-line and call-log text only', async () => {
+  const url = negative.caOrigin + '/';
+  const cases = [
+    { message: 'Operation was cancelled', outcome: 'webkit_cancelled_first_line' },
+    { message: 'page.goto: Operation was cancelled', outcome: 'webkit_cancelled_first_line' },
+    { message: 'page.goto: Protocol error (Playwright.navigate): Operation was cancelled at ' + url,
+      outcome: 'webkit_cancelled_first_line' },
+    { message: 'failure\nCall log: Operation was cancelled PRIVATE_SENTINEL',
+      outcome: 'webkit_cancelled_call_log' },
+    { message: 'Navigation failed\nCall log:\n  - Operation was cancelled PRIVATE_SENTINEL',
+      outcome: 'webkit_cancelled_call_log' },
+    { message: 'failure\nOperation was cancelled PRIVATE_SENTINEL', outcome: 'webkit_cancelled_other' },
+    { message: 'Operation was cancelled_SUFFIX PRIVATE_SENTINEL', outcome: 'webkit_no_fixed_token' },
+    { message: 'PRIVATE_SENTINEL https://private.invalid/?token=secret', outcome: 'webkit_no_fixed_token' },
+  ];
+  for (const { message, outcome } of cases) {
     const type = fake('webkit', undefined, { reason: 'ca', kind: 'raw-error', message });
     const events = [];
     await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
       (stage, engine) => events.push({ stage, engine })), /^Error: SF08 browser trust preflight refused$/);
-    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_webkit_cancelled_present', engine: 'webkit' });
+    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_' + outcome, engine: 'webkit' });
     assert.deepEqual(checkedFailure(events.at(-1).stage, 'webkit'),
-      { schema_version: 1, stage: 'engine_wrong_ca_webkit_cancelled_present', engine: 'webkit' });
+      { schema_version: 1, stage: 'engine_wrong_ca_' + outcome, engine: 'webkit' });
     assert.equal(type.trace.contextClosed && type.trace.closed, true);
-    assert.doesNotMatch(JSON.stringify(events), /Operation|cancelled PRIVATE|PRIVATE_SENTINEL|Call log/);
+    assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|secret|Operation|Call log/);
   }
 });
 

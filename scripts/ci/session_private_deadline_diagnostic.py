@@ -82,7 +82,7 @@ def _head_finalizer_assertion(lines: list[str], start: int, end: int) -> list[di
         + r"(?:[^\r\n]*[/\\])?runtime[/\\]src[/\\]auth[/\\]session[/\\]"
         + r"http_bridge_tests\.rs:([1-9][0-9]{0,3}):([1-9][0-9]{0,3}):\Z")
     # Exact reviewed source SHA is checked before native execution below.
-    assertions = {282: 1, 283: 2, 284: 3, 285: 4, 424: 5}
+    assertions = {282: 1, 283: 2, 284: 3, 285: 4, 495: 5}
     projected = []
     for index in range(start + 1, end):
         match = panic.fullmatch(lines[index])
@@ -190,7 +190,7 @@ def source_inventory(root: Path) -> bool:
         private = (root / "runtime/src/auth/session/http_bridge_tests.rs").read_text()
         calibration = (root / "runtime/src/http_server/private_deadline_calibration.rs").read_text()
         if hashlib.sha256(private.encode()).hexdigest() != (
-                "46c1ec095b7cf7e3879ce5a0cde4511192d7550ac0d31e5ec3747b63f3012cd1"):
+                "8c7bdabff12f8b9e08c2ea9eae0ac3e05bf3c5f0afaf0e31e875d6a1488d2821"):
             return False
         for name, _ in CASES.values():
             source = private if name.startswith(PRIVATE) else calibration

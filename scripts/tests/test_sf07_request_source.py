@@ -229,6 +229,17 @@ class RequestSourceTests(unittest.TestCase):
         changed = workflow.replace('set -euo pipefail', 'set -eu pipefail', 1)
         self.assertNotEqual(hashlib.sha256(projection.inverse_workflow(changed).encode()).hexdigest(), BASE_WORKFLOW_SHA)
 
+    def test_session_wait_inventory_is_exact_without_replacing_base_digest(self):
+        workflow = read('.github/workflows/ci.yml')
+        entry = "'sf02-http-bridge.log': 7"
+        self.assertEqual(workflow.count(entry), 2)
+        self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(), BASE_WORKFLOW_SHA)
+        for replacement in ('', entry + entry, "'sf02-http-bridge.log': 6", "'sf02-http-bridge.log': 8"):
+            with self.subTest(replacement=replacement), self.assertRaises(ValueError):
+                projection.inverse_workflow(workflow.replace(entry, replacement, 1))
+        self.assertEqual(read('runtime/src/auth/session/http_bridge_tests.rs').count(
+            'async fn session_deferred_touch_wait_spends_handler_budget_before_business_error()'), 1)
+
     def test_request_native_mode_fakes_are_exact_bounded_and_failure_closed(self):
         spec = importlib.util.spec_from_file_location('request_summary', ROOT/'scripts/ci/sf07_checkpoint_summary.py')
         summary = importlib.util.module_from_spec(spec)

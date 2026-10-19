@@ -101,7 +101,7 @@ HISTORICAL_HTTP_AFTER = '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea
 HTTP_AFTER = 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31'
 TESTS_BEFORE = '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173'
 HISTORICAL_TESTS_AFTER = '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f'
-TESTS_AFTER = 'af15acfd253f7cf6ad716191834c750377bcd1528e6996baf5dd7ad4e4ec2584'
+TESTS_AFTER = '4c744e65f03518ab7f2a871c0b001d6a4556f6d1efefe7633c287cd5d620b3e8'
 SOURCE_LINE = '          python -B scripts/tests/test_sf07_request_source.py\n'
 NATIVE_LINE = '          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request\n'
 RATE_SOURCE_LINE = '          python -B scripts/tests/test_sf07_rate_source.py\n'
@@ -177,6 +177,12 @@ RELEASE_PROFILE_CI_STEPS = ('      - name: Measure bounded SF07 response and rat
 
 
 def inverse_workflow(source):
+    # Add the real deferred-touch deadline regression without replacing any
+    # historical source digest or accepting a missing/duplicated registration.
+    current_session_inventory = "'sf02-http-bridge.log': 7"
+    if source.count(current_session_inventory) != 2:
+        raise ValueError("Session HTTP bridge inventory mismatch")
+    source = source.replace(current_session_inventory, "'sf02-http-bridge.log': 6")
     for addition in RELEASE_PROFILE_CI_STEPS:
         if source.count(addition) != 1:
             raise ValueError("release profile workflow registration mismatch")
@@ -295,6 +301,15 @@ def inverse_private_assertion(source):
 
 
 def inverse_collector(source):
+    # The reviewed Session fixture separates deferred SQL wait from mapper
+    # finalization. Rebind only its exact source and relocated HEAD assertion;
+    # keep the historical helper digest and all other controls unchanged.
+    current_session = '8c7bdabff12f8b9e08c2ea9eae0ac3e05bf3c5f0afaf0e31e875d6a1488d2821'
+    current_assertions = 'assertions = {282: 1, 283: 2, 284: 3, 285: 4, 495: 5}'
+    if source.count(current_session) != 1 or source.count(current_assertions) != 1:
+        raise ValueError('Session fixture collector binding mismatch')
+    source = source.replace(current_session, '46c1ec095b7cf7e3879ce5a0cde4511192d7550ac0d31e5ec3747b63f3012cd1')
+    source = source.replace(current_assertions, 'assertions = {282: 1, 283: 2, 284: 3, 285: 4, 424: 5}')
     source = inverse_private_assertion(source)
     source = inverse_private_pair_control(source)
     for added, inherited in SESSION_NATIVE_COLLECTOR_INVERSE:

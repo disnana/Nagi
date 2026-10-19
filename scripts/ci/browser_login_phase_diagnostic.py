@@ -14,6 +14,16 @@ COMMAND = (
 RAW_LIMIT = 1024 * 1024
 MAX_RECORDS = 10
 U64_MAX = (1 << 64) - 1
+# Failure-only source coordinates for this exact test. The source identity is
+# constant; neither a raw path nor the following panic payload is retained.
+# A captured location is diagnostic evidence, not proof of the failure's cause.
+MAX_FAILURE_LOCATIONS = 10
+FAILURE_LOCATION = re.compile(
+    rf"thread '{re.escape(CASE)}'(?: \([1-9][0-9]{{0,19}}\))? panicked at "
+    r"runtime[/\\]tests[/\\]browser_login_public_api\.rs:"
+    r"(?P<line>[1-9][0-9]{0,5}):(?P<column>[1-9][0-9]{0,5}):\Z",
+    re.ASCII,
+)
 
 # Field order is part of the private observer wire contract. Numeric values are
 # checked against the closed enum dictionaries in the observer packet.
@@ -179,7 +189,7 @@ def parse_public_record(line: str) -> dict | None:
 
 def empty_document(cargo_exit: int) -> dict:
     return {
-        "schema": "nagi-browser-login-phase-diagnostic-v3",
+        "schema": "nagi-browser-login-phase-diagnostic-v4",
         "case": CASE,
         "command": COMMAND,
         "cargo_exit": cargo_exit,
@@ -189,6 +199,7 @@ def empty_document(cargo_exit: int) -> dict:
         "invalid_reason_counts": {name: 0 for name in INVALID_REASON_NAMES},
         "records": [],
         "public_api_records": [],
+        "failure_locations": [],
     }
 
 
@@ -210,12 +221,18 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
 
     records: list[dict] = []
     public_records: list[dict] = []
+    failure_locations: list[dict] = []
     public_record_ids: set[tuple[str, int]] = set()
     request_ids: set[int] = set()
     summaries: list[str] = []
     case_rows: list[str] = []
     invalid = False
     for line in text.splitlines():
+        location = FAILURE_LOCATION.fullmatch(line)
+        if location is not None and len(failure_locations) < MAX_FAILURE_LOCATIONS:
+            failure_locations.append({name: int(value)
+                                      for name, value in location.groupdict().items()})
+            continue
         if "browser_login_phase_diag" in line:
             document["observer_records_seen"] = min(
                 MAX_RECORDS + 1, document["observer_records_seen"] + 1
@@ -311,6 +328,8 @@ def sanitize(raw: bytes | None, cargo_exit: int) -> tuple[dict, int]:
         document["capture_valid"] = True
         document["records"] = records
         document["public_api_records"] = public_records
+        if cargo_exit == 101 and summary_status == "failed":
+            document["failure_locations"] = failure_locations
         return document, 0 if cargo_exit == 0 else 1
 
     # Drop all event records if any candidate record was malformed or the
@@ -324,7 +343,7 @@ def closed_count_line(document: dict) -> str:
     unavailable = "browser_login_phase_counts unavailable"
     expected = {"schema", "case", "command", "cargo_exit", "capture_valid",
                 "test_summary", "observer_records_seen", "invalid_reason_counts",
-                "records", "public_api_records"}
+                "records", "public_api_records", "failure_locations"}
     if type(document) is not dict or set(document) != expected:
         return unavailable
     seen = document["observer_records_seen"]
