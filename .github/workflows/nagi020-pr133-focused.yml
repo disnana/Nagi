@@ -1,4 +1,4 @@
-name: PR133 WebKit mirrored TLS error correction
+name: PR133 destroyed TLS metadata and ordinary Windows tests
 
 on:
   push:
@@ -9,10 +9,94 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr133-webkit-mirror-r16-${{ github.ref }}
+  group: pr133-correction-r17-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  strict-browser-mirrored-error:
+  windows-ordinary-and-diagnostic:
+    if: github.ref == 'refs/heads/test/nagi020-pr133-ci-repair-20261019'
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        id: rust
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: nagi-pr133-csrf-windows-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: |
+            nagi-pr133-csrf-windows-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+            nagi-rust-v1-package-windows-x86_64-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+      - name: Check normal and diagnostic contracts once in the declared scratch environment
+        shell: bash
+        env:
+          CARGO_TERM_COLOR: never
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          if [ -n "${RUST_TEST_THREADS+x}" ] || [ -n "${RUSTFLAGS+x}" ]; then
+            echo "Unexpected inherited test profile" >&2
+            exit 2
+          fi
+          capture() {
+            local label="$1"
+            shift
+            set +e
+            "$@" 2>&1 | tee "$RUNNER_TEMP/pr133-r17-$label.log"
+            local statuses=("${PIPESTATUS[@]}")
+            set -e
+            if [ "${statuses[0]}" -ne 0 ] || [ "${statuses[1]}" -ne 0 ]; then
+              return 1
+            fi
+          }
+          failed=0
+          capture ordinary-session-list cargo test --locked -p nagi-runtime --test session_csrf_public_api -- --list || failed=1
+          capture ordinary-session cargo test --locked -p nagi-runtime --test session_csrf_public_api || failed=1
+          capture ordinary-browser cargo test --locked -p nagi-runtime --test browser_login_public_api || failed=1
+          capture diagnostic-session-list env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api -- --list || failed=1
+          capture diagnostic-session env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api || failed=1
+          capture original-budget env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib pool_readiness_tests:: || failed=1
+          capture native-finish env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib native_finish || failed=1
+          python - <<'PY'
+          import os, pathlib, re, sys
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          sys.path.insert(0, str(pathlib.Path.cwd() / 'scripts/ci'))
+          import session_deadline_diagnostic as diagnostic
+          # All ordinary cases are required. The eleventh is cfg-only observer calibration.
+          extra = 'controlled_same_file_writer_reports_native_token_identity_boundary'
+          required = diagnostic.SESSION_CASES
+          if len(required) != 11 or extra not in required:
+              raise AssertionError('unexpected source-bound Session inventory')
+          for label, expected in [('ordinary-session-list', required - {extra}),
+                                  ('diagnostic-session-list', required)]:
+              text = (root / f'pr133-r17-{label}.log').read_text(encoding='utf-8')
+              actual = re.findall(r'(?m)^([a-z_][a-z_0-9]*): test\s*$', text)
+              if len(actual) != len(expected) or set(actual) != expected:
+                  raise AssertionError(f'{label}: exact test registration mismatch')
+          counts = {'ordinary-session': 10, 'ordinary-browser': 10,
+                    'diagnostic-session': 11, 'original-budget': 2, 'native-finish': 20}
+          for label, expected in counts.items():
+              text = (root / f'pr133-r17-{label}.log').read_text(encoding='utf-8')
+              pattern = rf'test result: ok\. {expected} passed; 0 failed; 0 ignored;'
+              if re.search(pattern, text) is None:
+                  raise AssertionError(f'{label}: required test inventory did not pass')
+              print(f'pr133_r17 {label} passed={expected} failed=0 ignored=0')
+          PY
+          exit "$failed"
+
+  strict-browser-destroyed-metadata:
     if: github.ref == 'refs/heads/test/nagi020-pr133-ci-repair-20261019'
     uses: ./.github/workflows/sf08-browser.yml

@@ -2199,3 +2199,56 @@ test('one-shot fingerprint propagates only exact digest kinds and only on failed
   }, performance.now() + 1000, value => rows.push(value)), true);
   assert.deepEqual(rows, []);
 });
+
+for (const role of ['host', 'ca']) test(`one-shot destroyed TLS metadata retains the earlier bound mirror identity (${role})`, async () => {
+  for (const clearRemote of [false, true]) {
+    const peer = await hostPeerFixture({ role, nodeMirroredErrors: true });
+    const browser = hostBrowser({ role, endpoint: peer.endpoint,
+      duringGoto: ({ page }) => {
+        peer.connect(); peer.sni();
+        peer.socket.destroy();
+        peer.socket.localAddress = undefined; peer.socket.localPort = undefined;
+        if (clearRemote) { peer.socket.remoteAddress = undefined; peer.socket.remotePort = undefined; }
+        peer.socket.emit('error', Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' }));
+        page.emit('console', webkitConsoleError(peer.endpoint.url));
+      } });
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(browser.browser, browser.factory, peer.until), true);
+    assert.equal(browser.closed(), true);
+    assert.equal(peer.credentials.key, null);
+    assert.equal(peer.raw.destroyed && peer.socket.destroyed, true);
+    assert.equal(await peer.endpoint.finish(), false, 'private proof remains single use');
+  }
+});
+
+test('one-shot destroyed metadata cannot replace conflicting or absent initial binding and independent proof', async () => {
+  const modes = ['not-destroyed', 'partial-local-address', 'partial-local-port',
+    'remote-address-conflict', 'remote-port-conflict', 'throwing-getter',
+    'missing-initial-binding', 'missing-SNI-binding', 'missing-console', 'prior-lifecycle'];
+  for (const role of ['host', 'ca']) for (const mode of modes) {
+    const peer = await hostPeerFixture({ role, nodeMirroredErrors: true });
+    const browser = hostBrowser({ role, endpoint: peer.endpoint,
+      duringGoto: ({ page }) => {
+        if (mode === 'missing-initial-binding') peer.raw.localAddress = undefined;
+        peer.connect();
+        if (mode === 'missing-SNI-binding') peer.socket.localAddress = undefined;
+        peer.sni();
+        if (mode !== 'not-destroyed') peer.socket.destroy();
+        const oldAddress = peer.socket.localAddress, oldPort = peer.socket.localPort;
+        peer.socket.localAddress = undefined; peer.socket.localPort = undefined;
+        if (mode === 'partial-local-address') peer.socket.localAddress = oldAddress;
+        if (mode === 'partial-local-port') peer.socket.localPort = oldPort;
+        if (mode === 'remote-address-conflict') peer.socket.remoteAddress = '127.0.0.2';
+        if (mode === 'remote-port-conflict') peer.socket.remotePort++;
+        if (mode === 'throwing-getter') Object.defineProperty(peer.socket, 'remoteAddress', {
+          get() { throw new Error('PRIVATE_SENTINEL'); } });
+        if (mode === 'prior-lifecycle') page.emit('crash');
+        peer.socket.emit('error', Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' }));
+        if (mode !== 'missing-console') page.emit('console', webkitConsoleError(peer.endpoint.url));
+      } });
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(browser.browser, browser.factory, peer.until), false, `${role}/${mode}`);
+    assert.equal(browser.closed(), true);
+    assert.equal(peer.credentials.key, null);
+  }
+});

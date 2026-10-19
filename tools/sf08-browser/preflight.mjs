@@ -769,6 +769,15 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
       return socket instanceof native.TLSSocket ? 'socket_error_reset_tls' : 'socket_error_reset_raw';
     } catch { return 'socket_error_other'; }
   };
+  const mirrorTupleBound = socket => {
+    // Node can clear local socket metadata before emitting the mirrored Error.
+    // Identity still comes from the previously checked raw/SNI socket and E/S,
+    // never from missing fields. Any conflicting field remains a veto.
+    const current = [socket.remoteAddress, socket.remotePort, socket.localAddress, socket.localPort];
+    return !!rawTuple && rawTuple.length === 4 && (sameTuple(rawTuple, current) ||
+      (socket.destroyed === true && current[2] === undefined && current[3] === undefined &&
+        current.every((value, index) => value === undefined || value === rawTuple[index])));
+  };
   // TLS callbacks may still be on the native handshake stack. Keep the veto
   // synchronous, but destroy the owned raw/TLS wrappers in one later turn.
   // Join and credential release wait for the complete destruction batch.
@@ -800,7 +809,7 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
             !resetMirror.seen && resetMirror.error === error && resetMirror.socket === socket &&
             alerts === 1 && connections === 1 && sniCount === 1 && socket === sniSocket &&
             socket instanceof native.TLSSocket && error instanceof Error && error.code === 'ECONNRESET' &&
-            sameTuple(rawTuple, tuple(socket))) {
+            mirrorTupleBound(socket)) {
           resetMirror.seen = true; return;
         }
       } catch {}
