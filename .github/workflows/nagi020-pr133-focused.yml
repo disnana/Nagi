@@ -1,4 +1,4 @@
-name: PR133 Windows reverse order and WebKit console witness
+name: PR133 WebKit mirrored TLS error correction
 
 on:
   push:
@@ -9,98 +9,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr133-causal-r14-${{ github.ref }}
+  group: pr133-webkit-mirror-r16-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  windows-temp-volume-observation:
-    if: github.ref == 'refs/heads/test/nagi020-pr133-ci-repair-20261019'
-    runs-on: windows-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        id: rust
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Check comparison collector and actual platform before compilation
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -B -m unittest discover -s scripts/tests -p test_windows_temp_volume_comparison.py
-          python -B -m unittest discover -s scripts/tests -p test_session_deadline_diagnostic.py
-          python -B scripts/ci/windows_temp_volume_comparison.py --check-platform
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: nagi-pr133-csrf-windows-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
-          restore-keys: |
-            nagi-pr133-csrf-windows-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
-            nagi-rust-v1-package-windows-x86_64-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
-      - name: Select one compiled executable and compare fixed original versus runner temp placement
-        shell: bash
-        env:
-          CARGO_TERM_COLOR: never
-        run: |
-          set -euo pipefail
-          trap 'rm -f "$RUNNER_TEMP/pr133-volume-cargo.json" "$RUNNER_TEMP/pr133-volume-browser.raw"' EXIT
-          capture() {
-            local destination="$1"
-            local limit="$2"
-            shift 2
-            set +e
-            "$@" | python -c 'import sys
-          remaining=int(sys.argv[1])+1
-          while True:
-           data=sys.stdin.buffer.read(8192)
-           if not data:
-            break
-           if remaining:
-            sys.stdout.buffer.write(data[:remaining])
-            remaining-=min(remaining,len(data))
-          sys.stdout.buffer.flush()' "$limit" > "$destination"
-            local statuses=("${PIPESTATUS[@]}")
-            probe_rc=${statuses[0]}
-            if [ "${statuses[1]}" -ne 0 ]; then
-              rm -f "$destination"
-              probe_rc=125
-            fi
-            set -e
-          }
-          capture "$RUNNER_TEMP/pr133-volume-cargo.json" 16777216 env RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api --no-run --message-format=json
-          cargo_rc=$probe_rc
-          if [ "$cargo_rc" -ne 0 ]; then
-            printf 'volume_comparison_compile=failed\n'
-            exit "$cargo_rc"
-          fi
-          # Browser raw is bounded and private. The same one execution is used
-          # for both closed v2 records; no browser retry per Session arm.
-          capture "$RUNNER_TEMP/pr133-volume-browser.raw" 262144 bash -c 'env RUSTFLAGS="--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag" cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1'
-          browser_rc=$probe_rc
-          python -B scripts/ci/windows_temp_volume_comparison.py \
-            --repo-root "$GITHUB_WORKSPACE" \
-            --target-root "$GITHUB_WORKSPACE/target" \
-            --cargo-json "$RUNNER_TEMP/pr133-volume-cargo.json" \
-            --cargo-exit-code "$cargo_rc" \
-            --browser-raw "$RUNNER_TEMP/pr133-volume-browser.raw" \
-            --browser-exit-code "$browser_rc" \
-            --output-dir "$RUNNER_TEMP/pr133-temp-volume-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-      - name: Preserve only closed comparison and original v2 records
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr133-windows-temp-volume-comparison
-          path: |
-            ${{ runner.temp }}/pr133-temp-volume-${{ github.run_id }}-${{ github.run_attempt }}/comparison.json
-            ${{ runner.temp }}/pr133-temp-volume-${{ github.run_id }}-${{ github.run_attempt }}/A.v2.json
-            ${{ runner.temp }}/pr133-temp-volume-${{ github.run_id }}-${{ github.run_attempt }}/B.v2.json
-          if-no-files-found: ignore
-
-
-  strict-browser-console-witness:
+  strict-browser-mirrored-error:
     if: github.ref == 'refs/heads/test/nagi020-pr133-ci-repair-20261019'
     uses: ./.github/workflows/sf08-browser.yml

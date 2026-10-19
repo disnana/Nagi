@@ -1056,12 +1056,25 @@ async function hostPeerFixture(options = {}, api = hostProof) {
     ? await api.createWebkitWrongCAEndpoint(credentials, until, native, options.diagnose)
     : await api.createWebkitWrongHostEndpoint(credentials, until, native, options.diagnose);
   const raw = new HostRaw(), socket = new HostTLS();
+  if (options.nodeMirroredErrors) {
+    // Node 22 _tls_wrap installs these before SNICallback can own the TLS
+    // socket. The first error listener forwards the SAME Error synchronously
+    // through _tlsError/tlsClientError, then own(socket)'s error listener runs.
+    let forwarded = false;
+    const forward = error => {
+      if (!forwarded) { forwarded = true; server.emit('tlsClientError', error, socket); }
+    };
+    socket.on('error', error => socket.emit('_tlsError', error));
+    socket.on('_tlsError', forward);
+    socket.on('error', forward);
+  }
   function connect() { server.emit('connection', raw); }
   function sni(name = profile.hostname, receiver = socket) {
     nativeOptions.SNICallback.call(receiver, name, () => {});
   }
   function alert(code = profile.code, peer = socket, error = Object.assign(new Error('PRIVATE_SENTINEL'), { code })) {
     server.emit('tlsClientError', error, peer);
+    return error;
   }
   return { endpoint, server, raw, socket, connect, sni, alert, until, profile, files, credentials };
 }
@@ -1166,6 +1179,117 @@ test('one-shot R13 exact native alert path remains valid without console witness
   assert.equal(await hostProof.probeWebkitWrongHost(browser.browser, browser.factory,
     performance.now() + 1000), true);
   assert.equal(browser.closed(), true);
+});
+
+for (const role of ['host', 'ca']) test(`one-shot R16 Node mirrors the same bound reset Error before the owned TLS error listener (${role})`, { timeout: 5000 }, async () => {
+  for (const consoleFirst of [false, true]) {
+    const rows = [], peer = await hostPeerFixture({ role, nodeMirroredErrors: true,
+      diagnose: kind => rows.push(kind) });
+    const browser = hostBrowser({ role, endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      duringGoto: ({ page }) => {
+        if (consoleFirst) page.emit('console', webkitConsoleError(peer.endpoint.url));
+        peer.connect(); peer.sni();
+        peer.socket.emit('error', Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' }));
+        if (!consoleFirst) page.emit('console', webkitConsoleError(peer.endpoint.url));
+      } });
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(browser.browser, browser.factory, peer.until), true, `${role}/${consoleFirst}`);
+    assert.deepEqual(rows, [], 'a mirrored notification is not an independent failure');
+    assert.equal(browser.closed(), true);
+    assert.equal(peer.raw.destroyed && peer.socket.destroyed, true, 'actual owned socket destruction is joined');
+    assert.equal(peer.credentials.key, null, 'credentials release waits for actual join');
+    assert.equal(await peer.endpoint.finish(), false, 'proof is consumed once');
+  }
+});
+
+test('one-shot R16 mirrored reset never authorizes other identities duplicates reordered errors or EOF', { timeout: 8000 }, async () => {
+  const modes = ['different-error', 'raw-socket', 'different-tls', 'second-mirror', 'before-server',
+    'changed-code', 'changed-tuple', 'duplicate-server', 'EOF', 'raw-EOF', 'prior-error', 'duplicate-SNI', 'duplicate-TCP'];
+  for (const role of ['host', 'ca']) for (const mode of modes) {
+    const rows = [], peer = await hostPeerFixture({ role, diagnose: kind => rows.push(kind) });
+    const browser = hostBrowser({ role, endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      duringGoto: ({ page }) => {
+        const error = Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' });
+        peer.connect(); peer.sni();
+        if (mode === 'prior-error') peer.raw.emit('error', new Error('PRIVATE_SENTINEL'));
+        if (mode === 'duplicate-SNI') peer.sni();
+        if (mode === 'duplicate-TCP') peer.connect();
+        if (mode === 'before-server') peer.socket.emit('error', error);
+        peer.alert('ECONNRESET', mode === 'different-tls' ? new HostTLS() : peer.socket, error);
+        if (mode === 'changed-code') error.code = 'ERR_TLS_HANDSHAKE_TIMEOUT';
+        if (mode === 'changed-tuple') peer.socket.remotePort++;
+        if (mode === 'duplicate-server') peer.alert('ECONNRESET', peer.socket, error);
+        if (mode === 'EOF') peer.socket.emit('end');
+        if (mode === 'raw-EOF') peer.raw.emit('end');
+        if (mode === 'raw-socket') peer.raw.emit('error', error);
+        else peer.socket.emit('error', mode === 'different-error'
+          ? Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' }) : error);
+        if (mode === 'second-mirror') peer.socket.emit('error', error);
+        page.emit('console', webkitConsoleError(peer.endpoint.url));
+      } });
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(browser.browser, browser.factory, peer.until), false, `${role}/${mode}`);
+    assert.equal(browser.closed(), true, `${role}/${mode}`);
+    assert.equal(rows.length, 1, `${role}/${mode}: first native veto stays latched`);
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_SENTINEL|ECONNRESET/);
+  }
+});
+
+test('one-shot R16 faithful mirror retains independent console request response lifecycle deadline and join vetoes', { timeout: 8000 }, async () => {
+  const cases = [
+    { label: 'console missing', console: false },
+    { label: 'console malformed', console: { text: 'Unacceptable TLS certificate' } },
+    { label: 'duplicate console', duplicateConsole: true },
+    { label: 'foreign console', console: { location: { url: 'https://private.invalid/' } } },
+    { label: 'request missing', missing: true }, { label: 'foreign URL', foreignURL: true },
+    { label: 'foreign frame', foreignFrame: true }, { label: 'non-navigation', nonNavigation: true },
+    { label: 'duplicate request', duplicate: true }, { label: 'HTTP response', httpResponse: true },
+    { label: 'non-null response', response: async () => ({ status: () => 200 }) },
+    { label: 'response throws', response: async () => { throw new Error('PRIVATE_SENTINEL'); } },
+    { label: 'page crash', lifecycle: true }, { label: 'browser disconnected', disconnect: true },
+    { label: 'lifecycle during actual join', lifecycleAtJoin: true },
+    { label: 'application data', nativeData: true }, { label: 'secure connection', nativeSecure: true },
+    { label: 'close error', closeError: true }, { label: 'close never joins', closeHang: true, budget: 50 },
+    { label: 'original deadline', budget: 50,
+      response: async () => { await new Promise(resolve => setTimeout(resolve, 80)); return null; } },
+  ];
+  for (const role of ['host', 'ca']) for (const item of cases) {
+    let browser;
+    const rows = [], peer = await hostPeerFixture({ role, nodeMirroredErrors: true,
+      closeError: item.closeError, closeHang: item.closeHang, budget: item.budget ?? 1000,
+      beforeServerClose: () => { if (item.lifecycleAtJoin) browser.page.emit('crash'); } });
+    browser = hostBrowser({ ...item, role, endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      duringGoto: ({ page, browser }) => {
+        peer.connect(); peer.sni();
+        peer.socket.emit('error', Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' }));
+        if (item.nativeData) peer.socket.emit('data', Buffer.from('PRIVATE_SENTINEL'));
+        if (item.nativeSecure) peer.server.emit('secureConnection', peer.socket);
+        if (item.console !== false) page.emit('console', webkitConsoleError(peer.endpoint.url, item.console));
+        if (item.duplicateConsole) page.emit('console', webkitConsoleError(peer.endpoint.url));
+        if (item.lifecycle) page.emit('crash');
+        if (item.disconnect) browser.emit('disconnected');
+      } });
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(browser.browser, browser.factory, peer.until, kind => rows.push(kind)), false, `${role}/${item.label}`);
+    assert.equal(browser.closed(), true, `${role}/${item.label}`);
+    assert.equal(rows.length, 1, `${role}/${item.label}`);
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_SENTINEL|private\.invalid/);
+  }
+});
+
+test('one-shot R16 standalone reset stays false and mirrored exact native alerts stay unchanged', { timeout: 5000 }, async () => {
+  for (const role of ['host', 'ca']) {
+    const reset = await hostPeerFixture({ role, nodeMirroredErrors: true });
+    reset.connect(); reset.sni();
+    reset.socket.emit('error', Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' }));
+    assert.equal(await reset.endpoint.finish(), false, `${role}: public finish cannot arm reset proof`);
+    await reset.endpoint.close();
+    const exact = await hostPeerFixture({ role, nodeMirroredErrors: true });
+    exact.connect(); exact.sni();
+    exact.socket.emit('error', Object.assign(new Error('PRIVATE_SENTINEL'), { code: exact.profile.code }));
+    assert.equal(await exact.endpoint.finish(), true, `${role}: exact native alert still settles without console`);
+    await exact.endpoint.close();
+  }
 });
 
 test('one-shot R13 reset and console remain jointly bound and veto poisoned evidence', { timeout: 8000 }, async () => {

@@ -736,7 +736,7 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
   ownedHostCredentials.delete(credentials);
   let server, secureContext, timer, port, rawTuple, sniSocket, bad = false,
     connections = 0, sniCount = 0, alerts = 0, peer = false, consoleResetObservation = false,
-    consoleResetTerminal = false, ready = false, closing = false, closedEvent = false,
+    consoleResetTerminal = false, resetMirror = null, ready = false, closing = false, closedEvent = false,
     closeCallback = false, joined = false, used = false, destroyPending = false;
   const sockets = new Set(), listeners = [];
   let readyResolve, readyReject, joinedResolve;
@@ -754,7 +754,7 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
     if (!joined && !destroyPending && closeCallback && closedEvent && sockets.size === 0 && server?.listening === false) {
       joined = true; clearTimeout(timer);
       for (const { target, event, callback } of listeners) target.off(event, callback);
-      listeners.length = 0; secureContext = null; credentials.release(); joinedResolve(true);
+      listeners.length = 0; secureContext = null; resetMirror = null; credentials.release(); joinedResolve(true);
     }
   };
   const stopAccepting = () => {
@@ -790,7 +790,22 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
       complete();
     });
     listen(socket, 'end', () => veto('socket_eof'));
-    listen(socket, 'error', error => { if (!peer) veto(socketErrorKind(error, socket)); });
+    listen(socket, 'error', error => {
+      if (peer) return;
+      try {
+        hostBudget(until);
+        // Node forwards this same Error to tlsClientError before this owned
+        // listener runs. Consume that notification once, never a new error.
+        if (consoleResetObservation && consoleResetTerminal && !bad && resetMirror &&
+            !resetMirror.seen && resetMirror.error === error && resetMirror.socket === socket &&
+            alerts === 1 && connections === 1 && sniCount === 1 && socket === sniSocket &&
+            socket instanceof native.TLSSocket && error instanceof Error && error.code === 'ECONNRESET' &&
+            sameTuple(rawTuple, tuple(socket))) {
+          resetMirror.seen = true; return;
+        }
+      } catch {}
+      veto(socketErrorKind(error, socket));
+    });
   };
   try {
     const remaining = hostBudget(until);
@@ -836,7 +851,10 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
             sniCount === 1 && socket === sniSocket && socket instanceof native.TLSSocket &&
             error instanceof Error && error.code === 'ECONNRESET';
         } catch {}
-        if (boundReset) { consoleResetTerminal = true; destroy(); return; }
+        if (boundReset) {
+          consoleResetTerminal = true; resetMirror = { error, socket, seen: false };
+          destroy(); return;
+        }
         // Inspect only a rejected event, never widen the exact acceptance code.
         let kind = 'peer_other';
         try {
