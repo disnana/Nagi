@@ -1,5 +1,5 @@
-# Candidate reusable job. Root must integrate source bundle at tools/sf08-browser
-# and audit before activation. No local container/image execution has occurred.
+# Shared strict browser/TLS job; ci.yml requires it for selected release checks.
+# Manual and focused callers use the same pinned environment and proof checks.
 name: SF08 isolated browser TLS
 on:
   workflow_dispatch:

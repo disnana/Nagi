@@ -2,6 +2,16 @@
 
 [RFC](rfc.en.md) · [日本語](implementation-plan.md) · [Baseline audit](baseline-audit.md)
 
+## 2026-10-19: integration PR #133 and cause-specific CI repairs
+
+[Integration PR #133](https://github.com/disnana/Nagi/pull/133) remains Draft. Superseded #121, #122, #123, #126, #131 and #132 were closed with their history retained. The October 18 observations below apply to their own earlier HEADs, not current acceptance.
+
+The initial PR HEAD `688ea61a62630d50597213e6ba006e5dac4bef5e` failed required CI, including four-OS and real-browser checks. The Session 20ms fixture now separates a deferred DB touch spending that budget (504) from mapper/finalizer behavior after the touch completes during preparation; deadlines and original refusals remain. Cause-specific, independently reviewed repairs restore fixed HTTP 500/408/413 bodies and finite fixture capacity, and make a test-only path reject conflicting Cache-Control before canonicalization. Local default-parallel runtime execution passed 860 tests with no failures; the explicitly invoked Task cost measurement also passed. This does not establish final-HEAD four-OS acceptance.
+
+[Dedicated validation HEAD `0b9e4f24`](https://github.com/disnana/Nagi/actions/runs/39228101806) runs focused HTTP/Session checks. WebKit's wrong-CA refusal now progresses, but its wrong-host refusal lacks sufficient evidence, so real-browser acceptance is HOLD. Generic cancellation, timeout or teardown events are not proof of certificate refusal. The final candidate must make real-browser success a publication gate and exclude temporary validation workflows. Nonreproduction of the earlier Windows login failure is not a causal resolution.
+
+Remaining acceptance requires the final integrated HEAD's mandatory CI, four OS, High/independently saved Low/handwritten Low/native, HTTP/TLS/real browsers, distributions, performance/resources, Japanese/English Docs, independent final review and required GUI acceptance. IDE automated tests and Plugin Verifier do not establish GUI success. Published Nagi remains 0.1.11; the approved candidate 0.2.0 version change does not authorize merge, tags, release or Marketplace publication.
+
 ## 2026-10-18: integration candidate and remaining acceptance
 
 **Separate adopted contracts, candidate implementation, execution evidence and formal publication.** The confirmed main HEAD is `7da0068254c1895ed4e6f2c824aab45eb2fbbf2c`. The changes developed in PRs #121, #122, #123, #126, #131 and #132 are consolidated into a single main-targeted 0.2.0 integration PR. Retain the original PRs as implementation and review history; bind acceptance to the integration PR's latest HEAD and required verification. The dedicated validation branch below is an intermediate evidence snapshot, neither merged nor a formal distribution.

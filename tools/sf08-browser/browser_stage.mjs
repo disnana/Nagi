@@ -100,6 +100,50 @@ function readInput(file) {
   } finally { fs.closeSync(fd); }
 }
 
+const WEBKIT_WITNESS_BASE_STAGES = Object.freeze([
+  'engine_wrong_ca_unknown',
+  'engine_wrong_ca_response_received',
+  'engine_wrong_ca_no_response',
+  'engine_wrong_ca_timeout',
+  'engine_wrong_ca_webkit_protocol_form',
+  'engine_wrong_ca_webkit_token_present',
+  'engine_wrong_ca_webkit_cancelled_first_line',
+  'engine_wrong_ca_webkit_cancelled_call_log',
+  'engine_wrong_ca_webkit_cancelled_other',
+  'engine_wrong_ca_webkit_no_fixed_token',
+  'engine_wrong_ca_webkit_shape_non_error',
+  'engine_wrong_ca_webkit_shape_non_string',
+  'engine_wrong_ca_webkit_shape_oversize',
+  'engine_wrong_ca_webkit_shape_access_failed',
+  'engine_wrong_host_unknown',
+  'engine_wrong_host_response_received',
+  'engine_wrong_host_no_response',
+  'engine_wrong_host_timeout',
+  'engine_wrong_host_webkit_protocol_form',
+  'engine_wrong_host_webkit_token_present',
+  'engine_wrong_host_webkit_cancelled_present',
+  'engine_wrong_host_webkit_no_fixed_token',
+  'engine_wrong_host_webkit_shape_non_error',
+  'engine_wrong_host_webkit_shape_non_string',
+  'engine_wrong_host_webkit_shape_oversize',
+  'engine_wrong_host_webkit_shape_access_failed'
+]);
+export const WEBKIT_WITNESS_DIAGNOSTICS = Object.freeze([
+  'missing_event',
+  'duplicate_event',
+  'foreign_request_url',
+  'foreign_request_non_navigation',
+  'foreign_request_frame',
+  'not_certificate',
+  'malformed',
+  'http_response',
+  'lifecycle',
+  'error_shape',
+  'deadline',
+  'response_query_fault',
+  'response_query_timeout',
+  'certificate_event'
+]);
 export const FAILURE_STAGES = ['none','settings','native_wrong_ca','guard','native_positive','native_wrong_host',
   'engine_launch','engine_positive','engine_positive_ca','engine_positive_host','engine_positive_timeout',
   'engine_positive_response','engine_positive_tls_unknown','engine_positive_unknown',
@@ -127,6 +171,9 @@ const FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES = [
   'engine_wrong_ca_diag_multiple_codes','engine_wrong_ca_diag_no_fixed_code',
   'engine_wrong_ca_shape_non_error','engine_wrong_ca_shape_non_string',
   'engine_wrong_ca_shape_oversize','engine_wrong_ca_shape_access_failed'];
+export const WEBKIT_WITNESS_STAGE_LIST = Object.freeze(WEBKIT_WITNESS_BASE_STAGES.flatMap(base =>
+  WEBKIT_WITNESS_DIAGNOSTICS.map(diagnostic => `${base}_witness_${diagnostic}`)));
+const WEBKIT_WITNESS_STAGES = new Set(WEBKIT_WITNESS_STAGE_LIST);
 const WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES = ["engine_wrong_ca_webkit_protocol_form", "engine_wrong_ca_webkit_token_present", "engine_wrong_ca_webkit_no_fixed_token",
   "engine_wrong_ca_webkit_cancelled_first_line", "engine_wrong_ca_webkit_cancelled_call_log", "engine_wrong_ca_webkit_cancelled_other",
   "engine_wrong_ca_webkit_shape_non_error", "engine_wrong_ca_webkit_shape_non_string", "engine_wrong_ca_webkit_shape_oversize", "engine_wrong_ca_webkit_shape_access_failed"];
@@ -137,11 +184,12 @@ const WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES = [
   'engine_wrong_host_webkit_shape_oversize','engine_wrong_host_webkit_shape_access_failed'];
 export const FAILURE_ENGINES = ['none','chromium','firefox','webkit'];
 export function checkedFailure(stage, engine) {
-  if (!FAILURE_STAGES.includes(stage) || !FAILURE_ENGINES.includes(engine) ||
+  if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage)) || !FAILURE_ENGINES.includes(engine) ||
       (stage.startsWith('engine_') !== (engine !== 'none')) ||
       (FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'firefox') ||
       (WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||
       (WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||
+      (WEBKIT_WITNESS_STAGES.has(stage) && engine !== 'webkit') ||
       (['engine_wrong_ca_bad_signature','engine_wrong_ca_other_tls'].includes(stage) && engine !== 'firefox') ||
       (stage === 'engine_wrong_ca_hostname' && engine === 'webkit')) throw new Error('SF08 checkpoint refused');
   return { schema_version: 1, stage, engine };

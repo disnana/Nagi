@@ -102,6 +102,14 @@ pub(super) fn finalize_prelogin(
         PreloginCompletion::Replacement(seal, response) => {
             drop(seal);
             owner.retire();
+            // Inspect the original impossible-state fixture before ordinary
+            // conversion discards reserved headers and installs its managed
+            // plan. Match the Session finalizer's pre-conversion guard.
+            if response.status.0 == StatusCode::NOT_MODIFIED
+                || response.produced.conflicting_cache()
+            {
+                return terminal(context, pool, owner, Status::INTERNAL_SERVER_ERROR, head);
+            }
             finalize_authenticated(response.into_http(head), PolicySource::Prelogin, head)
         }
         PreloginCompletion::Ready(seal) => {

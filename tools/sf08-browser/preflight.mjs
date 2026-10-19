@@ -380,7 +380,11 @@ function nativeTLSGet(origin, ca) {
 // main-document request and a certificate-specific network failure, no response,
 // and no closure/crash. It never retries or extends the original probe budget.
 export function webkitCertificateWitness(page, context, browser, probeURL, until) {
-  let active = true, poisoned = false, ended = false, stopped = false, attempted = false, failed = null, count = 0;
+  let active = true, poisoned = false, ended = false, stopped = false, attempted = false,
+    failed = null, count = 0, diagnosis = null;
+  const diagnose = (value, override = false) => {
+    if (override || diagnosis === null) diagnosis = value;
+  };
   const installed = [];
   const listen = (target, event, fn, network = false) => {
     target.on(event, fn);
@@ -390,13 +394,18 @@ export function webkitCertificateWitness(page, context, browser, probeURL, until
     for (let i = installed.length - 1; i >= 0; i--) {
       const item = installed[i];
       if (onlyNetwork && !item.network) continue;
-      try { item.target.off(item.event, item.fn); } catch { poisoned = true; }
+      try { item.target.off(item.event, item.fn); }
+      catch { poisoned = true; diagnose('lifecycle'); }
       installed.splice(i, 1);
     }
   };
   const vetoed = () => {
-    try { return poisoned || ended || page.isClosed() || !browser.isConnected(); }
-    catch { return true; }
+    if (poisoned) return true;
+    if (ended) { diagnose('lifecycle'); return true; }
+    try {
+      if (page.isClosed() || !browser.isConnected()) { diagnose('lifecycle'); return true; }
+      return false;
+    } catch { diagnose('lifecycle'); return true; }
   };
   try {
     const frame = page.mainFrame();
@@ -404,25 +413,40 @@ export function webkitCertificateWitness(page, context, browser, probeURL, until
     listen(page, 'requestfailed', request => {
       if (!active) return;
       count++;
+      if (count !== 1) {
+        poisoned = true;
+        diagnose('duplicate_event', true);
+        return;
+      }
       try {
-        if (count !== 1 || request.url() !== probeURL || request.isNavigationRequest() !== true ||
-            request.frame() !== frame || request.failure()?.errorText !== TLS_ERROR.webkit.ca) {
-          poisoned = true;
-          return;
+        const url = request?.url();
+        if (typeof url !== 'string') { poisoned = true; diagnose('malformed'); return; }
+        if (url !== probeURL) { poisoned = true; diagnose('foreign_request_url'); return; }
+        const navigation = request.isNavigationRequest();
+        if (typeof navigation !== 'boolean') { poisoned = true; diagnose('malformed'); return; }
+        if (navigation !== true) { poisoned = true; diagnose('foreign_request_non_navigation'); return; }
+        const requestFrame = request.frame();
+        if (requestFrame !== frame) { poisoned = true; diagnose('foreign_request_frame'); return; }
+        const failure = request.failure();
+        if (failure === null || (typeof failure !== 'object' && typeof failure !== 'function')) {
+          poisoned = true; diagnose('malformed'); return;
         }
+        const errorText = failure.errorText;
+        if (typeof errorText !== 'string') { poisoned = true; diagnose('malformed'); return; }
+        if (errorText !== TLS_ERROR.webkit.ca) { poisoned = true; diagnose('not_certificate'); return; }
         failed = request;
-      } catch { poisoned = true; }
+      } catch { poisoned = true; diagnose('malformed'); }
     }, true);
     // A fresh page has no previous HTTP traffic. Even a redirect is a veto.
-    listen(page, 'response', () => { if (active) poisoned = true; }, true);
-    for (const event of ['close', 'crash']) listen(page, event, () => { ended = true; });
-    listen(context, 'close', () => { ended = true; });
-    listen(browser, 'disconnected', () => { ended = true; });
-  } catch { poisoned = true; }
+    listen(page, 'response', () => { if (active) { poisoned = true; diagnose('http_response', true); } }, true);
+    for (const event of ['close', 'crash']) listen(page, event, () => { ended = true; diagnose('lifecycle', true); });
+    listen(context, 'close', () => { ended = true; diagnose('lifecycle', true); });
+    listen(browser, 'disconnected', () => { ended = true; diagnose('lifecycle', true); });
+  } catch { poisoned = true; diagnose('malformed'); }
   return {
     vetoed,
     async refused(error) {
-      if (stopped || attempted) return false;
+      if (stopped || attempted) { diagnose('error_shape'); return false; }
       attempted = true;
       // Freeze navigation observations before querying the already failed
       // request; teardown or delayed events cannot become evidence.
@@ -430,17 +454,38 @@ export function webkitCertificateWitness(page, context, browser, probeURL, until
       detach(true);
       let timer;
       try {
-        if (!(error instanceof Error) || error.name !== 'Error' || vetoed() || count !== 1 || !failed)
-          return false;
+        let errorShape = false;
+        try { errorShape = !(error instanceof Error) || error.name !== 'Error'; }
+        catch { errorShape = true; }
+        if (errorShape) { diagnose('error_shape'); return false; }
+        if (vetoed()) return false;
+        if (count !== 1) { diagnose(count === 0 ? 'missing_event' : 'duplicate_event'); return false; }
+        if (!failed) { diagnose('malformed'); return false; }
         const remaining = Math.floor(until - performance.now());
-        if (!Number.isFinite(remaining) || remaining < 1 || remaining > 10000) return false;
-        const noResponse = await Promise.race([
-          Promise.resolve(failed.response()).then(value => value === null, () => false),
-          new Promise(resolve => { timer = setTimeout(() => resolve(false), remaining); }),
+        if (!Number.isFinite(remaining) || remaining < 1 || remaining > 10000) {
+          diagnose('deadline');
+          return false;
+        }
+        const responseResult = await Promise.race([
+          Promise.resolve(failed.response()).then(value => ({ kind: value === null ? 'none' :
+            value === undefined ? 'malformed' : 'response' }), () => ({ kind: 'fault' })),
+          new Promise(resolve => { timer = setTimeout(() => resolve({ kind: 'timeout' }), remaining); }),
         ]);
-        return noResponse && performance.now() < until && !vetoed();
-      } catch { return false; }
+        if (responseResult.kind === 'response') { diagnose('http_response', true); return false; }
+        if (responseResult.kind === 'malformed') { diagnose('malformed'); return false; }
+        if (responseResult.kind === 'fault') { diagnose('response_query_fault'); return false; }
+        if (responseResult.kind === 'timeout') { diagnose('response_query_timeout'); return false; }
+        if (!(performance.now() < until)) { diagnose('deadline'); return false; }
+        if (vetoed()) return false;
+        return responseResult.kind === 'none';
+      } catch { diagnose('response_query_fault'); return false; }
       finally { clearTimeout(timer); }
+    },
+    diagnostic() {
+      if (diagnosis !== null) return diagnosis;
+      if (count === 0) return 'missing_event';
+      if (count > 1) return 'duplicate_event';
+      return failed ? 'certificate_event' : 'malformed';
     },
     stop() { active = false; detach(false); const good = !vetoed(); stopped = true; return good; },
   };
@@ -522,8 +567,8 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
           await page.close();
         }
         if (!rejected) {
-          if (reason === 'ca') checkpoint(wrongCAFailureStage(failureOutcome), name);
-          else checkpoint(wrongHostFailureStage(failureOutcome), name);
+          const stage = reason === 'ca' ? wrongCAFailureStage(failureOutcome) : wrongHostFailureStage(failureOutcome);
+          checkpoint(witness ? `${stage}_witness_${witness.diagnostic()}` : stage, name);
           refuse();
         }
       }

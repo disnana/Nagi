@@ -358,9 +358,15 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     assert!(accepted.headers().contains_key(names::SET_COOKIE));
     assert!(owner.seal().is_err());
     f.stop().await;
-    for response in [
-        empty(response_context, Status::NOT_MODIFIED).unwrap(),
-        conflicting_cache_for_test(empty(response_context, Status::OK).unwrap()),
+    for (case, response) in [
+        (
+            "not_modified",
+            empty(response_context, Status::NOT_MODIFIED).unwrap(),
+        ),
+        (
+            "conflicting_cache",
+            conflicting_cache_for_test(empty(response_context, Status::OK).unwrap()),
+        ),
     ] {
         let f = Fixture::new(1000).await;
         let owner = prelogin::HttpOwner::new(
@@ -375,7 +381,13 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
             false,
             &f.pool,
         );
-        assert!(denied.status() == StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(
+            denied.status() == StatusCode::INTERNAL_SERVER_ERROR,
+            "prelogin_replacement_case={case} status={}",
+            denied.status().as_u16()
+        );
+        let denied = vary::finish(denied);
+        no_terminal_material(&denied, StatusCode::INTERNAL_SERVER_ERROR, &owner);
         assert!(!denied.headers().contains_key(names::SET_COOKIE));
         assert!(owner.seal().is_err());
         assert!(f.count().await == 1);

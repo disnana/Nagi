@@ -1,4 +1,4 @@
-import ast,json,os
+import ast,json,os,subprocess
 from pathlib import Path
 import tempfile,time
 from types import SimpleNamespace as NS
@@ -97,6 +97,43 @@ class R2Tests(unittest.TestCase):
         self.assertIn("stage-failure.json",node)
         self.assertIn('O_EXCL',node)
         for stage in f.STAGES:self.assertIn("'"+stage+"'",node)
+
+    def test_webkit_witness_checkpoints_are_bounded_and_webkit_only(self):
+        self.assertEqual(len(f.WEBKIT_WITNESS_DIAGNOSTICS), 14)
+        self.assertEqual(len(f.WEBKIT_WITNESS_STAGES),
+                         len(f.WEBKIT_WITNESS_BASE_STAGES) * len(f.WEBKIT_WITNESS_DIAGNOSTICS))
+        node=(c.HERE/'browser_stage.mjs').read_text()
+        self.assertIn('WEBKIT_WITNESS_BASE_STAGES.flatMap(base =>',node)
+        self.assertIn('WEBKIT_WITNESS_DIAGNOSTICS.map(diagnostic =>',node)
+        script="""import { WEBKIT_WITNESS_STAGE_LIST, checkedFailure } from './browser_stage.mjs';
+const engines=['none','chromium','firefox','webkit'];
+const rows=WEBKIT_WITNESS_STAGE_LIST.flatMap(stage=>engines.map(engine=>{
+  try { checkedFailure(stage,engine); return [stage,engine,true]; }
+  catch { return [stage,engine,false]; }
+}));
+process.stdout.write(JSON.stringify({stages:WEBKIT_WITNESS_STAGE_LIST,rows}));"""
+        result=subprocess.run(['node','--input-type=module','-e',script],cwd=c.HERE,
+                              check=True,capture_output=True,text=True,timeout=10)
+        generated=json.loads(result.stdout)
+        self.assertEqual(set(generated['stages']),f.WEBKIT_WITNESS_STAGES)
+        self.assertEqual(len(generated['stages']),len(f.WEBKIT_WITNESS_STAGES))
+        expected={(stage,engine,engine=='webkit')
+                  for stage in f.WEBKIT_WITNESS_STAGES
+                  for engine in ('none','chromium','firefox','webkit')}
+        self.assertEqual({tuple(row) for row in generated['rows']},expected)
+        for stage in f.WEBKIT_WITNESS_STAGES:
+            good={'schema_version':1,'stage':stage,'engine':'webkit'}
+            self.assertEqual(f.validate(good),good)
+            for engine in ('none','chromium','firefox'):
+                with self.assertRaisesRegex(ValueError,'^invalid failure checkpoint$'):
+                    f.validate({**good,'engine':engine})
+        for stage in ('engine_wrong_host_webkit_cancelled_present_witness_PRIVATE_SENTINEL',
+                      'engine_wrong_host_webkit_cancelled_present_witness_unknown',
+                      'engine_wrong_host_webkit_cancelled_present_witness_missing_event_extra',
+                      'engine_wrong_host_witness_missing_event'):
+            with self.assertRaisesRegex(ValueError,'^invalid failure checkpoint$') as caught:
+                f.validate({'schema_version':1,'stage':stage,'engine':'webkit'})
+            self.assertNotIn('PRIVATE_SENTINEL',str(caught.exception))
 
     def test_failure_checkpoint_samefd_owned_regular_reader_rejects_fifo_mode_and_keys(self):
         import protocol

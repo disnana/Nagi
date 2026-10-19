@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { settings, probeEngine, firefoxCAReadiness, firefoxWorkerReadiness, webkitCertificateWitness } from './preflight.mjs';
-import { checkedFailure, FAILURE_STAGES } from './browser_stage.mjs';
+import { checkedFailure, FAILURE_STAGES, WEBKIT_WITNESS_DIAGNOSTICS, WEBKIT_WITNESS_STAGE_LIST } from './browser_stage.mjs';
 
 const CA = Buffer.from('unit-ca-only-not-a-certificate');
 const provisioned = { schema_version: 1, stores_provisioned: true, browser_trust_verified: false,
@@ -31,6 +31,8 @@ function certificateWitnessFixture(overrides = {}, until = performance.now() + 1
   const witness = webkitCertificateWitness(page, context, browser, url, until);
   return { page, context, browser, request, witness };
 }
+
+const witnessStage = (stage, diagnostic) => `${stage}_witness_${diagnostic}`;
 
 test('WebKit certificate event proves one bound failed navigation, never cancellation alone', async () => {
   const f = certificateWitnessFixture();
@@ -102,6 +104,64 @@ test('WebKit certificate witness keeps response closure timeout and original dea
   pending.page.emit('requestfailed', pending.request);
   assert.equal(await pending.witness.refused(new Error('Operation was cancelled')), false);
   pending.witness.stop();
+});
+
+test('WebKit witness exposes only fixed failure facts', async () => {
+  const cases = [
+    { label: 'missing_event', make: () => certificateWitnessFixture(), run: async f => {
+      assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+    } },
+    { label: 'duplicate_event', make: () => certificateWitnessFixture(), run: async f => {
+      f.page.emit('requestfailed', f.request); f.page.emit('requestfailed', f.request);
+      assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+    } },
+    { label: 'foreign_request_url', make: () => certificateWitnessFixture({ url: () => negative.hostOrigin + '/PRIVATE_SENTINEL' }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'foreign_request_non_navigation', make: () => certificateWitnessFixture({ isNavigationRequest: () => false }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'foreign_request_frame', make: () => certificateWitnessFixture({ frame: () => ({}) }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'not_certificate', make: () => certificateWitnessFixture({ failure: () => ({ errorText: 'Operation was cancelled' }) }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'malformed', make: () => certificateWitnessFixture({ failure: () => null }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'http_response', make: () => certificateWitnessFixture(), run: async f => {
+      f.page.emit('response', { url: () => 'https://private.invalid/PRIVATE_SENTINEL' });
+      assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+      const queried = certificateWitnessFixture({ response: async () => ({ status: () => 200 }) });
+      queried.page.emit('requestfailed', queried.request);
+      assert.equal(await queried.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+      assert.equal(queried.witness.diagnostic(), 'http_response');
+      queried.witness.stop();
+    } },
+    { label: 'lifecycle', make: () => certificateWitnessFixture(), run: async f => {
+      f.context.emit('close'); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+    } },
+    { label: 'error_shape', make: () => certificateWitnessFixture(), run: async f => {
+      assert.equal(await f.witness.refused(Object.assign(new Error('PRIVATE_SENTINEL'), { name: 'TimeoutError' })), false);
+    } },
+    { label: 'deadline', make: () => certificateWitnessFixture({}, performance.now() - 1), run: async f => {
+      f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false);
+    } },
+    { label: 'response_query_fault', make: () => certificateWitnessFixture({ response: () => { throw new Error('PRIVATE_SENTINEL'); } }),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'response_query_timeout', make: () => certificateWitnessFixture({ response: () => new Promise(() => {}) }, performance.now() + 20),
+      run: async f => { f.page.emit('requestfailed', f.request); assert.equal(await f.witness.refused(new Error('PRIVATE_SENTINEL')), false); } },
+    { label: 'certificate_event', make: () => certificateWitnessFixture(), run: async f => {
+      f.page.emit('requestfailed', f.request);
+      assert.equal(await f.witness.refused(new Error('Operation was cancelled')), true);
+    } },
+  ];
+  assert.equal(WEBKIT_WITNESS_DIAGNOSTICS.length, cases.length);
+  for (const item of cases) {
+    const f = item.make();
+    await item.run(f);
+    assert.equal(f.witness.diagnostic(), item.label);
+    assert.equal(WEBKIT_WITNESS_DIAGNOSTICS.includes(f.witness.diagnostic()), true);
+    assert.doesNotMatch(JSON.stringify({ diagnostic: f.witness.diagnostic() }),
+      /PRIVATE_SENTINEL|private\.invalid|Unacceptable|Operation|https?:/);
+    f.witness.stop();
+  }
 });
 
 function fake(name, mode, fault) {
@@ -216,9 +276,12 @@ function fake(name, mode, fault) {
 test('WebKit probe uses the bound certificate event without accepting cancellation or HTTP', async () => {
   for (const reason of ['ca', 'host']) {
     const type = fake('webkit', 'normal', { reason, kind: 'cancelled', requestCertificate: true });
-    const result = await probeEngine('webkit', type, settings(provisioned, ready, negative));
+    const checkpoints = [];
+    const result = await probeEngine('webkit', type, settings(provisioned, ready, negative),
+      (stage, engine) => checkpoints.push({ stage, engine }));
     assert.equal(result.wrong_ca_refused, true);
     assert.equal(result.wrong_host_refused, true);
+    assert.equal(checkpoints.some(item => item.stage.includes('_witness_')), false);
     assert.equal(type.trace.urls.length, 5);
     assert.equal(type.trace.closed, true);
     assert.equal(type.trace.contextClosed, true);
@@ -598,7 +661,7 @@ test('wrong-CA failure output uses finite codes and preserves only the original 
       (stage, engine) => events.push({ stage, engine })),
     /^Error: SF08 browser trust preflight refused$/);
     assert.deepEqual(events.at(-1), { stage: name === 'webkit'
-      ? 'engine_wrong_ca_webkit_no_fixed_token' : 'engine_wrong_ca_unknown', engine: name });
+      ? witnessStage('engine_wrong_ca_webkit_no_fixed_token', 'missing_event') : 'engine_wrong_ca_unknown', engine: name });
     assert.doesNotMatch(JSON.stringify(events), /SEC_ERROR|SSL_ERROR|PRIVATE_SENTINEL/);
   }
 });
@@ -743,7 +806,8 @@ test('WebKit wrong-CA diagnostics remain failure-only and emit fixed labels', as
     const events = [];
     await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
       (stage, engine) => events.push({ stage, engine })), /^Error: SF08 browser trust preflight refused$/);
-    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_' + item.outcome, engine: 'webkit' });
+    assert.deepEqual(events.at(-1), { stage: witnessStage('engine_wrong_ca_' + item.outcome,
+      item.kind === 'raw-non-error' ? 'error_shape' : 'missing_event'), engine: 'webkit' });
     assert.equal(type.trace.contextClosed && type.trace.closed, true);
     assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|Unacceptable|Protocol|certificate/);
   }
@@ -759,6 +823,26 @@ test('new WebKit failure checkpoints refuse other engines', () => {
     for (const engine of ['none', 'chromium', 'firefox']) {
       assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
     }
+  }
+  const unknown = witnessStage('engine_wrong_host_webkit_no_fixed_token', 'missing_event');
+  const cancelled = witnessStage('engine_wrong_host_webkit_cancelled_present', 'missing_event');
+  assert.ok(WEBKIT_WITNESS_STAGE_LIST.includes(unknown));
+  assert.ok(WEBKIT_WITNESS_STAGE_LIST.includes(cancelled));
+  assert.notEqual(unknown, cancelled);
+  for (const base of ['engine_wrong_ca_unknown','engine_wrong_ca_webkit_cancelled_first_line',
+    'engine_wrong_host_unknown','engine_wrong_host_webkit_cancelled_present']) {
+    for (const diagnostic of WEBKIT_WITNESS_DIAGNOSTICS) {
+      const stage = witnessStage(base, diagnostic);
+      assert.ok(WEBKIT_WITNESS_STAGE_LIST.includes(stage), stage);
+      assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+      for (const engine of ['none','chromium','firefox']) {
+        assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+      }
+    }
+  }
+  for (const stage of [witnessStage('engine_wrong_host_webkit_cancelled_present', 'private_token'),
+    'engine_wrong_host_webkit_cancelled_present_witness_unknown']) {
+    assert.throws(() => checkedFailure(stage, 'webkit'), /^Error: SF08 checkpoint refused$/);
   }
 });
 
@@ -783,9 +867,10 @@ test('WebKit wrong-CA cancellation labels distinguish first-line and call-log te
     const events = [];
     await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
       (stage, engine) => events.push({ stage, engine })), /^Error: SF08 browser trust preflight refused$/);
-    assert.deepEqual(events.at(-1), { stage: 'engine_wrong_ca_' + outcome, engine: 'webkit' });
+    const stage = witnessStage('engine_wrong_ca_' + outcome, 'missing_event');
+    assert.deepEqual(events.at(-1), { stage, engine: 'webkit' });
     assert.deepEqual(checkedFailure(events.at(-1).stage, 'webkit'),
-      { schema_version: 1, stage: 'engine_wrong_ca_' + outcome, engine: 'webkit' });
+      { schema_version: 1, stage, engine: 'webkit' });
     assert.equal(type.trace.contextClosed && type.trace.closed, true);
     assert.doesNotMatch(JSON.stringify(events), /PRIVATE_SENTINEL|private\.invalid|secret|Operation|Call log/);
   }
@@ -793,19 +878,19 @@ test('WebKit wrong-CA cancellation labels distinguish first-line and call-log te
 
 test('WebKit wrong-host failures receive bounded labels without changing acceptance', async () => {
   const cases = [
-    { kind: 'resolved-response', stage: 'engine_wrong_host_response_received' },
-    { kind: 'null-response', stage: 'engine_wrong_host_no_response' },
-    { kind: 'timeout', stage: 'engine_wrong_host_timeout' },
-    { kind: 'webkit-protocol', stage: 'engine_wrong_host_webkit_protocol_form' },
+    { kind: 'resolved-response', stage: witnessStage('engine_wrong_host_response_received', 'missing_event') },
+    { kind: 'null-response', stage: witnessStage('engine_wrong_host_no_response', 'missing_event') },
+    { kind: 'timeout', stage: witnessStage('engine_wrong_host_timeout', 'error_shape') },
+    { kind: 'webkit-protocol', stage: witnessStage('engine_wrong_host_webkit_protocol_form', 'missing_event') },
     { kind: 'raw-error', message: 'Navigation failed\nCall log: Unacceptable TLS certificate',
-      stage: 'engine_wrong_host_webkit_token_present' },
-    { kind: 'cancelled', stage: 'engine_wrong_host_webkit_cancelled_present' },
-    { kind: 'unknown', stage: 'engine_wrong_host_webkit_no_fixed_token' },
-    { kind: 'non-error', stage: 'engine_wrong_host_webkit_shape_non_error' },
-    { kind: 'oversized', stage: 'engine_wrong_host_webkit_shape_oversize' },
-    { kind: 'message-non-string', stage: 'engine_wrong_host_webkit_shape_non_string' },
-    { kind: 'message-missing', stage: 'engine_wrong_host_webkit_shape_non_string' },
-    { kind: 'message-getter-throws', stage: 'engine_wrong_host_webkit_shape_access_failed' },
+      stage: witnessStage('engine_wrong_host_webkit_token_present', 'missing_event') },
+    { kind: 'cancelled', stage: witnessStage('engine_wrong_host_webkit_cancelled_present', 'missing_event') },
+    { kind: 'unknown', stage: witnessStage('engine_wrong_host_webkit_no_fixed_token', 'missing_event') },
+    { kind: 'non-error', stage: witnessStage('engine_wrong_host_webkit_shape_non_error', 'error_shape') },
+    { kind: 'oversized', stage: witnessStage('engine_wrong_host_webkit_shape_oversize', 'missing_event') },
+    { kind: 'message-non-string', stage: witnessStage('engine_wrong_host_webkit_shape_non_string', 'missing_event') },
+    { kind: 'message-missing', stage: witnessStage('engine_wrong_host_webkit_shape_non_string', 'missing_event') },
+    { kind: 'message-getter-throws', stage: witnessStage('engine_wrong_host_webkit_shape_access_failed', 'missing_event') },
     { kind: 'page-open', stage: 'engine_wrong_host_page_open' },
     { kind: 'page-close', stage: 'engine_wrong_host_page_close' },
   ];
@@ -818,7 +903,7 @@ test('WebKit wrong-host failures receive bounded labels without changing accepta
     assert.deepEqual(events.at(-1), { stage: item.stage, engine: 'webkit' });
     assert.deepEqual(checkedFailure(item.stage, 'webkit'),
       { schema_version: 1, stage: item.stage, engine: 'webkit' });
-    if (item.stage.startsWith('engine_wrong_host_webkit_')) {
+    if (item.stage.startsWith('engine_wrong_host_webkit_') || item.stage.includes('_witness_')) {
       for (const engine of ['none', 'chromium', 'firefox']) {
         assert.throws(() => checkedFailure(item.stage, engine), /^Error: SF08 checkpoint refused$/);
       }
