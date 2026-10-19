@@ -124,17 +124,18 @@ class VolumeTests(unittest.TestCase):
                 h.select_binary(alias_repo, self.target, self.messages, 0)
         self.assertEqual(caught.exception.reason, 'artifact_refused')
 
-    def test_fixed_pair_preserves_failed_A_and_runs_B_exactly_once(self):
+    def test_fixed_reverse_pair_preserves_failed_A_and_runs_both_exactly_once(self):
         result, code = self.run_pair()
-        self.assertEqual([arm['arm'] for arm in result['arms']], ['A', 'B'])
+        self.assertEqual([arm['arm'] for arm in result['arms']], ['B', 'A'])
         self.assertEqual(result['status'], 'tests_failed')
         self.assertEqual(code, 1, 'a failed/504 arm can never become successful experiment acceptance')
         runs = [call for call in self.calls if call[0] == [str(self.exe)]]
         self.assertEqual(len(runs), 2)
-        self.assertEqual(runs[0][2], self.env)
-        self.assertEqual({key for key in self.env if runs[1][2].get(key) != self.env[key]}, {'TMP', 'TEMP'})
-        self.assertEqual(runs[1][2]['TMP'], runs[1][2]['TEMP'])
-        self.assertTrue(Path(runs[1][2]['TMP']).is_relative_to(self.runner))
+        self.assertEqual(result['order'], 'B_then_A')
+        self.assertEqual(runs[1][2], self.env)
+        self.assertEqual({key for key in self.env if runs[0][2].get(key) != self.env[key]}, {'TMP', 'TEMP'})
+        self.assertEqual(runs[0][2]['TMP'], runs[0][2]['TEMP'])
+        self.assertTrue(Path(runs[0][2]['TMP']).is_relative_to(self.runner))
         self.assertTrue(all(call[3] == 30 for call in runs))
         self.assertTrue(result['order_confound'])
         self.assertEqual(result['causality'], 'unproven')
@@ -203,15 +204,16 @@ class VolumeTests(unittest.TestCase):
         result, code = self.run_pair()
         self.assertEqual(code, 0)
         self.assertEqual(result['status'], 'tests_passed')
-        self.assertEqual([arm['arm'] for arm in result['arms']], ['A', 'B'])
+        self.assertEqual([arm['arm'] for arm in result['arms']], ['B', 'A'])
         self.assertEqual(result['causality'], 'unproven')
         self.b_failed = True
         result, code = self.run_pair()
         self.assertEqual(code, 1)
         self.assertEqual(result['status'], 'tests_failed')
+        self.assertEqual([arm['arm'] for arm in result['arms']], ['B', 'A'])
         self.assert_private(result)
 
-    def test_source_and_binary_mutation_stop_before_B(self):
+    def test_source_and_binary_mutation_stop_before_A(self):
         original = self.capture
         def capture(argv, **kwargs):
             value = original(argv, **kwargs)

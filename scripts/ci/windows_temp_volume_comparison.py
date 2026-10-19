@@ -325,7 +325,7 @@ def _closed_arm(label, captured, browser, browser_exit, collector):
 def compare(*, repo, target_root, messages, cargo_exit, browser_raw, browser_exit,
             env, native=None, capture=capture_process, collector=None):
     result = {'schema': SCHEMA, 'status': 'infra_failed', 'reason': 'internal_error',
-              'topology': 'unknown', 'temp_api': 'unknown', 'order': 'A_then_B',
+              'topology': 'unknown', 'temp_api': 'unknown', 'order': 'B_then_A',
               'order_confound': True, 'causality': 'unproven', 'scope': 'all_11_fixture_roots',
               'exe_sha256': None, 'source_sha256': None, 'browser_reused': False,
               'cleanup': 'not_created', 'arms': []}
@@ -390,7 +390,7 @@ def compare(*, repo, target_root, messages, cargo_exit, browser_raw, browser_exi
         if listed['returncode'] != 0 or len(lines) != 12 or set(lines) != expected:
             raise Refused('inventory_refused')
         unchanged()
-        for label, environment in [('A', dict(env)), ('B', b_env)]:
+        for label, environment in [('B', b_env), ('A', dict(env))]:
             unchanged()
             captured = run([str(executable)], environment, WATCHDOG)
             unchanged()

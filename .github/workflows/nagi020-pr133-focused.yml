@@ -1,4 +1,4 @@
-name: PR133 isolated causal comparisons
+name: PR133 Windows reverse order and WebKit console witness
 
 on:
   push:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr133-causal-comparisons-${{ github.ref }}
+  group: pr133-causal-r14-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -100,3 +100,7 @@ jobs:
             ${{ runner.temp }}/pr133-temp-volume-${{ github.run_id }}-${{ github.run_attempt }}/B.v2.json
           if-no-files-found: ignore
 
+
+  strict-browser-console-witness:
+    if: github.ref == 'refs/heads/test/nagi020-pr133-ci-repair-20261019'
+    uses: ./.github/workflows/sf08-browser.yml

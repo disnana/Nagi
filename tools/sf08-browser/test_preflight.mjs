@@ -1043,8 +1043,8 @@ async function hostPeerFixture(options = {}, api = hostProof) {
     ? api.readWebkitWrongCACredentials(files.work, files.ca, files.mainCA)
     : api.readWebkitWrongHostCredentials(files.work, files.caPath, files.ca);
   options.credentialsSeen?.(credentials);
-  let server, secureContextOptions, nativeOptions;
-  const native = { TLSSocket: HostTLS, createSecureContext(opts) { secureContextOptions = opts; if (options.setupFailure) throw new Error('PRIVATE_SENTINEL'); return {}; }, createServer(opts) {
+  let server, nativeOptions;
+  const native = { TLSSocket: HostTLS, createSecureContext: () => { if (options.setupFailure) throw new Error('PRIVATE_SENTINEL'); return {}; }, createServer(opts) {
     nativeOptions = opts; server = new EventEmitter(); server.listening = false;
     server.address = () => ({ address: '127.0.0.1', family: 'IPv4', port: 33005 });
     server.listen = () => { if (options.listenFailure) throw new Error('PRIVATE_SENTINEL'); server.listening = true; queueMicrotask(() => server.emit('listening')); return server; };
@@ -1063,8 +1063,14 @@ async function hostPeerFixture(options = {}, api = hostProof) {
   function alert(code = profile.code, peer = socket, error = Object.assign(new Error('PRIVATE_SENTINEL'), { code })) {
     server.emit('tlsClientError', error, peer);
   }
-  return { endpoint, server, raw, socket, connect, sni, alert, until, profile, files, credentials,
-    secureContextOptions, nativeOptions };
+  return { endpoint, server, raw, socket, connect, sni, alert, until, profile, files, credentials };
+}
+function webkitConsoleError(url, overrides = {}) {
+  const value = { type: 'error', text: 'Failed to load resource: Unacceptable TLS certificate',
+    location: { url }, args: [], ...overrides };
+  const method = item => typeof item === 'function' ? item : () => item;
+  return { type: method(value.type), text: method(value.text),
+    location: method(value.location), args: method(value.args) };
 }
 function hostBrowser(options = {}) {
   const role = options.role ?? 'host';
@@ -1084,11 +1090,11 @@ function hostBrowser(options = {}) {
     if (!options.missing) page.emit('requestfailed', request);
     if (options.duplicate) page.emit('requestfailed', request);
     if (options.httpResponse) page.emit('response', {});
-    options.duringGoto?.({ browser, context, page });
+    options.duringGoto?.({ browser, context, page, endpoint });
     if (options.resolved) return { status: () => 200 };
     throw options.error ?? new Error('Operation was cancelled');
   };
-  const endpoint = { url: `https://${profile.hostname}:33005/`,
+  const endpoint = options.endpoint ?? { url: `https://${profile.hostname}:33005/`,
     async finish() { options.duringJoin?.({ browser, context, page }); return options.peer !== false; },
     async close() { return options.join !== false; } };
   return { browser, context, page, endpoint, factory: async () => endpoint,
@@ -1138,6 +1144,110 @@ test('one-shot R4 exact certificate peer alert and either closed bound failure t
   const f = hostBrowser({ peer: false });
   assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000), false);
 });
+test('one-shot R13 WebKit console ResourceError combines bound request and joined reset', { timeout: 5000 }, async () => {
+  for (const role of ['host', 'ca']) {
+    const peer = await hostPeerFixture({ role });
+    const browser = hostBrowser({ role, endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      duringGoto: ({ page }) => {
+        assert.equal(page.listenerCount('console'), 1, 'console listener is installed before navigation');
+        peer.connect(); peer.sni(); peer.alert('ECONNRESET');
+        page.emit('console', webkitConsoleError(peer.endpoint.url));
+      } });
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(browser.browser, browser.factory, performance.now() + 1000), true, role);
+    assert.equal(browser.closed(), true);
+  }
+});
+
+test('one-shot R13 exact native alert path remains valid without console witness', { timeout: 5000 }, async () => {
+  const peer = await hostPeerFixture();
+  peer.connect(); peer.sni(); peer.alert();
+  const browser = hostBrowser({ endpoint: peer.endpoint, text: 'Unacceptable TLS certificate' });
+  assert.equal(await hostProof.probeWebkitWrongHost(browser.browser, browser.factory,
+    performance.now() + 1000), true);
+  assert.equal(browser.closed(), true);
+});
+
+test('one-shot R13 reset and console remain jointly bound and veto poisoned evidence', { timeout: 8000 }, async () => {
+  const cases = [
+    { label: 'reset only', native: 'reset', diagnostic: 'console_missing' },
+    { label: 'console only', console: [true], budget: 80 },
+    { label: 'console without terminal after owned connection', native: 'idle', console: [true], budget: 250 },
+    { label: 'generic console', native: 'reset', console: [{ text: 'TLS error' }], diagnostic: 'console_malformed' },
+    { label: 'partial certificate text', native: 'reset', console: [{ text: 'Unacceptable TLS certificate' }], diagnostic: 'console_malformed' },
+    { label: 'foreign console URL', native: 'reset', console: [{ location: { url: 'https://private.invalid/' } }] },
+    { label: 'console arguments', native: 'reset', console: [{ args: [{}] }] },
+    { label: 'console type accessor throws', native: 'reset', console: [{ type: () => { throw new Error('PRIVATE_SENTINEL'); } }] },
+    { label: 'console method throws', native: 'reset', console: [{ text: () => { throw new Error('PRIVATE_SENTINEL'); } }] },
+    { label: 'console location accessor throws', native: 'reset', console: [{ location: () => { throw new Error('PRIVATE_SENTINEL'); } }] },
+    { label: 'console args accessor throws', native: 'reset', console: [{ args: () => { throw new Error('PRIVATE_SENTINEL'); } }] },
+    { label: 'duplicate console', native: 'reset', console: [true, true] },
+    { label: 'foreign page console', native: 'reset', foreignPage: true },
+    { label: 'foreign navigation', native: 'reset', console: [true], foreignURL: true },
+    { label: 'foreign frame navigation', native: 'reset', console: [true], foreignFrame: true },
+    { label: 'non-navigation request', native: 'reset', console: [true], nonNavigation: true },
+    { label: 'duplicate navigation', native: 'reset', console: [true], duplicate: true },
+    { label: 'response veto', native: 'reset', console: [true], httpResponse: true },
+    { label: 'non-null failed response', native: 'reset', console: [true], response: async () => ({ status: () => 200 }) },
+    { label: 'lifecycle veto', native: 'reset', console: [true], lifecycle: true },
+    { label: 'browser disconnect veto', native: 'reset', console: [true], disconnect: true },
+    { label: 'secure connection veto', native: 'secure', console: [true] },
+    { label: 'data veto', native: 'data', console: [true] },
+    { label: 'EOF veto', native: 'eof', console: [true] },
+    { label: 'other native error veto', native: 'other', console: [true] },
+    { label: 'wrong SNI veto', native: 'wrong_sni', console: [true] },
+    { label: 'wrong TCP tuple veto', native: 'wrong_tuple', console: [true] },
+    { label: 'wrong TLS socket veto', native: 'wrong_socket', console: [true] },
+    { label: 'duplicate native terminal veto', native: 'duplicate', console: [true] },
+  ];
+  for (const item of cases) {
+    const diagnostics = [];
+    const peer = await hostPeerFixture({ role: 'host', budget: item.budget ?? 1000 });
+    const browser = hostBrowser({ endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      foreignURL: item.foreignURL, foreignFrame: item.foreignFrame, nonNavigation: item.nonNavigation,
+      duplicate: item.duplicate, httpResponse: item.httpResponse, response: item.response,
+      duringGoto: ({ page }) => {
+        for (const event of item.console ?? []) {
+          if (event === true) page.emit('console', webkitConsoleError(peer.endpoint.url));
+          else page.emit('console', webkitConsoleError(peer.endpoint.url, event));
+        }
+        if (item.foreignPage) new EventEmitter().emit('console', webkitConsoleError(peer.endpoint.url));
+        if (item.lifecycle) page.emit('crash');
+        if (item.disconnect) browser.browser.emit('disconnected');
+        if (item.native === 'reset' || item.native === 'duplicate' || item.native === 'secure' ||
+            item.native === 'data' || item.native === 'eof' || item.native === 'other' ||
+            item.native === 'idle' || item.native === 'wrong_sni' || item.native === 'wrong_tuple' ||
+            item.native === 'wrong_socket') {
+          if (item.native === 'wrong_tuple') peer.raw.remotePort++;
+          peer.connect();
+          peer.sni(item.native === 'wrong_sni' ? 'wrong.example' : undefined);
+          if (item.native === 'secure') peer.server.emit('secureConnection', peer.socket);
+          if (item.native === 'data') peer.socket.emit('data', Buffer.from('private'));
+          if (item.native === 'eof') peer.socket.emit('end');
+          if (item.native === 'reset') peer.alert('ECONNRESET');
+          if (item.native === 'duplicate') { peer.alert('ECONNRESET'); peer.alert('ECONNRESET'); }
+          if (item.native === 'secure' || item.native === 'data' || item.native === 'eof') peer.alert('ECONNRESET');
+          if (item.native === 'other') peer.alert('ERR_TLS_HANDSHAKE_TIMEOUT');
+          if (item.native === 'wrong_sni' || item.native === 'wrong_tuple') peer.alert('ECONNRESET');
+          if (item.native === 'wrong_socket') peer.alert('ECONNRESET', new HostTLS());
+        }
+      } });
+    assert.equal(await hostProof.probeWebkitWrongHost(browser.browser, browser.factory,
+      performance.now() + (item.budget ?? 1000), kind => diagnostics.push(kind)), false, item.label);
+    assert.equal(browser.closed(), true, item.label);
+    if (item.diagnostic) assert.deepEqual(diagnostics, [item.diagnostic], item.label);
+    assert.doesNotMatch(JSON.stringify(diagnostics), /PRIVATE_SENTINEL|private\.invalid/, item.label);
+  }
+  for (const [endpointRole, probeRole] of [['host', 'ca'], ['ca', 'host']]) {
+    const peer = await hostPeerFixture({ role: endpointRole });
+    const browser = hostBrowser({ role: endpointRole, endpoint: peer.endpoint });
+    const probe = probeRole === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(browser.browser, browser.factory, performance.now() + 1000), false,
+      `${endpointRole} endpoint cannot satisfy ${probeRole} role`);
+    assert.equal(browser.closed(), true, `${endpointRole} endpoint cleanup`);
+  }
+});
+
 test('one-shot R5 duplicate missing wrong SNI TCP and request events veto', async () => {
   for (const mode of ['no_sni', 'wrong_sni', 'duplicate_sni', 'duplicate_tcp', 'bad_receiver', 'wrong_tuple']) {
     const f = await hostPeerFixture(); f.connect();
@@ -1344,24 +1454,6 @@ test('one-shot CA credentials are role sealed and exact peer code alone can sett
     assert.deepEqual(rows, [expected]); assert.equal(JSON.stringify(rows).includes('PRIVATE_SENTINEL'), false);
   }
 });
-test('R11 bound wrong-CA TLS profile pins both native contexts to TLS 1.2 and keeps reset fail-closed', async () => {
-  caAPI();
-  const accepted = await hostPeerFixture({ role: 'ca' });
-  for (const options of [accepted.secureContextOptions, accepted.nativeOptions]) {
-    assert.equal(options.minVersion, 'TLSv1.2');
-    assert.equal(options.maxVersion, 'TLSv1.2');
-  }
-  assert.deepEqual(accepted.nativeOptions.ALPNProtocols, ['http/1.1']);
-  accepted.connect(); accepted.sni('localhost'); accepted.alert('ERR_SSL_TLSV1_ALERT_UNKNOWN_CA');
-  assert.equal(await accepted.endpoint.finish(), true);
-  assert.equal(await accepted.endpoint.close(), true);
-
-  const resetRows = [], reset = await hostPeerFixture({ role: 'ca', diagnose: value => resetRows.push(value) });
-  reset.connect(); reset.sni('localhost'); reset.alert('ECONNRESET');
-  assert.equal(await reset.endpoint.finish(), false);
-  assert.equal(await reset.endpoint.close(), true);
-  assert.deepEqual(resetRows, ['peer_connection_reset']);
-});
 test('one-shot CA request lifecycle deadline join and host-binding vetoes remain strict', async () => {
   caAPI();
   for (const options of [{ missing: true }, { duplicate: true }, { foreignURL: true },
@@ -1418,7 +1510,7 @@ test('one-shot R10 Node post-handshake hostname close remains a refusal', { time
   client.on('error', () => {});
   assert.equal(await endpoint.finish(), false); client.destroy(); await endpoint.close();
 });
-test('one-shot R11 removing independent proof vetoes makes their negative control fail', async () => {
+test('one-shot R11 removing independent proof vetoes makes their negative control fail', async t => {
   hostAPI();
   const source = fs.readFileSync(new URL('./preflight.mjs', import.meta.url), 'utf8');
   const mutant = async (before, after) => {
@@ -1432,7 +1524,7 @@ test('one-shot R11 removing independent proof vetoes makes their negative contro
       { duringJoin: ({ page }) => page.emit('crash') }],
     ['function hostBudget(until) {\n  const remaining = Math.floor(until - performance.now());', 'function hostBudget(until) {\n  const remaining = 1000;', { expired: true }],
     ['if (await hostWithin(endpoint.close(), until) !== true) good = false;', 'await hostWithin(endpoint.close(), until);', { join: false }],
-    ['if (await hostWithin(endpoint.finish(), until) !== true) refuse();', 'await hostWithin(endpoint.finish(), until);', { peer: false }],
+    ['if (finished !== true) refuse();', '', { peer: false }],
   ]) {
     const original = hostBrowser(options), changed = hostBrowser(options);
     const until = () => performance.now() + (options.expired ? -1 : 1000);
@@ -1450,18 +1542,30 @@ test('one-shot R11 removing independent proof vetoes makes their negative contro
     const api = await mutant(anchor, replacement), changed = await hostPeerFixture({}, api); action(changed);
     assert.equal(await changed.endpoint.finish(), true, 'peer negative oracle detects removed veto'); await changed.endpoint.close();
   }
-  for (const [anchor, replacement, action] of [
-    ['error.code !== profile.code || bad', 'bad', f => {
+  for (const [caseId, anchor, replacement, action] of [
+    ['ca_code', 'error.code !== profile.code || bad', 'bad', f => {
       f.connect(); f.sni('localhost'); f.alert('ERR_SSL_SSL/TLS_ALERT_BAD_CERTIFICATE');
     }],
-    ['sniCount !== 1 || name !== profile.hostname || ', 'sniCount !== 1 || ', f => {
+    ['ca_sni', 'sniCount !== 1 || name !== profile.hostname || ', 'sniCount !== 1 || ', f => {
       f.connect(); f.sni('sf08-wronghost.invalid'); f.alert('ERR_SSL_TLSV1_ALERT_UNKNOWN_CA');
     }],
   ]) {
     const original = await hostPeerFixture({ role: 'ca' }); action(original);
     assert.equal(await original.endpoint.finish(), false); await original.endpoint.close();
-    const api = await mutant(anchor, replacement), changed = await hostPeerFixture({ role: 'ca' }, api); action(changed);
-    assert.equal(await changed.endpoint.finish(), true, 'CA role negative oracle detects removed exact-code/SNI veto');
+    const api = await mutant(anchor, replacement), observed = [];
+    const changed = await hostPeerFixture({ role: 'ca', diagnose: kind => {
+      observed.push(['deadline', 'join', 'socket', 'peer_binding', 'response', 'setup'].includes(kind) ? kind : 'other');
+    } }, api);
+    const remaining = () => Math.max(0, Math.min(1000, Math.floor(changed.until - performance.now())));
+    const atCreate = remaining(), began = performance.now();
+    action(changed);
+    const atAction = remaining(), beforeFinish = remaining();
+    const proved = await changed.endpoint.finish();
+    const facts = { case: caseId, first: observed[0] ?? 'none', atCreate, atAction, beforeFinish,
+      afterFinish: remaining(), elapsed: Math.max(0, Math.min(10000, Math.floor(performance.now() - began))),
+      listening: changed.server.listening, rawDestroyed: changed.raw.destroyed, tlsDestroyed: changed.socket.destroyed };
+    t.diagnostic('ca_mutant=' + JSON.stringify(facts));
+    assert.equal(proved, true, 'CA role negative oracle detects removed exact-code/SNI veto ' + JSON.stringify(facts));
     await changed.endpoint.close();
   }
 });

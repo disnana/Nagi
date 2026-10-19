@@ -100,6 +100,7 @@ class R2Tests(unittest.TestCase):
 
     def test_one_shot_failure_categories_are_finite_webkit_only_and_not_acceptance(self):
         categories = {'credential', 'setup', 'navigation', 'request', 'response',
+                      'console_missing', 'console_malformed',
                       'peer_legacy_certificate', 'peer_connection_reset', 'peer_handshake_timeout',
                       'peer_no_native_code', 'peer_non_error', 'peer_other_code', 'peer_other', 'peer_binding',
                       'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'}
@@ -121,6 +122,7 @@ class R2Tests(unittest.TestCase):
 
     def test_wrong_ca_one_shot_categories_are_finite_webkit_only_and_not_acceptance(self):
         categories = {'credential', 'setup', 'navigation', 'request', 'response',
+                      'console_missing', 'console_malformed',
                       'peer_legacy_certificate', 'peer_connection_reset', 'peer_handshake_timeout',
                       'peer_no_native_code', 'peer_non_error', 'peer_other_code', 'peer_other', 'peer_binding',
                       'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'}

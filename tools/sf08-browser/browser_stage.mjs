@@ -177,6 +177,7 @@ export const WEBKIT_WITNESS_DIAGNOSTICS = Object.freeze([
 export const FAILURE_STAGES = [
   'engine_wrong_ca_one_shot_credential', 'engine_wrong_ca_one_shot_setup',
   'engine_wrong_ca_one_shot_navigation', 'engine_wrong_ca_one_shot_request',
+  'engine_wrong_ca_one_shot_console_missing', 'engine_wrong_ca_one_shot_console_malformed',
   'engine_wrong_ca_one_shot_response', 'engine_wrong_ca_one_shot_peer_legacy_certificate',
   'engine_wrong_ca_one_shot_peer_connection_reset', 'engine_wrong_ca_one_shot_peer_handshake_timeout',
   'engine_wrong_ca_one_shot_peer_no_native_code', 'engine_wrong_ca_one_shot_peer_non_error',
@@ -187,6 +188,7 @@ export const FAILURE_STAGES = [
   'engine_wrong_ca_one_shot_cleanup', 'engine_wrong_ca_one_shot_unknown',
   'engine_wrong_host_one_shot_credential', 'engine_wrong_host_one_shot_setup',
   'engine_wrong_host_one_shot_navigation', 'engine_wrong_host_one_shot_request',
+  'engine_wrong_host_one_shot_console_missing', 'engine_wrong_host_one_shot_console_malformed',
   'engine_wrong_host_one_shot_response', 'engine_wrong_host_one_shot_peer_legacy_certificate',
   'engine_wrong_host_one_shot_peer_connection_reset', 'engine_wrong_host_one_shot_peer_handshake_timeout',
   'engine_wrong_host_one_shot_peer_no_native_code', 'engine_wrong_host_one_shot_peer_non_error',

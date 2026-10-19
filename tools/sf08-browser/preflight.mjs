@@ -531,12 +531,16 @@ const WRONG_HOST = 'sf08-wronghost.invalid';
 const PEER_CERTIFICATE_CODE = 'ERR_SSL_SSL/TLS_ALERT_BAD_CERTIFICATE';
 const HOST_PROFILE = Object.freeze({ hostname: WRONG_HOST, code: PEER_CERTIFICATE_CODE });
 const CA_PROFILE = Object.freeze({ hostname: 'localhost', code: 'ERR_SSL_TLSV1_ALERT_UNKNOWN_CA' });
+const WEBKIT_CONSOLE_RESOURCE_ERROR = 'Failed to load resource: Unacceptable TLS certificate';
+const webkitConsoleResetEndpoints = new WeakMap();
 // Failure-only fixed vocabulary. These facts never authorize a TLS result.
 const HOST_FAILURE_STAGES = Object.freeze({
   credential: 'engine_wrong_host_one_shot_credential',
   setup: 'engine_wrong_host_one_shot_setup',
   navigation: 'engine_wrong_host_one_shot_navigation',
   request: 'engine_wrong_host_one_shot_request',
+  console_missing: 'engine_wrong_host_one_shot_console_missing',
+  console_malformed: 'engine_wrong_host_one_shot_console_malformed',
   response: 'engine_wrong_host_one_shot_response',
   peer_legacy_certificate: 'engine_wrong_host_one_shot_peer_legacy_certificate',
   peer_connection_reset: 'engine_wrong_host_one_shot_peer_connection_reset',
@@ -558,6 +562,8 @@ const CA_FAILURE_STAGES = Object.freeze({
   setup: 'engine_wrong_ca_one_shot_setup',
   navigation: 'engine_wrong_ca_one_shot_navigation',
   request: 'engine_wrong_ca_one_shot_request',
+  console_missing: 'engine_wrong_ca_one_shot_console_missing',
+  console_malformed: 'engine_wrong_ca_one_shot_console_malformed',
   response: 'engine_wrong_ca_one_shot_response',
   peer_legacy_certificate: 'engine_wrong_ca_one_shot_peer_legacy_certificate',
   peer_connection_reset: 'engine_wrong_ca_one_shot_peer_connection_reset',
@@ -717,9 +723,9 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
   if (ownedHostCredentials.get(credentials) !== profile) { failure('setup'); refuse(); }
   ownedHostCredentials.delete(credentials);
   let server, secureContext, timer, port, rawTuple, sniSocket, bad = false,
-    connections = 0, sniCount = 0, alerts = 0, peer = false, ready = false,
-    closing = false, closedEvent = false, closeCallback = false, joined = false, used = false,
-    destroyPending = false;
+    connections = 0, sniCount = 0, alerts = 0, peer = false, consoleResetObservation = false,
+    consoleResetTerminal = false, ready = false, closing = false, closedEvent = false,
+    closeCallback = false, joined = false, used = false, destroyPending = false;
   const sockets = new Set(), listeners = [];
   let readyResolve, readyReject, joinedResolve;
   const listening = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
@@ -760,14 +766,18 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
   const own = socket => {
     if (sockets.has(socket)) return;
     sockets.add(socket);
-    listen(socket, 'close', () => { sockets.delete(socket); if (!peer) { failure('socket'); bad = true; } complete(); });
+    listen(socket, 'close', () => {
+      sockets.delete(socket);
+      if (!peer && !consoleResetTerminal) { failure('socket'); bad = true; }
+      complete();
+    });
     listen(socket, 'end', () => veto('socket'));
     listen(socket, 'error', () => { if (!peer) veto(); });
   };
   try {
     const remaining = hostBudget(until);
-    secureContext = native.createSecureContext({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2', maxVersion: 'TLSv1.2' });
-    server = native.createServer({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2', maxVersion: 'TLSv1.2',
+    secureContext = native.createSecureContext({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2' });
+    server = native.createServer({ cert: credentials.cert, key: credentials.key, minVersion: 'TLSv1.2',
       ALPNProtocols: ['http/1.1'], handshakeTimeout: remaining,
       SNICallback(name, callback) {
         try {
@@ -799,6 +809,16 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
             error.code !== profile.code || bad) refuse();
         peer = true; destroy();
       } catch {
+        // The alternative terminal is observed privately and accepted only by
+        // the probe after its independent exact console and request witnesses.
+        let boundReset = false;
+        try {
+          hostBudget(until);
+          boundReset = consoleResetObservation && !bad && alerts === 1 && connections === 1 &&
+            sniCount === 1 && socket === sniSocket && socket instanceof native.TLSSocket &&
+            error instanceof Error && error.code === 'ECONNRESET';
+        } catch {}
+        if (boundReset) { consoleResetTerminal = true; destroy(); return; }
         // Inspect only a rejected event, never widen the exact acceptance code.
         let kind = 'peer_other';
         try {
@@ -842,7 +862,7 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
     if (!server) credentials.release();
     refuse();
   }
-  return Object.freeze({ url: `https://${profile.hostname}:${port}/`,
+  const endpoint = Object.freeze({ url: `https://${profile.hostname}:${port}/`,
     async finish() {
       if (used) { failure('peer_binding'); return false; }
       used = true;
@@ -861,6 +881,25 @@ async function createWebkitCertificateEndpoint(credentials, until, native, diagn
       try { await hostWithin(join, until); hostBudget(until); return joined; }
       catch { failure('join'); return false; }
     } });
+  webkitConsoleResetEndpoints.set(endpoint, {
+    arm() { consoleResetObservation = true; },
+    resetObserved() { return consoleResetTerminal; },
+    async finish() {
+      if (used) { failure('peer_binding'); return false; }
+      used = true;
+      try { await hostWithin(join, until); hostBudget(until); }
+      catch { veto('join'); return false; }
+      const proved = ready && joined && (peer || consoleResetTerminal) && !bad &&
+        connections === 1 && sniCount === 1 && alerts === 1;
+      if (!proved && !bad) {
+        if (!ready) failure('setup');
+        else if (!joined || !closedEvent || !closeCallback || sockets.size !== 0) failure('join');
+        else failure('peer_binding');
+      }
+      return proved;
+    },
+  });
+  return endpoint;
 }
 
 // An independent proof branch. It never clears the original witness's poison.
@@ -905,6 +944,26 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         url.pathname !== '/' || url.search || url.hash || url.origin + '/' !== endpoint.url ||
         Number(url.port) < 1024 || Number(url.port) > 65535 || typeof endpoint.finish !== 'function' ||
         typeof endpoint.close !== 'function') refuse();
+    const consoleReset = webkitConsoleResetEndpoints.get(endpoint);
+    consoleReset?.arm();
+    let consoleEvents = 0, consoleCertificateProof = false;
+    listen(page, 'console', message => {
+      consoleEvents = Math.min(2, consoleEvents + 1);
+      try { live(); }
+      catch { failure('deadline'); bad = true; return; }
+      try {
+        if (consoleEvents !== 1) { failure('console_malformed'); bad = true; return; }
+        const type = message.type();
+        const text = message.text();
+        const location = message.location();
+        const args = message.args();
+        if (type !== 'error' || text !== WEBKIT_CONSOLE_RESOURCE_ERROR || !location ||
+            location.url !== endpoint.url || !Array.isArray(args) || args.length !== 0) {
+          failure('console_malformed'); bad = true; return;
+        }
+        consoleCertificateProof = true;
+      } catch { failure('console_malformed'); bad = true; }
+    });
     listen(page, 'requestfailed', request => {
       requests = Math.min(2, requests + 1);
       try {
@@ -927,7 +986,14 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     if (requests !== 1 || !failed || await hostWithin(failed.response(), until) !== null) refuse();
     live();
     phase = 'peer_binding';
-    if (await hostWithin(endpoint.finish(), until) !== true) refuse();
+    const finished = consoleReset
+      ? await hostWithin(consoleReset.finish(), until)
+      : await hostWithin(endpoint.finish(), until);
+    if (consoleReset?.resetObserved() && !consoleCertificateProof) {
+      failure(consoleEvents === 0 ? 'console_missing' : 'console_malformed');
+      refuse();
+    }
+    if (finished !== true) refuse();
     live();
     good = true;
   } catch { failure(phase); good = false; }
