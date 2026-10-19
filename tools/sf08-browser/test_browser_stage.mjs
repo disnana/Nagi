@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { stage, businessConfig, trustEnv, FAILURE_STAGES } from './browser_stage.mjs';
+import { stage, businessConfig, trustEnv, FAILURE_STAGES, checkedFailure } from './browser_stage.mjs';
 const IMAGE = 'sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9';
 const home = '/run/nagi-sf08/trust-unit/home';
 const ca = Buffer.from('synthetic-public-main-ca');
@@ -208,4 +208,29 @@ test('default wrong-host factory reads bound work and ready CA and fails closed 
   await assert.rejects(stage(value, f.deps), /^Error: SF08 browser trust preflight refused$/);
   assert.equal(callerInvoked, false);
   assert.deepEqual([...f.calls], ['native']);
+});
+
+
+test('one-shot checkpoint vocabulary is finite WebKit-only with no dynamic fields', () => {
+  const categories = ['credential', 'setup', 'navigation', 'request', 'response', 'peer_legacy_certificate',
+    'peer_other', 'peer_binding', 'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'];
+  const actual = FAILURE_STAGES.filter(stage => stage.startsWith('engine_wrong_host_one_shot_'));
+  assert.deepEqual(actual, categories.map(category => 'engine_wrong_host_one_shot_' + category));
+  for (const stage of actual) {
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+    for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine), /^Error: SF08 checkpoint refused$/);
+  }
+  for (const stage of ['engine_wrong_host_one_shot_PRIVATE_SENTINEL', 'engine_wrong_host_one_shot_peer_legacy_certificate_SUFFIX',
+    'engine_wrong_host_one_shot_ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'engine_wrong_host_one_shot_accepted'])
+    assert.throws(() => checkedFailure(stage, 'webkit'), /^Error: SF08 checkpoint refused$/);
+});
+
+test('credential failure diagnostic is fixed and callback error never changes stage refusal', async () => {
+  for (const throwing of [false, true]) {
+    const rows = [], f = fake({ preflight: async (_b, _p, _r, _n, _c, factory) => {
+      await factory(performance.now() + 10000, value => { rows.push(value); if (throwing) throw new Error('PRIVATE_SENTINEL'); });
+    } });
+    await assert.rejects(stage(input(), f.deps), /^Error: SF08 browser trust preflight refused$/);
+    assert.deepEqual(rows, ['credential']); assert.deepEqual([...f.calls], ['native']);
+  }
 });

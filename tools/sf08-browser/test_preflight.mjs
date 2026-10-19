@@ -1005,15 +1005,15 @@ async function hostPeerFixture(options = {}, api = hostProof) {
   const files = hostCertificateFiles();
   const credentials = api.readWebkitWrongHostCredentials(files.work, files.caPath, files.ca);
   let server, nativeOptions;
-  const native = { TLSSocket: HostTLS, createSecureContext: () => ({}), createServer(opts) {
+  const native = { TLSSocket: HostTLS, createSecureContext: () => { if (options.setupFailure) throw new Error('PRIVATE_SENTINEL'); return {}; }, createServer(opts) {
     nativeOptions = opts; server = new EventEmitter(); server.listening = false;
     server.address = () => ({ address: '127.0.0.1', family: 'IPv4', port: 33005 });
     server.listen = () => { server.listening = true; queueMicrotask(() => server.emit('listening')); return server; };
-    server.close = callback => { server.listening = false; if (!options.closeHang) queueMicrotask(() => { server.emit('close'); callback(); }); return server; };
+    server.close = callback => { server.listening = false; if (!options.closeHang) queueMicrotask(() => { server.emit('close'); callback(options.closeError ? new Error('PRIVATE_SENTINEL') : undefined); }); return server; };
     return server;
   } };
   const until = performance.now() + (options.budget ?? 1000);
-  const endpoint = await api.createWebkitWrongHostEndpoint(credentials, until, native);
+  const endpoint = await api.createWebkitWrongHostEndpoint(credentials, until, native, options.diagnose);
   const raw = new HostRaw(), socket = new HostTLS();
   function connect() { server.emit('connection', raw); }
   function sni(name = 'sf08-wronghost.invalid', receiver = socket) {
@@ -1241,7 +1241,7 @@ test('one-shot R11 removing independent proof vetoes makes their negative contro
   for (const [anchor, replacement, options] of [
     ['request.url() !== endpoint.url || ', '', { foreignURL: true }],
     ['requests = Math.min(2, requests + 1);', 'requests = 1;', { duplicate: true }],
-    ["for (const event of ['close', 'crash']) listen(page, event, () => { bad = true; });", '',
+    ["for (const event of ['close', 'crash']) listen(page, event, () => { failure('lifecycle'); bad = true; });", '',
       { duringJoin: ({ page }) => page.emit('crash') }],
     ['function hostBudget(until) {\n  const remaining = Math.floor(until - performance.now());', 'function hostBudget(until) {\n  const remaining = 1000;', { expired: true }],
     ['if (await hostWithin(endpoint.close(), until) !== true) good = false;', 'await hostWithin(endpoint.close(), until);', { join: false }],
@@ -1287,4 +1287,111 @@ test('one-shot R12 source-bound integration and original certificate oracle stay
     if (name === 'webkit') assert.equal(dedicated.closed(), true);
   }
   await assert.rejects(hostProof.runPreflight({}, provisioned, ready, negative), /^Error: SF08 browser trust preflight refused$/);
+});
+
+test('one-shot diagnostics report one fixed failure and never report success', async () => {
+  const cases = [
+    [{ missing: true }, 'request'], [{ foreignURL: true }, 'request'], [{ text: 'PRIVATE_SENTINEL' }, 'request'],
+    [{ response: async () => undefined }, 'response'],
+    [{ error: Object.assign(new Error('PRIVATE_SENTINEL'), { name: 'TimeoutError' }) }, 'navigation'],
+    [{ duringJoin: ({ page }) => page.emit('crash') }, 'lifecycle'], [{ peer: false }, 'peer_other'],
+    [{ join: false }, 'join'], [{ closeError: true }, 'cleanup'],
+  ];
+  for (const [options, expected] of cases) {
+    const without = hostBrowser(options), withDiagnostic = hostBrowser(options), rows = [];
+    assert.equal(await hostProof.probeWebkitWrongHost(without.browser, without.factory, performance.now() + 1000), false);
+    assert.equal(await hostProof.probeWebkitWrongHost(withDiagnostic.browser, withDiagnostic.factory, performance.now() + 1000,
+      value => rows.push(value)), false);
+    assert.deepEqual(rows, [expected]);
+    assert.equal(JSON.stringify(rows).includes('PRIVATE_SENTINEL'), false);
+  }
+  for (const text of ['Operation was cancelled', 'Unacceptable TLS certificate']) {
+    const f = hostBrowser({ text }), rows = [];
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000, value => rows.push(value)), true);
+    assert.deepEqual(rows, []);
+  }
+  const expired = hostBrowser(), rows = [];
+  assert.equal(await hostProof.probeWebkitWrongHost(expired.browser, expired.factory, performance.now() - 1, value => rows.push(value)), false);
+  assert.deepEqual(rows, ['deadline']);
+});
+
+test('one-shot diagnostics separate legacy peer code from binding and other errors without accepting it', async () => {
+  for (const [code, expected] of [['ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'peer_legacy_certificate'],
+    ['ECONNRESET', 'peer_other'], ['PRIVATE_SENTINEL_ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE', 'peer_other']]) {
+    const rows = [], f = await hostPeerFixture({ diagnose: value => rows.push(value) });
+    f.connect(); f.sni(); f.alert(code);
+    assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
+    assert.deepEqual(rows, [expected]);
+    assert.equal(JSON.stringify(rows).includes('PRIVATE_SENTINEL'), false);
+  }
+  const rows = [], f = await hostPeerFixture({ diagnose: value => rows.push(value) });
+  f.connect(); f.sni('PRIVATE_SENTINEL'); f.alert('ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE');
+  assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
+  assert.deepEqual(rows, ['peer_binding'], 'first veto wins over later peer detail');
+});
+
+test('one-shot diagnostics cannot turn callback throws or malformed facts into successful evidence', async () => {
+  for (const observer of [undefined, null, false, true, {}, Symbol('PRIVATE_SENTINEL'), () => { throw new Error('PRIVATE_SENTINEL'); }]) {
+    const f = hostBrowser({ peer: false });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000, observer), false);
+  }
+  for (const first of ['credential', 'setup', 'PRIVATE_SENTINEL']) {
+    const f = hostBrowser(), rows = [];
+    const factory = async (_until, diagnose) => { diagnose(first); throw new Error('PRIVATE_SENTINEL'); };
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, factory, performance.now() + 1000, value => rows.push(value)), false);
+    assert.deepEqual(rows, [first === 'PRIVATE_SENTINEL' ? 'setup' : first]);
+  }
+  const f = hostBrowser(), rows = [];
+  const factory = async (_until, diagnose) => { diagnose('peer_other'); return f.endpoint; };
+  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, factory, performance.now() + 1000, value => rows.push(value)), true);
+  assert.deepEqual(rows, [], 'even a supplied diagnostic latch cannot be emitted on success');
+});
+
+
+test('one-shot diagnostics retain first native veto across setup socket response deadline and join', async () => {
+  const setup = [];
+  await assert.rejects(hostPeerFixture({ setupFailure: true, diagnose: value => setup.push(value) }), /^Error: SF08 browser trust preflight refused$/);
+  assert.deepEqual(setup, ['setup']);
+  for (const [mode, expected] of [['socket', 'socket'], ['response', 'response'], ['binding', 'peer_binding'], ['join', 'join'], ['deadline', 'deadline']]) {
+    const rows = [], f = await hostPeerFixture({ closeError: mode === 'join', budget: mode === 'deadline' ? 35 : 1000,
+      diagnose: value => rows.push(value) });
+    if (mode !== 'deadline') {
+      f.connect(); f.sni();
+      if (mode === 'socket') f.raw.emit('end');
+      if (mode === 'response') f.server.emit('secureConnection', f.socket);
+      f.alert(undefined, mode === 'binding' ? new HostTLS() : undefined);
+    }
+    assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
+    assert.deepEqual(rows, [expected]);
+  }
+});
+
+test('one-shot failure checkpoint emits only its fixed WebKit category and cannot expose caller facts', async () => {
+  const stages = [], type = fake('webkit', 'normal');
+  await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
+    (stage, engine) => stages.push(checkedFailure(stage, engine)), undefined,
+    async (_until, diagnose) => { diagnose('credential'); diagnose('PRIVATE_SENTINEL'); throw new Error('PRIVATE_SENTINEL'); }));
+  assert.deepEqual(stages.at(-1), { schema_version: 1, stage: 'engine_wrong_host_one_shot_credential', engine: 'webkit' });
+  assert.equal(stages.filter(row => row.stage.startsWith('engine_wrong_host_one_shot_')).length, 1);
+  assert.equal(JSON.stringify(stages).includes('PRIVATE_SENTINEL'), false);
+});
+
+
+test('one-shot diagnostic observer exceptions cannot change valid native peer proof or rejection', async () => {
+  for (const accepted of [true, false]) {
+    let calls = 0;
+    const f = await hostPeerFixture({ diagnose: () => { calls++; throw new Error('PRIVATE_SENTINEL'); } });
+    f.connect(); f.sni(); f.alert(accepted ? undefined : 'ECONNRESET');
+    assert.equal(await f.endpoint.finish(), accepted); await f.endpoint.close();
+    assert.equal(calls, accepted ? 0 : 1);
+  }
+  for (const value of [undefined, null, {}, 'PRIVATE_SENTINEL', 1]) {
+    const rows = [], f = await hostPeerFixture({ diagnose: value => rows.push(value) });
+    f.connect(); f.sni();
+    const error = new Error('PRIVATE_SENTINEL');
+    Object.defineProperty(error, 'code', { get() { if (value === undefined) throw new Error('PRIVATE_SENTINEL'); return value; } });
+    f.server.emit('tlsClientError', error, f.socket);
+    assert.equal(await f.endpoint.finish(), false); await f.endpoint.close();
+    assert.deepEqual(rows, ['peer_other']);
+  }
 });

@@ -529,6 +529,32 @@ export function webkitCertificateWitness(page, context, browser, probeURL, until
 
 const WRONG_HOST = 'sf08-wronghost.invalid';
 const PEER_CERTIFICATE_CODE = 'ERR_SSL_SSL/TLS_ALERT_BAD_CERTIFICATE';
+// Failure-only fixed vocabulary. These facts never authorize a TLS result.
+const HOST_FAILURE_STAGES = Object.freeze({
+  credential: 'engine_wrong_host_one_shot_credential',
+  setup: 'engine_wrong_host_one_shot_setup',
+  navigation: 'engine_wrong_host_one_shot_navigation',
+  request: 'engine_wrong_host_one_shot_request',
+  response: 'engine_wrong_host_one_shot_response',
+  peer_legacy_certificate: 'engine_wrong_host_one_shot_peer_legacy_certificate',
+  peer_other: 'engine_wrong_host_one_shot_peer_other',
+  peer_binding: 'engine_wrong_host_one_shot_peer_binding',
+  socket: 'engine_wrong_host_one_shot_socket',
+  lifecycle: 'engine_wrong_host_one_shot_lifecycle',
+  deadline: 'engine_wrong_host_one_shot_deadline',
+  join: 'engine_wrong_host_one_shot_join',
+  cleanup: 'engine_wrong_host_one_shot_cleanup',
+  unknown: 'engine_wrong_host_one_shot_unknown',
+});
+function hostFirstDiagnostic(observer) {
+  let seen = false;
+  return kind => {
+    if (seen || typeof kind !== 'string' || !Object.hasOwn(HOST_FAILURE_STAGES, kind)) return;
+    seen = true;
+    try { if (typeof observer === 'function') observer(kind); } catch {}
+  };
+}
+
 const ownedHostCredentials = new WeakSet();
 function hostBudget(until) {
   const remaining = Math.floor(until - performance.now());
@@ -623,8 +649,13 @@ export function readWebkitWrongHostCredentials(work, caPath, caPEM, io = fs) {
 
 // The native dependency is fixed in the browser stage. Its optional explicit
 // argument exists only for the source-bound unit controls, never receipt data.
-export async function createWebkitWrongHostEndpoint(credentials, until, native = tls) {
-  if (!ownedHostCredentials.has(credentials)) refuse();
+export async function createWebkitWrongHostEndpoint(credentials, until, native = tls, diagnose) {
+  const note = hostFirstDiagnostic(diagnose);
+  const failure = kind => {
+    const remaining = Math.floor(until - performance.now());
+    note(!Number.isFinite(remaining) || remaining < 1 || remaining > 10000 ? 'deadline' : kind);
+  };
+  if (!ownedHostCredentials.has(credentials)) { failure('setup'); refuse(); }
   ownedHostCredentials.delete(credentials);
   let server, secureContext, timer, port, rawTuple, sniSocket, bad = false,
     connections = 0, sniCount = 0, alerts = 0, peer = false, ready = false,
@@ -651,16 +682,16 @@ export async function createWebkitWrongHostEndpoint(credentials, until, native =
   const stopAccepting = () => {
     if (closing) return;
     closing = true;
-    try { server.close(error => { if (error) bad = true; closeCallback = true; complete(); }); }
-    catch { bad = true; readyReject(new Error(REFUSED)); }
+    try { server.close(error => { if (error) { failure('join'); bad = true; } closeCallback = true; complete(); }); }
+    catch { failure('join'); bad = true; readyReject(new Error(REFUSED)); }
   };
-  const destroy = () => { for (const socket of sockets) { try { socket.destroy(); } catch { bad = true; } } };
-  const veto = () => { bad = true; stopAccepting(); destroy(); };
+  const destroy = () => { for (const socket of sockets) { try { socket.destroy(); } catch { failure('socket'); bad = true; } } };
+  const veto = (kind = 'socket') => { failure(kind); bad = true; stopAccepting(); destroy(); };
   const own = socket => {
     if (sockets.has(socket)) return;
     sockets.add(socket);
-    listen(socket, 'close', () => { sockets.delete(socket); if (!peer) bad = true; complete(); });
-    listen(socket, 'end', veto);
+    listen(socket, 'close', () => { sockets.delete(socket); if (!peer) { failure('socket'); bad = true; } complete(); });
+    listen(socket, 'end', () => veto('socket'));
     listen(socket, 'error', () => { if (!peer) veto(); });
   };
   try {
@@ -674,9 +705,9 @@ export async function createWebkitWrongHostEndpoint(credentials, until, native =
           sniCount = Math.min(2, sniCount + 1);
           if (sniCount !== 1 || name !== WRONG_HOST || !(this instanceof native.TLSSocket) ||
               connections !== 1 || !sameTuple(rawTuple, tuple(this))) refuse();
-          sniSocket = this; own(this); listen(this, 'data', veto);
+          sniSocket = this; own(this); listen(this, 'data', () => veto('response'));
           callback(null, secureContext);
-        } catch { veto(); callback(new Error(REFUSED)); }
+        } catch { veto('peer_binding'); callback(new Error(REFUSED)); }
       } });
     listen(server, 'connection', socket => {
       connections = Math.min(2, connections + 1);
@@ -686,9 +717,9 @@ export async function createWebkitWrongHostEndpoint(credentials, until, native =
         if (connections !== 1) refuse();
         rawTuple = tuple(socket);
         stopAccepting(); // One-shot: subsequent accepted callbacks still veto.
-      } catch { veto(); }
+      } catch { veto('peer_binding'); }
     });
-    listen(server, 'secureConnection', socket => { own(socket); veto(); });
+    listen(server, 'secureConnection', socket => { own(socket); veto('response'); });
     listen(server, 'tlsClientError', (error, socket) => {
       alerts = Math.min(2, alerts + 1);
       try {
@@ -697,9 +728,19 @@ export async function createWebkitWrongHostEndpoint(credentials, until, native =
             !(socket instanceof native.TLSSocket) || !(error instanceof Error) ||
             error.code !== PEER_CERTIFICATE_CODE || bad) refuse();
         peer = true; destroy();
-      } catch { veto(); }
+      } catch {
+        // Inspect only a rejected event, never widen the exact acceptance code.
+        let kind = 'peer_other';
+        try {
+          if (alerts !== 1 || connections !== 1 || sniCount !== 1 || socket !== sniSocket ||
+              !(socket instanceof native.TLSSocket)) kind = 'peer_binding';
+          else if (error instanceof Error && error.code === 'ERR_SSL_SSLV3_ALERT_BAD_CERTIFICATE')
+            kind = 'peer_legacy_certificate';
+        } catch {}
+        veto(kind);
+      }
     });
-    listen(server, 'error', () => { readyReject(new Error(REFUSED)); veto(); });
+    listen(server, 'error', () => { readyReject(new Error(REFUSED)); veto('setup'); });
     listen(server, 'close', () => { closedEvent = true; complete(); });
     listen(server, 'listening', () => {
       try {
@@ -708,54 +749,60 @@ export async function createWebkitWrongHostEndpoint(credentials, until, native =
         if (!address || address.address !== '127.0.0.1' || address.family !== 'IPv4' ||
             !Number.isInteger(address.port) || address.port < 1024 || address.port > 65535) refuse();
         port = address.port; ready = true; readyResolve();
-      } catch { readyReject(new Error(REFUSED)); veto(); }
+      } catch { readyReject(new Error(REFUSED)); veto('setup'); }
     });
-    timer = setTimeout(veto, remaining);
+    timer = setTimeout(() => veto('deadline'), remaining);
     server.listen({ host: '127.0.0.1', port: 0, exclusive: true });
     await hostWithin(listening, until);
   } catch {
-    bad = true; clearTimeout(timer);
+    failure('setup'); bad = true; clearTimeout(timer);
     if (server) { stopAccepting(); destroy(); try { await hostWithin(join, until); } catch {} }
     credentials.release(); refuse();
   }
   return Object.freeze({ url: `https://${WRONG_HOST}:${port}/`,
     async finish() {
-      if (used) return false;
+      if (used) { failure('peer_binding'); return false; }
       used = true;
       try { await hostWithin(join, until); hostBudget(until); }
-      catch { veto(); return false; }
+      catch { veto('join'); return false; }
       return ready && joined && peer && !bad && connections === 1 && sniCount === 1 && alerts === 1;
     },
     async close() {
       stopAccepting(); destroy();
       try { await hostWithin(join, until); hostBudget(until); return joined; }
-      catch { return false; }
+      catch { failure('join'); return false; }
     } });
 }
 
 // An independent proof branch. It never clears the original witness's poison.
 // Cancellation gains no authority; only the separately joined native peer fact
 // plus every bound-request/lifecycle/deadline condition can complete this probe.
-export async function probeWebkitWrongHost(browser, factory, until) {
+export async function probeWebkitWrongHost(browser, factory, until, diagnose) {
+  let firstFailure, phase = 'setup';
+  const note = hostFirstDiagnostic(kind => { firstFailure = kind; });
+  const failure = kind => {
+    const remaining = Math.floor(until - performance.now());
+    note(!Number.isFinite(remaining) || remaining < 1 || remaining > 10000 ? 'deadline' : kind);
+  };
   let context, page, endpoint, bad = false, requests = 0, failed, good = false;
   const listeners = [];
   const listen = (target, event, callback) => { target.on(event, callback); listeners.push({ target, event, callback }); };
   const live = () => {
     hostBudget(until);
-    if (bad || page.isClosed() || !browser.isConnected()) refuse();
+    if (bad || page.isClosed() || !browser.isConnected()) { failure('lifecycle'); refuse(); }
   };
   try {
     hostBudget(until);
     if (typeof factory !== 'function') refuse();
     context = await hostWithin(browser.newContext({ ignoreHTTPSErrors: false, serviceWorkers: 'block' }), until);
     page = await hostWithin(context.newPage(), until);
-    for (const event of ['close', 'crash']) listen(page, event, () => { bad = true; });
-    listen(context, 'close', () => { bad = true; });
-    listen(browser, 'disconnected', () => { bad = true; });
-    listen(page, 'response', () => { bad = true; });
+    for (const event of ['close', 'crash']) listen(page, event, () => { failure('lifecycle'); bad = true; });
+    listen(context, 'close', () => { failure('lifecycle'); bad = true; });
+    listen(browser, 'disconnected', () => { failure('lifecycle'); bad = true; });
+    listen(page, 'response', () => { failure('response'); bad = true; });
     const frame = page.mainFrame();
     if (!frame) refuse();
-    endpoint = await hostWithin(Promise.resolve(factory(until)), until);
+    endpoint = await hostWithin(Promise.resolve(factory(until, note)), until);
     const url = new URL(endpoint.url);
     if (url.protocol !== 'https:' || url.hostname !== WRONG_HOST || url.username || url.password ||
         url.pathname !== '/' || url.search || url.hash || url.origin + '/' !== endpoint.url ||
@@ -770,28 +817,34 @@ export async function probeWebkitWrongHost(browser, factory, until) {
         const failure = request.failure();
         if (!failure || !['Operation was cancelled', 'Unacceptable TLS certificate'].includes(failure.errorText)) refuse();
         failed = request;
-      } catch { bad = true; }
+      } catch { failure('request'); bad = true; }
     });
     live();
+    phase = 'navigation';
     let navigationError;
-    try { await hostWithin(page.goto(endpoint.url, { waitUntil: 'load', timeout: hostBudget(until) }), until); bad = true; }
+    try { await hostWithin(page.goto(endpoint.url, { waitUntil: 'load', timeout: hostBudget(until) }), until); failure('response'); bad = true; }
     catch (error) { navigationError = error; }
     if (!(navigationError instanceof Error) || navigationError.name !== 'Error') refuse();
     live();
+    phase = requests !== 1 || !failed ? 'request' : 'response';
     if (requests !== 1 || !failed || await hostWithin(failed.response(), until) !== null) refuse();
     live();
+    phase = 'peer_other';
     if (await hostWithin(endpoint.finish(), until) !== true) refuse();
     live();
     good = true;
-  } catch { good = false; }
+  } catch { failure(phase); good = false; }
   finally {
-    if (endpoint) { try { if (await hostWithin(endpoint.close(), until) !== true) good = false; } catch { good = false; } }
+    if (endpoint) { try { if (await hostWithin(endpoint.close(), until) !== true) good = false; if (!good) failure('join'); } catch { failure('join'); good = false; } }
     // Lifecycle vetoes remain armed through actual endpoint join. Detach only
     // these owned callbacks before intentional page/context teardown.
-    for (const { target, event, callback } of listeners) { try { target.off(event, callback); } catch { good = false; } }
-    if (page) { try { await hostWithin(page.close(), until); } catch { good = false; } }
-    if (context) { try { await hostWithin(context.close(), until); } catch { good = false; } }
-    try { hostBudget(until); } catch { good = false; }
+    for (const { target, event, callback } of listeners) { try { target.off(event, callback); } catch { failure('cleanup'); good = false; } }
+    if (page) { try { await hostWithin(page.close(), until); } catch { failure('cleanup'); good = false; } }
+    if (context) { try { await hostWithin(context.close(), until); } catch { failure('cleanup'); good = false; } }
+    try { hostBudget(until); } catch { failure('deadline'); good = false; }
+  }
+  if (!(good && !bad)) {
+    try { if (typeof diagnose === 'function') diagnose(firstFailure ?? 'unknown'); } catch {}
   }
   return good && !bad;
 }
@@ -832,8 +885,10 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
       for (const reason of ['ca', 'host']) {
         checkpoint(reason === 'ca' ? 'engine_wrong_ca' : 'engine_wrong_host', name);
         if (name === 'webkit' && reason === 'host' && wrongHostFactory !== undefined) {
-          if (!await probeWebkitWrongHost(browser, wrongHostFactory, performance.now() + 10000)) {
-            checkpoint('engine_wrong_host_unknown', name);
+          let detail = 'unknown';
+          if (!await probeWebkitWrongHost(browser, wrongHostFactory, performance.now() + 10000,
+            kind => { if (typeof kind === 'string' && Object.hasOwn(HOST_FAILURE_STAGES, kind)) detail = kind; })) {
+            checkpoint(HOST_FAILURE_STAGES[detail], name);
             refuse();
           }
           continue;

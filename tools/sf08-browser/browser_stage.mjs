@@ -66,8 +66,15 @@ export async function stage(input, deps = {}) {
   const browsers = deps.browsers ?? await import(pathToFileURL(input.playwright_module).href);
   checkpoint('native_wrong_ca', 'none');
   await (deps.nativeNegative ?? nativeWrongCA)(config.negative.ca, config.caPEM);
-  const wrongHostFactory = deps.wrongHostFactory ?? (until => createWebkitWrongHostEndpoint(
-    readWebkitWrongHostCredentials(input.work, input.ready.ca, config.caPEM), until));
+  const wrongHostFactory = deps.wrongHostFactory ?? ((until, diagnose) => {
+    let credentials;
+    try { credentials = readWebkitWrongHostCredentials(input.work, input.ready.ca, config.caPEM); }
+    catch {
+      try { if (typeof diagnose === 'function') diagnose('credential'); } catch {}
+      throw new Error('SF08 browser trust preflight refused');
+    }
+    return createWebkitWrongHostEndpoint(credentials, until, undefined, diagnose);
+  });
   const receipt = await (deps.preflight ?? runPreflight)(browsers, provisioned, input.ready, negative, checkpoint, wrongHostFactory);
   if (JSON.stringify(receipt) !== JSON.stringify({ schema_version: 1, transport_preflight_passed: true,
     engines: ['chromium', 'firefox', 'webkit'].map(engine => ({ engine, positive_sans: 3,
@@ -157,7 +164,15 @@ export const WEBKIT_WITNESS_DIAGNOSTICS = Object.freeze([
   'response_query_timeout',
   'certificate_event'
 ]);
-export const FAILURE_STAGES = ['none','settings','native_wrong_ca','guard','native_positive','native_wrong_host',
+export const FAILURE_STAGES = [
+  'engine_wrong_host_one_shot_credential', 'engine_wrong_host_one_shot_setup',
+  'engine_wrong_host_one_shot_navigation', 'engine_wrong_host_one_shot_request',
+  'engine_wrong_host_one_shot_response', 'engine_wrong_host_one_shot_peer_legacy_certificate',
+  'engine_wrong_host_one_shot_peer_other', 'engine_wrong_host_one_shot_peer_binding',
+  'engine_wrong_host_one_shot_socket', 'engine_wrong_host_one_shot_lifecycle',
+  'engine_wrong_host_one_shot_deadline', 'engine_wrong_host_one_shot_join',
+  'engine_wrong_host_one_shot_cleanup', 'engine_wrong_host_one_shot_unknown',
+'none','settings','native_wrong_ca','guard','native_positive','native_wrong_host',
   'engine_launch','engine_positive','engine_positive_ca','engine_positive_host','engine_positive_timeout',
   'engine_positive_response','engine_positive_tls_unknown','engine_positive_unknown',
   'engine_wrong_ca','engine_wrong_ca_response_received','engine_wrong_ca_bad_signature',
@@ -202,6 +217,7 @@ export function checkedFailure(stage, engine) {
       (FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'firefox') ||
       (WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||
       (WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||
+      (stage.startsWith('engine_wrong_host_one_shot_') && engine !== 'webkit') ||
       (WEBKIT_WITNESS_STAGES.has(stage) && engine !== 'webkit') ||
       (['engine_wrong_ca_bad_signature','engine_wrong_ca_other_tls'].includes(stage) && engine !== 'firefox') ||
       (stage === 'engine_wrong_ca_hostname' && engine === 'webkit')) throw new Error('SF08 checkpoint refused');

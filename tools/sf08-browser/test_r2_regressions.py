@@ -98,6 +98,26 @@ class R2Tests(unittest.TestCase):
         self.assertIn('O_EXCL',node)
         for stage in f.STAGES:self.assertIn("'"+stage+"'",node)
 
+    def test_one_shot_failure_categories_are_finite_webkit_only_and_not_acceptance(self):
+        categories = {'credential', 'setup', 'navigation', 'request', 'response',
+                      'peer_legacy_certificate', 'peer_other', 'peer_binding',
+                      'socket', 'lifecycle', 'deadline', 'join', 'cleanup', 'unknown'}
+        prefix = 'engine_wrong_host_one_shot_'
+        expected = {prefix + category for category in categories}
+        self.assertEqual({stage for stage in f.STAGES if stage.startswith(prefix)}, expected)
+        for stage in expected:
+            value = {'schema_version': 1, 'stage': stage, 'engine': 'webkit'}
+            self.assertEqual(f.validate(value), value)
+            for engine in ('none', 'chromium', 'firefox'):
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                    f.validate({**value, 'engine': engine})
+            with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                f.validate({**value, 'accepted': True})
+        for suffix in ('', 'PRIVATE_SENTINEL', 'peer_other_extra', 'https://private.invalid/'):
+            with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$') as caught:
+                f.validate({'schema_version': 1, 'stage': prefix + suffix, 'engine': 'webkit'})
+            self.assertNotIn('PRIVATE_SENTINEL', str(caught.exception))
+
     def test_webkit_witness_checkpoints_are_bounded_and_webkit_only(self):
         self.assertEqual(len(f.WEBKIT_WITNESS_DIAGNOSTICS), 25)
         self.assertEqual({value for value in f.WEBKIT_WITNESS_DIAGNOSTICS
