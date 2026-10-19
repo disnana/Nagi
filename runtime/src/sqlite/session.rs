@@ -193,6 +193,10 @@ pub(super) struct Config {
     pub command_gate: Option<Arc<Gate>>,
     pub cleanup_gate: Option<Arc<Gate>>,
     pub commit_gate: Option<Arc<Gate>>,
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    pub native_call_gate: Option<Arc<Gate>>,
+    #[cfg(all(test, nagi_auth_stage_diag))]
+    pub native_return_gate: Option<Arc<Gate>>,
     pub exit_gate: Option<Arc<Gate>>,
     pub deny_rollback: bool,
     pub deny_commit: bool,
@@ -973,7 +977,23 @@ fn run_session(
                                     if let Some(finish) = &native_finish {
                                         finish.commit_enter();
                                     }
+                                    #[cfg(all(test, nagi_auth_stage_diag))]
+                                    if let Some(gate) = &config.native_call_gate {
+                                        gate.block_once();
+                                    }
+                                    #[cfg(nagi_auth_stage_diag)]
+                                    if let Some(finish) = &native_finish {
+                                        finish.call_enter();
+                                    }
                                     let result = native.commit();
+                                    #[cfg(nagi_auth_stage_diag)]
+                                    if let Some(finish) = &native_finish {
+                                        finish.call_return();
+                                    }
+                                    #[cfg(all(test, nagi_auth_stage_diag))]
+                                    if let Some(gate) = &config.native_return_gate {
+                                        gate.block_once();
+                                    }
                                     #[cfg(nagi_auth_stage_diag)]
                                     if let Some(finish) = &native_finish {
                                         finish.commit_return(result.is_ok());

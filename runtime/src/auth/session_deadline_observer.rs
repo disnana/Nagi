@@ -3,7 +3,10 @@
 use std::{
     fmt,
     future::Future,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
     time::Instant,
 };
 
@@ -103,7 +106,7 @@ pub(crate) enum Db {
     RollbackDone,
     Settled,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct Record {
     until: Instant,
     phase_at: Instant,
@@ -127,6 +130,10 @@ struct State {
     entered: Instant,
     security_until: Instant,
     record: Mutex<Record>,
+    native_call_enter: AtomicU64,
+    native_call_return: AtomicU64,
+    #[cfg(test)]
+    native_call_changed: tokio::sync::Notify,
 }
 #[derive(Clone)]
 pub(crate) struct Observer(Arc<State>);
@@ -142,6 +149,10 @@ impl Observer {
             admitted,
             entered,
             security_until: until,
+            native_call_enter: AtomicU64::new(native_finish::tagged(0, native_finish::UNSEEN_US)),
+            native_call_return: AtomicU64::new(native_finish::tagged(0, native_finish::UNSEEN_US)),
+            #[cfg(test)]
+            native_call_changed: tokio::sync::Notify::new(),
             record: Mutex::new(Record {
                 until,
                 phase_at: entered,
@@ -187,6 +198,51 @@ impl Observer {
         )
         .to_string()
     }
+    #[cfg(test)]
+    pub(crate) fn native_call_for_test(&self) -> String {
+        native_finish::CallClosed::new(
+            self.closed(504).expect("unpoisoned test observer"),
+            native_finish::Origin::Session,
+            0,
+        )
+        .to_string()
+    }
+    #[cfg(test)]
+    pub(crate) fn hold_native_record_for_test(
+        &self,
+        entered: std::sync::mpsc::SyncSender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+    ) {
+        let _held = self.0.record.lock().unwrap();
+        entered.send(()).unwrap();
+        release
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .expect("record gate watchdog");
+    }
+    #[cfg(test)]
+    pub(crate) fn native_call_return_seen_for_test(&self) -> bool {
+        (self.0.native_call_return.load(Ordering::Acquire) as u32) < native_finish::UNSEEN_US
+    }
+    #[cfg(test)]
+    pub(crate) async fn wait_native_call_for_test(&self, returned: bool) {
+        tokio::time::timeout(std::time::Duration::from_secs(10), async {
+            loop {
+                let changed = self.0.native_call_changed.notified();
+                let word = if returned {
+                    &self.0.native_call_return
+                } else {
+                    &self.0.native_call_enter
+                }
+                .load(Ordering::Acquire);
+                if (word as u32) < native_finish::UNSEEN_US {
+                    return;
+                }
+                changed.await;
+            }
+        })
+        .await
+        .expect("native stamp watchdog");
+    }
     pub(crate) fn db(&self, stage: Db) {
         self.update(|r| {
             r.db = stage;
@@ -212,20 +268,40 @@ impl Observer {
         if status != 504 {
             return None;
         }
-        let held = self.0.record.lock().ok()?;
+        let record = *self.0.record.lock().ok()?;
+        Some(self.close_record(record))
+    }
+    fn close_record(&self, record: Record) -> Closed {
+        let entered = self.0.native_call_enter.load(Ordering::Acquire);
+        let returned = self.0.native_call_return.load(Ordering::Acquire);
+        let after = self.0.record.lock().ok().map(|held| *held);
         let now = Instant::now();
-        let record = *held;
-        Some(Closed {
+        Closed {
+            // Preserve the original terminal copy even if the second read
+            // becomes poisoned. Only the new supplement is unavailable.
+            native_call: after.map_or(native_finish::CallSnapshot::UNAVAILABLE, |after| {
+                native_finish::CallSnapshot::coherent(record, after, entered, returned)
+            }),
             record,
             exit_remaining_ms: bounded_ms(record.until.saturating_duration_since(now)),
             selected_deadline_passed: now >= record.until,
-        })
+        }
+    }
+    #[cfg(test)]
+    fn closed_after_copy(&self, status: u16, after_copy: impl FnOnce()) -> Option<Closed> {
+        if status != 504 {
+            return None;
+        }
+        let record = *self.0.record.lock().ok()?;
+        after_copy();
+        Some(self.close_record(record))
     }
     pub(crate) fn emit(&self, status: u16) {
         if let Some(closed) = self.closed(status) {
             eprintln!(
-                "{closed}\n{}",
-                native_finish::Closed::new(closed, native_finish::Origin::Session, 0)
+                "{closed}\n{}\n{}",
+                native_finish::Closed::new(closed, native_finish::Origin::Session, 0),
+                native_finish::CallClosed::new(closed, native_finish::Origin::Session, 0)
             );
         }
     }
@@ -235,23 +311,37 @@ impl Observer {
         // may already be dropped; ACTIVE is deliberately not consulted here.
         if let Some(closed) = self.closed(504) {
             eprintln!(
-                "{}\n{}",
+                "{}\n{}\n{}",
                 PrivateClosed { closed, terminal },
-                native_finish::Closed::new(closed, native_finish::Origin::Private, terminal as u8)
+                native_finish::Closed::new(closed, native_finish::Origin::Private, terminal as u8),
+                native_finish::CallClosed::new(
+                    closed,
+                    native_finish::Origin::Private,
+                    terminal as u8
+                )
             );
         }
     }
     pub(crate) fn emit_guarded(&self, status: u16) {
         if let Some(closed) = self.closed(status) {
-            eprintln!("{}", GuardedClosed(closed));
+            eprintln!(
+                "{}\n{}",
+                GuardedClosed(closed),
+                native_finish::CallClosed::new(closed, native_finish::Origin::Session, 0)
+            );
         }
     }
     pub(crate) fn emit_token(&self, status: u16) {
         if let Some(closed) = self.closed(status) {
             eprintln!(
-                "{}\n{}",
+                "{}\n{}\n{}",
                 TokenClosed(closed),
                 native_finish::Closed::new(
+                    closed,
+                    native_finish::Origin::Token,
+                    closed.record.token_terminal as u8
+                ),
+                native_finish::CallClosed::new(
                     closed,
                     native_finish::Origin::Token,
                     closed.record.token_terminal as u8
@@ -268,13 +358,14 @@ impl Observer {
                     .saturating_duration_since(self.0.admitted),
             );
             eprintln!(
-                "{}\n{}",
+                "{}\n{}\n{}",
                 BootstrapClosed {
                     closed,
                     security_budget_ms,
                     selected_end_kind
                 },
-                native_finish::Closed::new(closed, native_finish::Origin::Bootstrap, 0)
+                native_finish::Closed::new(closed, native_finish::Origin::Bootstrap, 0),
+                native_finish::CallClosed::new(closed, native_finish::Origin::Bootstrap, 0)
             );
         }
     }
@@ -344,6 +435,7 @@ pub(crate) async fn observe<F: Future>(stage: Phase, future: F) -> F::Output {
 #[derive(Clone, Copy)]
 struct Closed {
     record: Record,
+    native_call: native_finish::CallSnapshot,
     exit_remaining_ms: u16,
     selected_deadline_passed: bool,
 }

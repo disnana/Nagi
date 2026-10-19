@@ -1,6 +1,9 @@
 //! Closed request-owned native call boundaries, not OS wait classifications.
 use super::{Db, Observer};
-use std::fmt;
+use std::{
+    fmt,
+    sync::atomic::{AtomicU64, Ordering},
+};
 pub(super) const LIMIT_US: u32 = 60_000_000;
 pub(super) const UNSEEN_US: u32 = LIMIT_US + 1;
 fn bounded_us(duration: std::time::Duration) -> u32 {
@@ -18,7 +21,7 @@ pub(super) enum Stage {
     CleanupErr = 6,
     CheckoutReturned = 7,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct Record {
     pub(super) valid: bool,
     active: bool,
@@ -49,6 +52,116 @@ impl Record {
         }
     }
 }
+// Upper32 bits are the nonwrapping, request-local begin counter. Lower32
+// bits are the existing bounded elapsed value; out-of-range means unavailable.
+const INVALID_US: u32 = u32::MAX;
+pub(super) const fn tagged(begin: u16, stamp: u32) -> u64 {
+    ((begin as u64) << 32) | stamp as u64
+}
+fn unpack(word: u64) -> (u64, u32) {
+    (word >> 32, word as u32)
+}
+#[derive(Clone, Copy)]
+pub(super) struct CallSnapshot {
+    valid: bool,
+    state: u8,
+    generation: u16,
+    entered: u32,
+    returned: u32,
+    native_state: u8,
+    commit_result: u8,
+    settled: u32,
+    begins: u16,
+    commits: u16,
+}
+impl CallSnapshot {
+    pub(super) const UNAVAILABLE: Self = Self {
+        valid: false,
+        state: 0,
+        generation: 0,
+        entered: UNSEEN_US,
+        returned: UNSEEN_US,
+        native_state: 0,
+        commit_result: 0,
+        settled: UNSEEN_US,
+        begins: 0,
+        commits: 0,
+    };
+    pub(super) fn coherent(
+        before: super::Record,
+        after: super::Record,
+        entry: u64,
+        returned: u64,
+    ) -> Self {
+        let (entry_generation, entry) = unpack(entry);
+        let (return_generation, returned) = unpack(returned);
+        let n = before.native;
+        if before != after
+            || !n.valid
+            || (n.stage == Stage::CommitOk && n.commit_result != 1)
+            || (n.stage == Stage::CommitErr && n.commit_result != 2)
+            || ((n.stage == Stage::CheckoutReturned) != (n.settled_us <= LIMIT_US))
+            || (n.stage != Stage::CheckoutReturned && n.settled_us != UNSEEN_US)
+            || before.begins == 0
+            || before.begins >= 1023
+            || entry_generation != u64::from(before.begins)
+            || return_generation != entry_generation
+            || entry > UNSEEN_US
+            || returned > UNSEEN_US
+            || (returned != UNSEEN_US && (entry == UNSEEN_US || returned < entry))
+            || (entry != UNSEEN_US && n.commit_enter_us > entry)
+        {
+            return Self::UNAVAILABLE;
+        }
+        let state = if entry == UNSEEN_US {
+            if returned != UNSEEN_US
+                || n.commit_result != 0
+                || matches!(n.stage, Stage::CommitOk | Stage::CommitErr)
+            {
+                return Self::UNAVAILABLE;
+            }
+            1
+        } else if returned == UNSEEN_US {
+            if n.stage != Stage::CommitEntered
+                || n.commit_result != 0
+                || n.commit_return_us != UNSEEN_US
+                || n.settled_us != UNSEEN_US
+            {
+                return Self::UNAVAILABLE;
+            }
+            2
+        } else if n.stage == Stage::CommitEntered {
+            if n.commit_result != 0 || n.commit_return_us != UNSEEN_US || n.settled_us != UNSEEN_US
+            {
+                return Self::UNAVAILABLE;
+            }
+            3
+        } else {
+            if !matches!(n.commit_result, 1 | 2)
+                || n.stage == Stage::Unseen
+                || n.commit_return_us < returned
+                || n.commit_return_us > LIMIT_US
+                || (n.stage == Stage::CheckoutReturned && n.settled_us < returned)
+            {
+                return Self::UNAVAILABLE;
+            }
+            4
+        };
+        Self {
+            valid: true,
+            state,
+            generation: before.begins,
+            entered: entry,
+            returned,
+            native_state: n.stage as u8,
+            commit_result: n.commit_result,
+            settled: n.settled_us,
+            begins: before.begins,
+            commits: before.commits,
+        }
+    }
+}
+
 // A lexical witness borrows the already request-owned Observer. No new task ID,
 // callback, authority, native resource, await or cross-request global slot.
 // begin mirrors the existing bounded begins counter only, so an old guard's
@@ -75,6 +188,14 @@ impl<'a> NativeFinish<'a> {
             r.native.active = true;
             owns = true;
             begin = r.begins;
+            observer
+                .0
+                .native_call_enter
+                .store(tagged(begin, UNSEEN_US), Ordering::Release);
+            observer
+                .0
+                .native_call_return
+                .store(tagged(begin, UNSEEN_US), Ordering::Release);
         });
         Self {
             observer,
@@ -115,6 +236,35 @@ impl<'a> NativeFinish<'a> {
             r.stage = Stage::CommitEntered;
             r.commit_enter_us = now;
         });
+    }
+    fn publish_call(&self, word: &AtomicU64) {
+        if !self.owns {
+            return;
+        }
+        let expected = tagged(self.begin, UNSEEN_US);
+        let stamp = tagged(self.begin, bounded_us(self.observer.0.admitted.elapsed()));
+        if let Err(prior) =
+            word.compare_exchange(expected, stamp, Ordering::Release, Ordering::Acquire)
+        {
+            // A stale lexical owner never overwrites a later begin. Duplicate
+            // same-generation publication is poisoned without taking the mutex.
+            if unpack(prior).0 == u64::from(self.begin) {
+                let _ = word.compare_exchange(
+                    prior,
+                    tagged(self.begin, INVALID_US),
+                    Ordering::Release,
+                    Ordering::Acquire,
+                );
+            }
+        }
+        #[cfg(test)]
+        self.observer.0.native_call_changed.notify_waiters();
+    }
+    pub(crate) fn call_enter(&self) {
+        self.publish_call(&self.observer.0.native_call_enter);
+    }
+    pub(crate) fn call_return(&self) {
+        self.publish_call(&self.observer.0.native_call_return);
     }
     pub(crate) fn commit_return(&self, ok: bool) {
         self.mark(|r, now| {
@@ -239,6 +389,28 @@ impl fmt::Display for Closed {
             self.origin as u8,self.terminal,u8::from(n.valid),n.stage as u8,n.commit_result,n.cleanup_result,n.cleanup_reason,n.commit_enter_us,n.commit_return_us,n.cleanup_enter_us,n.cleanup_return_us,n.settled_us,r.begins,r.commits,u8::from(self.snapshot.selected_deadline_passed))
     }
 }
+pub(super) struct CallClosed {
+    snapshot: super::Closed,
+    origin: Origin,
+    terminal: u8,
+}
+impl CallClosed {
+    pub(super) fn new(snapshot: super::Closed, origin: Origin, terminal: u8) -> Self {
+        Self {
+            snapshot,
+            origin,
+            terminal,
+        }
+    }
+}
+impl fmt::Display for CallClosed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let n = self.snapshot.native_call;
+        write!(f,"session_native_call_diag status=504 origin={} terminal={} diagnostic_valid={} native_call_state={} generation={} call_enter_us={} call_return_us={} native_state={} commit_result={} settled_us={} begins={} commits={} selected_deadline_passed={}",
+            self.origin as u8,self.terminal,u8::from(n.valid),n.state,n.generation,n.entered,n.returned,n.native_state,n.commit_result,n.settled,n.begins,n.commits,u8::from(n.valid && self.snapshot.selected_deadline_passed))
+    }
+}
+
 #[cfg(test)]
 #[path = "session_native_finish_tests.rs"]
 mod tests;
