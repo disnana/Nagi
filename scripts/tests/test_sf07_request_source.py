@@ -160,7 +160,7 @@ class RequestSourceTests(unittest.TestCase):
         self.assertNotIn('self.headers.clone()', http)
         self.assertNotIn('parts.headers.clone()', read('runtime/src/http_server/csrf_http.rs'))
 
-    def test_eight_new_native_oracles_are_registered_without_changing_old_39(self):
+    def test_eight_new_request_oracles_preserve_current_wire_inventory(self):
         native = read('runtime/src/http_server/request_headers_tests.rs')
         names = re.findall(r'#\[(?:tokio::)?test\]\s*(?:async )?fn (\w+)\(', native)
         self.assertEqual(len(names), 8)
@@ -169,7 +169,7 @@ class RequestSourceTests(unittest.TestCase):
         summary = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(summary)
         self.assertEqual(set(summary.EXPECTED['request']), {'http_server::request_headers::tests::' + n for n in names})
-        self.assertEqual(tuple(len(summary.EXPECTED[n]) for n in ('wire', 'quota', 'transport')), (39, 9, 9))
+        self.assertEqual(tuple(len(summary.EXPECTED[n]) for n in ('wire', 'quota', 'transport')), (40, 9, 9))
         self.assertEqual(len(re.findall(r'#\[tokio::test\]\s*async fn', read('runtime/src/http_server/response_send_tests.rs'))), 9)
         import json
         inherited = {k: list(summary.EXPECTED[k]) for k in ('wire', 'quota', 'transport', 'request', 'rate-startup')}

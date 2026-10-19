@@ -2,9 +2,6 @@
 # and audit before activation. No local container/image execution has occurred.
 name: SF08 isolated browser TLS
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
   workflow_call:
 permissions:

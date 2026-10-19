@@ -44,7 +44,9 @@ function expectedTLSFailure(error, name, reason, probeURL) {
   return exactTLSFailureToken(error, TLS_ERROR[name][reason], probeURL);
 }
 
-// Failure-only facts; expectedTLSFailure remains the sole acceptance oracle.
+// Navigation-error classification only. The probe may additionally require a
+// strictly bound certificate-specific requestfailed witness; these diagnostic
+// labels themselves never authorize a rejection.
 function wrongCAFailureOutcome(error, name, probeURL) {
   try {
     if (!(error instanceof Error)) return 'unknown';
@@ -372,6 +374,78 @@ function nativeTLSGet(origin, ca) {
   });
 }
 
+// Playwright 1.64.1 preserves Network.loadingFailed.errorText in request.failure
+// separately from the provisional navigation error used by page.goto. Generic
+// cancellation is never evidence: this alternative requires the exact failed
+// main-document request and a certificate-specific network failure, no response,
+// and no closure/crash. It never retries or extends the original probe budget.
+export function webkitCertificateWitness(page, context, browser, probeURL, until) {
+  let active = true, poisoned = false, ended = false, stopped = false, attempted = false, failed = null, count = 0;
+  const installed = [];
+  const listen = (target, event, fn, network = false) => {
+    target.on(event, fn);
+    installed.push({ target, event, fn, network });
+  };
+  const detach = onlyNetwork => {
+    for (let i = installed.length - 1; i >= 0; i--) {
+      const item = installed[i];
+      if (onlyNetwork && !item.network) continue;
+      try { item.target.off(item.event, item.fn); } catch { poisoned = true; }
+      installed.splice(i, 1);
+    }
+  };
+  const vetoed = () => {
+    try { return poisoned || ended || page.isClosed() || !browser.isConnected(); }
+    catch { return true; }
+  };
+  try {
+    const frame = page.mainFrame();
+    if (!frame) throw new Error(REFUSED);
+    listen(page, 'requestfailed', request => {
+      if (!active) return;
+      count++;
+      try {
+        if (count !== 1 || request.url() !== probeURL || request.isNavigationRequest() !== true ||
+            request.frame() !== frame || request.failure()?.errorText !== TLS_ERROR.webkit.ca) {
+          poisoned = true;
+          return;
+        }
+        failed = request;
+      } catch { poisoned = true; }
+    }, true);
+    // A fresh page has no previous HTTP traffic. Even a redirect is a veto.
+    listen(page, 'response', () => { if (active) poisoned = true; }, true);
+    for (const event of ['close', 'crash']) listen(page, event, () => { ended = true; });
+    listen(context, 'close', () => { ended = true; });
+    listen(browser, 'disconnected', () => { ended = true; });
+  } catch { poisoned = true; }
+  return {
+    vetoed,
+    async refused(error) {
+      if (stopped || attempted) return false;
+      attempted = true;
+      // Freeze navigation observations before querying the already failed
+      // request; teardown or delayed events cannot become evidence.
+      active = false;
+      detach(true);
+      let timer;
+      try {
+        if (!(error instanceof Error) || error.name !== 'Error' || vetoed() || count !== 1 || !failed)
+          return false;
+        const remaining = Math.floor(until - performance.now());
+        if (!Number.isFinite(remaining) || remaining < 1 || remaining > 10000) return false;
+        const noResponse = await Promise.race([
+          Promise.resolve(failed.response()).then(value => value === null, () => false),
+          new Promise(resolve => { timer = setTimeout(() => resolve(false), remaining); }),
+        ]);
+        return noResponse && performance.now() < until && !vetoed();
+      } catch { return false; }
+      finally { clearTimeout(timer); }
+    },
+    stop() { active = false; detach(false); const good = !vetoed(); stopped = true; return good; },
+  };
+}
+
 export async function probeEngine(name, browserType, config, checkpoint = () => {}, readinessTiming) {
   if (!Object.hasOwn(VERSIONS, name)) refuse();
   let browser;
@@ -412,6 +486,9 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
         let rejected = false;
         let failureOutcome = 'unknown';
         const probeURL = config.negative[reason] + '/';
+        const witness = name === 'webkit'
+          ? webkitCertificateWitness(page, context, browser, probeURL, performance.now() + 10000)
+          : null;
         try {
           const response = await page.goto(probeURL, { waitUntil: 'load', timeout: 10000 });
           if (reason === 'ca') failureOutcome = response === null || response === undefined
@@ -434,7 +511,13 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
             } catch { rejected = false; }
             if (!rejected) failureOutcome = wrongHostFailureOutcome(error, name, probeURL);
           }
+          if (!rejected && witness) rejected = await witness.refused(error);
+          // Mandatory lifecycle/timeout vetoes also apply to the original
+          // exact TLS-message path, not only the alternative event witness.
+          if (witness && (!(error instanceof Error) || error.name !== 'Error' || witness.vetoed()))
+            rejected = false;
         } finally {
+          if (witness && !witness.stop()) rejected = false;
           if (reason === 'host') checkpoint('engine_wrong_host_page_close', name);
           await page.close();
         }

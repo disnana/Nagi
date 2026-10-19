@@ -22,6 +22,12 @@ pub(super) fn with_response_fixture(options: Options) -> Options {
             .checked_mul(262_144)
             .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
             .expect("test fallback retained bound fits usize");
+        // A native connection retains its prior response's charge through the
+        // next request. Concurrent handlers need their own finite output slots.
+        let live_responses = options
+            .requests
+            .checked_add(options.connections)
+            .expect("test live response count fits usize");
         let limits = response_limits(
             i64::try_from(body_bytes).expect("test body bound fits i64"),
             65_536,
@@ -29,7 +35,7 @@ pub(super) fn with_response_fixture(options: Options) -> Options {
             4096,
             32,
             131_072,
-            i64::try_from(options.requests).expect("test request count fits i64"),
+            i64::try_from(live_responses).expect("test response count fits i64"),
             i64::try_from(retained_bytes).expect("test retained bound fits i64"),
             i64::try_from(options.connections).expect("test connection count fits i64"),
             i64::try_from(fallback_retained_bytes).expect("test fallback retained bound fits i64"),

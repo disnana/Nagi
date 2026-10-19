@@ -435,6 +435,7 @@ pub(in crate::http_server) enum FallbackStatus {
     Limited { retry_seconds: u64 },
     Capacity,
     Internal,
+    TransportInternal,
     Unauthorized,
     Forbidden,
     BodyTimeout,
@@ -452,13 +453,14 @@ pub(in crate::http_server) enum FallbackStatus {
     Security(FailureKind),
 }
 impl FallbackStatus {
-    pub(in crate::http_server) fn all() -> [Self; 23] {
+    pub(in crate::http_server) fn all() -> [Self; 24] {
         [
             Self::Limited {
                 retry_seconds: u64::MAX,
             },
             Self::Capacity,
             Self::Internal,
+            Self::TransportInternal,
             Self::Unauthorized,
             Self::Forbidden,
             Self::BodyTimeout,
@@ -485,7 +487,7 @@ impl FallbackStatus {
         match self {
             Self::Limited { .. } => 429,
             Self::Capacity => 503,
-            Self::Internal => 500,
+            Self::Internal | Self::TransportInternal => 500,
             Self::Unauthorized => 401,
             Self::Forbidden => 403,
             Self::BodyTimeout => 408,
@@ -514,10 +516,11 @@ impl FallbackStatus {
             Self::Limited { .. } => b"too many requests",
             Self::Capacity => b"service unavailable",
             Self::Internal => b"internal error",
+            Self::TransportInternal => b"Internal Server Error",
             Self::Unauthorized => b"unauthorized",
             Self::Forbidden => b"forbidden",
-            Self::BodyTimeout => b"request timeout",
-            Self::BodyTooLarge => b"content too large",
+            Self::BodyTimeout => b"Request Timeout",
+            Self::BodyTooLarge => b"Payload Too Large",
             Self::Deadline => b"gateway timeout",
             Self::BadRequest => b"Bad Request",
             Self::NotFound => b"Not Found",

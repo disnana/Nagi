@@ -286,6 +286,45 @@ fn fallback_uses_independent_ledger_then_closes_without_another_allocation() {
 }
 
 #[test]
+fn closed_transport_and_internal_bodies_keep_independent_finite_fallback_credit() {
+    let fallback = FallbackLedger::checked(fallback_limits(), 1).unwrap();
+    for (reason, code, body) in [
+        (
+            FallbackStatus::TransportInternal,
+            500,
+            b"Internal Server Error".as_slice(),
+        ),
+        (FallbackStatus::Internal, 500, b"internal error".as_slice()),
+        (
+            FallbackStatus::BodyTimeout,
+            408,
+            b"Request Timeout".as_slice(),
+        ),
+        (
+            FallbackStatus::BodyTooLarge,
+            413,
+            b"Payload Too Large".as_slice(),
+        ),
+    ] {
+        assert_eq!(reason.code(), code);
+        assert_eq!(reason.body(), body);
+        let wire = fallback_wire(fallback.produce(reason), code);
+        let (headers, original) = wire.into_parts();
+        assert_eq!(original.as_ref(), body);
+        let last = original.clone();
+        drop(headers);
+        drop(original);
+        let before = fallback.allocation_attempts();
+        let (closed, meter) = crate::metrics::measure(|| fallback.produce(reason));
+        assert!(closed.is_close());
+        assert_eq!(meter.allocations, 0);
+        assert_eq!(fallback.allocation_attempts(), before);
+        drop(last);
+        assert!(!fallback.produce(reason).is_close());
+    }
+}
+
+#[test]
 fn fallback_preserves_statuses_and_positive_retry_without_ordinary_serializer() {
     let fallback = FallbackLedger::checked(fallback_limits(), 1).unwrap();
     for (status, code) in [

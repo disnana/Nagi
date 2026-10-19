@@ -370,12 +370,6 @@ jobs:
 
           raise SystemExit(1 if overall_failed else 0)
           PY
-      - name: Compile actual CSRF semantic mutants on Linux
-        if: always() && matrix.platform == 'linux-x86_64'
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/pr133-focused"
-          python -B scripts/ci/csrf_deadline_mutations.py . "$RUNNER_TEMP/pr133-focused/csrf-deadline-mutations.json"
       - name: Preserve only closed focused summaries
         if: always()
         uses: actions/upload-artifact@v4

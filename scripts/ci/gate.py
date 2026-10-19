@@ -23,7 +23,10 @@ def errors(needs: dict) -> list[str]:
     if jetbrains not in ("true", "false"):
         failures.append("jetbrains: missing or invalid check plan")
     plan = needs.get("release-plan", {}).get("outputs", {})
+    if not isinstance(plan, dict):
+        plan = {}
     package_jetbrains = plan.get("package_jetbrains")
+    package_nagi = plan.get("package_nagi")
     if package_jetbrains not in ("true", "false"):
         failures.append("jetbrains: missing or invalid package plan")
     if jetbrains in ("true", "false") and package_jetbrains in ("true", "false"):
@@ -31,6 +34,13 @@ def errors(needs: dict) -> list[str]:
         actual = needs.get("jetbrains", {}).get("result", "missing")
         if actual != expected:
             failures.append(f"jetbrains: {actual}, expected {expected}")
+    if full not in ("true", "false") or package_nagi not in ("true", "false"):
+        failures.append("sf08-browser: missing or invalid selector")
+    else:
+        expected = "success" if full == "true" or package_nagi == "true" else "skipped"
+        actual = needs.get("sf08-browser", {}).get("result", "missing")
+        if actual != expected:
+            failures.append(f"sf08-browser: {actual}, expected {expected}")
     for component, job in (("vscode", "vscode-package"), ("nagi", "nagi-package")):
         planned = plan.get(f"package_{component}")
         if planned not in ("true", "false"):

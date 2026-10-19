@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { settings, probeEngine, firefoxCAReadiness, firefoxWorkerReadiness } from './preflight.mjs';
+import { EventEmitter } from 'node:events';
+import { settings, probeEngine, firefoxCAReadiness, firefoxWorkerReadiness, webkitCertificateWitness } from './preflight.mjs';
 import { checkedFailure, FAILURE_STAGES } from './browser_stage.mjs';
 
 const CA = Buffer.from('unit-ca-only-not-a-certificate');
@@ -19,19 +20,111 @@ const messages = { chromium: ['net::ERR_CERT_AUTHORITY_INVALID', 'net::ERR_CERT_
   webkit: ['Unacceptable TLS certificate', 'Unacceptable TLS certificate'] };
 const versions = { chromium: '156.0.8078.4', firefox: '157.0', webkit: '27.2' };
 
+function certificateWitnessFixture(overrides = {}, until = performance.now() + 10000) {
+  const page = new EventEmitter(), context = new EventEmitter(), browser = new EventEmitter();
+  const frame = {}, url = negative.caOrigin + '/';
+  page.mainFrame = () => frame;
+  page.isClosed = () => false;
+  browser.isConnected = () => true;
+  const request = { url: () => url, frame: () => frame, isNavigationRequest: () => true,
+    failure: () => ({ errorText: messages.webkit[0] }), response: async () => null, ...overrides };
+  const witness = webkitCertificateWitness(page, context, browser, url, until);
+  return { page, context, browser, request, witness };
+}
+
+test('WebKit certificate event proves one bound failed navigation, never cancellation alone', async () => {
+  const f = certificateWitnessFixture();
+  f.page.emit('requestfailed', f.request);
+  assert.equal(await f.witness.refused(new Error('Operation was cancelled')), true);
+  assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false);
+  assert.equal(f.page.listenerCount('requestfailed'), 0);
+  assert.equal(f.witness.stop(), true);
+  for (const target of [f.page, f.context, f.browser]) assert.equal(target.eventNames().length, 0);
+  f.page.emit('requestfailed', f.request); // Teardown cannot provide more evidence.
+});
+
+test('WebKit certificate witness rejects missing duplicate foreign or malformed evidence', async () => {
+  for (const [label, overrides] of [
+    ['wrong URL', { url: () => negative.hostOrigin + '/' }],
+    ['subresource', { isNavigationRequest: () => false }],
+    ['subframe', { frame: () => ({}) }],
+    ['null failure', { failure: () => null }],
+    ['generic cancellation', { failure: () => ({ errorText: 'Operation was cancelled' }) }],
+    ['network failure', { failure: () => ({ errorText: 'net::ERR_CONNECTION_REFUSED' }) }],
+    ['token suffix', { failure: () => ({ errorText: messages.webkit[0] + ' PRIVATE_SENTINEL' }) }],
+    ['nonstring', { failure: () => ({ errorText: 1 }) }],
+    ['failure getter throws', { failure: () => Object.defineProperty({}, 'errorText', {
+      get() { throw new Error('PRIVATE_SENTINEL'); },
+    }) }],
+    ['method throws', { frame: () => { throw new Error('PRIVATE_SENTINEL'); } }],
+    ['HTTP response', { response: async () => ({ status: () => 200 }) }],
+    ['response query throws', { response: () => { throw new Error('PRIVATE_SENTINEL'); } }],
+  ]) {
+    const f = certificateWitnessFixture(overrides);
+    f.page.emit('requestfailed', f.request);
+    assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false, label);
+    f.witness.stop();
+  }
+  for (const count of [0, 2]) {
+    const f = certificateWitnessFixture();
+    for (let i = 0; i < count; i++) f.page.emit('requestfailed', f.request);
+    assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false);
+    f.witness.stop();
+  }
+});
+
+test('WebKit certificate witness keeps response closure timeout and original deadline vetoes', async () => {
+  for (const event of ['response', 'close', 'crash', 'context-close', 'disconnected']) {
+    const f = certificateWitnessFixture();
+    f.page.emit('requestfailed', f.request);
+    if (event === 'context-close') f.context.emit('close');
+    else if (event === 'disconnected') f.browser.emit(event);
+    else f.page.emit(event);
+    assert.equal(await f.witness.refused(new Error('Operation was cancelled')), false, event);
+    f.witness.stop();
+  }
+  for (const error of [Object.assign(new Error('PRIVATE_SENTINEL'), { name: 'TimeoutError' }),
+                       { message: 'Unacceptable TLS certificate' }]) {
+    const f = certificateWitnessFixture(); f.page.emit('requestfailed', f.request);
+    assert.equal(await f.witness.refused(error), false); f.witness.stop();
+  }
+  const expired = certificateWitnessFixture({}, performance.now() - 1);
+  expired.page.emit('requestfailed', expired.request);
+  assert.equal(await expired.witness.refused(new Error('Operation was cancelled')), false);
+  expired.witness.stop();
+  const late = certificateWitnessFixture();
+  late.witness.stop(); late.page.emit('requestfailed', late.request);
+  assert.equal(await late.witness.refused(new Error('Operation was cancelled')), false);
+  const stopped = certificateWitnessFixture(); stopped.page.emit('requestfailed', stopped.request);
+  stopped.witness.stop();
+  assert.equal(await stopped.witness.refused(new Error('Operation was cancelled')), false);
+  const pending = certificateWitnessFixture({ response: () => new Promise(() => {}) }, performance.now() + 25);
+  pending.page.emit('requestfailed', pending.request);
+  assert.equal(await pending.witness.refused(new Error('Operation was cancelled')), false);
+  pending.witness.stop();
+});
+
 function fake(name, mode, fault) {
   const trace = { urls: [], timeouts: [], closed: false, pageClosed: 0, contextClosed: false };
   const config = fault?.config ?? settings(provisioned, ready, negative);
   return { trace, async launch(options) {
     trace.launch = options;
+    const browserEvents = new EventEmitter();
     return { version: () => mode === 'version' ? 'unexpected' : versions[name],
+      on: browserEvents.on.bind(browserEvents), off: browserEvents.off.bind(browserEvents),
+      isConnected: () => !trace.closed,
       async close() { trace.closed = true; },
       async newContext(options) {
         trace.context = options;
-        return { async close() { trace.contextClosed = true; }, async newPage() {
+        const contextEvents = new EventEmitter();
+        return { on: contextEvents.on.bind(contextEvents), off: contextEvents.off.bind(contextEvents),
+          async close() { trace.contextClosed = true; }, async newPage() {
           if (fault?.reason === 'host' && fault.kind === 'page-open' && trace.urls.length === 4)
             throw new Error('PRIVATE_SENTINEL');
-          return { async close() {
+          const pageEvents = new EventEmitter(), frame = {};
+          return { on: pageEvents.on.bind(pageEvents), off: pageEvents.off.bind(pageEvents),
+            mainFrame: () => frame, isClosed: () => false,
+            async close() {
             trace.pageClosed++;
             if (fault?.reason === 'host' && fault.kind === 'page-close' &&
                 trace.urls.at(-1) === config.negative.host + '/') throw new Error('PRIVATE_SENTINEL');
@@ -41,6 +134,12 @@ function fake(name, mode, fault) {
             if (url.startsWith(config.negative.ca) || url.startsWith(config.negative.host)) {
               const reason = url.startsWith(config.negative.ca) ? 'ca' : 'host';
               const token = messages[name][reason === 'ca' ? 0 : 1];
+              if (fault?.reason === reason && fault.requestCertificate) {
+                pageEvents.emit('requestfailed', {
+                  url: () => url, isNavigationRequest: () => true, frame: () => frame,
+                  failure: () => ({ errorText: messages.webkit[0] }), response: async () => null,
+                });
+              }
               if (mode === 'accepted') return { status: () => 200 };
               if (mode === 'network') throw new Error('net::ERR_CONNECTION_REFUSED PRIVATE_SENTINEL');
               if (fault && fault.reason === reason) {
@@ -52,6 +151,7 @@ function fake(name, mode, fault) {
                 if (fault.kind === 'protocol-wrapper') throw new Error(
                   'page.goto: Protocol error (browsingContext.navigate): ' + (fault.token ?? token) + ' at ' + url);
                 if (fault.kind === 'raw-error') throw new Error(fault.message);
+                if (fault.kind === 'named-error') throw Object.assign(new Error(fault.message), { name: fault.errorName });
                 if (fault.kind === 'raw-non-error') throw { message: fault.message };
                 if (fault.kind === 'message-getter-throws') {
                   const error = new Error();
@@ -112,6 +212,33 @@ function fake(name, mode, fault) {
       } };
   } };
 }
+
+test('WebKit probe uses the bound certificate event without accepting cancellation or HTTP', async () => {
+  for (const reason of ['ca', 'host']) {
+    const type = fake('webkit', 'normal', { reason, kind: 'cancelled', requestCertificate: true });
+    const result = await probeEngine('webkit', type, settings(provisioned, ready, negative));
+    assert.equal(result.wrong_ca_refused, true);
+    assert.equal(result.wrong_host_refused, true);
+    assert.equal(type.trace.urls.length, 5);
+    assert.equal(type.trace.closed, true);
+    assert.equal(type.trace.contextClosed, true);
+    for (const fault of [
+      { reason, kind: 'cancelled' },
+      { reason, kind: 'timeout', requestCertificate: true },
+      ...['TimeoutError', 'TargetClosedError', 'AbortError'].map(errorName => ({
+        reason, kind: 'named-error', message: messages.webkit[0], errorName, requestCertificate: true,
+      })),
+      { reason, kind: 'raw-non-error', message: messages.webkit[0], requestCertificate: true },
+      { reason, kind: 'resolved-response', requestCertificate: true },
+      { reason, kind: 'null-response', requestCertificate: true },
+    ]) {
+      const refused = fake('webkit', 'normal', fault);
+      await assert.rejects(probeEngine('webkit', refused, settings(provisioned, ready, negative)));
+      assert.equal(refused.trace.closed, true);
+      assert.equal(refused.trace.contextClosed, true);
+    }
+  }
+});
 
 test('strict endpoint/profile settings and CA hash binding', () => {
   assert.equal(settings(provisioned, ready, negative).origins.length, 3);

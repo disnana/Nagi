@@ -124,11 +124,12 @@ class BridgeBoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 projection.inverse_quota(invalid)
 
-    def test_all_twelve_native_oracles_registered_with_existing_nineteen(self):
+    def test_all_thirteen_native_oracles_registered_with_existing_nineteen(self):
         tests = source("runtime/src/http_server/response_wire_tests.rs")
-        self.assertEqual(tests.count("#[test]"), 12)
+        self.assertEqual(tests.count("#[test]"), 13)
         for token in ("header_only", "frame_clone", "head_empty", "fallback_uses_independent",
-                      "without_another_allocation", "foreign_owner", "send_sync"):
+                      "without_another_allocation", "foreign_owner", "send_sync",
+                      "closed_transport_and_internal_bodies_keep_independent_finite_fallback_credit"):
             self.assertTrue(token in tests, "native boundary oracle missing")
         self.assertEqual(source("runtime/src/http_server.rs").count("mod response_budget;"), 1)
         self.assertNotIn("#[cfg(test)]\nmod response_budget;", source("runtime/src/http_server.rs"))
