@@ -2,7 +2,7 @@
 
 Follow [installation](getting-started.md) with [your first CLI app](first-app.md). Use the [language feature index](#language-feature-index) for a path through the language, or open the [syntax reference](syntax.md) and [built-in functions](builtins.md) for lookup.
 
-These Docs target Nagi 0.1.11, officially released on 2026-10-07; the VS Code extension 0.1.13 and JetBrains plugin 0.1.1 are separate components. The official site is normally built from main and may include changes not yet published. See the [JetBrains installation guide](../../editors/jetbrains-nagi/README.en.md) to select an IDEA or PyCharm ZIP. See the [Changelog](../../CHANGELOG.md) and the [0.1.11 migration guide](migration-0.1.11.md).
+These Docs target Nagi 0.2.0, [released on 2026-10-20](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0). Editor extensions have separate versions; see the [editor guide](editor.md). The official site is normally built from main and may include later changes. See the [Changelog](../../CHANGELOG.md) and [0.2.0 migration guide](migration-0.2.0.md).
 
 See [About Nagi](introduction.md) for its purpose and current scope. The references below describe implemented APIs and their limits. Unimplemented proposals are kept in [design](library-design.md) and the [roadmap](roadmap.md).
 
@@ -57,7 +57,7 @@ Each detail page describes current behavior and release scope, then provides or 
 | HTTP without a database, headers, and response statuses | [HTTP](http.md), [API reference](http-server.md) |
 | Read and write JSON | [JSON](json.md) |
 | Use the existing SQLite API and preflight SQL | [SQLite](database.md), [SQL checks](sql-check.md) |
-| Use typed parameters, a Pool, and transactions | [SQLite Pools and Transactions (unreleased development source)](sqlite-pool.md) |
+| Use typed parameters, a Pool, and transactions | [SQLite Pools and Transactions](sqlite-pool.md) |
 | Split code into files or call Rust | [Imports and Rust](modules-and-rust.md) |
 | Share your own libraries or use Rust crates | [Libraries and Rust assets](libraries.md) |
 | Save an entry file and build settings | [nagi.toml](projects.md) |
@@ -71,7 +71,7 @@ Runnable examples are in [examples/tutorial/](../../examples/tutorial/). Referen
 
 Tutorial code uses the current syntax. Explicit move and Task result handles are published in Nagi 0.1.11; confirm that the installed compiler is version 0.1.11 or later with `nagic --version`. See the [migration guide](migration-0.1.11.md) and [Task result handles](task-handles.md). Shared actor messages remain future design work.
 
-The new [SQLite Pool/Tx API](sqlite-pool.md) is available in the development source only; it is not included in 0.1.11.
+The [SQLite Pool/Tx API](sqlite-pool.md) is included in 0.2.0; it is not included in 0.1.11.
 
 ## Implementation and development
 
@@ -81,6 +81,6 @@ Follow the [first contribution walkthrough](contributing.md) to locate a source 
 
 `std.actor` is a standard library available from Nagi 0.1.8. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) covers registration, calls, and shutdown. The older actor/Supervisor built-ins and [queues](queue.md) remain test APIs. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
 
-These pages cover the current source and Nagi 0.1. See the [change log](../../CHANGELOG.md) for changes by version. Unsupported features are listed on each page.
+These pages cover Nagi 0.2.0 and the current source. See the [change log](../../CHANGELOG.md) for changes by version. Unsupported features are listed on each page.
 
-- [Authentication/authorization (unreleased SF01)](security.md) and [0.2.0 migration](migration-0.2.0.md)
+- [Authentication/authorization](security.md) and [0.2.0 migration](migration-0.2.0.md)

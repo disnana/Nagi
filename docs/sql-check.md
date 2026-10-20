@@ -1,6 +1,6 @@
 # SQLの事前検査
 
-開発sourceの `std.db.sqlite` は、通常checkで直接literalから作る `Query` を必須にします。SQL構文・schemaの検査は明示オプションで有効にする別段階です。SF05は未リリースで、正式0.2.0や公開済み0.1.xの機能として扱いません。[SQLite](sqlite-pool.md)と[移行](migration-0.2.0.md)を参照してください。
+Nagi 0.2.0の `std.db.sqlite` は、通常checkで直接literalから作る `Query` を必須にします。SQL構文・schemaの検査は明示オプションで有効にする別段階です。公開済み0.1.xの機能へ遡及適用しません。[SQLite](sqlite-pool.md)と[移行](migration-0.2.0.md)を参照してください。
 
 ## 使い方
 

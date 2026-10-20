@@ -2,7 +2,7 @@
 
 [Index](README.md) · [SQLite Pools and Transactions](sqlite-pool.md) · [SQL preflight checks](sql-check.md)
 
-The development source uses `std.db.sqlite` as its standard SQLite entry point. SF05 removes `Db` and `db_open/db_exec/db_all/db_query/db_insert/db_update/db_write`, with concrete checker migration diagnostics. Formal 0.2.0 remains unreleased; these changes do not apply retroactively to published 0.1.x binaries.
+Nagi 0.2.0 uses `std.db.sqlite` as its standard SQLite entry point. SF05 removes `Db` and `db_open/db_exec/db_all/db_query/db_insert/db_update/db_write`, with concrete checker migration diagnostics. These changes do not apply retroactively to published 0.1.x binaries.
 
 Open a `Pool` with explicit `Options`; a `Tx` reserves one connection. SQL structure is an opaque `Query` made by `sqlite.literal(...)` from a direct string literal. Actual values go through `Parameters`. There is no constructor from a string variable, concatenation, formatting, or dynamic string. Query values may be stored, selected, and returned from functions.
 

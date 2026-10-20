@@ -1,6 +1,6 @@
 # HTTP
 
-This page describes unreleased 0.2.0 SF01 development source. For published 0.1.x code, see the [migration guide](migration-0.2.0.md). Every route, including public routes, requires an explicit Policy.
+This page describes Nagi 0.2.0. For published 0.1.x code, see the [migration guide](migration-0.2.0.md). Every route, including public routes, requires an explicit Policy.
 
 Use `std.http.server` to build an HTTP server without a database. Define async handlers, shared state, and error responses in Nagi.
 
@@ -20,7 +20,7 @@ async def hello(request: http.Request, state: shared[State], access: unit) -> Re
 
 ```
 
-This handler returns `Hello, Nagi!` as `Result[Response, Error]`. The 0.2.0 candidate requires explicit response and rate budgets plus a rate policy on every route before startup. Do not reuse unverified values as defaults. See [SF07 budgets and startup](http-server.md#explicit-sf07-budgets-and-rate-policy-development-candidate) for the required configuration; runtime acceptance remains pending.
+This handler returns `Hello, Nagi!` as `Result[Response, Error]`. Nagi 0.2.0 requires explicit response and rate budgets plus a rate policy on every route before startup. Do not reuse unverified values as defaults. See [SF07 budgets and startup](http-server.md#explicit-sf07-budgets-and-rate-policy) for the required configuration.
 
 ## Requests and responses
 
@@ -53,6 +53,6 @@ The [authentication example](../../test-nagi-code/library-examples/http-auth/REA
 - [JSON](json.md): decoding a body into a class
 - [Retired HTTP APIs](http-legacy.md): migrate legacy decorators and serve
 
-The standard server currently serves HTTP/1.1 on loopback. Use a reverse proxy for TLS and external access. Peer IP access, streaming, WebSocket, and HTTP/2 APIs are not implemented. A standard HTTP client for calling external APIs is also not implemented.
+The standard server currently serves HTTP/1.1 on loopback. Use a reverse proxy for TLS and external access. Peer IP access, streaming, WebSocket, and HTTP/2 APIs are not implemented. Use the [HTTP client](http-client.md) fixed-operation API for outbound calls. It does not accept arbitrary request-supplied URLs.
 
 Internally, Hyper handles HTTP transport and Tokio runs async work. Nagi provides route registration, typed state, responses, limits, and error mapping. Replacing this implementation with Axum/Tower is under evaluation; neither replacement nor a performance improvement has been established.

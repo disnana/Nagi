@@ -4,7 +4,7 @@
 
 CLI、HTTP API、SQLite、actor、Rust連携の例です。Nagiで書く処理と、Rustに任せる処理を各READMEで説明しています。本番用のひな形ではなく、入力・出力と制限を確認するためのサンプルです。
 
-リポジトリ一式を取得し、そのルートで実行してください。Nagi 0.1.9とRust/Cargo、OSごとのビルド環境が必要です。[セットアップ](../docs/getting-started.md)を参照してください。`main`からビルドしたコンパイラには、公開版と同じ版番号でも未リリースの修正が含まれる場合があります。
+リポジトリ一式を取得し、そのルートで実行してください。Nagi 0.2.0とRust/Cargo、OSごとのビルド環境が必要です。[セットアップ](../docs/getting-started.md)を参照してください。`main`からビルドしたコンパイラには、公開版と同じ版番号でも未リリースの修正が含まれる場合があります。
 
 ## 自作ライブラリとRustの資産
 
@@ -25,7 +25,7 @@ CLI、HTTP API、SQLite、actor、Rust連携の例です。Nagiで書く処理�
 
 ## タスク管理JSON API
 
-[Nagi Tasks](web-demo/README.md)は、タスクの追加・編集・完了・削除と集計を行うJSON APIです。Nagiが標準HTTP routeと入力検証を担当し、ランタイムがHTTPとSQLiteを扱います。`GET /`はplain-text案内を返します。ブラウザーUIはtyped HTML応答が整うまで未接続です。
+[Nagi Tasks](web-demo/README.md)は、タスクの追加・編集・完了・削除と集計を行うJSON APIです。Nagiが標準HTTP routeと入力検証を担当し、ランタイムがHTTPとSQLiteを扱います。`GET /`はplain-text案内を返します。0.2.0にはtyped HTML subsetがありますが、この例のbrowser UIは未移行で、未接続のままです。
 
 ## Rustライブラリを使う
 

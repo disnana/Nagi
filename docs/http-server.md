@@ -1,6 +1,6 @@
 # HTTP APIリファレンス
 
-未リリース0.2.0の開発APIです。[移行](migration-0.2.0.md)と[認証・認可](security.md)も参照してください。
+Nagi 0.2.0のAPIです。[移行](migration-0.2.0.md)と[認証・認可](security.md)も参照してください。
 
 ```nagi
 import std.http.server as http
@@ -62,7 +62,7 @@ Statusは数値を保持するコピー可能な値です。文字列への変�
 
 `context`は現在のRequestから`response_context`で借ります。応答予算のための不透明な値で、認証proofではありません。Requestより長く保持できず、defaultから作れません。factoryは予算の保持責任を持つ所有Responseを返し、明示した確保・直列化の上限を超えると`Err`になります。`try`で処理するかfactoryのResultを直接返し、handlerの業務エラーと予算・確保失敗を区別してください。
 
-開発候補ではcompilerとruntimeのAPIを接続しています。限定native検証は最終受入を意味しません。最終統合HEADの4 OS・資源検証を含む必須条件は未完で、公開済み機能の保証ではありません。
+[0.2.0 release CI](https://github.com/disnana/Nagi/actions/runs/39422234923)は4 OSとbrowser受入に成功しました。下記の予算は記載した資源を制限しますが、process全体のメモリ、SLA、普遍的な確保失敗からの回復を保証しません。
 
 `text`、`bytes`は借りた入力をコピーして、Responseが所有するbodyを作ります。`json`は値を借用してJSONを作るため、元の値をmoveしません。文字列リテラルはview引数へ直接渡せます。変数から借りる場合は`view(value)`を使います。
 
@@ -93,9 +93,9 @@ Nagi 0.1.10以降では、応答開始前のhandlerやmapperでunwindするpanic
 
 エラー応答にリクエストIDなどが必要なら、handlerで検証した値を保持し、失敗時に独自エラー型へmoveできます。[見積APIの例](../test-nagi-code/application-examples/quote-api/README.md)では、この方法で共通mapperへIDを渡しています。
 
-## SF07の明示予算とrate policy（開発候補）
+## SF07の明示予算とrate policy
 
-応答・rateの新予算に暗黙defaultはありません。`default_options()`は従来のtransport設定を持ちますが、新予算を補いません。両方の予算と全routeの認証前rate policyを明示してから起動します。未設定や不整合はlisten前に拒否します。最終統合HEADのnative・4 OS受入は未完です。
+応答・rateの新予算に暗黙defaultはありません。`default_options()`は従来のtransport設定を持ちますが、新予算を補いません。両方の予算と全routeの認証前rate policyを明示してから起動します。未設定や不整合はlisten前に拒否します。
 
 | 設定API | 契約 |
 |---|---|
@@ -113,9 +113,9 @@ Nagi 0.1.10以降では、応答開始前のhandlerやmapperでunwindするpanic
 
 token不足は429、table／quota容量不足やClosing／ClockFaultは503、内部故障やmapper自身の失敗は500です。既に成立した認証・期限等の拒否を上書きしません。独立した有限fallback枠まで不足した場合は接続を閉じます。
 
-算術的に受理できる設定でも、全processメモリや遅延SLAの保証ではありません。起動catalogue保持量の正確な計上、小規模設定の実測、native並行動作、最終4 OS検証はリリース阻害要因として残っています。
+算術的に受理できる設定でも、全processメモリや遅延SLAの保証ではありません。下記の小規模構成の実測と配備先の条件を踏まえて予算を選んでください。
 
-## 小規模構成の実測（候補の限定検証）
+## 小規模構成の実測
 
 公開APIのfixture [sf07_small_profile.rs](../runtime/tests/sf07_small_profile.rs)は接続・リクエスト各8枠、4 routeと、次の明示予算を使います。検証した構成例であり、暗黙defaultや実運用の推奨値ではありません。
 
@@ -141,7 +141,7 @@ allocation counterはloopback clientを含む呼出しthreadの累積eventで、
 
 ## 制限と停止
 
-0.2.0開発sourceでは、`serve`とRustの`serve_listener`にchecked authority設定が必要です。未設定の`default_options()`/`options(...)`だけでは起動Errになります。
+0.2.0では、`serve`とRustの`serve_listener`にchecked authority設定が必要です。未設定の`default_options()`/`options(...)`だけでは起動Errになります。
 
 | 起動設定 | 契約 |
 |---|---|
@@ -154,7 +154,7 @@ authorityの再設定やproxy ACLの上書きはErrです。setterはOptionsをm
 
 全route・404/405・body受信・verifier・proof発行より前に、HTTP/1.1のorigin-formと一個の非空Hostを検査します。不正・欠落・重複・非allowlist、absolute-form/authority-form/`*`、ForwardedまたはX-Forwarded-*のpresenceは400、HTTP/1.0は505です。これらruntime拒否はno-storeとcloseです。Hyper自身がservice前に拒否する不正HTTP構文・HTTP/2 prefaceは公式parserへ委譲し、handler/proofには届きません。標準listenerはHTTP/1のみです。
 
-direct/proxyのprofileは起動時に固定します。proxyでもForwarded系はbackendへ送る前に除去し、Hostは登録済み内部値または登録済みpass-through値にします。ACLは`accept`が返す実peerだけで判定し、headerからtrustやoriginを選びません。loopback ACLは同hostの別processを認証しません。Host一致はOrigin/CSRF/CORSを免除せず、未リリースSF03候補では下記の別契約として扱います。
+direct/proxyのprofileは起動時に固定します。proxyでもForwarded系はbackendへ送る前に除去し、Hostは登録済み内部値または登録済みpass-through値にします。ACLは`accept`が返す実peerだけで判定し、headerからtrustやoriginを選びません。loopback ACLは同hostの別processを認証しません。Host一致はOrigin/CSRF/CORSを免除せず、下記の別契約として扱います。
 
 `serve`はloopbackの平文HTTPで、origin設定はTLSを実装しません。ローカルのpublic応答確認とbrowser認証を区別してください。browser用は信頼された証明書のTLS frontendを置き、たとえばexternal origin `https://localhost:8443`、backend wire `localhost:8080`、peer `127.0.0.1`を明示します。HTTP/2 frontendもHTTP/1.1へ終端します。Secure Cookieにlocalhost例外はありません。実TLS/browser・4 OSの検証は別の受入条件です。
 
@@ -202,7 +202,7 @@ NagiのAPIは[標準moduleの登録](../compiler/src/stdlib.rs)と[HTTP runtime]
 
 [HTTP runtimeのテスト](../runtime/src/http_server/tests.rs)には、実際のsocketを使う応答、制限、タイムアウト、接続終了の確認があります。[Rust連携](modules-and-rust.md)では独自のサーバーを作れますが、同じ制限や障害処理が自動で付くわけではありません。
 
-## 明示CORS route metadata（未リリースSF03候補）
+## 明示CORS route metadata
 
 `CorsPolicy`は所有するopaque設定で、認証proofではありません。`CorsCredentials.OMIT`はAllow-Credentialsを省略し、`ALLOW`は`true`を出します。credentialの除去やPolicy/CSRFの免除はしません。`cors_policy(origins: List[str], request_headers: List[str], credentials: CorsCredentials, max_age_seconds: i64, max_origins: i64, max_origin_bytes: i64, max_headers: i64, max_header_bytes: i64) -> Result[CorsPolicy, Error]`で作成します。count/bytes上限は正のnative size、listは空も可能です。max-ageは明示した0..4294967295秒で、0はpositive lifetimeなしです。server側preflight cacheはありません。
 
@@ -217,4 +217,4 @@ originはhttp/https scheme・ASCII host・effective portのcanonical exact一致
 
 OPTIONSにAccess-Control-Request-MethodまたはAccess-Control-Request-Headersがあればtarget routeのmetadataだけを使います。成功は空204と要求method/header・明示Max-Age・no-storeで、verifier/handler/proof/Session/DB処理なしです。通常OPTIONSは独自Policyが必要です。未知path/methodは404/405とgrantなしを保持します。重複/不正metadataは400、valid未許可origin/header・既定denyは403です。admission・宣言bodyの503/413を優先し、preflight bodyは400とcloseです。
 
-actualの未許可/不正/欠落OriginはCORS grantなしで、通常認証・CSRF・status・handler動作を変えません。許可cross-origin preflightでもunsafe Session POSTの外部HTTPS Origin/token条件は免除されません。外側finalizerはCookie一回配送・no-store・CSP・nosniff・challenge・framingを保持し、選択済early errorでも有限typed Vary依存をunionします。認証/Sessionの304は秘密なし500、公的DTOの304は既存statusを保持します。source APIだけでnative/4OSや実TLS/browser受理を主張しません。この候補は未リリースでB1へ依存します。
+actualの未許可/不正/欠落OriginはCORS grantなしで、通常認証・CSRF・status・handler動作を変えません。許可cross-origin preflightでもunsafe Session POSTの外部HTTPS Origin/token条件は免除されません。外側finalizerはCookie一回配送・no-store・CSP・nosniff・challenge・framingを保持し、選択済early errorでも有限typed Vary依存をunionします。認証/Sessionの304は秘密なし500、公的DTOの304は既存statusを保持します。CORSはSession CSRFとともに0.2.0に含まれます。release CIでTLS/browser/proxy受入を検証していますが、配備先のTLSとproxy設定は別に確認してください。
