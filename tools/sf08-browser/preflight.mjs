@@ -998,7 +998,7 @@ export function validWebkitEventTiming(trace, encoded) {
 // favor of waitForURL for successful navigations, but a certificate refusal must
 // not commit the requested URL. Prearming the failure waiter avoids its usual
 // registration race. Both operations retain the original absolute deadline.
-function startWrongHostDocumentNavigation(page, url, until) {
+function startWebkitDocumentNavigation(page, url, until) {
   let initiated = false;
   const outcome = promise => Promise.resolve(promise).then(
     value => ({ fulfilled: true, value }), error => ({ fulfilled: false, error }));
@@ -1068,10 +1068,9 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     wakeConsoleWait(proved === true);
   };
   // Request failure and navigation rejection are independently delivered public
-  // events. Own the host-only signal before starting the single navigation.
+  // events. Own the signal before starting either one-shot negative navigation.
   let wakeRequestWait;
-  const requestWait = profile === HOST_PROFILE
-    ? new Promise(resolve => { wakeRequestWait = resolve; }) : undefined;
+  const requestWait = new Promise(resolve => { wakeRequestWait = resolve; });
   const signalRequestWait = proved => {
     const wake = wakeRequestWait;
     wakeRequestWait = undefined;
@@ -1174,23 +1173,19 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     let navigationError;
     event('G');
     try {
-      if (profile === HOST_PROFILE) {
-        documentNavigation = startWrongHostDocumentNavigation(page, endpoint.url, until);
-        await documentNavigation.wait();
-      } else {
-        await hostWithin(page.goto(endpoint.url, { waitUntil: 'load', timeout: hostBudget(until) }), until);
-      }
+      documentNavigation = startWebkitDocumentNavigation(page, endpoint.url, until);
+      await documentNavigation.wait();
       event('V'); hardVeto('response');
     }
     catch (error) { navigationError = error; }
-    if (profile === HOST_PROFILE && documentNavigation?.initiated() !== true) {
+    if (documentNavigation?.initiated() !== true) {
       hardVeto('navigation'); refuse();
     }
     if (!(navigationError instanceof Error) || navigationError.name !== 'Error') refuse();
     event('N');
     live();
     phase = 'request';
-    if (profile === HOST_PROFILE && requests === 0) {
+    if (requests === 0) {
       if (await hostWithin(requestWait, until) !== true) refuse();
       live();
     }

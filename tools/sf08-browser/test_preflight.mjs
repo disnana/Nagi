@@ -1174,7 +1174,7 @@ test('document initiation prearms one waiter and triggers once before unchanged 
   const ca = hostBrowser({ role: 'ca', navigationOrder: caOrder,
     duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url)) });
   assert.equal(await hostProof.probeWebkitWrongCA(ca.browser, ca.factory, performance.now() + 1000), true);
-  assert.deepEqual(caOrder, ['goto', 'page-close'], 'legacy CA navigation stays unchanged');
+  assert.deepEqual(caOrder, ['wait', 'evaluate', 'page-close'], 'selected one-shot CA uses the same prearmed document entry');
 });
 
 test('document initiation cannot turn generic cancellation or unsafe navigation into certificate proof', async () => {
@@ -1329,6 +1329,70 @@ test('bound request wait retains generic cancellation console refusal and immedi
     assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000), !deferred);
     assert.equal(f.closed(), true);
   }
+});
+
+test('CA document initiation prearms once and joins exact immediate or delayed request proof', { timeout: 2000 }, async () => {
+  for (const delayed of [false, true]) {
+    const order = [], budgets = [];
+    const deliver = ({ emitRequest, page, endpoint }) => {
+      order.push('requestfailed'); emitRequest();
+      page.emit('console', webkitConsoleError(endpoint.url));
+    };
+    const f = hostBrowser({ role: 'ca', navigationOrder: order,
+      waiterOptions: value => budgets.push(value.timeout),
+      navigationSettled: fulfilled => { assert.equal(fulfilled, false); order.push('navigation-rejected'); },
+      deliverRequest: value => delayed ? setImmediate(() => deliver(value)) : deliver(value),
+      duringJoin: () => order.push('native-proof') });
+    const result = await hostProof.probeWebkitWrongCA(f.browser, f.factory, performance.now() + 1000);
+    assert.equal(result, true);
+    assert.deepEqual(order, delayed
+      ? ['wait', 'evaluate', 'navigation-rejected', 'requestfailed', 'native-proof', 'page-close']
+      : ['wait', 'evaluate', 'requestfailed', 'navigation-rejected', 'native-proof', 'page-close']);
+    assert.equal(budgets.length, 1);
+    assert.ok(budgets[0] > 0 && budgets[0] <= 1000);
+    assert.equal(f.closed(), true);
+  }
+});
+
+test('CA document initiation retains generic cancellation request response lifecycle and setup refusals', { timeout: 3000 }, async () => {
+  for (const options of [{ generic: true }, { foreignURL: true }, { foreignFrame: true },
+    { nonNavigation: true }, { duplicate: true }, { text: 'PRIVATE_SENTINEL' },
+    { response: async () => ({ status: () => 200 }) }, { httpResponse: true },
+    { lifecycle: true }, { peer: false }, { join: false }, { evaluateError: true },
+    { waiterSetupError: true }]) {
+    let delivered;
+    const delivery = new Promise(resolve => { delivered = resolve; });
+    const f = hostBrowser({ role: 'ca', ...options,
+      deliverRequest: value => setImmediate(() => {
+        if (options.lifecycle) value.page.emit('crash');
+        value.emitRequest(); value.page.emit('console', webkitConsoleError(value.endpoint.url,
+          options.generic ? { text: 'Failed to load resource: Operation was cancelled' } : {}));
+        delivered();
+      }) });
+    const rows = [];
+    assert.equal(await hostProof.probeWebkitWrongCA(f.browser, f.factory, performance.now() + 1000,
+      (...args) => rows.push(args)), false);
+    if (!options.evaluateError && !options.waiterSetupError) await delivery;
+    assert.equal(f.closed(), true);
+    assert.equal(f.page.listenerCount('requestfailed'), 0);
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_SENTINEL/);
+  }
+});
+
+test('CA document initiation missing request uses original deadline and ignores stale proof', { timeout: 2000 }, async () => {
+  let deliver;
+  const budgets = [];
+  const f = hostBrowser({ role: 'ca', waiterOptions: value => budgets.push(value.timeout),
+    deliverRequest: value => { deliver = value; } });
+  const rows = [], until = performance.now() + 35;
+  assert.equal(await hostProof.probeWebkitWrongCA(f.browser, f.factory, until,
+    kind => rows.push(kind)), false);
+  assert.deepEqual(rows, ['deadline']);
+  assert.ok(budgets[0] > 0 && budgets[0] <= 35);
+  assert.equal(f.closed(), true);
+  assert.equal(f.page.listenerCount('requestfailed'), 0);
+  deliver.emitRequest(); deliver.page.emit('console', webkitConsoleError(deliver.endpoint.url));
+  assert.deepEqual(rows, ['deadline']);
 });
 
 test('one-shot R1 real EOF reset and idle are never certificate alerts', { timeout: 10000 }, async () => {
@@ -2588,11 +2652,21 @@ test('wrong-CA socket event category reaches its fixed checkpoint and stays refu
   const type = fake('webkit', 'normal', { reason: 'ca', requestCertificate: true });
   const checkpoints = [];
   const endpoint = { url: negative.caOrigin + '/', async finish() { return false; }, async close() { return true; } };
+  // The selected one-shot CA context implements the supported document entry;
+  // general fake() retains goto for positive controls and legacy CA fallback.
+  const dedicated = hostBrowser({ role: 'ca', text: 'Unacceptable TLS certificate', endpoint });
+  const launch = type.launch.bind(type); let contexts = 0;
+  type.launch = async options => {
+    const browser = await launch(options), newContext = browser.newContext.bind(browser);
+    browser.newContext = config => ++contexts === 1 ? newContext(config) : dedicated.browser.newContext(config);
+    return browser;
+  };
   await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
     (stage, engine) => checkpoints.push({ stage, engine }), undefined, undefined,
     async (_until, diagnose) => { diagnose('socket_eof'); return endpoint; }),
   /^Error: SF08 browser trust preflight refused$/);
   assert.deepEqual(checkpoints.at(-1), { stage: 'engine_wrong_ca_one_shot_socket_eof_events_GRMQNSBJKO_0', engine: 'webkit' });
+  assert.equal(dedicated.closed(), true);
   assert.equal(type.trace.closed && type.trace.contextClosed, true);
 });
 
