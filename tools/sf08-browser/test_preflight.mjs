@@ -1093,20 +1093,58 @@ function hostBrowser(options = {}) {
   browser.newContext = async config => { assert.deepEqual(config, { ignoreHTTPSErrors: false, serviceWorkers: 'block' }); return context; };
   context.newPage = async () => page;
   let contextsClosed = 0, pagesClosed = 0;
+  let navigationWaiter, navigationTimer;
+  const settleNavigation = (fulfilled, value) => {
+    if (!navigationWaiter) return;
+    const waiter = navigationWaiter; navigationWaiter = undefined;
+    clearTimeout(navigationTimer);
+    options.navigationSettled?.(fulfilled, value);
+    (fulfilled ? waiter.resolve : waiter.reject)(value);
+  };
   context.close = async () => { contextsClosed++; if (options.closeError) throw new Error('PRIVATE_SENTINEL'); context.emit('close'); };
-  page.close = async () => { pagesClosed++; page.emit('close'); };
-  page.goto = async url => {
+  page.close = async () => {
+    pagesClosed++; options.navigationOrder?.push('page-close');
+    page.emit('close'); settleNavigation(false, new Error('Page closed'));
+  };
+  const navigate = async url => {
+    options.navigationObserved?.(url);
     const request = { url: () => options.foreignURL ? url + 'PRIVATE_SENTINEL' : url,
       isNavigationRequest: () => !options.nonNavigation, frame: () => options.foreignFrame ? {} : frame,
       failure: () => ({ errorText: options.text ?? 'Operation was cancelled' }),
       response: options.response ?? (async () => null) };
     options.requestObserved?.(request);
-    if (!options.missing) page.emit('requestfailed', request);
-    if (options.duplicate) page.emit('requestfailed', request);
+    const emitRequest = () => {
+      if (!options.missing) page.emit('requestfailed', request);
+      if (options.duplicate) page.emit('requestfailed', request);
+    };
+    if (options.deliverRequest) options.deliverRequest({ emitRequest, request, page, endpoint });
+    else emitRequest();
     if (options.httpResponse) page.emit('response', {});
     options.duringGoto?.({ browser, context, page, endpoint });
     if (options.resolved) return { status: () => 200 };
     throw options.error ?? new Error('Operation was cancelled');
+  };
+  page.goto = async url => { options.navigationOrder?.push('goto'); return navigate(url); };
+  page.waitForNavigation = config => {
+    options.navigationOrder?.push('wait');
+    options.waiterOptions?.(config);
+    if (options.waiterSetupError) throw new Error('PRIVATE_SENTINEL');
+    assert.equal(navigationWaiter, undefined, 'one armed waiter');
+    return new Promise((resolve, reject) => {
+      navigationWaiter = { resolve, reject };
+      navigationTimer = setTimeout(() => settleNavigation(false, new Error('Navigation timed out')), config.timeout);
+    });
+  };
+  page.evaluate = async (action, url) => {
+    options.navigationOrder?.push('evaluate');
+    assert.match(String(action), /location\.assign\(target\)/);
+    assert.equal(navigationWaiter === undefined, false, 'waiter armed before document trigger');
+    if (options.evaluateError) throw new Error('PRIVATE_SENTINEL');
+    if (options.evaluatePending) return new Promise(resolve => { options.releaseEvaluate?.(resolve); });
+    if (!options.navigationPending) {
+      navigate(url).then(value => settleNavigation(true, value), error => settleNavigation(false, error));
+    }
+    return options.evaluateValue;
   };
   const endpoint = options.endpoint ?? { url: `https://${profile.hostname}:33005/`,
     async finish() { options.duringJoin?.({ browser, context, page }); return options.peer !== false; },
@@ -1114,6 +1152,264 @@ function hostBrowser(options = {}) {
   return { browser, context, page, endpoint, factory: async () => endpoint,
     closed: () => pagesClosed === 1 && contextsClosed === 1 };
 }
+
+test('document initiation prearms one waiter and triggers once before unchanged proof and join', async () => {
+  const order = [], navigations = [], waiterOptions = [];
+  const f = hostBrowser({ navigationOrder: order, navigationObserved: url => navigations.push(url),
+    waiterOptions: value => waiterOptions.push(value),
+    duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url)) });
+  const close = f.endpoint.close;
+  f.endpoint.close = async () => { order.push('native-join'); return close(); };
+  const rows = [];
+  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 10000,
+    (...args) => rows.push(args)), true);
+  assert.deepEqual(order, ['wait', 'evaluate', 'native-join', 'page-close']);
+  assert.deepEqual(navigations, [f.endpoint.url]);
+  assert.equal(waiterOptions.length, 1);
+  assert.equal(waiterOptions[0].waitUntil, 'load');
+  assert.ok(waiterOptions[0].timeout > 0 && waiterOptions[0].timeout <= 10000);
+  assert.deepEqual(rows, []);
+  assert.equal(f.closed(), true);
+  const caOrder = [];
+  const ca = hostBrowser({ role: 'ca', navigationOrder: caOrder,
+    duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url)) });
+  assert.equal(await hostProof.probeWebkitWrongCA(ca.browser, ca.factory, performance.now() + 1000), true);
+  assert.deepEqual(caOrder, ['wait', 'evaluate', 'page-close'], 'selected one-shot CA uses the same prearmed document entry');
+});
+
+test('document initiation cannot turn generic cancellation or unsafe navigation into certificate proof', async () => {
+  for (const options of [
+    { duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url,
+      { text: 'Failed to load resource: Operation was cancelled' })) },
+    { httpResponse: true, resolved: true },
+    { missing: true }, { duplicate: true }, { foreignURL: true }, { foreignFrame: true },
+    { nonNavigation: true }, { peer: false }, { join: false },
+    { evaluateValue: 'PRIVATE_SENTINEL' },
+  ]) {
+    const order = [];
+    const f = hostBrowser({ navigationOrder: order,
+      duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url)), ...options });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000), false);
+    assert.equal(order.filter(value => value === 'evaluate').length, 1);
+    assert.equal(order.includes('goto'), false);
+    assert.equal(f.closed(), true);
+  }
+});
+
+test('document initiation fault joins pending failure waiter after native join without unhandled rejection', async () => {
+  const order = [], settled = [], unhandled = [];
+  const onUnhandled = error => unhandled.push(error);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const f = hostBrowser({ evaluateError: true, navigationOrder: order,
+      navigationSettled: fulfilled => settled.push(fulfilled) });
+    const close = f.endpoint.close;
+    f.endpoint.close = async () => { order.push('native-join'); return close(); };
+    const rows = [];
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
+      (kind, trace) => rows.push({ kind, trace })), false);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(order, ['wait', 'evaluate', 'native-join', 'page-close']);
+    assert.deepEqual(settled, [false]);
+    assert.deepEqual(unhandled, []);
+    assert.equal(f.closed(), true);
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_SENTINEL/);
+    const refusedOrder = [];
+    const refused = hostBrowser({ waiterSetupError: true, navigationOrder: refusedOrder });
+    assert.equal(await hostProof.probeWebkitWrongHost(refused.browser, refused.factory, performance.now() + 1000), false);
+    assert.deepEqual(refusedOrder, ['wait', 'page-close'], 'no trigger after waiter setup refusal');
+  } finally { process.off('unhandledRejection', onUnhandled); }
+});
+
+test('document initiation timeout and late proof retain original deadline and drain owned promises', { timeout: 2000 }, async () => {
+  const settled = [], order = [], budgets = [];
+  let releaseEvaluate;
+  const f = hostBrowser({ evaluatePending: true, navigationOrder: order,
+    releaseEvaluate: resolve => { releaseEvaluate = resolve; },
+    navigationSettled: fulfilled => settled.push(fulfilled),
+    waiterOptions: options => budgets.push(options.timeout) });
+  const close = f.page.close;
+  f.page.close = async () => { await close(); releaseEvaluate?.(); };
+  const until = performance.now() + 35;
+  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, until), false);
+  assert.equal(budgets.length, 1);
+  assert.ok(budgets[0] > 0 && budgets[0] <= 35, 'waiter uses the original remaining budget');
+  assert.equal(settled.length, 1);
+  assert.equal(order.filter(value => value === 'evaluate').length, 1);
+  assert.equal(f.closed(), true);
+  // A stale callback after cleanup cannot create or resume another navigation.
+  f.page.emit('console', webkitConsoleError(f.endpoint.url));
+  assert.equal(order.filter(value => value === 'evaluate').length, 1);
+  const pending = hostBrowser({ navigationPending: true });
+  assert.equal(await hostProof.probeWebkitWrongHost(pending.browser, pending.factory, performance.now() + 30), false);
+  assert.equal(pending.closed(), true);
+});
+
+test('bound request wait accepts exact requestfailed delivered after navigation rejection', { timeout: 2000 }, async () => {
+  const order = [];
+  let delivered;
+  const delivery = new Promise(resolve => { delivered = resolve; });
+  const f = hostBrowser({
+    navigationSettled: fulfilled => { assert.equal(fulfilled, false); order.push('navigation-rejected'); },
+    deliverRequest: ({ emitRequest, page, endpoint }) => setImmediate(() => {
+      order.push('requestfailed'); emitRequest();
+      page.emit('console', webkitConsoleError(endpoint.url)); delivered();
+    }),
+    duringJoin: () => order.push('native-proof'),
+  });
+  const result = await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000);
+  await delivery;
+  assert.equal(result, true);
+  assert.deepEqual(order, ['navigation-rejected', 'requestfailed', 'native-proof']);
+  assert.equal(f.closed(), true);
+});
+
+test('bound request wait missing event expires at original deadline and ignores stale delivery', { timeout: 2000 }, async () => {
+  let emitRequest, page, endpoint, finished = 0;
+  const budgets = [], rows = [];
+  const f = hostBrowser({
+    waiterOptions: value => budgets.push(value.timeout),
+    deliverRequest: value => { ({ emitRequest, page, endpoint } = value); },
+    duringJoin: () => { finished++; },
+  });
+  const until = performance.now() + 35;
+  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, until,
+    (kind, trace) => rows.push({ kind, trace })), false);
+  assert.ok(performance.now() >= until - 1, 'no earlier request-count refusal');
+  assert.equal(budgets.length, 1);
+  assert.ok(budgets[0] > 0 && budgets[0] <= 35, 'original navigation budget');
+  assert.equal(finished, 0);
+  assert.equal(f.closed(), true);
+  assert.equal(page.listenerCount('requestfailed'), 0);
+  emitRequest(); page.emit('console', webkitConsoleError(endpoint.url));
+  assert.equal(finished, 0, 'stale event cannot restart proof');
+  assert.equal(rows.length, 1);
+});
+
+test('bound request wait rejects later foreign duplicate response and lifecycle events', { timeout: 3000 }, async () => {
+  for (const options of [{ foreignURL: true }, { foreignFrame: true }, { nonNavigation: true },
+    { text: 'PRIVATE_SENTINEL' }, { duplicate: true }, { response: async () => ({ status: () => 200 }) },
+    { delayedVeto: 'response' }, { delayedVeto: 'close' }, { delayedVeto: 'crash' },
+    { delayedVeto: 'context-close' }, { delayedVeto: 'disconnect' }]) {
+    let finished = 0, emitRequest, deliver;
+    const delivery = new Promise(resolve => { deliver = resolve; });
+    const f = hostBrowser({ ...options,
+      deliverRequest: value => {
+        emitRequest = value.emitRequest;
+        setImmediate(() => {
+          if (options.delayedVeto === 'context-close') f.context.emit('close');
+          else if (options.delayedVeto === 'disconnect') f.browser.emit('disconnected');
+          else if (options.delayedVeto) value.page.emit(options.delayedVeto, {});
+          else value.emitRequest();
+          value.page.emit('console', webkitConsoleError(value.endpoint.url)); deliver();
+        });
+      },
+      duringJoin: () => { finished++; },
+    });
+    const rows = [];
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
+      (kind, trace) => rows.push({ kind, trace })), false);
+    await delivery;
+    assert.equal(finished, 0);
+    assert.equal(f.closed(), true);
+    assert.equal(f.page.listenerCount('requestfailed'), 0);
+    emitRequest();
+    assert.equal(finished, 0);
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_SENTINEL/);
+  }
+});
+
+test('bound request wait retains generic cancellation console refusal and immediate flow', { timeout: 2000 }, async () => {
+  for (const deferred of [false, true]) {
+    const f = hostBrowser({ deliverRequest: deferred ? ({ emitRequest, page, endpoint }) => setImmediate(() => {
+      emitRequest(); page.emit('console', webkitConsoleError(endpoint.url,
+        { text: 'Failed to load resource: Operation was cancelled' }));
+    }) : undefined,
+    duringGoto: deferred ? undefined : ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url)) });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000), !deferred);
+    assert.equal(f.closed(), true);
+  }
+});
+
+test('CA document initiation prearms once and joins exact immediate or delayed request proof', { timeout: 2000 }, async () => {
+  for (const delayed of [false, true]) {
+    const order = [], budgets = [];
+    const deliver = ({ emitRequest, page, endpoint }) => {
+      order.push('requestfailed'); emitRequest();
+      page.emit('console', webkitConsoleError(endpoint.url));
+    };
+    const f = hostBrowser({ role: 'ca', navigationOrder: order,
+      waiterOptions: value => budgets.push(value.timeout),
+      navigationSettled: fulfilled => { assert.equal(fulfilled, false); order.push('navigation-rejected'); },
+      deliverRequest: value => delayed ? setImmediate(() => deliver(value)) : deliver(value),
+      duringJoin: () => order.push('native-proof') });
+    const result = await hostProof.probeWebkitWrongCA(f.browser, f.factory, performance.now() + 1000);
+    assert.equal(result, true);
+    assert.deepEqual(order, delayed
+      ? ['wait', 'evaluate', 'navigation-rejected', 'requestfailed', 'native-proof', 'page-close']
+      : ['wait', 'evaluate', 'requestfailed', 'navigation-rejected', 'native-proof', 'page-close']);
+    assert.equal(budgets.length, 1);
+    assert.ok(budgets[0] > 0 && budgets[0] <= 1000);
+    assert.equal(f.closed(), true);
+  }
+});
+
+test('CA document initiation retains generic cancellation request response lifecycle and setup refusals', { timeout: 3000 }, async () => {
+  for (const options of [{ generic: true }, { foreignURL: true }, { foreignFrame: true },
+    { nonNavigation: true }, { duplicate: true }, { text: 'PRIVATE_SENTINEL' },
+    { response: async () => ({ status: () => 200 }) }, { httpResponse: true },
+    { lifecycle: true }, { peer: false }, { join: false }, { evaluateError: true },
+    { waiterSetupError: true }]) {
+    let delivered;
+    const delivery = new Promise(resolve => { delivered = resolve; });
+    const f = hostBrowser({ role: 'ca', ...options,
+      deliverRequest: value => setImmediate(() => {
+        if (options.lifecycle) value.page.emit('crash');
+        value.emitRequest(); value.page.emit('console', webkitConsoleError(value.endpoint.url,
+          options.generic ? { text: 'Failed to load resource: Operation was cancelled' } : {}));
+        delivered();
+      }) });
+    const rows = [];
+    assert.equal(await hostProof.probeWebkitWrongCA(f.browser, f.factory, performance.now() + 1000,
+      (...args) => rows.push(args)), false);
+    if (!options.evaluateError && !options.waiterSetupError) await delivery;
+    assert.equal(f.closed(), true);
+    assert.equal(f.page.listenerCount('requestfailed'), 0);
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_SENTINEL/);
+  }
+});
+
+test('CA document initiation missing request uses original deadline and ignores stale proof', { timeout: 2000 }, async () => {
+  let deliver;
+  const budgets = [];
+  const f = hostBrowser({ role: 'ca', waiterOptions: value => budgets.push(value.timeout),
+    deliverRequest: value => { deliver = value; } });
+  const rows = [], until = performance.now() + 35;
+  assert.equal(await hostProof.probeWebkitWrongCA(f.browser, f.factory, until,
+    kind => rows.push(kind)), false);
+  assert.deepEqual(rows, ['deadline']);
+  assert.ok(budgets[0] > 0 && budgets[0] <= 35);
+  assert.equal(f.closed(), true);
+  assert.equal(f.page.listenerCount('requestfailed'), 0);
+  deliver.emitRequest(); deliver.page.emit('console', webkitConsoleError(deliver.endpoint.url));
+  assert.deepEqual(rows, ['deadline']);
+});
+
+test('owned request timeout labels deadline even before a rounded clock tick', { timeout: 2000 }, async t => {
+  // Freeze only the observed clock. The real bounded timer still expires, so
+  // this models rounding without relying on a scheduler or elapsed-time race.
+  t.mock.method(performance, 'now', () => 1000);
+  for (const role of ['host', 'ca']) {
+    const rows = [], budgets = [];
+    const f = hostBrowser({ role, missing: true, waiterOptions: value => budgets.push(value.timeout) });
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(f.browser, f.factory, 1035, kind => rows.push(kind)), false);
+    assert.deepEqual(rows, ['deadline']);
+    assert.deepEqual(budgets, [35]);
+    assert.equal(f.closed(), true);
+    assert.equal(f.page.listenerCount('requestfailed'), 0);
+  }
+});
 
 test('one-shot R1 real EOF reset and idle are never certificate alerts', { timeout: 10000 }, async () => {
   hostAPI(); const files = hostCertificateFiles();
@@ -2093,7 +2389,8 @@ test('omitting the CA factory preserves the legacy CA oracle while host one-shot
 
 test('one-shot diagnostics report one fixed failure and never report success', async () => {
   const cases = [
-    [{ missing: true }, 'request'], [{ foreignURL: true }, 'request'], [{ text: 'PRIVATE_SENTINEL' }, 'request'],
+    // Missing request evidence now waits until the original deadline; refusal stays false.
+    [{ missing: true }, 'deadline'], [{ foreignURL: true }, 'request'], [{ text: 'PRIVATE_SENTINEL' }, 'request'],
     [{ response: async () => undefined }, 'response'],
     [{ error: Object.assign(new Error('PRIVATE_SENTINEL'), { name: 'TimeoutError' }) }, 'navigation'],
     [{ duringJoin: ({ page }) => page.emit('crash') }, 'lifecycle'], [{ peer: false }, 'peer_binding'],
@@ -2298,11 +2595,21 @@ test('wrong-CA socket event category reaches its fixed checkpoint and stays refu
   const type = fake('webkit', 'normal', { reason: 'ca', requestCertificate: true });
   const checkpoints = [];
   const endpoint = { url: negative.caOrigin + '/', async finish() { return false; }, async close() { return true; } };
+  // The selected one-shot CA context implements the supported document entry;
+  // general fake() retains goto for positive controls and legacy CA fallback.
+  const dedicated = hostBrowser({ role: 'ca', text: 'Unacceptable TLS certificate', endpoint });
+  const launch = type.launch.bind(type); let contexts = 0;
+  type.launch = async options => {
+    const browser = await launch(options), newContext = browser.newContext.bind(browser);
+    browser.newContext = config => ++contexts === 1 ? newContext(config) : dedicated.browser.newContext(config);
+    return browser;
+  };
   await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
     (stage, engine) => checkpoints.push({ stage, engine }), undefined, undefined,
     async (_until, diagnose) => { diagnose('socket_eof'); return endpoint; }),
   /^Error: SF08 browser trust preflight refused$/);
   assert.deepEqual(checkpoints.at(-1), { stage: 'engine_wrong_ca_one_shot_socket_eof_events_GRMQNSBJKO_0', engine: 'webkit' });
+  assert.equal(dedicated.closed(), true);
   assert.equal(type.trace.closed && type.trace.contextClosed, true);
 });
 

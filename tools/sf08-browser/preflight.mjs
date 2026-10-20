@@ -974,6 +974,39 @@ export function validWebkitEventTrace(value) {
     (!value.endsWith('_1') || value.length === 34));
 }
 
+// One fixed comparison candidate: use the fresh document's supported navigation
+// entry point, not Inspector/UI loadRequest. waitForNavigation is deprecated in
+// favor of waitForURL for successful navigations, but a certificate refusal must
+// not commit the requested URL. Prearming the failure waiter avoids its usual
+// registration race. Both operations retain the original absolute deadline.
+function startWebkitDocumentNavigation(page, url, until) {
+  let initiated = false;
+  const outcome = promise => Promise.resolve(promise).then(
+    value => ({ fulfilled: true, value }), error => ({ fulfilled: false, error }));
+  // Arm synchronously before triggering exactly one location.assign. A
+  // synchronous waiter setup failure must not initiate any navigation.
+  const waiter = outcome(page.waitForNavigation({ waitUntil: 'load', timeout: hostBudget(until) }));
+  let initiation;
+  try { initiation = outcome(page.evaluate(target => { location.assign(target); }, url)); }
+  catch (error) { initiation = Promise.resolve({ fulfilled: false, error }); }
+  // Handlers are attached immediately even when initiation fails while the
+  // waiter is pending. Final page.close cancels that waiter after native join.
+  const joined = Promise.all([initiation, waiter]);
+  return {
+    async wait() {
+      const started = await hostWithin(initiation, until);
+      if (!started.fulfilled) throw started.error;
+      if (started.value !== undefined) refuse();
+      initiated = true;
+      const navigated = await hostWithin(waiter, until);
+      if (!navigated.fulfilled) throw navigated.error;
+      return navigated.value;
+    },
+    initiated() { return initiated; },
+    async join() { await hostWithin(joined, until); },
+  };
+}
+
 async function probeWebkitCertificate(browser, factory, until, diagnose, profile) {
   const events = [];
   let eventOverflow = false, eventsClosed = false, textFingerprint;
@@ -988,7 +1021,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     const remaining = Math.floor(until - performance.now());
     note(!Number.isFinite(remaining) || remaining < 1 || remaining > 10000 ? 'deadline' : kind);
   };
-  let context, page, endpoint, bad = false, consolePoison = false, privateExactAlert = false,
+  let context, page, endpoint, documentNavigation, bad = false, consolePoison = false, privateExactAlert = false,
     requests = 0, failed, good = false;
   let wakeConsoleWait;
   let consoleWaitSettled = false;
@@ -998,10 +1031,19 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     consoleWaitSettled = true;
     wakeConsoleWait(proved === true);
   };
+  // Request failure and navigation rejection are independently delivered public
+  // events. Own the signal before starting either one-shot negative navigation.
+  let wakeRequestWait;
+  const requestWait = new Promise(resolve => { wakeRequestWait = resolve; });
+  const signalRequestWait = proved => {
+    const wake = wakeRequestWait;
+    wakeRequestWait = undefined;
+    wake?.(proved === true);
+  };
   const hardVeto = kind => {
     if (kind === 'lifecycle') event('C');
     if (kind === 'response') event('P');
-    failure(kind); bad = true; signalConsoleWait(false);
+    failure(kind); bad = true; signalConsoleWait(false); signalRequestWait(false);
   };
   const poisonConsole = () => {
     failure('console_malformed'); consolePoison = true; signalConsoleWait(false);
@@ -1086,6 +1128,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         if (!failure || !['Operation was cancelled', 'Unacceptable TLS certificate'].includes(failureText)) refuse();
         failed = request;
         event('M');
+        signalRequestWait(true);
         if (failureText === 'Unacceptable TLS certificate') event('Q'); // Diagnostic only; never a replacement proof.
       } catch { hardVeto('request'); }
     });
@@ -1093,11 +1136,30 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     phase = 'navigation';
     let navigationError;
     event('G');
-    try { await hostWithin(page.goto(endpoint.url, { waitUntil: 'load', timeout: hostBudget(until) }), until); event('V'); hardVeto('response'); }
+    try {
+      documentNavigation = startWebkitDocumentNavigation(page, endpoint.url, until);
+      await documentNavigation.wait();
+      event('V'); hardVeto('response');
+    }
     catch (error) { navigationError = error; }
+    if (documentNavigation?.initiated() !== true) {
+      hardVeto('navigation'); refuse();
+    }
     if (!(navigationError instanceof Error) || navigationError.name !== 'Error') refuse();
     event('N');
     live();
+    phase = 'request';
+    if (requests === 0) {
+      let requestProved;
+      try { requestProved = await hostWithin(requestWait, until); }
+      catch (error) {
+        // This owned signal never rejects. Only its original deadline waiter can
+        // reject here, including a rounded timer firing before the next clock tick.
+        failure('deadline'); throw error;
+      }
+      if (requestProved !== true) refuse();
+      live();
+    }
     phase = requests !== 1 || !failed ? 'request' : 'response';
     if (requests !== 1 || !failed || await hostWithin(failed.response(), until) !== null) refuse();
     const boundFailed = failed;
@@ -1140,6 +1202,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
   } catch { signalConsoleWait(false); failure(phase); good = false; }
   finally {
     signalConsoleWait(false);
+    signalRequestWait(false);
     if (endpoint) {
       event('J');
       try {
@@ -1160,6 +1223,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     event('O');
     eventsClosed = true;
     if (page) { try { await hostWithin(page.close(), until); } catch { failure('cleanup'); good = false; } }
+    if (documentNavigation) { try { await documentNavigation.join(); } catch { failure('cleanup'); good = false; } }
     if (context) { try { await hostWithin(context.close(), until); } catch { failure('cleanup'); good = false; } }
     try { hostBudget(until); } catch { failure('deadline'); good = false; }
   }
