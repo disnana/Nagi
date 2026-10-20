@@ -33,5 +33,47 @@ jobs:
           if len(names)!=14 or len(set(names))!=14 or not required.issubset(names):
               raise SystemExit("b1_bootstrap_inventory=invalid")
           PYLIST
+      - name: Observe the existing fifteen CSRF unit tests before the deadline fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: -- --list > "$RUNNER_TEMP/b1-bootstrap-auth-csrf-list.log"
+          python3 - <<'PYLIST'
+          import os,pathlib,re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-auth-csrf-list.log").read_text()
+          names=re.findall(r"(?m)^([a-zA-Z0-9_:]+): test$",text)
+          if len(names)!=15 or len(set(names))!=15:
+              raise SystemExit("b1_bootstrap_auth_csrf_inventory=invalid")
+          PYLIST
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/b1-bootstrap-auth-csrf-run.log"
+          python3 - <<'PYSUMMARY'
+          import os,pathlib,re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-auth-csrf-run.log").read_text(encoding="utf-8")
+          summaries=re.findall(r"(?m)^test result: (.+)$",text)
+          expected=r"ok\. 15 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out; finished in [0-9.]+s"
+          if len(summaries)!=1 or re.fullmatch(expected,summaries[0]) is None:
+              raise SystemExit("b1_bootstrap_auth_csrf_summary=invalid")
+          PYSUMMARY
       - name: Observe existing cases with unchanged default parallelism and deadlines
         run: cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests -- --show-output
+      - name: Observe the ten public Session CSRF API tests after the deadline fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api -- --list > "$RUNNER_TEMP/b1-bootstrap-session-csrf-api-list.log"
+          python3 - <<'PYLIST'
+          import os,pathlib,re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-session-csrf-api-list.log").read_text()
+          names=re.findall(r"(?m)^([a-zA-Z0-9_:]+): test$",text)
+          if len(names)!=10 or len(set(names))!=10:
+              raise SystemExit("b1_bootstrap_session_csrf_api_inventory=invalid")
+          PYLIST
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/b1-bootstrap-session-csrf-api-run.log"
+          python3 - <<'PYSUMMARY'
+          import os,pathlib,re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-session-csrf-api-run.log").read_text(encoding="utf-8")
+          summaries=re.findall(r"(?m)^test result: (.+)$",text)
+          expected=r"ok\. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in [0-9.]+s"
+          if len(summaries)!=1 or re.fullmatch(expected,summaries[0]) is None:
+              raise SystemExit("b1_bootstrap_session_csrf_api_summary=invalid")
+          PYSUMMARY
