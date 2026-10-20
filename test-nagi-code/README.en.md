@@ -4,7 +4,7 @@
 
 Examples of CLIs, HTTP APIs, SQLite, actors, and Rust integration. Each README identifies the work written in Nagi and the work handled by Rust. These demonstrate inputs, outputs, and limits; they are not production templates.
 
-Obtain the full repository and run from its root. You need Nagi 0.1.9, Rust/Cargo, and your OS's build tools; see [setup](../docs/en/getting-started.md). A compiler built from `main` may include unreleased fixes even when its version number matches the public release.
+Obtain the full repository and run from its root. You need Nagi 0.2.0, Rust/Cargo, and your OS's build tools; see [setup](../docs/en/getting-started.md). A compiler built from `main` may include unreleased fixes even when its version number matches the public release.
 
 ## Libraries and Rust integration
 
@@ -25,7 +25,7 @@ The [Result API](../docs/en/result-api.md) uses integer parsing and a single-row
 
 ## Task management JSON API
 
-[Nagi Tasks](web-demo/README.md) adds, edits, completes, deletes, and aggregates tasks through a JSON API. Nagi defines standard HTTP routes and input validation; the runtime handles HTTP and SQLite. `GET /` returns a plain-text API landing message. The browser UI remains unconnected while typed HTML responses are pending.
+[Nagi Tasks](web-demo/README.md) adds, edits, completes, deletes, and aggregates tasks through a JSON API. Nagi defines standard HTTP routes and input validation; the runtime handles HTTP and SQLite. `GET /` returns a plain-text API landing message. The browser UI remains unconnected; this sample has not migrated to the typed HTML subset available in 0.2.0.
 
 ## Use Rust libraries
 

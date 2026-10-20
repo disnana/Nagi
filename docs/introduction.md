@@ -32,7 +32,7 @@ Rust経由の生成を当面の基盤とします。独自バックエンド、V
 
 ## 開発状況
 
-現在は0.1系です。一般的なバックエンドをNagiだけで書けるという目標は未達です。SQLiteのbind引数は固定形で、標準PostgreSQL、送信HTTP client、利用者が定義する不透明な資源型はありません。
+現在の公開版は0.2.0です。一般的なバックエンドをNagiだけで書けるという目標は未達です。SQLiteには型付きParametersがあり、送信HTTPには固定操作の[HTTP client](http-client.md)があります。標準PostgreSQLと利用者が定義する不透明な資源型はありません。
 
 `check`はNagiの型・move・view等を検査します。借用やRustのtraitは最終的にrustcも検査するため、`check`成功後にビルドで失敗する場合があります。保証範囲は[所有権](ownership.md)、対応書式は[文法](syntax.md)を参照してください。
 

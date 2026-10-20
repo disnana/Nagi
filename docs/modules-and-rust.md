@@ -63,7 +63,7 @@ module名で見えるのは、そのファイル自身が定義した関数・cl
 
 同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。引用符なしのimportは登録済みの`std.http.server`、`std.actor`、`std.result`等を対象にします。
 
-未リリース0.2.0 SF01の`std.auth`はrequest-bound `AuthScope`と`Grant[P]`を使います。旧Principalと無期限issuerは廃止しました。[認証・認可](security.md)に型・lease・trusted adapterの責務、[移行](migration-0.2.0.md)に差分があります。[サンプル](../test-nagi-code/application-examples/auth-boundary/README.md)は標準Policy経路を使う有限credentialの検証例で、productionの暗号検証や永続Sessionを実装したとは扱いません。
+0.2.0 SF01の`std.auth`はrequest-bound `AuthScope`と`Grant[P]`を使います。旧Principalと無期限issuerは廃止しました。[認証・認可](security.md)に型・lease・trusted adapterの責務、[移行](migration-0.2.0.md)に差分があります。[サンプル](../test-nagi-code/application-examples/auth-boundary/README.md)は標準Policy経路を使う有限credentialの検証例で、productionの暗号検証や永続Sessionを実装したとは扱いません。
 
 ### LowとRustで同じ定義を使う
 
@@ -83,7 +83,7 @@ Rustのアダプターからは、rootで読み込んだmoduleのclassを`super:
 
 ## 標準HTTP libraryを読み込む
 
-`std.http.server`と`std.actor`はNagi 0.1.8から使える標準ライブラリです。以下の応答factory例は未リリース0.2.0のContext-first APIを使います。
+`std.http.server`と`std.actor`はNagi 0.1.8から使える標準ライブラリです。以下の応答factory例は0.2.0のContext-first APIを使います。
 
 ```nagi
 import std.http.server as http
@@ -94,7 +94,7 @@ def greeting(request: Request) -> Result[Response, Error]:
     return http.text(context, Code.OK, "Hello, Nagi!")
 ```
 
-この例はrequest-borrowed contextを使うresponse factory断片で、listenerを起動しません。response予算、rate予算、各routeのrate policyを設定する起動手順は[HTTP APIリファレンス](http-server.md#sf07の明示予算とrate-policy開発候補)を参照してください。
+この例はrequest-borrowed contextを使うresponse factory断片で、listenerを起動しません。response予算、rate予算、各routeのrate policyを設定する起動手順は[HTTP APIリファレンス](http-server.md#sf07の明示予算とrate-policy)を参照してください。
 
 標準moduleはコンパイラと一緒に提供する登録済みのlibraryです。カレントディレクトリの同名ファイルやエディターのbufferで差し替えません。module importには`as`を付け、`from`では必要な定義だけを選べます。importするだけでlistenerやworkerは起動しません。生成Lowにも標準定義のIDを残し、標準型のaliasは同じnative型を指します。
 

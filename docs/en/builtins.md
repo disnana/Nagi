@@ -74,7 +74,7 @@ These functions are asynchronous. The table lists types **after awaiting**. Extr
 |---|---|---|---|
 | `sleep(milliseconds)` | i64 | `unit` | Waits for an i64 number of milliseconds |
 
-Unreleased SF05 removes Db/db_* with concrete `SF05 migration` diagnostics. Use literal Query, Parameters, and Pool/Tx from `std.db.sqlite`; see [SQLite](database.md) and [migration](migration-0.2.0.md).
+0.2.0 SF05 removes Db/db_* with concrete `SF05 migration` diagnostics. Use literal Query, Parameters, and Pool/Tx from `std.db.sqlite`; see [SQLite](database.md) and [migration](migration-0.2.0.md).
 
 ## Sharing and type sizes
 
@@ -115,4 +115,4 @@ The following functions are synchronous.
 
 Pass a synchronous function as `kernel`. See [reading benchmarks](performance.md) for methods and units, and the [CPU test](../../examples/cpu.nagi) for an example.
 
-Retired `html`/`serve(Db,port)` receive migration diagnostics in unreleased SF01. See [migration](migration-0.2.0.md).
+Retired `html`/`serve(Db,port)` receive migration diagnostics in 0.2.0 SF01. See [migration](migration-0.2.0.md).

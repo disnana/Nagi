@@ -125,7 +125,7 @@ CRC32、JSON整形、asyncのRust関数を呼びます。[タスク管理サイ�
 
 Nagi 0.1.11への導入対象では、生成先の`.nagi/`内にbuild世代ごとの実行ファイルを保存します。同じ入口ソースと生成先ならアプリIDは変わりませんが、再ビルド後の実行ファイルのパスは変わります。起動中の旧実行ファイルを上書き・削除・停止する処理はありません。ビルドが失敗した場合は、新しい実行ファイルを起動せず、前回の成功を示すmetadataを残します。
 
-公開版`nagic` 0.1.11の通常のCLI build/runは成功世代を自動削除せず、保持上限もありません。これは`build/native-target/`や`NAGI_NATIVE_TARGET_DIR`のCargo共有cacheとは別です。通常のCLI用generation cleanup commandはありません。JetBrains 0.1.3未リリース候補では、plugin管理runだけが対応する同一PR sourceの開発compilerへ`NAGI_RUN_RETENTION=latest`を渡す保持modeを検証中です。公開compiler 0.1.11はこのmodeを実装していません。compiler 0.1.12の一時候補は中止され、この機能はJetBrains 0.1.3とmatching development compilerで検証中です。
+公開版`nagic` 0.1.11の通常のCLI build/runは成功世代を自動削除せず、保持上限もありません。これは`build/native-target/`や`NAGI_NATIVE_TARGET_DIR`のCargo共有cacheとは別です。通常のCLI用generation cleanup commandはありません。JetBrains 0.1.3未リリース候補では、plugin管理runだけがcompiler 0.2.0へ`NAGI_RUN_RETENTION=latest`を渡す保持modeを検証中です。公開compiler 0.1.11はこのmodeを実装していません。compiler 0.1.12の一時候補は中止され、この機能はJetBrains 0.1.3とcompiler 0.2.0で検証中です。
 
 候補modeでもnative run成功が記録されたlatest、実行中・現在の入力が必要とするgeneration、失敗後のlast-good generationは保護します。compile成功だけではruntime成功とみなさず、latestにrun成功記録がなければ旧成功世代を回収しません。成功した通常buildを含む各generationの入力snapshotも調べるため、別appやnon-latest runが参照するgenerationを保護します。外部hardlink inputのfile identityがrun leaseと一致するときも、そのleaseとgenerationを保持します。依存元を回収した後に参照先がもう一度のsuccessful sweepまで残ることがあり、総generation数や容量の厳密な上限はありません。managed generationの入力metadataが不明な場合も安全側に保持します。unknown file、link/reparse point、failed staging、共有Cargo target cacheは削除しません。generation treeの外に置くrecovery journalを後続のplugin管理runで検査し、unknownまたはoversized journal recordは保持したまま正常なrecordの回収を続けます。CLIで容量を整理する場合も、実行中のgenerationやlatestが参照するgenerationを手動で削除しないでください。候補の回収modeはまだ検証中です。
 

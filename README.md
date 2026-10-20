@@ -39,9 +39,9 @@ nagic --version
 nagic --help
 ```
 
-[VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)はMarketplaceまたは[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。IntelliJ IDEA・PyCharm向けの[Nagi](editors/jetbrains-nagi/README.md)は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから入れる場合は、一覧のVersionsで利用可能な版とIDE対応を確認してください。GitHubの公開済み0.1.2 Releaseには、両IDE共通の`nagi-jetbrains-0.1.2.zip`と`.sha256`があります。このZIPの最低対応はIntelliJ IDEA 2025.1.1 build 251.25410.109、PyCharm 2025.1.1 build 251.25410.122です。Marketplaceからは対応IDEへ直接インストールでき、Release ZIPは手動インストールします。0.1.3は未公開候補です。公開済みcompiler 0.1.11は通常のCheck/Runに使えますが、候補の補完・診断・定義移動には同じPR sourceから作ったcompiler CI artifactが必要です。操作は[エディターの案内](docs/editor.md)を参照してください。
+[VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)はMarketplaceまたは[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。IntelliJ IDEA・PyCharm向けの[Nagi](editors/jetbrains-nagi/README.md)は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから入れる場合は、一覧のVersionsで利用可能な版とIDE対応を確認してください。GitHubの公開済み0.1.2 Releaseには、両IDE共通の`nagi-jetbrains-0.1.2.zip`と`.sha256`があります。このZIPの最低対応はIntelliJ IDEA 2025.1.1 build 251.25410.109、PyCharm 2025.1.1 build 251.25410.122です。Marketplaceからは対応IDEへ直接インストールでき、Release ZIPは手動インストールします。0.1.3は未公開候補です。公開済みcompiler 0.1.11は通常のCheck/Runに使えますが、候補の補完・診断・定義移動にはcompiler 0.2.0を使えます。操作は[エディターの案内](docs/editor.md)を参照してください。
 
-インストールスクリプトは引き続き公開ReleaseのNagi 0.1.11を取得します。このREADMEには未公開の0.2.0開発sourceのAPI例が含まれます。例を検査・実行するには、同じsource revisionからbuildしたcompilerか、そのrevisionに対応するCI artifactを使ってください。公開0.1.11にはこれらのAPIはありません。インストールした公開版は`nagic --version`で確かめてください。0.1.11との互換性は[0.1.11移行ガイド](docs/migration-0.1.11.md)を参照してください。
+Nagi 0.2.0は[2026-10-20に公開しました](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0)。インストールスクリプトは最新の公開Releaseを選びます。以下のHTTP・SQLite API例には0.2.0が必要で、公開0.1.11には含まれません。`nagic --version`で導入版を確認し、更新前に[0.2.0移行ガイド](docs/migration-0.2.0.md)を参照してください。
 
 ### アンインストール
 
@@ -61,9 +61,9 @@ Linux / macOS（bash）:
 
 変更済み・検証できない配布物は残します。プロジェクト、Rust/Cargo、VS Code拡張は変更しません。詳細は[導入ガイド](docs/getting-started.md#アンインストールする)へ。
 
-## 0.2.0候補のHTTP例を動かす
+## 0.2.0のHTTP例を動かす
 
-次を`server.nagi`に保存します。DB書き込みのないHTTPサンプルです。同じsource revisionからbuildした候補compilerか、対応するCI artifactで検査・実行してください。公開0.1.11ではこのAPIを使えません。
+次を`server.nagi`に保存します。DB書き込みのないHTTPサンプルです。Nagi 0.2.0で検査・実行してください。
 
 ```nagi
 import std.http.server as http
@@ -118,13 +118,13 @@ SVG・PNGには別途D2が必要です。絞り込み、推論できない関係
 
 Lowの互換性を保ちながら、当面はHighとRust連携を優先します。使い方は[HighとLow](docs/low-language.md)、Rustの資産を呼ぶ方法は[Rust連携](docs/modules-and-rust.md)へ。
 
-## 現在の範囲（0.2.0開発source）
+## 現在の範囲（0.2.0）
 
 | このsourceで使えるもの | 主な制限 |
 |---|---|
 | 型付きの値、class・enum、List、nullable、Result、move・view・shared | 利用者定義のgeneric関数・traitと標準Map操作は未対応。`owned[T]`に汎用constructorや透過的な演算はありません |
 | HTTP、ヘッダー、応答status、独自エラー、共有状態 | 標準サーバーはloopbackのHTTP/1。TLS・WebSocket・streamingの公開APIはありません |
-| JSON、SQLite Pool/Tx、型付きParameters、SQL/schemaのopt-in事前検査 | SQLite APIは未公開の開発sourceに含まれます。SQLは直接literalの一文で、placeholderは匿名`?`のみ。標準PostgreSQLはありません |
+| JSON、SQLite Pool/Tx、型付きParameters、SQL/schemaのopt-in事前検査 | SQLは直接literalの一文で、placeholderは匿名`?`のみ。標準PostgreSQLはありません |
 | async・scope、typed actor・Supervisor | Tokio上の同一プロセス。独自VM、無停止更新、分散actorはありません |
 | ファイルのimport、標準module、Rust連携、Lowの関数差し替え | 任意のRust型をそのまま使う機能や、安定した外部ABIはありません |
 

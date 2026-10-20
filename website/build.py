@@ -55,7 +55,7 @@ def site_defaults(repository: str) -> tuple[str, str]:
 GROUPS = [
     ("入門", [("getting-started", "準備と最初の実行"), ("language-guide", "コードを書きながら学ぶ"), ("first-app", "最初のCLIアプリ"), ("editor", "エディターの操作例")]),
     ("言語リファレンス", [("syntax", "文法の早見表"), ("builtins", "組み込み関数"), ("types", "型と推論"), ("classes", "class"), ("ownership", "所有権"), ("view-and-zero-copy", "viewとコピー"), ("error-handling", "エラー処理")]),
-    ("アプリを作る", [("http", "使い方"), ("http-server", "APIリファレンス"), ("http-stdlib-performance", "性能測定"), ("security", "認証・認可（未リリース）"), ("migration-0.2.0", "0.2.0移行（未リリース）"), ("http-legacy", "旧APIの移行"), ("json", "JSON"), ("database", "SQLite"), ("sqlite-pool", "SQLite PoolとTransaction（未リリース）"), ("sql-check", "SQLの事前検査"), ("modules-and-rust", "importとRust連携"), ("libraries", "自作ライブラリとRustの資産"), ("projects", "プロジェクト設定"), ("async", "asyncとscope"), ("task-handles", "Task結果handle"), ("concurrency", "並行処理"), ("actor", "actorの書き方"), ("supervisor", "再起動と停止"), ("actor-reference", "APIリファレンス"), ("actor-performance", "性能測定")]),
+    ("アプリを作る", [("http", "使い方"), ("http-server", "APIリファレンス"), ("http-stdlib-performance", "性能測定"), ("security", "認証・認可"), ("migration-0.2.0", "0.2.0移行"), ("http-legacy", "旧APIの移行"), ("json", "JSON"), ("database", "SQLite"), ("sqlite-pool", "SQLite PoolとTransaction"), ("sql-check", "SQLの事前検査"), ("modules-and-rust", "importとRust連携"), ("libraries", "自作ライブラリとRustの資産"), ("projects", "プロジェクト設定"), ("async", "asyncとscope"), ("task-handles", "Task結果handle"), ("concurrency", "並行処理"), ("actor", "actorの書き方"), ("supervisor", "再起動と停止"), ("actor-reference", "APIリファレンス"), ("actor-performance", "性能測定")]),
     ("サンプル", [("library-examples", "サンプルプロジェクト一覧"), ("web-demo", "タスク管理デモ"), ("result-api", "Result APIサンプル")]),
     ("設計と開発", [("library-design", "ライブラリとRust連携の設計案"), ("introduction", "Nagiについて"), ("low-language", "HighとLow"), ("memory-model", "メモリの扱い"), ("compiler-internals", "コンパイラの構成"), ("code-map", "コードを図にする"), ("contributing", "Nagi本体への貢献"), ("queue", "キューの試験"), ("ffi", "他の言語との連携"), ("performance", "性能の読み方"), ("measurements", "測定結果"), ("http-capacity", "通信の負荷試験"), ("roadmap", "今後の開発"), ("vscode-extension", "VS Code拡張の設定")]),
 ]
@@ -73,7 +73,7 @@ for _, entries in GROUPS:
 ENGLISH_GROUPS = [
     ("First steps", [("getting-started", "Setup and first run"), ("language-guide", "Learn by writing code"), ("first-app", "First CLI app"), ("editor", "Editor walkthrough")]),
     ("Language reference", [("syntax", "Syntax reference"), ("builtins", "Built-in functions"), ("types", "Types and inference"), ("classes", "Classes"), ("ownership", "Ownership"), ("view-and-zero-copy", "Views and copying"), ("error-handling", "Error handling")]),
-    ("Build an application", [("http", "Guide"), ("http-server", "API reference"), ("http-stdlib-performance", "Measurements"), ("security", "Authentication (unreleased)"), ("migration-0.2.0", "0.2.0 migration (unreleased)"), ("http-legacy", "Retired API migration"), ("json", "JSON"), ("database", "SQLite"), ("sqlite-pool", "SQLite Pools and Transactions (unreleased)"), ("sql-check", "SQL checks"), ("modules-and-rust", "Imports and Rust"), ("libraries", "Libraries and Rust assets"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("task-handles", "Task result handles"), ("concurrency", "Concurrency"), ("actor", "Writing actors"), ("supervisor", "Restart and shutdown"), ("actor-reference", "API reference"), ("actor-performance", "Measurements")]),
+    ("Build an application", [("http", "Guide"), ("http-server", "API reference"), ("http-stdlib-performance", "Measurements"), ("security", "Authentication"), ("migration-0.2.0", "0.2.0 migration"), ("http-legacy", "Retired API migration"), ("json", "JSON"), ("database", "SQLite"), ("sqlite-pool", "SQLite Pools and Transactions"), ("sql-check", "SQL checks"), ("modules-and-rust", "Imports and Rust"), ("libraries", "Libraries and Rust assets"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("task-handles", "Task result handles"), ("concurrency", "Concurrency"), ("actor", "Writing actors"), ("supervisor", "Restart and shutdown"), ("actor-reference", "API reference"), ("actor-performance", "Measurements")]),
     ("Examples", [("library-examples", "Sample projects"), ("web-demo", "Task management demo"), ("result-api", "Result API example")]),
     ("Design and development", [("library-design", "Library design proposal"), ("introduction", "About Nagi"), ("low-language", "High and Low"), ("memory-model", "Memory handling"), ("compiler-internals", "Compiler internals"), ("code-map", "Code maps"), ("contributing", "Contributing to Nagi"), ("queue", "Queue experiments"), ("ffi", "Language interfaces"), ("performance", "Reading benchmarks"), ("measurements", "Measurements"), ("http-capacity", "HTTP load tests"), ("roadmap", "Roadmap"), ("vscode-extension", "VS Code extension settings")]),
 ]
@@ -95,18 +95,18 @@ NAV_TOPIC_LABELS = {
 
 LABELS = {
     "ja": dict(skip_label="本文へ移動", home_label="Nagi ホーム", menu_label="サイトのメニュー",
-               start_label="はじめる", status_label="Nagi 0.1 · 開発中", footer_label="フッター",
+               start_label="はじめる", status_label="Nagi 0.2.0 · 開発中", footer_label="フッター",
                other_language="en", other_label="English", switch_label="Read this page in English",
                docs_contents="Docsの目次", page_contents="このページの目次", on_page="このページ",
-               source_label="このページのソース", docs_version="Nagi 0.1 · 開発中のDocs",
+               source_label="このページのソース", docs_version="Nagi 0.2.0 · Docs",
                copy_label="コピー", copy_aria="このコードをコピー", code_aria="コード",
                table_aria="表（横にスクロールできます）", theme_label="外観",
                theme_system="システム", theme_light="ライト", theme_dark="ダーク"),
     "en": dict(skip_label="Skip to content", home_label="Nagi home", menu_label="Site navigation",
-               start_label="Get started", status_label="Nagi 0.1 · In development", footer_label="Footer",
+               start_label="Get started", status_label="Nagi 0.2.0 · In development", footer_label="Footer",
                other_language="ja", other_label="日本語", switch_label="このページを日本語で読む",
                docs_contents="Docs contents", page_contents="On this page", on_page="On this page",
-               source_label="Page source", docs_version="Nagi 0.1 · Development docs",
+               source_label="Page source", docs_version="Nagi 0.2.0 · Docs",
                copy_label="Copy", copy_aria="Copy this code", code_aria="Code",
                table_aria="Table (scroll horizontally)", theme_label="Appearance",
                theme_system="System", theme_light="Light", theme_dark="Dark"),

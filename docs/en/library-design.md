@@ -79,7 +79,7 @@ Evaluate Axum/Tower first against the current standard HTTP implementation. **Ad
 
 Match public APIs, admission capacity, body/header limits, deadlines, panic responses, and shutdown. Evaluate throughput, latency, CPU, memory, overload recovery, and maintenance costs. Existing [measurements](http-stdlib-performance.md) are not results of this adoption comparison.
 
-An outgoing HTTP client is also unimplemented. Reuse of reqwest or similar libraries is under consideration; response status versus transport errors, receive limits, deadlines, and resource cleanup need contracts first.
+The 0.2.0 outgoing [HTTP client](http-client.md) uses fixed operations and finite budgets registered by a trusted Rust host. Its contract distinguishes response status, transport failures, receive limits, deadlines, and actual termination/join. There is no general client API accepting arbitrary URLs or raw header maps.
 
 ## Implementation order
 

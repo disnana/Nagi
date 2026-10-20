@@ -9,7 +9,7 @@
 1. **既存の言語規則を揃える。** `owned`・`view`・move、分岐やloopの検査、算術の失敗、source mappingを整理する。`check`成功後のRustビルド失敗を再現例で追い、Nagi側で診断すべきものとRustへ任せる検査を区別する。
 2. **Rust資源との境界を決める。** 不透明な型の識別、借用、共有、非同期終了、取消後の仕事を定義する。一般的なtraitや新構文は、具体的なAPIで必要性を確認してから検討する。
 3. **標準ライブラリを整理する。** HTTP・JSON・DB等のAPIをmoduleとして提供し、不要なランタイム依存を分離する。生成するSerde・行変換・公開型にも対応が必要で、Cargoのoptional化だけでは終わらない。
-4. **DBを汎用化する。** SQLiteとPostgreSQLは別module・別資源型とし、引数・行・エラーの規則を揃える。SQLite Pool/Txの公開APIと終了方針は#99としてmainへ反映し、4 OS CIを確認済みです。公開Nagi 0.1.11には未収録です。使い方と制約は[SQLite PoolとTransaction](sqlite-pool.md)を参照してください。Nagi 0.1.10の[明示SQL/schema検査](sql-check.md)はSQLiteの名前・返却列・bind数が対象で、値の型・NULLや他DBの検査は未対応。
+4. **DBを汎用化する。** SQLiteとPostgreSQLは別module・別資源型とし、引数・行・エラーの規則を揃える。SQLite Pool/Txの公開APIと終了方針は0.2.0に含まれます。使い方と制約は[SQLite PoolとTransaction](sqlite-pool.md)を参照してください。Nagi 0.1.10の[明示SQL/schema検査](sql-check.md)はSQLiteの名前・返却列・bind数が対象で、値の型・NULLや他DBの検査は未対応。
 5. **HTTP基盤を比較する。** Axum／Towerを第一候補として、現行実装と同じAPI、制限、障害、停止条件で評価する。通常負荷・過負荷・長時間の性能と保守負担を確認して採否を決める。置き換えは未決。
 6. **実例と文書で境界を確かめる。** Nagi・Rust双方の検査、公開版とmainの差、実測条件を示す。診断や書きやすさも、同じ課題を解く実例で評価する。
 
@@ -31,15 +31,15 @@
 
 Rust以外のバックエンドでも同じ意味を保つには、型・所有権・解放・失敗・非同期処理・runtime接続の契約と実装が必要です。Lowを使ってコンパイラを書き直すことを、現在の開発段階の必須条件にはしません。
 
-S1 Task結果handleとS2 Supervisor/HTTP移行はNagi 0.1.11で公開済みです。S2は既存APIで実装しています。[使い方](task-handles.md)と[検証状況](internal/task-handles-s1-results.md)を分けています。Supervisor/HTTPのS2移行は[サービス例](../test-nagi-code/library-examples/supervised-service/README.md)へ接続しました。公開Pool/Txはmainへ反映済みで、0.1.11には未収録です。
+S1 Task結果handleとS2 Supervisor/HTTP移行はNagi 0.1.11で公開済みです。S2は既存APIで実装しています。[使い方](task-handles.md)と[検証状況](internal/task-handles-s1-results.md)を分けています。Supervisor/HTTPのS2移行は[サービス例](../test-nagi-code/library-examples/supervised-service/README.md)へ接続しました。公開Pool/Txは0.2.0に含まれます。
 
 ## 0.2.0 Security Foundation
 
-次工程の[設計RFC](internal/security-foundation/rfc.md)と[機能別PR/検証計画](internal/security-foundation/implementation-plan.md)を作成しました。認証・認可、CSRF、HTML出力、SQL構造/bind、送信先検証、CORS、Cookie/Session、資源上限の責務を分けます。現在は設計段階で、新機能を利用できるという案内ではありません。最新指示による[安全性優先の判断と移行](internal/security-foundation/decisions-and-migration.md)を基準に、全標準HTTP policy必須・単一request-bound Grant・永続Sessionを実装し、統合検証前に正式0.2.0を公開しません。
+Nagi 0.2.0 Security Foundationは[4 OS・browser受入](https://github.com/disnana/Nagi/actions/runs/39422234923)を経て[2026-10-20に公開しました](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0)。明示HTTP policy、request-bound Grant、永続Session/Cookie、CSRF/CORS、typed HTML subset、literal SQLとtyped bind、送信先検証、応答・rate予算を含みます。制限は[移行](migration-0.2.0.md)と各APIリファレンスを参照してください。
 
 ### 0.2.1計画: HTTP応答の圧縮展開（SF06-COMP-021）
 
-これは0.2.1の計画で、未着手・実装0件です。0.2.0のHTTP client設計ではidentity encodingのみを受理し、それ以外の`Content-Encoding`を暗黙展開や再送なしで失敗させる設計です。公開0.1.xや現行実装の機能説明ではありません。
+これは0.2.1の計画で、未着手・実装0件です。0.2.0のHTTP clientはidentity encodingのみを受理し、それ以外の`Content-Encoding`を暗黙展開や再送なしで失敗させます。
 
 0.2.1では依存の独立review後にcodecを選び、encoded/decoded size、memory、処理時間を別々に制限します。破損入力や取消では安全に停止し、workerの実join後に資源を解放する受入が必要です。codec、具体的な上限値、厳密な全OS CPU保証は未決です。既存API signatureと安全契約を保ちます。Q1の有限TCP failoverとTTL=0の一操作規則は維持し、decode失敗を自動retryしません。実装・review・website生成は未実行です。
 

@@ -2,7 +2,7 @@
 
 SQLiteの設定を型付きclassとして読み、JSONで返します。NULL、bool、f64、文字列、BLOBを含む3件のデータを起動時に用意します。既存の行は上書きしません。
 
-SF05のQuery/Pool/Txを含む未リリース開発sourceからcompilerをbuildし、リポジトリのルートで起動してください。公開済み0.1.xのbinaryはこの例の新APIに対応しません。
+SF05のQuery/Pool/Txを含むNagi 0.2.0を使い、リポジトリのルートで起動してください。公開済み0.1.xのbinaryはこの例の新APIに対応しません。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/device-settings/nagi.toml

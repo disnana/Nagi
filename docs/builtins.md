@@ -74,7 +74,7 @@ sliceの位置はi64です。str / bytesの位置はbyte単位、Listの位置�
 |---|---|---|---|
 | `sleep(milliseconds)` | i64 | `unit` | i64のミリ秒数だけ待つ |
 
-未リリースSF05では旧Db/db_*を廃止し、`SF05 migration`診断にします。標準SQLiteは `std.db.sqlite` のliteral Query、Parameters、Pool/Txへ移行してください。[SQLite](database.md)と[移行](migration-0.2.0.md)を参照してください。
+0.2.0 SF05では旧Db/db_*を廃止し、`SF05 migration`診断にします。標準SQLiteは `std.db.sqlite` のliteral Query、Parameters、Pool/Txへ移行してください。[SQLite](database.md)と[移行](migration-0.2.0.md)を参照してください。
 
 ## 共有と型のサイズ
 
@@ -115,4 +115,4 @@ sliceの位置はi64です。str / bytesの位置はbyte単位、Listの位置�
 
 `kernel`には同期関数を渡します。測定方法と数値の単位は[性能の読み方](performance.md)、実行例は[CPU試験](../examples/cpu.nagi)にあります。
 
-旧`html`/`serve(Db,port)`は未リリースSF01でmigration診断になります。[移行](migration-0.2.0.md)を参照してください。
+旧`html`/`serve(Db,port)`は0.2.0 SF01でmigration診断になります。[移行](migration-0.2.0.md)を参照してください。

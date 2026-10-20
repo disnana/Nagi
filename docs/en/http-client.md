@@ -1,6 +1,6 @@
 # HTTP client API (SF06)
 
-This page describes an unreleased Nagi 0.2.0 development candidate. The API is not included in public Nagi 0.1.11. For server-side HTTP, see the [HTTP server API](http-server.md); for scope and sequencing, see the [SF06 implementation plan](../internal/security-foundation/implementation-plan.en.md).
+This page describes Nagi 0.2.0. The API is not included in public Nagi 0.1.11. For server-side HTTP, see the [HTTP server API](http-server.md); for scope and sequencing, see the [SF06 implementation plan](../internal/security-foundation/implementation-plan.en.md).
 
 ## API
 
@@ -89,7 +89,7 @@ Operations and TLS for the same service share one immutable trust owner. Equal n
 
 Insufficient budget returns `Capacity`; invalid settings, overflow, and binding mismatches return `InvalidInput`; explicit allocation failures return `Unavailable`; closure returns `Closing`. Startup failures use `RequestNotStarted` and no auth failure. Accounting inconsistencies close the domain with `Internal`. The model does not cover host input allocated before acceptance, hidden foreign-crate heap capacity, Arc/Bytes allocator bookkeeping, allocator rounding/fragmentation, runtime DNS/TLS/HTTP buffers or Future/stack storage, the existing operation ledger, or application state. It does not guarantee total malloc/heap/RSS bounds or universal OOM recovery.
 
-The scoped SF06 fixture has an independent High review GO. [Run 39130975356 / job 117685886104](https://github.com/disnana/Nagi/actions/runs/39130975356/job/117685886104) passed generated Rust for High, saved Low without High, and handwritten Low, plus one exact TLS/Grant case in 101.89 seconds. This validates that fixture only. Exact-head four-OS CI for the final integration HEAD, the integrated independent final review, measured small-configuration examples, and a production-positive profile remain pending. Do not use unverified fixture values as production recommendations.
+The [0.2.0 release CI](https://github.com/disnana/Nagi/actions/runs/39422234923) passed all four OSes, including the High/saved-Low/handwritten-Low application checks. The positive TLS fixture uses a test-only destination seam; it does not prove a production-positive Internet connection profile or provide production sizing recommendations.
 
 `execute` consumes the actual `Grant[P]` for protected work. The reviewed host adapter binds the subject and target from that Grant into the actual request. Callers cannot supply an arbitrary URL, an arbitrary method/path combination, a raw header map, or a Cookie or cookie jar. Headers are limited to fixed registration-time `Accept` and `Content-Type` declarations and an optional Bearer credential bound to a protected operation. A public operation is registered under a separate type and accepts no Grant or credential. The checker rejects passing a `ProtectedOperation` to `execute_public` to bypass authorization.
 
@@ -119,6 +119,6 @@ The client checks all A and AAAA candidates. It refuses a lookup if any candidat
 | Positive TLS native fixture | PASS, using a `cfg(test)`-only destination-admission seam. This does not establish a positive production connection profile |
 | Production loopback denial | PASS. A lookup returns loopback and AAAA completes successfully with NoData; denial before TCP is confirmed after actual task shutdown |
 | Integrated SF06 fixture: generated Rust for High, saved Low without High and handwritten Low; one TLS/Grant exact case | [PASS (101.89 s)](https://github.com/disnana/Nagi/actions/runs/39130975356/job/117685886104). Fixture scope only; not four-OS or production-positive-profile acceptance |
-| Public API connection CI on four OSes | Pending on the final integration HEAD. Earlier private-head CI results are not a substitute |
+| Four-OS release CI | [PASS](https://github.com/disnana/Nagi/actions/runs/39422234923); fixture scope does not establish a production-positive connection profile |
 
-This candidate is not a released feature and has not passed four-OS production-connection acceptance.
+This API is released in 0.2.0. Production-positive connection acceptance and deployment sizing remain outside the fixture evidence above.

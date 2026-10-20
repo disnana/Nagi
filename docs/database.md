@@ -2,7 +2,7 @@
 
 [目次](README.md) · [SQLite PoolとTransaction](sqlite-pool.md) · [SQLの事前検査](sql-check.md)
 
-開発sourceの標準SQLite入口は `std.db.sqlite` です。SF05で旧 `Db` と `db_open/db_exec/db_all/db_query/db_insert/db_update/db_write` を廃止し、checkerで具体的な移行診断を返します。正式0.2.0は未リリースで、公開済み0.1.xのbinaryへ遡及適用しません。
+Nagi 0.2.0の標準SQLite入口は `std.db.sqlite` です。SF05で旧 `Db` と `db_open/db_exec/db_all/db_query/db_insert/db_update/db_write` を廃止し、checkerで具体的な移行診断を返します。公開済み0.1.xのbinaryへ遡及適用しません。
 
 `Pool` を明示 `Options` で開き、`Tx` が一つの接続を専有します。SQL構造は直接文字列literalから `sqlite.literal(...)` で作る opaque `Query`、実値は `Parameters` で渡します。文字列変数、連結、format、動的文字列からQueryを作る入口はありません。Query自体の保存・選択・関数返却はできます。
 
