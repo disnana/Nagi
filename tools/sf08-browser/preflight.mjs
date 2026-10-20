@@ -1067,10 +1067,20 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     consoleWaitSettled = true;
     wakeConsoleWait(proved === true);
   };
+  // Request failure and navigation rejection are independently delivered public
+  // events. Own the host-only signal before starting the single navigation.
+  let wakeRequestWait;
+  const requestWait = profile === HOST_PROFILE
+    ? new Promise(resolve => { wakeRequestWait = resolve; }) : undefined;
+  const signalRequestWait = proved => {
+    const wake = wakeRequestWait;
+    wakeRequestWait = undefined;
+    wake?.(proved === true);
+  };
   const hardVeto = kind => {
     if (kind === 'lifecycle') event('C');
     if (kind === 'response') event('P');
-    failure(kind); bad = true; signalConsoleWait(false);
+    failure(kind); bad = true; signalConsoleWait(false); signalRequestWait(false);
   };
   const poisonConsole = () => {
     failure('console_malformed'); consolePoison = true; signalConsoleWait(false);
@@ -1155,6 +1165,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         if (!failure || !['Operation was cancelled', 'Unacceptable TLS certificate'].includes(failureText)) refuse();
         failed = request;
         event('M');
+        signalRequestWait(true);
         if (failureText === 'Unacceptable TLS certificate') event('Q'); // Diagnostic only; never a replacement proof.
       } catch { hardVeto('request'); }
     });
@@ -1178,6 +1189,11 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     if (!(navigationError instanceof Error) || navigationError.name !== 'Error') refuse();
     event('N');
     live();
+    phase = 'request';
+    if (profile === HOST_PROFILE && requests === 0) {
+      if (await hostWithin(requestWait, until) !== true) refuse();
+      live();
+    }
     phase = requests !== 1 || !failed ? 'request' : 'response';
     if (requests !== 1 || !failed || await hostWithin(failed.response(), until) !== null) refuse();
     const boundFailed = failed;
@@ -1220,6 +1236,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
   } catch { signalConsoleWait(false); failure(phase); good = false; }
   finally {
     signalConsoleWait(false);
+    signalRequestWait(false);
     if (endpoint) {
       event('J');
       try {
