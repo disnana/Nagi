@@ -1501,7 +1501,7 @@ test('one-shot R17 delayed console ordering waits only for exact proof within th
     assert.doesNotMatch(JSON.stringify(diagnostics), /PRIVATE_SENTINEL|foreign\.invalid/);
     if (item.expected === false) {
       assert.equal(eventTraces.length, 1, `${item.label}: one bounded failure trace`);
-      assert.match(eventTraces[0], /^[ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_0$/);
+      assert.match(eventTraces[0], /^[ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_0$/);
       const codes = eventTraces[0].slice(0, -2);
       assert.equal(codes.endsWith('O'), true, 'owned observation ended before intentional teardown');
       if (item.event === 'absent') {
@@ -1552,6 +1552,48 @@ test('one-shot event observations classify once, cap at32, and never serialize c
   assert.equal(records.length, 1);
   assert.match(records[0].trace, /^GRMEUI{27}_1$/, 'first32 events only; overflow forbids complete-count/absence claims');
   assert.equal(records[0].trace.length, 34);
+});
+
+test('text fingerprint is bounded owned failure metadata and never certificate proof', async () => {
+  const text = 'Failed to load resource: unit PRIVATE_SENTINEL transport failure';
+  let locationReads = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'url', { get() { locationReads++; throw new Error('PRIVATE_SENTINEL'); } });
+  const variants = [
+    { name: 'owned bounded text', override: { text }, expected: createHash('sha256').update(text).digest('hex') },
+    { name: 'oversize text', override: { text: 'x'.repeat(1025) } },
+    { name: 'oversize UTF8', override: { text: '界'.repeat(400) } },
+    { name: 'foreign location', override: { text, location: { url: 'https://private.invalid/' } } },
+    { name: 'accessor location', override: { text, location: accessor } },
+    { name: 'arguments present', override: { text, args: ['PRIVATE_SENTINEL'] } },
+    { name: 'wrong type', override: { text, type: 'log' } },
+  ];
+  for (const item of variants) {
+    const records = [];
+    const f = hostBrowser({ duringGoto: ({ page, endpoint }) => {
+      page.emit('console', webkitConsoleError(endpoint.url, item.override));
+    } });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
+      (kind, trace, fingerprint) => records.push({ kind, trace, fingerprint })), false, item.name);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].kind, 'console_malformed');
+    assert.equal(records[0].fingerprint, item.expected, item.name);
+    assert.match(records[0].trace, /^[ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_0$/);
+    assert.doesNotMatch(JSON.stringify(records), /PRIVATE_SENTINEL|private\.invalid/);
+  }
+  assert.equal(locationReads, 0, 'diagnostics never invoke a location getter skipped by the original text comparison');
+});
+
+test('bound request error class is diagnostic only and never substitutes for native proof', async () => {
+  for (const text of ['Operation was cancelled', 'Unacceptable TLS certificate']) {
+    const records = [];
+    const f = hostBrowser({ text, peer: false });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
+      (kind, trace) => records.push({ kind, trace })), false, 'failed native finish remains a refusal');
+    assert.equal(records.length, 1);
+    assert.equal(records[0].trace.includes('Q'), text === 'Unacceptable TLS certificate');
+    assert.match(records[0].trace, /GRMQ?NSBJKO_0/);
+  }
 });
 
 test('one-shot R5 duplicate missing wrong SNI TCP and request events veto', async () => {
@@ -2162,7 +2204,7 @@ test('wrong-CA socket event category reaches its fixed checkpoint and stays refu
     (stage, engine) => checkpoints.push({ stage, engine }), undefined, undefined,
     async (_until, diagnose) => { diagnose('socket_eof'); return endpoint; }),
   /^Error: SF08 browser trust preflight refused$/);
-  assert.deepEqual(checkpoints.at(-1), { stage: 'engine_wrong_ca_one_shot_socket_eof_events_GRMNSBJKO_0', engine: 'webkit' });
+  assert.deepEqual(checkpoints.at(-1), { stage: 'engine_wrong_ca_one_shot_socket_eof_events_GRMQNSBJKO_0', engine: 'webkit' });
   assert.equal(type.trace.closed && type.trace.contextClosed, true);
 });
 

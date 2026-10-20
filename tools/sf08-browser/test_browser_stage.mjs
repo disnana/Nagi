@@ -4,10 +4,25 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { stage, businessConfig, trustEnv, FAILURE_STAGES, checkedFailure } from './browser_stage.mjs';
 
+test('text identity suffix is bounded static WebKit failure metadata only', () => {
+  const digest = 'a'.repeat(64);
+  for (const role of ['ca', 'host']) {
+    const base = `engine_wrong_${role}_one_shot_console_malformed`;
+    const value = `${base}_events_GRMNXJKO_0_text_${digest}`;
+    assert.deepEqual(checkedFailure(value, 'webkit'), { schema_version: 1, stage: value, engine: 'webkit' });
+    for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(value, engine));
+    for (const invalid of [value + '\n', value + '_extra', value.replace('GRMNXJKO', 'GRMNJKO'),
+      value.replace('console_malformed', 'accepted'), value.replace('console_malformed', 'deadline'),
+      value.replace(digest, 'A'.repeat(64)), value.replace(digest, 'a'.repeat(63)),
+      value.replace(digest, 'PRIVATE_SENTINEL'), value.replace('GRMNXJKO_0', 'X_1')])
+      assert.throws(() => checkedFailure(invalid, 'webkit'));
+  }
+});
+
 test('bounded one-shot event suffix is a strict failure-only WebKit vocabulary', () => {
   for (const role of ['ca', 'host']) {
     const base = `engine_wrong_${role}_one_shot_deadline`;
-    for (const trace of ['_0', 'GRMNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'.repeat(32) + '_1']) {
+    for (const trace of ['_0', 'GRMNSFWDJHO_0', 'GRMQNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'.repeat(32) + '_1']) {
       const stage = `${base}_events_${trace}`;
       assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
       for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine));

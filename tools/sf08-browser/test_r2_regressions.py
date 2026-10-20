@@ -41,14 +41,31 @@ def business_failure_report(secret='unit-private-sentinel'):
 
 
 class R2Tests(unittest.TestCase):
+    def test_text_identity_suffix_is_failure_only_bounded_and_closed(self):
+        digest = 'a'*64
+        for role in ('ca', 'host'):
+            base = f'engine_wrong_{role}_one_shot_console_malformed'
+            stage = base+'_events_GRMNXJKO_0_text_'+digest
+            value = dict(schema_version=1,stage=stage,engine='webkit')
+            self.assertEqual(f.validate(value),value)
+            self.assertEqual(f.validate(dict(value,phase='browser'),outer=True),dict(value,phase='browser'))
+            for engine in ('none','chromium','firefox'):
+                with self.assertRaises(ValueError): f.validate(dict(value,engine=engine))
+            for invalid in (stage+'\n',stage+'_extra',stage.replace('GRMNXJKO','GRMNJKO'),
+                stage.replace('console_malformed','accepted'),stage.replace('console_malformed','deadline'),
+                stage.replace(digest,'A'*64),stage.replace(digest,'a'*63),
+                stage.replace(digest,'PRIVATE_SENTINEL'),stage.replace('GRMNXJKO_0','X_1')):
+                with self.assertRaisesRegex(ValueError,'^invalid failure checkpoint$'):
+                    f.validate(dict(value,stage=invalid))
+
     def test_bounded_one_shot_event_suffix_is_strict_and_keeps_exact_schema(self):
-        expected_codes = 'ETXLAZUIRMNGVSFBYWDPCJKHO'
+        expected_codes = 'ETXLAZUIRMNGVSFBYWDPCJKHOQ'
         self.assertEqual(f.WEBKIT_EVENT_CODES, expected_codes)
         js = (c.HERE/'preflight.mjs').read_text()
         self.assertIn("export const WEBKIT_EVENT_CODES = '" + expected_codes + "'", js)
         for role in ('ca', 'host'):
             base = f'engine_wrong_{role}_one_shot_deadline'
-            for trace in ('_0', 'GRMNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'*32+'_1'):
+            for trace in ('_0', 'GRMNSFWDJHO_0', 'GRMQNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'*32+'_1'):
                 stage = base + '_events_' + trace
                 value = dict(schema_version=1, stage=stage, engine='webkit')
                 self.assertEqual(f.validate(value), value)

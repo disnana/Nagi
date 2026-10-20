@@ -220,6 +220,94 @@ def native_summary(raw):
     rows=re.findall(r"(?m)^test ([^ \n]+) \.\.\. (ok)$",text)
     return "passed" if len(lines)==len(rows)==9 and {name for name,_ in rows}==set(EXPECTED) else "invalid"
 
+
+# These eight workflow-only RC deltas were reviewed independently: six exact
+# Windows TMP/TEMP guards and two concrete SF03 deadline inventory counts.
+_WINDOWS_TEMP_GUARD = (
+    '          if [ "${RUNNER_OS:-}" = "Windows" ]; then\n'
+    '            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then\n'
+    '              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2\n'
+    '              exit 2\n'
+    '            fi\n'
+    '            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"\n'
+    '          fi\n'
+)
+_WINDOWS_TEMP_GUARD_SITES = (
+    ('nagi-package', 'Diagnose G3 generation-token failure before crypto checks', 'set -euo pipefail',
+     'cargo test --locked -p nagi-runtime --test session_csrf_public_api guarded_rotation_and_logout_invalidate_old_generation_tokens -- --exact 2>&1 | tee "$RUNNER_TEMP/g3-generation-target.log"'),
+    ('nagi-package', 'Check SF02 public Session runtime and one-use delivery before other checks', 'set -euo pipefail',
+     "python -c 'import os; print(\"ICU4X_DATA_DIR present:\", \"ICU4X_DATA_DIR\" in os.environ)'"),
+    ('nagi-package', 'Diagnose private Session phase deadlines on Windows', 'set +e',
+     'python -B scripts/tests/test_session_private_deadline_diagnostic.py'),
+    ('nagi-package', 'Capture bounded Session auth stages before broad checks', 'set -e',
+     'python scripts/tests/test_auth_stage_diagnostic.py'),
+    ('nagi-package', 'Capture bounded Session deadline public tests', 'set -euo pipefail',
+     'python scripts/tests/test_session_deadline_diagnostic.py'),
+    ('nagi-package', 'Check B1 Session CSRF runtime and public socket contracts', 'set -euo pipefail',
+     'python -B scripts/tests/test_csrf_deadline_mutations.py'),
+)
+_CSRF_DEADLINE_CURRENT = '"sf03-b1-csrf-deadline.log":14'
+_CSRF_DEADLINE_HISTORICAL = '"sf03-b1-csrf-deadline.log":12'
+_CSRF_DEADLINE_SITE = (
+    '          cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"\n'
+    '          cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"\n'
+    "          python - <<'PYCODE'\n"
+    '          import os, pathlib, re\n'
+    '          root=pathlib.Path(os.environ["RUNNER_TEMP"])\n'
+    '          for name, count in {"sf03-b1-csrf-core.log":14, "sf03-b1-csrf-deadline.log":14, "sf03-b1-csrf-public.log":10}.items():\n'
+)
+
+
+def _workflow_step_span(source, job, title):
+    job_header = f'  {job}:\n'
+    if source.count(job_header) != 1:
+        raise ValueError('workflow job anchor mismatch')
+    job_start = source.index(job_header)
+    job_tail = job_start + len(job_header)
+    next_job = re.search(r'(?m)^  [A-Za-z0-9_-]+:[ \t]*$', source[job_tail:])
+    job_end = job_tail + next_job.start() if next_job else len(source)
+    job_source = source[job_start:job_end]
+    step_header = f'      - name: {title}\n'
+    if job_source.count(step_header) != 1:
+        raise ValueError('workflow step anchor mismatch')
+    step_start = job_source.index(step_header)
+    step_tail = step_start + len(step_header)
+    next_step = re.search(r'(?m)^      - ', job_source[step_tail:])
+    step_end = step_tail + next_step.start() if next_step else len(job_source)
+    return job_start + step_start, job_start + step_end
+
+
+def _replace_workflow_step(source, job, title, before, after):
+    start, end = _workflow_step_span(source, job, title)
+    step = source[start:end]
+    if step.count(before) != 1:
+        raise ValueError('workflow step residual anchor mismatch')
+    return source[:start] + step.replace(before, after, 1) + source[end:]
+
+
+def _inverse_reviewed_workflow_residuals(source):
+    """Reverse only the six fixed Windows guards and two fixed SF03 counts."""
+    source = projection.inverse_workflow(source)
+    if source.count(_WINDOWS_TEMP_GUARD) != len(_WINDOWS_TEMP_GUARD_SITES):
+        raise ValueError('Windows TMP/TEMP guard inventory mismatch')
+    for job, title, set_line, first_command in _WINDOWS_TEMP_GUARD_SITES:
+        run_open = f'        shell: bash\n        run: |\n          {set_line}\n'
+        anchored = run_open + _WINDOWS_TEMP_GUARD + f'          {first_command}\n'
+        restored = run_open + f'          {first_command}\n'
+        source = _replace_workflow_step(source, job, title, anchored, restored)
+    if source.count(_CSRF_DEADLINE_CURRENT) != 2 or source.count(_CSRF_DEADLINE_HISTORICAL) != 0:
+        raise ValueError('SF03 deadline inventory mismatch')
+    for job in ('linux', 'nagi-package'):
+        source = _replace_workflow_step(
+            source, job, 'Check B1 Session CSRF runtime and public socket contracts',
+            _CSRF_DEADLINE_SITE,
+            _CSRF_DEADLINE_SITE.replace(_CSRF_DEADLINE_CURRENT, _CSRF_DEADLINE_HISTORICAL, 1),
+        )
+    if _WINDOWS_TEMP_GUARD in source or _CSRF_DEADLINE_CURRENT in source:
+        raise ValueError('reviewed workflow residual remains after inversion')
+    return source
+
+
 class BackportSourceTests(unittest.TestCase):
     def test_inverse_core_retains_child_decisions_and_every_diagnostic(self):
         source = read("runtime/src/http_server/browser_login.rs")
@@ -341,7 +429,7 @@ class BackportSourceTests(unittest.TestCase):
         self.assertIn('CARGO_TERM_COLOR=never "$@" 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py "$mode"', profile_step)
         self.assertNotIn('RUSTFLAGS', profile_step)
         self.assertNotIn('--test-threads', profile_step)
-        restored = projection.inverse_workflow(workflow)
+        restored = _inverse_reviewed_workflow_residuals(workflow)
         self.assertEqual(hashlib.sha256(restored.replace(B1_STEP, '').encode()).hexdigest(), PRODUCTION_WORKFLOW_CHILD)
         mutants = (
             profile_step.replace('-- --list', '--', 1),
@@ -369,6 +457,63 @@ class BackportSourceTests(unittest.TestCase):
         http_sha = projection.HTTP_AFTER
         self.assertEqual(workflow.count("'runtime/src/http_server.rs': '" + http_sha + "'"), 2)
         self.assertEqual(read('scripts/ci/session_private_deadline_diagnostic.py').count('expected_digest = "' + http_sha + '"'), 1)
+
+
+    def test_reviewed_workflow_inverse_rejects_moved_or_changed_residuals(self):
+        workflow = read('.github/workflows/ci.yml')
+        first_site = _WINDOWS_TEMP_GUARD_SITES[0]
+        _, first_title, first_set, first_command = first_site
+        run_open = f'        shell: bash\n        run: |\n          {first_set}\n'
+        first_anchor = run_open + _WINDOWS_TEMP_GUARD + f'          {first_command}\n'
+        first_restored = run_open + f'          {first_command}\n'
+        second_site = _WINDOWS_TEMP_GUARD_SITES[1]
+        _, second_title, second_set, second_command = second_site
+        second_command_anchor = (
+            f'        shell: bash\n        run: |\n          {second_set}\n'
+            f'          {second_command}\n'
+        )
+        moved_to_wrong_step = workflow.replace(first_anchor, first_restored, 1)
+        moved_to_wrong_step = moved_to_wrong_step.replace(
+            second_command_anchor,
+            second_command_anchor.replace(f'          {second_command}\n',
+                                          _WINDOWS_TEMP_GUARD + f'          {second_command}\n', 1),
+            1,
+        )
+        missing = workflow.replace(_WINDOWS_TEMP_GUARD, '', 1)
+        duplicated = workflow.replace(_WINDOWS_TEMP_GUARD,
+                                     _WINDOWS_TEMP_GUARD + _WINDOWS_TEMP_GUARD, 1)
+        edited = workflow.replace(
+            'echo "RUNNER_TEMP must be a nonempty existing directory on Windows"',
+            'echo "RUNNER_TEMP must be an existing directory on Windows"', 1)
+        moved_within_step = workflow.replace(
+            first_anchor, run_open + f'          {first_command}\n' + _WINDOWS_TEMP_GUARD, 1)
+        wrong_count_site = workflow.replace(_CSRF_DEADLINE_CURRENT,
+                                             '"sf03-b1-csrf-deadline.log":13', 1)
+        missing_count_site = workflow.replace(_CSRF_DEADLINE_CURRENT,
+                                              _CSRF_DEADLINE_HISTORICAL, 1)
+        duplicate_count_site = workflow.replace(
+            '"sf04-html-core.log": 20,',
+            '"sf04-html-core.log": 20, "sf03-b1-csrf-deadline.log":14', 1)
+        for label, mutant in (
+            ('missing guard', missing),
+            ('duplicated guard', duplicated),
+            ('edited guard', edited),
+            ('guard moved to another step', moved_to_wrong_step),
+            ('guard moved within step', moved_within_step),
+            ('wrong count value', wrong_count_site),
+            ('missing expected count site', missing_count_site),
+            ('duplicate count at unrelated site', duplicate_count_site),
+        ):
+            with self.subTest(label=label), self.assertRaises(ValueError):
+                _inverse_reviewed_workflow_residuals(mutant)
+
+    def test_reviewed_workflow_inverse_leaves_unrelated_drift_for_frozen_hash(self):
+        workflow = read('.github/workflows/ci.yml') + '# unrelated workflow drift\n'
+        restored = _inverse_reviewed_workflow_residuals(workflow)
+        self.assertNotEqual(
+            hashlib.sha256(restored.replace(B1_STEP, '').encode()).hexdigest(),
+            PRODUCTION_WORKFLOW_CHILD,
+        )
 
     def test_fixed_owner_inverse_cannot_hide_changed_live_gate_or_cookie(self):
         path = 'runtime/src/auth/prelogin/http_bridge.rs'
