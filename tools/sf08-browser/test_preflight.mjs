@@ -1093,9 +1093,21 @@ function hostBrowser(options = {}) {
   browser.newContext = async config => { assert.deepEqual(config, { ignoreHTTPSErrors: false, serviceWorkers: 'block' }); return context; };
   context.newPage = async () => page;
   let contextsClosed = 0, pagesClosed = 0;
+  let navigationWaiter, navigationTimer;
+  const settleNavigation = (fulfilled, value) => {
+    if (!navigationWaiter) return;
+    const waiter = navigationWaiter; navigationWaiter = undefined;
+    clearTimeout(navigationTimer);
+    options.navigationSettled?.(fulfilled, value);
+    (fulfilled ? waiter.resolve : waiter.reject)(value);
+  };
   context.close = async () => { contextsClosed++; if (options.closeError) throw new Error('PRIVATE_SENTINEL'); context.emit('close'); };
-  page.close = async () => { pagesClosed++; page.emit('close'); };
-  page.goto = async url => {
+  page.close = async () => {
+    pagesClosed++; options.navigationOrder?.push('page-close');
+    page.emit('close'); settleNavigation(false, new Error('Page closed'));
+  };
+  const navigate = async url => {
+    options.navigationObserved?.(url);
     const request = { url: () => options.foreignURL ? url + 'PRIVATE_SENTINEL' : url,
       isNavigationRequest: () => !options.nonNavigation, frame: () => options.foreignFrame ? {} : frame,
       failure: () => ({ errorText: options.text ?? 'Operation was cancelled' }),
@@ -1108,12 +1120,126 @@ function hostBrowser(options = {}) {
     if (options.resolved) return { status: () => 200 };
     throw options.error ?? new Error('Operation was cancelled');
   };
+  page.goto = async url => { options.navigationOrder?.push('goto'); return navigate(url); };
+  page.waitForNavigation = config => {
+    options.navigationOrder?.push('wait');
+    options.waiterOptions?.(config);
+    if (options.waiterSetupError) throw new Error('PRIVATE_SENTINEL');
+    assert.equal(navigationWaiter, undefined, 'one armed waiter');
+    return new Promise((resolve, reject) => {
+      navigationWaiter = { resolve, reject };
+      navigationTimer = setTimeout(() => settleNavigation(false, new Error('Navigation timed out')), config.timeout);
+    });
+  };
+  page.evaluate = async (action, url) => {
+    options.navigationOrder?.push('evaluate');
+    assert.match(String(action), /location\.assign\(target\)/);
+    assert.equal(navigationWaiter === undefined, false, 'waiter armed before document trigger');
+    if (options.evaluateError) throw new Error('PRIVATE_SENTINEL');
+    if (options.evaluatePending) return new Promise(resolve => { options.releaseEvaluate?.(resolve); });
+    if (!options.navigationPending) {
+      navigate(url).then(value => settleNavigation(true, value), error => settleNavigation(false, error));
+    }
+    return options.evaluateValue;
+  };
   const endpoint = options.endpoint ?? { url: `https://${profile.hostname}:33005/`,
     async finish() { options.duringJoin?.({ browser, context, page }); return options.peer !== false; },
     async close() { return options.join !== false; } };
   return { browser, context, page, endpoint, factory: async () => endpoint,
     closed: () => pagesClosed === 1 && contextsClosed === 1 };
 }
+
+test('document initiation prearms one waiter and triggers once before unchanged proof and join', async () => {
+  const order = [], navigations = [], waiterOptions = [];
+  const f = hostBrowser({ navigationOrder: order, navigationObserved: url => navigations.push(url),
+    waiterOptions: value => waiterOptions.push(value),
+    duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url)) });
+  const close = f.endpoint.close;
+  f.endpoint.close = async () => { order.push('native-join'); return close(); };
+  const rows = [];
+  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 10000,
+    (...args) => rows.push(args)), true);
+  assert.deepEqual(order, ['wait', 'evaluate', 'native-join', 'page-close']);
+  assert.deepEqual(navigations, [f.endpoint.url]);
+  assert.equal(waiterOptions.length, 1);
+  assert.equal(waiterOptions[0].waitUntil, 'load');
+  assert.ok(waiterOptions[0].timeout > 0 && waiterOptions[0].timeout <= 10000);
+  assert.deepEqual(rows, []);
+  assert.equal(f.closed(), true);
+  const caOrder = [];
+  const ca = hostBrowser({ role: 'ca', navigationOrder: caOrder,
+    duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url)) });
+  assert.equal(await hostProof.probeWebkitWrongCA(ca.browser, ca.factory, performance.now() + 1000), true);
+  assert.deepEqual(caOrder, ['goto', 'page-close'], 'legacy CA navigation stays unchanged');
+});
+
+test('document initiation cannot turn generic cancellation or unsafe navigation into certificate proof', async () => {
+  for (const options of [
+    { duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url,
+      { text: 'Failed to load resource: Operation was cancelled' })) },
+    { httpResponse: true, resolved: true },
+    { missing: true }, { duplicate: true }, { foreignURL: true }, { foreignFrame: true },
+    { nonNavigation: true }, { peer: false }, { join: false },
+    { evaluateValue: 'PRIVATE_SENTINEL' },
+  ]) {
+    const order = [];
+    const f = hostBrowser({ navigationOrder: order,
+      duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url)), ...options });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000), false);
+    assert.equal(order.filter(value => value === 'evaluate').length, 1);
+    assert.equal(order.includes('goto'), false);
+    assert.equal(f.closed(), true);
+  }
+});
+
+test('document initiation fault joins pending failure waiter after native join without unhandled rejection', async () => {
+  const order = [], settled = [], unhandled = [];
+  const onUnhandled = error => unhandled.push(error);
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const f = hostBrowser({ evaluateError: true, navigationOrder: order,
+      navigationSettled: fulfilled => settled.push(fulfilled) });
+    const close = f.endpoint.close;
+    f.endpoint.close = async () => { order.push('native-join'); return close(); };
+    const rows = [];
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
+      (kind, trace) => rows.push({ kind, trace })), false);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(order, ['wait', 'evaluate', 'native-join', 'page-close']);
+    assert.deepEqual(settled, [false]);
+    assert.deepEqual(unhandled, []);
+    assert.equal(f.closed(), true);
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE_SENTINEL/);
+    const refusedOrder = [];
+    const refused = hostBrowser({ waiterSetupError: true, navigationOrder: refusedOrder });
+    assert.equal(await hostProof.probeWebkitWrongHost(refused.browser, refused.factory, performance.now() + 1000), false);
+    assert.deepEqual(refusedOrder, ['wait', 'page-close'], 'no trigger after waiter setup refusal');
+  } finally { process.off('unhandledRejection', onUnhandled); }
+});
+
+test('document initiation timeout and late proof retain original deadline and drain owned promises', { timeout: 2000 }, async () => {
+  const settled = [], order = [], budgets = [];
+  let releaseEvaluate;
+  const f = hostBrowser({ evaluatePending: true, navigationOrder: order,
+    releaseEvaluate: resolve => { releaseEvaluate = resolve; },
+    navigationSettled: fulfilled => settled.push(fulfilled),
+    waiterOptions: options => budgets.push(options.timeout) });
+  const close = f.page.close;
+  f.page.close = async () => { await close(); releaseEvaluate?.(); };
+  const until = performance.now() + 35;
+  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, until), false);
+  assert.equal(budgets.length, 1);
+  assert.ok(budgets[0] > 0 && budgets[0] <= 35, 'waiter uses the original remaining budget');
+  assert.equal(settled.length, 1);
+  assert.equal(order.filter(value => value === 'evaluate').length, 1);
+  assert.equal(f.closed(), true);
+  // A stale callback after cleanup cannot create or resume another navigation.
+  f.page.emit('console', webkitConsoleError(f.endpoint.url));
+  assert.equal(order.filter(value => value === 'evaluate').length, 1);
+  const pending = hostBrowser({ navigationPending: true });
+  assert.equal(await hostProof.probeWebkitWrongHost(pending.browser, pending.factory, performance.now() + 30), false);
+  assert.equal(pending.closed(), true);
+});
 
 test('one-shot R1 real EOF reset and idle are never certificate alerts', { timeout: 10000 }, async () => {
   hostAPI(); const files = hostCertificateFiles();

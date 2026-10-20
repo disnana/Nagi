@@ -993,6 +993,39 @@ export function validWebkitEventTiming(trace, encoded) {
   return true;
 }
 
+// One fixed comparison candidate: use the fresh document's supported navigation
+// entry point, not Inspector/UI loadRequest. waitForNavigation is deprecated in
+// favor of waitForURL for successful navigations, but a certificate refusal must
+// not commit the requested URL. Prearming the failure waiter avoids its usual
+// registration race. Both operations retain the original absolute deadline.
+function startWrongHostDocumentNavigation(page, url, until) {
+  let initiated = false;
+  const outcome = promise => Promise.resolve(promise).then(
+    value => ({ fulfilled: true, value }), error => ({ fulfilled: false, error }));
+  // Arm synchronously before triggering exactly one location.assign. A
+  // synchronous waiter setup failure must not initiate any navigation.
+  const waiter = outcome(page.waitForNavigation({ waitUntil: 'load', timeout: hostBudget(until) }));
+  let initiation;
+  try { initiation = outcome(page.evaluate(target => { location.assign(target); }, url)); }
+  catch (error) { initiation = Promise.resolve({ fulfilled: false, error }); }
+  // Handlers are attached immediately even when initiation fails while the
+  // waiter is pending. Final page.close cancels that waiter after native join.
+  const joined = Promise.all([initiation, waiter]);
+  return {
+    async wait() {
+      const started = await hostWithin(initiation, until);
+      if (!started.fulfilled) throw started.error;
+      if (started.value !== undefined) refuse();
+      initiated = true;
+      const navigated = await hostWithin(waiter, until);
+      if (!navigated.fulfilled) throw navigated.error;
+      return navigated.value;
+    },
+    initiated() { return initiated; },
+    async join() { await hostWithin(joined, until); },
+  };
+}
+
 async function probeWebkitCertificate(browser, factory, until, diagnose, profile) {
   const events = [];
   const eventTimings = [];
@@ -1024,7 +1057,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     const remaining = Math.floor(until - performance.now());
     note(!Number.isFinite(remaining) || remaining < 1 || remaining > 10000 ? 'deadline' : kind);
   };
-  let context, page, endpoint, bad = false, consolePoison = false, privateExactAlert = false,
+  let context, page, endpoint, documentNavigation, bad = false, consolePoison = false, privateExactAlert = false,
     requests = 0, failed, good = false;
   let wakeConsoleWait;
   let consoleWaitSettled = false;
@@ -1129,8 +1162,19 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     phase = 'navigation';
     let navigationError;
     event('G');
-    try { await hostWithin(page.goto(endpoint.url, { waitUntil: 'load', timeout: hostBudget(until) }), until); event('V'); hardVeto('response'); }
+    try {
+      if (profile === HOST_PROFILE) {
+        documentNavigation = startWrongHostDocumentNavigation(page, endpoint.url, until);
+        await documentNavigation.wait();
+      } else {
+        await hostWithin(page.goto(endpoint.url, { waitUntil: 'load', timeout: hostBudget(until) }), until);
+      }
+      event('V'); hardVeto('response');
+    }
     catch (error) { navigationError = error; }
+    if (profile === HOST_PROFILE && documentNavigation?.initiated() !== true) {
+      hardVeto('navigation'); refuse();
+    }
     if (!(navigationError instanceof Error) || navigationError.name !== 'Error') refuse();
     event('N');
     live();
@@ -1196,6 +1240,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     event('O');
     eventsClosed = true;
     if (page) { try { await hostWithin(page.close(), until); } catch { failure('cleanup'); good = false; } }
+    if (documentNavigation) { try { await documentNavigation.join(); } catch { failure('cleanup'); good = false; } }
     if (context) { try { await hostWithin(context.close(), until); } catch { failure('cleanup'); good = false; } }
     try { hostBudget(until); } catch { failure('deadline'); good = false; }
   }
