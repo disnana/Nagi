@@ -1,0 +1,12 @@
+name: Final browser fixture validation
+on:
+  push:
+    branches: [test/ci-browser-final-20261020]
+permissions:
+  contents: read
+concurrency:
+  group: browser-fixture-final-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  browser:
+    uses: ./.github/workflows/sf08-browser.yml
