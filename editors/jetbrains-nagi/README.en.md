@@ -2,9 +2,9 @@
 
 [日本語](README.md)
 
-Nagi support for IntelliJ IDEA and PyCharm. Version 0.1.3 keeps plugin ID `com.disnana.nagi` and uses **Nagi** as its display name. It is being prepared for publication. Check the Marketplace listing for its name and available versions after submission, approval, and publication. [Install the compiler separately](https://nagi.disnana.com/en/docs/getting-started/).
+Nagi support for IntelliJ IDEA and PyCharm. Version 0.1.3 keeps plugin ID `com.disnana.nagi` and uses **Nagi** as its display name. Check GitHub Releases and the Marketplace listing for available versions. [Install the compiler separately](https://nagi.disnana.com/en/docs/getting-started/).
 
-The plugin version is managed in `build.gradle.kts`. The common ZIP on GitHub Releases is version 0.1.2. For Marketplace installs, check the existing listing's Versions view for available versions and compatible IDE builds. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download one common ZIP for both IDEs from [GitHub Releases](https://github.com/disnana/Nagi/releases).
+The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release includes a common ZIP for both IDEs; check Releases for newer available assets. For Marketplace installs, check the existing listing's Versions view for available versions and compatible IDE builds. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download one common ZIP for both IDEs from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
 ## Features in 0.1.2
 
@@ -17,19 +17,19 @@ The plugin version is managed in `build.gradle.kts`. The common ZIP on GitHub Re
 
 These features describe the published 0.1.2 release. It does not support whole-file formatting, semantic completion, go to definition, or automatic type checks. Type checking invokes the Nagi compiler manually.
 
-The 0.1.3 implementation passed tests and Plugin Verifier on all four IDEA/PyCharm stable/EAP paths in [main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923). Each EAP IDE retains three deprecated-API and one experimental-API Verifier warnings; this was not a warning-free result. Headless checks do not establish GUI acceptance. Final GUI interaction at the release HEAD, IME, the full EditorConfig modifier and live configuration reload remain unconfirmed. Earlier GUI checks on another source do not establish acceptance of this HEAD.
+The 0.1.3 implementation passed tests and Plugin Verifier on all four IDEA/PyCharm stable/EAP paths in [main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923). Each EAP IDE retains three deprecated-API and one experimental-API Verifier warnings; this was not a warning-free result. Headless checks do not establish GUI acceptance. The user has accepted the earlier GUI checks; this update changes listing text and compiler guidance without changing IDE feature control flow. IME, the full EditorConfig modifier and live configuration reload remain unconfirmed.
 
-## 0.1.3 (preparing publication)
+## 0.1.3
 
-This section describes implemented 0.1.3 features and their limits, separately from published 0.1.2. This PR adds the formal 0.1.3 changelog entry. After merge to main and successful required IDE checks, the existing workflow can create its GitHub Release. It does not assume that a 0.1.3 Release ZIP exists yet. Marketplace submission, approval, and publication are separate steps.
+This section describes 0.1.3 features and their limits, separately from 0.1.2. Install only a plugin ZIP listed in GitHub Releases or a compatible version offered by Marketplace. GitHub and Marketplace publication are separate; CI validation artifacts are not formal releases.
 
 ### Compiler compatibility
 
 | Plugin | Compiler | Supported behavior |
 |---|---|---|
 | Published 0.1.2 | Public Nagi 0.2.0 / 0.1.11 | Manual Check/Run and basic editing; no semantic assistance, standard Run Configuration, or generation cleanup in 0.1.2 |
-| 0.1.3 preparing publication | Public Nagi 0.2.0 | High/Low semantic assistance, standard Run/Stop, and generation cleanup for IDE-managed runs |
-| 0.1.3 preparing publication | Public Nagi 0.1.11 | Ordinary Check/Run and normal execution through the standard Run Configuration; no assist protocol or generation-retention mode |
+| 0.1.3 | Public Nagi 0.2.0 | High/Low semantic assistance, standard Run/Stop, and generation cleanup for IDE-managed runs |
+| 0.1.3 | Public Nagi 0.1.11 | Ordinary Check/Run and normal execution through the standard Run Configuration; no assist protocol or generation-retention mode |
 | 0.1.2 / 0.1.3 | No compiler | Syntax highlighting and compiler-independent basic editing; Check/Run and semantic assistance need a compiler |
 
 [Install public compiler 0.2.0](https://nagi.disnana.com/en/docs/getting-started/) and confirm it with `nagic --version`. Semantic assistance in 0.1.3 no longer requires building a compiler from the same PR.
@@ -40,7 +40,7 @@ Function parameter information uses the IDE's standard Parameter Info action (us
 
 High/Low syntax highlighting and lexical `def`/`fn` candidates in confirmed top-level contexts do not require a compiler. Variable/member completion, diagnostics, definition navigation, Parameter Info, and semantic coloring use public compiler 0.2.0. Analysis is partial editor analysis, not proof that a full build succeeds, and diagnostics are limited to the first compiler error returned. In a project, the source file must be in the entry's import or native graph. Candidates are omitted when the compiler cannot validate a read at that context; a suggestion does not guarantee that a later assignment, move, or call use is valid. Navigation is unavailable for references without an exact source span. Semantic assistance is blocked until changes to `nagi.toml` are saved.
 
-The standard Run Configuration can be created from an existing local `.nagi` or `.low` file and uses the IDE's normal Run/Stop controls. It runs the nearest project's `nagi.toml` entry when present, saves open files first, and refuses to start in an untrusted project. Run preparation waits for pending saves without blocking the editor and can be canceled from the IDE's background task. If an open file has unsaved changes when preparation finishes, save and run again. Normal execution works with compiler 0.1.11. These 0.1.3 features are not part of the published 0.1.2 release. Plugin 0.1.3 is being prepared for publication; compiler 0.2.0 is already public.
+The standard Run Configuration can be created from an existing local `.nagi` or `.low` file and uses the IDE's normal Run/Stop controls. It runs the nearest project's `nagi.toml` entry when present, saves open files first, and refuses to start in an untrusted project. Run preparation waits for pending saves without blocking the editor and can be canceled from the IDE's background task. If an open file has unsaved changes when preparation finishes, save and run again. Normal execution works with compiler 0.1.11. These 0.1.3 features are not part of the published 0.1.2 release. Compiler 0.2.0 is public; check Releases or Marketplace for available plugin versions.
 
 Version 0.1.3 sets `NAGI_RUN_RETENTION=latest` only for IDE-managed Nagi runs and uses the generation-retention mode in public compiler 0.2.0. Published compiler 0.1.11 supports normal Check/Run but does not implement this mode or automatically prune successful CLI generations. Ordinary CLI generations remain immutable; this cleanup does not reclaim the shared Cargo cache in `build/native-target/` or `NAGI_NATIVE_TARGET_DIR`. This retention mode protects a latest generation only after a recorded successful native run, active generations, generations needed by all apps' input snapshots, and the last-good generation after a failed run. Compile success alone is not run success; managed generations with unknown input metadata are retained. Every successful generation, including ordinary builds, records canonical namespace references and input file identities; these protect dependencies of a non-latest active run or another app. If an external hard-link input shares the identity of a run lease, that lease and generation are preserved too. A dependency can remain until one additional successful sweep after its owner is reclaimed; there is no strict generation-count or disk-capacity limit. Unknown files, links/reparse points, and failed staging are also preserved. A recovery journal outside the generation tree is checked again on a later plugin-managed run; unknown or oversized records are preserved while recovery continues for valid records. This is not a CLI cleanup command or a power-loss durability guarantee.
 
@@ -95,6 +95,6 @@ Official references: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/de
 
 ## Minimum IDE
 
-The common 0.1.2 plugin targets IntelliJ IDEA 2025.1.1 build 251.25410.109 or later and PyCharm 2025.1.1 build 251.25410.122 or later. The initial 2025.1 builds do not resolve the public trust API used to reject commands in untrusted projects. Version 0.1.2 drops 2024.3 and those initial builds. Users on excluded IDE builds can keep the published 0.1.1; upgrade to the supported build before updating the plugin. The ID `com.disnana.nagi` and existing Marketplace page remain unchanged. This support range applies to the GitHub 0.1.2 release and is retained for 0.1.3, which is preparing publication.
+The common 0.1.2 plugin targets IntelliJ IDEA 2025.1.1 build 251.25410.109 or later and PyCharm 2025.1.1 build 251.25410.122 or later. The initial 2025.1 builds do not resolve the public trust API used to reject commands in untrusted projects. Version 0.1.2 drops 2024.3 and those initial builds. Users on excluded IDE builds can keep the published 0.1.1; upgrade to the supported build before updating the plugin. The ID `com.disnana.nagi` and existing Marketplace page remain unchanged. This support range applies to the GitHub 0.1.2 release and is retained for 0.1.3.
 
 Definition navigation to virtual standard-library sources is not supported. In 0.1.3, record fields are navigable when compiler 0.2.0 returns an exact declaration location; references without one remain unsupported.

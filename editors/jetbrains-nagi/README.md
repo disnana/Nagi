@@ -2,9 +2,9 @@
 
 [English](README.en.md)
 
-IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.disnana.nagi`を維持し、表示名を**Nagi**とします。0.1.3は公開準備中です。Marketplaceの表示・利用可能な版は、提出・承認・公開後の一覧で確認してください。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
+IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.disnana.nagi`を維持し、表示名を**Nagi**とします。利用可能な版はGitHub ReleasesとMarketplaceの一覧で確認してください。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
 
-プラグインの版は`build.gradle.kts`で管理します。GitHub Releasesの共通ZIPは0.1.2です。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
+プラグインの版は`build.gradle.kts`で管理します。公開済み0.1.2には両IDE共通ZIPがあり、新しい利用可能な成果物はReleasesで確認してください。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
 
 ## 0.1.2でできること
 
@@ -17,19 +17,19 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.d
 
 ここに記した機能は公開済み0.1.2のものです。0.1.2では全体の自動整形、型に基づく補完、定義への移動、自動型検査は未対応です。型検査は手動でNagiコンパイラを呼び出します。
 
-0.1.3の実装は[main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923)でIDEA/PyCharmのstable/EAP計4経路のtestとPlugin Verifierに成功しました。EAPのVerifierには各IDEで既存のdeprecated API 3件・experimental API 1件の警告があり、警告なしの結果ではありません。headless検証はGUI受入を意味せず、公開対象HEADの最終GUI操作、IME、EditorConfig modifierと設定変更後の再読み込みは未確認です。過去sourceのGUI確認を、このHEADの受入とは扱いません。
+0.1.3の実装は[main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923)でIDEA/PyCharmのstable/EAP計4経路のtestとPlugin Verifierに成功しました。EAPのVerifierには各IDEで既存のdeprecated API 3件・experimental API 1件の警告があり、警告なしの結果ではありません。headless検証はGUI受入を意味せず、利用者による既存GUI確認は受入済みです。今回の掲載情報・compiler案内の更新ではIDE機能の制御ロジックを変更していません。IME、EditorConfig modifierと設定変更後の再読み込みは未確認です。
 
-## 0.1.3（公開準備中）
+## 0.1.3
 
-この節は0.1.3の実装済み機能と制約です。公開済み0.1.2とは区別してください。このPRは0.1.3の正式changelogを用意します。mainへのmergeと必須IDE検証の成功後に、既存workflowがGitHub Releaseを作成する構成です。現時点で0.1.3のRelease ZIPの存在を前提にしません。Marketplaceへの提出・承認・公開は別の手順です。
+この節は0.1.3の機能と制約です。0.1.2とは区別してください。GitHub Releasesに掲載されたplugin ZIPか、Marketplaceで提供される対応版をインストールしてください。GitHubとMarketplaceの公開は別で、CI検証artifactは正式配布物ではありません。
 
 ### コンパイラとの対応
 
 | plugin | compiler | 対応範囲 |
 |---|---|---|
 | 公開済み0.1.2 | 公開Nagi 0.2.0 / 0.1.11 | 手動Check/Runと基本編集。semantic assistance・標準Run Configuration・世代回収は0.1.2に含まれません |
-| 公開準備中0.1.3 | 公開Nagi 0.2.0 | High/Lowのsemantic assistance、標準Run/Stop、IDE管理runの世代回収 |
-| 公開準備中0.1.3 | 公開Nagi 0.1.11 | 通常Check/Runと標準Run Configurationによる通常実行。assist protocolと世代回収modeは未対応 |
+| 0.1.3 | 公開Nagi 0.2.0 | High/Lowのsemantic assistance、標準Run/Stop、IDE管理runの世代回収 |
+| 0.1.3 | 公開Nagi 0.1.11 | 通常Check/Runと標準Run Configurationによる通常実行。assist protocolと世代回収modeは未対応 |
 | 0.1.2 / 0.1.3 | compilerなし | syntax highlightingとcompiler不要の基本編集。Check/Run・semantic assistanceにはcompilerが必要 |
 
 公開compiler 0.2.0を[導入](https://nagi.disnana.com/docs/getting-started/)し、`nagic --version`で確認してください。0.1.3のsemantic assistanceのために同じPRからcompilerをbuildする必要はありません。
@@ -40,7 +40,7 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.d
 
 High/Low syntax highlightingと、確認できた最上位文脈の字句`def`・`fn`候補にはcompilerは不要です。変数名・member補完、diagnostics、definition navigation、Parameter Info、semantic色分けには公開compiler 0.2.0を使います。解析はエディター向けの部分解析で、完全なbuild成功を保証せず、診断もcompilerが最初に返すエラーに限られます。project内では、対象sourceがentryからのimportまたはnative graphに含まれている必要があります。構文やcheckerがその位置でread可能と認めない候補は表示されず、候補が表示されても編集後の代入・move・callの妥当性を保証しません。compilerが正確なsource spanを返さない参照には移動できません。`nagi.toml`に未保存の変更がある場合は、保存するまでsemantic assistanceを実行しません。
 
-IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。起動準備ではエディターを止めずに保存の完了を待ち、IDEのbackground taskから中止できます。待機後に開いているfileの未保存変更が残っていた場合は、保存してから再実行してください。Nagi 0.1.11のcompilerで通常実行できます。これらは公開済み0.1.2には含まれない0.1.3の機能です。plugin 0.1.3は公開準備中で、compiler 0.2.0は公開済みです。
+IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。起動準備ではエディターを止めずに保存の完了を待ち、IDEのbackground taskから中止できます。待機後に開いているfileの未保存変更が残っていた場合は、保存してから再実行してください。Nagi 0.1.11のcompilerで通常実行できます。これらは公開済み0.1.2には含まれない0.1.3の機能です。compiler 0.2.0は公開済みです。利用可能なplugin版はReleasesまたはMarketplaceで確認してください。
 
 0.1.3では、IDEが管理するNagi Runに限って`NAGI_RUN_RETENTION=latest`を設定し、公開compiler 0.2.0の世代保持modeを使います。公開compiler 0.1.11は通常のCheck/Runに使えますが、このmodeを実装しておらず、CLI実行の成功世代を自動削除しません。通常のCLI世代はimmutableで、世代cleanupはCargo共有cache（`build/native-target/`または`NAGI_NATIVE_TARGET_DIR`）にも適用されません。このmodeはnative run成功を記録したlatest、実行中・すべてのappの入力snapshotが必要とする世代、失敗後のlast-goodを保護します。compile成功だけではrun成功とみなさず、managed世代の入力metadataが不明なら回収しません。入力snapshotは成功した通常buildも含み、namespace参照とfile identityを記録するため、non-latest run・別appが必要とする世代を保護します。外部hardlink inputのidentityがrun leaseと一致する場合も、そのleaseとgenerationを保持します。依存元を回収しても参照先が次のsuccessful sweepまで残ることがあり、総世代数や容量に厳密な上限はありません。unknown file、link/reparse point、failed stagingも削除しません。generation tree外のrecovery journalは次のplugin管理runで検査します。unknownまたはoversized recordは保持し、正常recordの回収は続けます。通常CLI向けのcleanup commandやpower-loss durability保証ではありません。
 
@@ -95,6 +95,6 @@ PyCharm用SDKでも同じコードを検証できます。
 
 ## 最低対応IDE
 
-0.1.2の共通プラグインはIntelliJ IDEA 2025.1.1 build 251.25410.109以降、PyCharm 2025.1.1 build 251.25410.122以降を対象とします。2025.1 branchの初期buildでは未信頼プロジェクトを判定する公開trust APIが解決されないため対象外です。公開trust APIで未信頼プロジェクトからの実行を拒否するため、0.1.2から2024.3と2025.1初期buildは対象外です。対象外IDEでは既存の公開済み0.1.1を引き続き利用でき、新版へ更新するには対応build以降へ更新してください。ID `com.disnana.nagi`と既存Marketplaceページは維持します。この対応範囲はGitHubの0.1.2 Releaseに適用し、公開準備中の0.1.3も維持します。
+0.1.2の共通プラグインはIntelliJ IDEA 2025.1.1 build 251.25410.109以降、PyCharm 2025.1.1 build 251.25410.122以降を対象とします。2025.1 branchの初期buildでは未信頼プロジェクトを判定する公開trust APIが解決されないため対象外です。公開trust APIで未信頼プロジェクトからの実行を拒否するため、0.1.2から2024.3と2025.1初期buildは対象外です。対象外IDEでは既存の公開済み0.1.1を引き続き利用でき、新版へ更新するには対応build以降へ更新してください。ID `com.disnana.nagi`と既存Marketplaceページは維持します。この対応範囲はGitHubの0.1.2 Releaseに適用し、0.1.3も維持します。
 
 標準ライブラリの仮想sourceへのジャンプは未対応です。compiler 0.2.0が正確な宣言位置を返すrecord fieldは0.1.3から移動でき、位置を返さない参照は対象外です。
