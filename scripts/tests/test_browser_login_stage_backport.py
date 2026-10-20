@@ -394,7 +394,9 @@ class BackportSourceTests(unittest.TestCase):
                     inverse_public(mutant)
 
     def test_workflow_is_only_two_required_native_steps_and_frozen_sources_remain(self):
-        workflow = read('.github/workflows/ci.yml')
+        # Strip only reviewed CI-level, infrastructure and publication wiring;
+        # unchanged native commands retain every legacy assertion and hash.
+        workflow = projection._LEVELS.inverse_workflow(read('.github/workflows/ci.yml'))
         profile_step = projection.BROWSER_COUNTER_PROFILE_STEP
         self.assertEqual(workflow.count(projection.CI_SOURCE_GUARD_STEP), 1)
         self.assertEqual(workflow.count(B1_STEP), 0)
@@ -471,7 +473,9 @@ class BackportSourceTests(unittest.TestCase):
 
 
     def test_early_source_guard_is_exact_and_package_matrix_waits_for_it(self):
-        workflow = read('.github/workflows/ci.yml')
+        # Strip only reviewed CI-level, infrastructure and publication wiring;
+        # unchanged native commands retain every legacy assertion and hash.
+        workflow = projection._LEVELS.inverse_workflow(read('.github/workflows/ci.yml'))
         source_step = projection.CI_SOURCE_GUARD_STEP
         package_gate = projection.CI_NAGI_PACKAGE_CURRENT_GATE
         self.assertEqual(workflow.count(source_step), 1)
@@ -512,6 +516,21 @@ class BackportSourceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     projection.inverse_workflow(mutant)
 
+
+    def test_canonical_workflow_rejects_unreviewed_action_and_tier_wiring(self):
+        workflow = read('.github/workflows/ci.yml')
+        reviewed_node = 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ci-pin:v4'
+        replacements = (
+            (reviewed_node, 'actions/setup-node@' + '0' * 40 + ' # ci-pin:v4'),
+            ('      matrix: ${{ fromJSON(needs.ci-plan.outputs.matrix) }}', '      matrix: {}'),
+            ('    needs: [changes, release-plan, ci-plan]', '    needs: [release-plan, ci-plan]'),
+            ('  critical:\n', '  critical-unreviewed:\n'),
+        )
+        for before, after in replacements:
+            with self.subTest(anchor=before):
+                self.assertIn(before, workflow)
+                with self.assertRaises(ValueError):
+                    projection._LEVELS.inverse_workflow(workflow.replace(before, after, 1))
 
     def test_sf07_profile_color_override_is_required_and_step_bound(self):
         workflow = read('.github/workflows/ci.yml')

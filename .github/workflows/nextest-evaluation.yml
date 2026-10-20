@@ -1,0 +1,71 @@
+name: Opt-in nextest target evaluation
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nextest-evaluation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  nextest-evaluation:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+       github.event.label.name == 'ci-nextest-benchmark' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    name: Compare locked compiler targets (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            first: libtest
+          - os: windows-latest
+            first: nextest
+          - os: macos-15
+            first: libtest
+          - os: macos-15-intel
+            first: nextest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
+      - name: Install the checksum-verified nextest release
+        id: install-nextest
+        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283
+        with:
+          tool: cargo-nextest@0.9.148
+          checksum: true
+          fallback: none
+      - name: Check evaluation helper fixtures
+        shell: bash
+        run: python -m unittest discover -s scripts/ci -p 'test_nextest_evaluation.py'
+      - name: Compare exact test inventories and counterbalanced warm runs
+        shell: bash
+        env:
+          NEXTTEST_FIRST: ${{ matrix.first }}
+          EVALUATION_OUTPUT: ${{ runner.temp }}/nextest-evaluation.json
+        run: python scripts/ci/nextest_evaluation.py benchmark --first "$NEXTTEST_FIRST" --output "$EVALUATION_OUTPUT"
+      - name: Preserve bounded evaluation result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: nextest-evaluation-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/nextest-evaluation.json
+          if-no-files-found: warn
+          retention-days: 7

@@ -7,6 +7,14 @@ on:
       - '**'
   pull_request:
   workflow_dispatch:
+    inputs:
+      level:
+        description: Coverage (release retains all four compiler platforms)
+        type: choice
+        options: [default, release]
+        default: default
+  schedule:
+    - cron: '23 3 * * 1'
 permissions:
   contents: read
 concurrency:
@@ -20,10 +28,11 @@ jobs:
       full_checks: ${{ steps.changes.outputs.full_checks }}
       jetbrains_checks: ${{ steps.changes.outputs.jetbrains_checks }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
         with:
+          persist-credentials: false # ci-isolation
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
       - name: Check OS-independent SF07 and BrowserLogin source guards
@@ -46,6 +55,88 @@ jobs:
           CHECK_HEAD: ${{ github.sha }}
         run: python scripts/ci/changes.py --event "$CHECK_EVENT" --base "$CHECK_BASE" --head "$CHECK_HEAD" --output "$GITHUB_OUTPUT"
 
+  ci-plan:
+    needs: [changes, release-plan]
+    if: always() && needs.changes.result == 'success' && needs.release-plan.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      level: ${{ steps.level.outputs.level }}
+      critical_checks: ${{ steps.level.outputs.critical_checks }}
+      comprehensive_checks: ${{ steps.level.outputs.comprehensive_checks }}
+      package_checks: ${{ steps.level.outputs.package_checks }}
+      matrix: ${{ steps.level.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - id: level
+        env:
+          CI_EVENT: ${{ github.event_name }}
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD: ${{ github.sha }}
+          CI_FULL: ${{ needs.changes.outputs.full_checks }}
+          CI_RELEASE_PLAN: ${{ toJSON(needs.release-plan.outputs) }}
+          CI_REQUESTED: ${{ inputs.level || 'default' }}
+        run: python -B scripts/ci/levels.py
+
+  critical:
+    name: Critical compiler and runtime (Linux)
+    needs: [changes, ci-plan]
+    if: needs.changes.result == 'success' && needs.ci-plan.result == 'success' && needs.ci-plan.outputs.critical_checks == 'true'
+    runs-on: ubuntu-latest
+    env:
+      NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+        id: rust
+        with:
+          components: rustfmt, clippy
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        id: nagi_rust_cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: nagi-critical-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: nagi-critical-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - run: python -B scripts/ci/critical_inventory.py
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo test --locked -p nagic --lib
+      - run: cargo test --locked -p nagi-runtime --lib
+      - run: cargo test --locked -p nagic --test enum_parser --test builtin_type_contracts
+      - run: cargo test --locked --doc
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        if: failure()
+        with:
+          retention-days: 7 # ci-retention
+          name: critical-linux-failures
+          path: |
+            build/compiler-failures/
+            build/ci-evidence/critical-inventory/
+          if-no-files-found: ignore
+
+      - name: Save validated Rust cache (PR-local) # ci-cache-save
+        if: success() && github.event_name == 'pull_request' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
   jetbrains:
     needs: [changes, release-plan]
     if: >-
@@ -56,27 +147,30 @@ jobs:
       release_version: ${{ needs.release-plan.outputs.jetbrains_version }}
 
   sf08-browser:
-    needs: [changes, release-plan]
+    needs: [changes, release-plan, ci-plan]
     if: >-
       always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
-      (needs.changes.outputs.full_checks == 'true' || needs.release-plan.outputs.package_nagi == 'true')
+      (needs.ci-plan.result == 'success' && (needs.ci-plan.outputs.comprehensive_checks == 'true' || needs.changes.outputs.full_checks == 'true') || needs.release-plan.outputs.package_nagi == 'true')
     uses: ./.github/workflows/sf08-browser.yml
 
   linux:
-    needs: changes
-    if: needs.changes.outputs.full_checks == 'true'
+    needs: [changes, ci-plan]
+    if: needs.changes.result == 'success' && needs.ci-plan.result == 'success' && needs.ci-plan.outputs.comprehensive_checks == 'true'
     runs-on: ubuntu-latest
     env:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
       NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
         id: rust
         with:
           components: rustfmt, clippy
       - name: Cache Rust checks and sample builds
-        uses: actions/cache@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        id: nagi_rust_cache
         with:
           path: |
             ~/.cargo/registry
@@ -87,14 +181,14 @@ jobs:
           restore-keys: |
             nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
             nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: tests/requirements.txt
       - name: Check SF06 signature diagnostic fake cases
         run: python -m unittest discover -s tests -p 'test_sf06_http_client_signature_diagnostic.py'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ci-pin:v4
         with:
           node-version: '22'
       - name: Compare BrowserLogin failure cases alone and with the parallel public suite
@@ -388,8 +482,9 @@ jobs:
           exit "$sanitize_rc"
       - name: Preserve bounded Session auth-stage traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: auth-stage-linux
           path: |
             ${{ runner.temp }}/auth-stage-csrf.trace
@@ -470,8 +565,9 @@ jobs:
           exit "$diagnose_rc"
       - name: Preserve sanitized Session deadline diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: session-deadline-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
           path: |
             ${{ runner.temp }}/session-deadline-diagnostic.json
@@ -693,8 +789,9 @@ jobs:
         run: python -B scripts/ci/csrf_deadline_mutations.py . "$RUNNER_TEMP/csrf-deadline-mutations.json"
       - name: Preserve closed CSRF deadline mutation evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: csrf-deadline-compiled-mutations-linux
           path: ${{ runner.temp }}/csrf-deadline-mutations.json
           if-no-files-found: ignore
@@ -743,8 +840,9 @@ jobs:
           NAGI_GOLDEN_CAPTURE_DIR="$RUNNER_TEMP/sf03-cors-goldens" cargo test --locked -p nagic --lib resource_contract_goldens::
       - name: Retain CORS native and actual golden capture evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: sf03-cors-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
           path: |
             ${{ runner.temp }}/sf03-cors-*.log
@@ -846,24 +944,37 @@ jobs:
           python -B scripts/ci/sf06_owned_network.py --binary "$binary" --source-sha "$GITHUB_SHA"
       - name: Preserve compiler and application failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: compiler-failures-linux
           path: build/compiler-failures/
           if-no-files-found: ignore
 
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
   rust-1-88:
     name: SF02 runtime Ed25519 profile on Rust 1.88.0 (Linux x86_64)
     timeout-minutes: 45
-    needs: changes
-    if: needs.changes.outputs.full_checks == 'true'
+    needs: [changes, ci-plan]
+    if: needs.changes.result == 'success' && needs.ci-plan.result == 'success' && needs.ci-plan.outputs.comprehensive_checks == 'true'
     runs-on: ubuntu-24.04
     env:
       CARGO_TARGET_DIR: target/sf02-rust-1.88.0-linux-x86_64
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.88.0
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: dtolnay/rust-toolchain@360a4e93673de6630fac2478bc9e35244b01a759 # ci-pin:1.88.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
       - name: Confirm the pinned Linux x86_64 toolchain
@@ -908,10 +1019,11 @@ jobs:
       package_vscode: ${{ steps.plan.outputs.package_vscode }}
       package_jetbrains: ${{ steps.plan.outputs.package_jetbrains }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
         with:
+          persist-credentials: false # ci-isolation
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
       - name: Check release planning, notes, and immutable publication safeguards
@@ -928,8 +1040,10 @@ jobs:
     if: needs.release-plan.outputs.package_vscode == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
       - run: python editors/vscode-nagi/scripts/package_vsix.py
@@ -952,8 +1066,9 @@ jobs:
               assert package['name'] == identity['Id']
           path.with_name(path.name + '.sha256').write_text(f'{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n', encoding='utf-8')
           PY
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 14 # ci-retention
           name: release-vscode
           path: |
             build/distribution/*.vsix
@@ -961,42 +1076,27 @@ jobs:
           if-no-files-found: error
 
   nagi-package:
-    needs: [changes, release-plan]
+    needs: [changes, release-plan, ci-plan]
     if: >-
       always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
-      needs.release-plan.outputs.package_nagi == 'true'
+      needs.ci-plan.result == 'success' && needs.ci-plan.outputs.package_checks == 'true'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-            executable: nagic
-            rust_host: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            platform: windows-x86_64
-            executable: nagic.exe
-            rust_host: x86_64-pc-windows-msvc
-          - os: macos-15
-            platform: macos-arm64
-            executable: nagic
-            rust_host: aarch64-apple-darwin
-          - os: macos-15-intel
-            platform: macos-x86_64
-            executable: nagic
-            rust_host: x86_64-apple-darwin
+      matrix: ${{ fromJSON(needs.ci-plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     env:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
       NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
         with:
+          persist-credentials: false # ci-isolation
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
         id: rust
       - name: Cache the target platform's Rust build
-        uses: actions/cache@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        id: nagi_rust_cache
         with:
           path: |
             ~/.cargo/registry
@@ -1007,12 +1107,12 @@ jobs:
           restore-keys: |
             nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
             nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
       - name: Check SF06 signature diagnostic fake cases
         run: python -m unittest discover -s tests -p 'test_sf06_http_client_signature_diagnostic.py'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ci-pin:v4
         with:
           node-version: '22'
       - name: Verify the compiler host architecture
@@ -1390,8 +1490,9 @@ jobs:
           python "$RUNNER_TEMP/sf06-http-client-guard.py" native-forms 0 "$NAGI_TEST_ARTIFACT_DIR"
       - name: Preserve closed SF06 native diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: sf06-http-client-native-${{ matrix.platform }}
           path: ${{ runner.temp }}/sf06-http-client-native/sf06-native-diagnostic.json
           if-no-files-found: ignore
@@ -1406,8 +1507,9 @@ jobs:
           fi
       - name: Preserve closed SF06 signature failure diagnostic
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: sf06-http-client-signature-${{ matrix.platform }}
           path: ${{ runner.temp }}/sf06-http-client-native/sf06-signature-diagnostic.json
           if-no-files-found: ignore
@@ -1697,8 +1799,9 @@ jobs:
           exit "$sanitize_rc"
       - name: Preserve bounded Session auth-stage traces
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: auth-stage-${{ matrix.platform }}
           path: |
             ${{ runner.temp }}/auth-stage-csrf.trace
@@ -1786,8 +1889,9 @@ jobs:
           exit "$diagnose_rc"
       - name: Preserve sanitized Session deadline diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: session-deadline-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
           path: |
             ${{ runner.temp }}/session-deadline-diagnostic.json
@@ -2056,8 +2160,9 @@ jobs:
           NAGI_GOLDEN_CAPTURE_DIR="$RUNNER_TEMP/sf03-cors-goldens" cargo test --locked -p nagic --lib resource_contract_goldens::
       - name: Retain CORS native and actual golden capture evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: sf03-cors-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
           path: |
             ${{ runner.temp }}/sf03-cors-*.log
@@ -2142,8 +2247,9 @@ jobs:
           python benchmarks/security-sf05/ci_provenance.py build/security-sf05
       - name: Preserve SF05 source identity and native evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: security-sf05-${{ matrix.platform }}
           path: build/security-sf05/
           if-no-files-found: warn
@@ -2342,8 +2448,9 @@ jobs:
       - name: Verify the shell uninstaller
         if: matrix.platform != 'windows-x86_64'
         run: python -m unittest discover -s scripts/releases -p 'test_uninstall.py'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 14 # ci-retention
           name: release-${{ matrix.platform }}
           path: |
             build/distribution/nagi-*.zip
@@ -2352,8 +2459,9 @@ jobs:
           if-no-files-found: error
       - name: Preserve target-platform HTTP receipt observation
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: http413-observation-${{ matrix.platform }}
           path: build/compiler-failures/http413-nodelay-*.json
           if-no-files-found: ignore
@@ -2387,49 +2495,45 @@ jobs:
           python -B scripts/ci/sf07_profile_summary.py --cargo-exit-code "$profile_rc" < "$RUNNER_TEMP/sf07-profile-native.log"
       - name: Preserve target-platform compiler, application, and HTTP observation evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: compiler-failures-${{ matrix.platform }}
           path: build/compiler-failures/
           if-no-files-found: ignore
 
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
   nagi-regression:
-    needs: [changes, release-plan]
+    needs: [changes, release-plan, ci-plan]
     if: >-
       needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
-      needs.release-plan.outputs.package_nagi == 'true'
+      needs.ci-plan.result == 'success' && needs.ci-plan.outputs.package_checks == 'true'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux-x86_64
-            executable: nagic
-            rust_host: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            platform: windows-x86_64
-            executable: nagic.exe
-            rust_host: x86_64-pc-windows-msvc
-          - os: macos-15
-            platform: macos-arm64
-            executable: nagic
-            rust_host: aarch64-apple-darwin
-          - os: macos-15-intel
-            platform: macos-x86_64
-            executable: nagic
-            rust_host: x86_64-apple-darwin
+      matrix: ${{ fromJSON(needs.ci-plan.outputs.matrix) }}
     runs-on: ${{ matrix.os }}
     env:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
       NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
         with:
+          persist-credentials: false # ci-isolation
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
         id: rust
       - name: Cache the regression platform's Rust build
-        uses: actions/cache@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        id: nagi_rust_cache
         with:
           path: |
             ~/.cargo/registry
@@ -2440,10 +2544,10 @@ jobs:
           restore-keys: |
             nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
             nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ci-pin:v4
         with:
           node-version: '22'
       - name: Verify the compiler host architecture
@@ -2469,20 +2573,33 @@ jobs:
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test task_handles --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
       - name: Preserve regression compiler and application failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: compiler-failures-regression-${{ matrix.platform }}
           path: build/compiler-failures/
           if-no-files-found: ignore
 
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
   ready:
     name: Ready to merge
-    if: github.event_name == 'pull_request' && always()
-    needs: [changes, linux, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression]
+    if: always()
+    needs: [changes, ci-plan, critical, linux, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
       - name: Require checks and planned packages to succeed
@@ -2491,29 +2608,11 @@ jobs:
         run: python scripts/ci/gate.py
 
   publish-release:
-    needs: [changes, linux, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression]
+    needs: [changes, ci-plan, critical, linux, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, ready]
     if: >-
       always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
-      (
-        (needs.linux.result == 'success' && needs.rust-1-88.result == 'success' &&
-         needs.sf08-browser.result == 'success') ||
-        (needs.release-plan.outputs.release_jetbrains == 'true' &&
-         needs.release-plan.outputs.release_nagi != 'true' &&
-         needs.release-plan.outputs.release_vscode != 'true' &&
-         needs.linux.result == 'skipped' &&
-         needs.rust-1-88.result == 'skipped' &&
-         needs.sf08-browser.result == 'skipped')
-      ) && needs.release-plan.result == 'success' &&
-      needs.changes.result == 'success' &&
-      (needs.jetbrains.result == 'success' || needs.jetbrains.result == 'skipped') &&
-      (needs.vscode-package.result == 'success' || needs.vscode-package.result == 'skipped') &&
-      (needs.nagi-package.result == 'success' || needs.nagi-package.result == 'skipped') &&
-      ((needs.release-plan.outputs.package_nagi == 'true' && needs.nagi-regression.result == 'success') ||
-       (needs.release-plan.outputs.package_nagi == 'false' && needs.nagi-regression.result == 'skipped')) &&
-      (needs.release-plan.outputs.release_nagi != 'true' || needs.nagi-regression.result == 'success') &&
-      (needs.release-plan.outputs.release_jetbrains != 'true' || needs.jetbrains.result == 'success') &&
-      (needs.release-plan.outputs.release_vscode != 'true' || needs.vscode-package.result == 'success') &&
-      (needs.release-plan.outputs.release_nagi != 'true' || needs.nagi-package.result == 'success') &&
+      needs.ready.result == 'success' && needs.ci-plan.result == 'success' &&
+      needs.ci-plan.outputs.level == '3' && needs.release-plan.result == 'success' &&
       (needs.release-plan.outputs.release_vscode == 'true' || needs.release-plan.outputs.release_nagi == 'true' || needs.release-plan.outputs.release_jetbrains == 'true')
     runs-on: ubuntu-latest
     permissions:
@@ -2522,11 +2621,17 @@ jobs:
       group: release-${{ github.repository }}
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
-      - uses: actions/download-artifact@v4
+      - name: Require exact-source level-3 publication gate # ci-publication
+        env:
+          NAGI_CI_NEEDS: ${{ toJSON(needs) }}
+        run: python -B scripts/ci/publication_gate.py
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ci-pin:v4
         with:
           pattern: release-*
           merge-multiple: true

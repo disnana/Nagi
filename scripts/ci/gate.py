@@ -3,10 +3,17 @@ from __future__ import annotations
 
 import json
 import os
+import levels
 
 
 def errors(needs: dict) -> list[str]:
-    failures = []
+    failures = levels.validation_errors(needs)
+    selection = needs.get("ci-plan", {}).get("outputs", {})
+    comprehensive = selection.get("comprehensive_checks")
+    expected_critical = "success" if selection.get("critical_checks") == "true" else "skipped"
+    actual_critical = needs.get("critical", {}).get("result", "missing")
+    if actual_critical != expected_critical:
+        failures.append(f"critical: {actual_critical}, expected {expected_critical}")
     for job in ("changes", "release-plan"):
         if needs.get(job, {}).get("result") != "success":
             failures.append(f"{job}: {needs.get(job, {}).get('result', 'missing')}")
@@ -14,7 +21,7 @@ def errors(needs: dict) -> list[str]:
     if full not in ("true", "false"):
         failures.append("linux: missing or invalid check plan")
     else:
-        expected = "success" if full == "true" else "skipped"
+        expected = "success" if comprehensive == "true" else "skipped"
         for job in ("linux", "rust-1-88"):
             actual = needs.get(job, {}).get("result", "missing")
             if actual != expected:
@@ -37,7 +44,7 @@ def errors(needs: dict) -> list[str]:
     if full not in ("true", "false") or package_nagi not in ("true", "false"):
         failures.append("sf08-browser: missing or invalid selector")
     else:
-        expected = "success" if full == "true" or package_nagi == "true" else "skipped"
+        expected = "success" if comprehensive == "true" or full == "true" or package_nagi == "true" else "skipped"
         actual = needs.get("sf08-browser", {}).get("result", "missing")
         if actual != expected:
             failures.append(f"sf08-browser: {actual}, expected {expected}")
@@ -47,7 +54,8 @@ def errors(needs: dict) -> list[str]:
         if planned not in ("true", "false"):
             failures.append(f"{job}: missing or invalid package plan")
             continue
-        expected = "success" if planned == "true" else "skipped"
+        selected = selection.get("package_checks") if component == "nagi" else planned
+        expected = "success" if selected == "true" else "skipped"
         actual = needs.get(job, {}).get("result", "missing")
         if actual != expected:
             failures.append(f"{job}: {actual}, expected {expected}")

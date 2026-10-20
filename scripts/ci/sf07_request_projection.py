@@ -4,6 +4,11 @@ import re
 import importlib.util
 from pathlib import Path
 
+_LEVELS_SPEC = importlib.util.spec_from_file_location(
+    "levels_projection", Path(__file__).with_name("levels_projection.py"))
+_LEVELS = importlib.util.module_from_spec(_LEVELS_SPEC)
+_LEVELS_SPEC.loader.exec_module(_LEVELS)
+
 _PARALLEL_SPEC = importlib.util.spec_from_file_location(
     "parallel_regression_projection", Path(__file__).with_name("parallel_regression_projection.py"))
 _PARALLEL = importlib.util.module_from_spec(_PARALLEL_SPEC)
@@ -315,6 +320,11 @@ CI_BROWSER_STEP_RESTORED = """      - name: Check owned BrowserLogin business st
 
 
 def inverse_source_guard_dedup(source):
+    # Direct callers use this intermediate inverse as well as inverse_workflow.
+    # Validate and remove the reviewed tier/infrastructure layer before checking
+    # the historical source-guard placement; no native command is normalized.
+    if "\n  ci-plan:\n" in source:
+        source = _LEVELS.inverse_workflow(source)
     # Restore the reviewed per-OS source calls and package dependency before
     # applying older inverses. The new early step is exact, unique, and located
     # immediately after Python setup in the existing changes gate. Keeping this
@@ -353,6 +363,8 @@ def inverse_source_guard_dedup(source):
 
 
 def inverse_workflow(source):
+    if "\n  ci-plan:\n" in source:
+        source = _LEVELS.inverse_workflow(source)
     source = _B1.inverse_failure_diagnostic(source)
     source = _PARALLEL.inverse_workflow(source)
     source = inverse_source_guard_dedup(source)

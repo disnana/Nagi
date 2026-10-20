@@ -40,7 +40,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
@@ -65,7 +65,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         id: rust
       - name: Cache the compiler for integration checks
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: nagi_rust_cache
         with:
           path: |
             ~/.cargo/registry
@@ -94,12 +95,22 @@ jobs:
       - name: Upload the candidate ZIP and checksum for independent verification
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
+          retention-days: 14 # ci-retention
           name: jetbrains-common-candidate
           path: |
             editors/jetbrains-nagi/build/release-assets/nagi-jetbrains-*.zip
             editors/jetbrains-nagi/build/release-assets/nagi-jetbrains-*.zip.sha256
           if-no-files-found: error
 
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
   verify:
     name: ${{ matrix.product }} ${{ matrix.channel }} test and verifier
     needs: candidate
@@ -145,14 +156,15 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ matrix.java_version }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
       - uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         id: rust
       - name: Cache the compiler for integration checks
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: nagi_rust_cache
         with:
           path: |
             ~/.cargo/registry
@@ -351,6 +363,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
+          retention-days: 7 # ci-retention
           name: nagi-jetbrains-reports-${{ matrix.product_code }}-${{ matrix.channel }}
           path: |
             editors/jetbrains-nagi/build/reports/tests/
@@ -359,6 +372,15 @@ jobs:
             editors/jetbrains-nagi/build/verification-metadata/
           if-no-files-found: warn
 
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
   package:
     name: Package verified common plugin ZIP
     needs: [candidate, verify]
@@ -381,6 +403,7 @@ jobs:
       - name: Upload the verified common plugin ZIP and checksum
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
+          retention-days: 14 # ci-retention
           name: release-jetbrains
           path: |
             editors/jetbrains-nagi/build/release-assets/nagi-jetbrains-${{ needs.candidate.outputs.version }}.zip
