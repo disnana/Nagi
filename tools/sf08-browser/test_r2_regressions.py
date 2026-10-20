@@ -41,6 +41,23 @@ def business_failure_report(secret='unit-private-sentinel'):
 
 
 class R2Tests(unittest.TestCase):
+    def test_temporary_wrong_host_format_suffix_is_failure_only_and_private(self):
+        base = 'engine_wrong_host_one_shot_console_malformed_events_GRMNXSFWJKO_0_text_'+'a'*64
+        for label in f.WRONG_HOST_CONSOLE_FORMATS:
+            stage = base+'_fmt_'+label
+            value = dict(schema_version=1, stage=stage, engine='webkit')
+            self.assertEqual(f.validate(value), value)
+            self.assertEqual(f.validate(dict(value, phase='browser'), outer=True), dict(value, phase='browser'))
+            for engine in ('none', 'chromium', 'firefox'):
+                with self.assertRaises(ValueError): f.validate(dict(value, engine=engine))
+            for invalid in (stage+'\n', stage+'_extra', stage.replace('wrong_host', 'wrong_ca'),
+                            stage.replace('GRMNXSFWJKO', 'GRMNSFWJKO'),
+                            stage.replace('console_malformed', 'accepted')):
+                with self.assertRaises(ValueError): f.validate(dict(value, stage=invalid))
+        for label in ('', 'PRIVATE_SENTINEL', 'https://secret.invalid/', 'a'*193):
+            with self.assertRaises(ValueError):
+                f.validate(dict(schema_version=1, stage=base+'_fmt_'+label, engine='webkit'))
+
     def test_text_identity_suffix_is_failure_only_bounded_and_closed(self):
         digest = 'a'*64
         for role in ('ca', 'host'):

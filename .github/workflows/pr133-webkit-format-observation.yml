@@ -1,0 +1,12 @@
+# TEMPORARY: PR133 wrong-host console-format investigation only.
+# Calls the unchanged ordinary pinned browser suite; remove after diagnosis.
+name: PR133 temporary WebKit format observation
+on:
+  push:
+    branches:
+      - test/nagi020-webkit-format-20261020
+permissions:
+  contents: read
+jobs:
+  browser:
+    uses: ./.github/workflows/sf08-browser.yml

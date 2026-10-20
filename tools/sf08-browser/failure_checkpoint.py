@@ -104,17 +104,25 @@ ENGINES = {'none','chromium','firefox','webkit'}
 
 
 WEBKIT_EVENT_CODES = 'ETXLAZUIRMNGVSFBYWDPCJKHOQ'
+WRONG_HOST_CONSOLE_FORMATS = frozenset({
+    'resource_empty', 'resource_certificate_suffix', 'resource_tls_closed',
+    'resource_tls_handshake', 'resource_tls_read', 'resource_tls_write',
+    'resource_receive', 'resource_http_status', 'resource_other', 'other',
+})
 
 
 def event_stage(stage, engine):
     if type(stage) is not str or len(stage) > 192 or engine != 'webkit':
         return False
     match = re.fullmatch(
-        r'(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32})_([01])(?:_text_([a-f0-9]{64}))?', stage)
+        r'(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32})_([01])(?:_text_([a-f0-9]{64})(?:_fmt_([a-z_]+))?)?', stage)
     return bool(match and match[1] in STAGES and
                 (match[3] == '0' or len(match[2]) == 32) and
                 ((match[4] is None and len(stage) <= 108) or
-                 (match[4] is not None and match[1].endswith('_console_malformed') and 'X' in match[2])))
+                 (match[4] is not None and match[1].endswith('_console_malformed') and 'X' in match[2])) and
+                (match[5] is None or
+                 (match[1] == 'engine_wrong_host_one_shot_console_malformed' and
+                  match[5] in WRONG_HOST_CONSOLE_FORMATS)))
 
 
 def validate(value, *, outer=False):

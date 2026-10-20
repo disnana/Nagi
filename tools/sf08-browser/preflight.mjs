@@ -974,9 +974,37 @@ export function validWebkitEventTrace(value) {
     (!value.endsWith('_1') || value.length === 34));
 }
 
+// TEMPORARY wrong-host failure-only format vocabulary. These are descriptions
+// of upstream WebConsole/GIO message shapes, never certificate evidence. Remove
+// with the focused diagnostic after the console mismatch has been resolved.
+const WRONG_HOST_CONSOLE_FORMATS = Object.freeze([
+  'resource_empty', 'resource_certificate_suffix', 'resource_tls_closed',
+  'resource_tls_handshake', 'resource_tls_read', 'resource_tls_write',
+  'resource_receive', 'resource_http_status', 'resource_other', 'other',
+]);
+export function validWrongHostConsoleFormat(value) {
+  return typeof value === 'string' && WRONG_HOST_CONSOLE_FORMATS.includes(value);
+}
+function wrongHostConsoleFormat(text) {
+  if (text === 'Failed to load resource') return 'resource_empty';
+  if (!text.startsWith('Failed to load resource: ')) return 'other';
+  const description = text.slice('Failed to load resource: '.length);
+  for (const [prefix, label] of [
+    ['Unacceptable TLS certificate', 'resource_certificate_suffix'],
+    ['TLS connection closed unexpectedly', 'resource_tls_closed'],
+    ['Error performing TLS handshake', 'resource_tls_handshake'],
+    ['Peer failed to perform TLS handshake', 'resource_tls_handshake'],
+    ['Error reading data from TLS socket', 'resource_tls_read'],
+    ['Error writing data to TLS socket', 'resource_tls_write'],
+    ['Error receiving data: ', 'resource_receive'],
+    ['the server responded with a status of ', 'resource_http_status'],
+  ]) if (description.startsWith(prefix)) return label;
+  return 'resource_other';
+}
+
 async function probeWebkitCertificate(browser, factory, until, diagnose, profile) {
   const events = [];
-  let eventOverflow = false, eventsClosed = false, textFingerprint;
+  let eventOverflow = false, eventsClosed = false, textFingerprint, consoleFormat;
   const event = kind => {
     if (eventsClosed) return;
     if (events.length < 32) events.push(kind);
@@ -1063,8 +1091,10 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
               if (owner && Object.hasOwn(owner, 'value') && typeof owner.value === 'string' &&
                   where && Object.hasOwn(where, 'value') && where.value === owner.value &&
                   count && Object.hasOwn(count, 'value') && count.value === 0 &&
-                  Buffer.byteLength(text, 'utf8') <= 1024)
+                  Buffer.byteLength(text, 'utf8') <= 1024) {
                 textFingerprint = createHash('sha256').update(text, 'utf8').digest('hex');
+                if (profile === HOST_PROFILE) consoleFormat = wrongHostConsoleFormat(text);
+              }
             } catch {} // Diagnostic failure cannot clear the original veto.
           }
           return;
@@ -1164,7 +1194,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     try { hostBudget(until); } catch { failure('deadline'); good = false; }
   }
   if (!(good && !bad)) {
-    try { if (typeof diagnose === 'function') diagnose(firstFailure ?? 'unknown', events.join('') + '_' + (eventOverflow ? '1' : '0'), textFingerprint); } catch {}
+    try { if (typeof diagnose === 'function') diagnose(firstFailure ?? 'unknown', events.join('') + '_' + (eventOverflow ? '1' : '0'), textFingerprint, consoleFormat); } catch {}
   }
   return good && !bad;
 }
@@ -1206,21 +1236,24 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
         checkpoint(reason === 'ca' ? 'engine_wrong_ca' : 'engine_wrong_host', name);
         const factory = reason === 'host' ? wrongHostFactory : wrongCAFactory;
         if (name === 'webkit' && factory !== undefined) {
-          let detail = 'unknown', eventTrace, textFingerprint;
+          let detail = 'unknown', eventTrace, textFingerprint, consoleFormat;
           const probe = reason === 'host' ? probeWebkitWrongHost : probeWebkitWrongCA;
           const stages = reason === 'host' ? HOST_FAILURE_STAGES : CA_FAILURE_STAGES;
           if (!await probe(browser, factory, performance.now() + 10000,
-            (kind, trace, fingerprint) => {
+            (kind, trace, fingerprint, format) => {
               if (hostDiagnosticKind(kind)) detail = kind;
               if (validWebkitEventTrace(trace)) eventTrace = trace;
               if (typeof fingerprint === 'string' && fingerprint.length === 64 && /^[a-f0-9]{64}$/.test(fingerprint))
                 textFingerprint = fingerprint;
+              if (reason === 'host' && validWrongHostConsoleFormat(format)) consoleFormat = format;
             })) {
             const fingerprint = peerCodeFingerprintKind(detail);
             const base = fingerprint ? `engine_wrong_${reason}_one_shot_${detail}` : stages[detail];
             const observed = eventTrace !== undefined && !fingerprint ? `${base}_events_${eventTrace}` : base;
             const text = detail === 'console_malformed' && eventTrace?.slice(0, -2).includes('X') && textFingerprint;
-            checkpoint(text ? `${observed}_text_${textFingerprint}` : observed, name);
+            const formatted = text && reason === 'host' && consoleFormat
+              ? `${observed}_text_${textFingerprint}_fmt_${consoleFormat}` : undefined;
+            checkpoint(formatted ?? (text ? `${observed}_text_${textFingerprint}` : observed), name);
             refuse();
           }
           continue;

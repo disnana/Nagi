@@ -6,7 +6,8 @@ import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import https from 'node:https';
 import { runPreflight, settings, readWebkitWrongHostCredentials, createWebkitWrongHostEndpoint,
-  readWebkitWrongCACredentials, createWebkitWrongCAEndpoint, validWebkitEventTrace } from './preflight.mjs';
+  readWebkitWrongCACredentials, createWebkitWrongCAEndpoint, validWebkitEventTrace,
+  validWrongHostConsoleFormat } from './preflight.mjs';
 
 export function trustEnv(home, inherited) {
   return { ...inherited, HOME: home, XDG_DATA_HOME: home + '/.local/share',
@@ -250,10 +251,13 @@ export function checkedFailure(stage, engine) {
   const observed = observation && observation[0] === stage && engine === 'webkit' && FAILURE_STAGES.includes(observation[1]) &&
     validWebkitEventTrace(observation[2]);
   const textObservation = typeof stage === 'string' && stage.length <= 192 &&
-    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_console_malformed)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])_text_([a-f0-9]{64})$/);
+    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_console_malformed)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])_text_([a-f0-9]{64})(?:_fmt_([a-z_]+))?$/);
   const observedText = textObservation && textObservation[0] === stage && engine === 'webkit' &&
     FAILURE_STAGES.includes(textObservation[1]) && validWebkitEventTrace(textObservation[2]) &&
-    textObservation[2].slice(0, -2).includes('X');
+    textObservation[2].slice(0, -2).includes('X') &&
+    (textObservation[4] === undefined ||
+      (textObservation[1] === 'engine_wrong_host_one_shot_console_malformed' &&
+       validWrongHostConsoleFormat(textObservation[4])));
   const peerFingerprint = typeof stage === 'string' && stage.length <= 108 &&
     stage.match(/^engine_wrong_(?:ca|host)_one_shot_peer_code_sha256_[a-f0-9]{64}$/)?.[0] === stage;
   if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage) && !peerFingerprint && !observed && !observedText) || !FAILURE_ENGINES.includes(engine) ||

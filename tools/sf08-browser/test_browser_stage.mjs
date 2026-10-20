@@ -4,6 +4,22 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { stage, businessConfig, trustEnv, FAILURE_STAGES, checkedFailure } from './browser_stage.mjs';
 
+test('temporary wrong-host format suffix is bounded fixed failure metadata only', () => {
+  const base = 'engine_wrong_host_one_shot_console_malformed_events_GRMNXSFWJKO_0_text_' + 'a'.repeat(64);
+  for (const format of ['resource_empty', 'resource_certificate_suffix', 'resource_tls_closed',
+    'resource_tls_handshake', 'resource_tls_read', 'resource_tls_write', 'resource_receive',
+    'resource_http_status', 'resource_other', 'other']) {
+    const stage = base + '_fmt_' + format;
+    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+    for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine));
+    for (const invalid of [stage + '\n', stage + '_extra', stage.replace('wrong_host', 'wrong_ca'),
+      stage.replace('GRMNXSFWJKO', 'GRMNSFWJKO'), stage.replace('console_malformed', 'accepted')])
+      assert.throws(() => checkedFailure(invalid, 'webkit'));
+  }
+  for (const suffix of ['', 'PRIVATE_SENTINEL', 'https://secret.invalid/', 'a'.repeat(193)])
+    assert.throws(() => checkedFailure(base + '_fmt_' + suffix, 'webkit'));
+});
+
 test('text identity suffix is bounded static WebKit failure metadata only', () => {
   const digest = 'a'.repeat(64);
   for (const role of ['ca', 'host']) {

@@ -1652,6 +1652,81 @@ test('one-shot event observations classify once, cap at32, and never serialize c
   assert.equal(records[0].trace.length, 34);
 });
 
+test('temporary wrong-host console format stays closed, private and never proof', async () => {
+  const cases = [
+    ['Failed to load resource', 'resource_empty'],
+    ['Failed to load resource: Unacceptable TLS certificate PRIVATE_SENTINEL', 'resource_certificate_suffix'],
+    ['Failed to load resource: TLS connection closed unexpectedly', 'resource_tls_closed'],
+    ['Failed to load resource: Error performing TLS handshake: PRIVATE_SENTINEL', 'resource_tls_handshake'],
+    ['Failed to load resource: Peer failed to perform TLS handshake: PRIVATE_SENTINEL', 'resource_tls_handshake'],
+    ['Failed to load resource: Error reading data from TLS socket: PRIVATE_SENTINEL', 'resource_tls_read'],
+    ['Failed to load resource: Error writing data to TLS socket: PRIVATE_SENTINEL', 'resource_tls_write'],
+    ['Failed to load resource: Error receiving data: PRIVATE_SENTINEL', 'resource_receive'],
+    ['Failed to load resource: the server responded with a status of PRIVATE_SENTINEL', 'resource_http_status'],
+    ['Failed to load resource: PRIVATE_SENTINEL https://secret.invalid/?token=PRIVATE_SENTINEL', 'resource_other'],
+    ['PRIVATE_SENTINEL https://secret.invalid/?token=PRIVATE_SENTINEL', 'other'],
+  ];
+  for (const [text, expected] of cases) {
+    const records = [];
+    const f = hostBrowser({ duringGoto: ({ page, endpoint }) => {
+      page.emit('console', webkitConsoleError(endpoint.url, { text }));
+    } });
+    const goto = f.page.goto;
+    f.page.goto = (url, options) => {
+      assert.equal(options.waitUntil, 'load');
+      assert.ok(options.timeout > 0 && options.timeout <= 10000);
+      return goto(url, options);
+    };
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 10000,
+      (kind, trace, fingerprint, format) => records.push({ kind, trace, fingerprint, format })), false);
+    assert.equal(f.closed(), true, 'actual owned mock close/join paths complete');
+    assert.equal(records.length, 1);
+    assert.equal(records[0].kind, 'console_malformed');
+    assert.equal(records[0].format, expected);
+    assert.equal(records[0].fingerprint, createHash('sha256').update(text).digest('hex'));
+    assert.equal(records[0].trace, 'GRMXNSFJKO_0', 'format adds no events or order changes');
+    assert.doesNotMatch(JSON.stringify(records), /PRIVATE_SENTINEL|secret\.invalid|token=/);
+    const checkpoint = `engine_wrong_host_one_shot_console_malformed_events_${records[0].trace}_text_${records[0].fingerprint}_fmt_${records[0].format}`;
+    assert.equal(checkedFailure(checkpoint, 'webkit').stage, checkpoint);
+  }
+  const records = [];
+  const ca = hostBrowser({ role: 'ca', duringGoto: ({ page, endpoint }) => {
+    page.emit('console', webkitConsoleError(endpoint.url, { text: cases[2][0] }));
+  } });
+  assert.equal(await hostProof.probeWebkitWrongCA(ca.browser, ca.factory, performance.now() + 10000,
+    (kind, trace, fingerprint, format) => records.push({ kind, trace, fingerprint, format })), false);
+  assert.equal(records[0].format, undefined, 'temporary observation is wrong-host only');
+  const exact = hostBrowser({ duringGoto: ({ page, endpoint }) => {
+    page.emit('console', webkitConsoleError(endpoint.url));
+  } });
+  assert.equal(await hostProof.probeWebkitWrongHost(exact.browser, exact.factory, performance.now() + 10000,
+    () => assert.fail('unchanged exact success has no failure diagnostic')), true);
+});
+
+test('temporary wrong-host format refuses foreign, secret and accessor metadata', async () => {
+  let reads = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'url', { get() { reads++; throw new Error('PRIVATE_SENTINEL'); } });
+  for (const override of [
+    { text: 'x'.repeat(1025) }, { text: '界'.repeat(400) },
+    { text: 'Failed to load resource: PRIVATE_SENTINEL', location: { url: 'https://secret.invalid/' } },
+    { text: 'Failed to load resource: PRIVATE_SENTINEL', location: accessor },
+    { text: 'Failed to load resource: PRIVATE_SENTINEL', args: ['PRIVATE_SENTINEL'] },
+    { text: 'Failed to load resource: PRIVATE_SENTINEL', type: 'log' },
+    { text: () => { throw new Error('PRIVATE_SENTINEL'); } },
+  ]) {
+    const records = [];
+    const f = hostBrowser({ duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url, override)) });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 10000,
+      (kind, trace, fingerprint, format) => records.push({ kind, trace, fingerprint, format })), false);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].format, undefined);
+    assert.equal(records[0].fingerprint, undefined);
+    assert.doesNotMatch(JSON.stringify(records), /PRIVATE_SENTINEL|secret\.invalid/);
+  }
+  assert.equal(reads, 0, 'diagnostics do not read skipped location accessors');
+});
+
 test('text fingerprint is bounded owned failure metadata and never certificate proof', async () => {
   const text = 'Failed to load resource: unit PRIVATE_SENTINEL transport failure';
   let locationReads = 0;
