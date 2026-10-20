@@ -1,0 +1,37 @@
+name: PR133 B1 bootstrap observation
+on:
+  push:
+    branches: [ci/pr133-b1-bootstrap-observation]
+permissions:
+  contents: read
+jobs:
+  existing-deadline-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Compile the existing runtime unit fixtures
+        run: cargo test --locked -p nagi-runtime --lib --no-run
+      - name: Require the existing fourteen deadline fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests -- --list > "$RUNNER_TEMP/b1-bootstrap-list.log"
+          python3 - <<'PYLIST'
+          import os,pathlib,re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-list.log").read_text()
+          names=re.findall(r"(?m)^([a-zA-Z0-9_:]+): test$",text)
+          required={
+              "http_server::csrf_http::deadline_tests::pool_readiness_tests::cold_worker2_startup_spends_original_guarded_http_budget",
+              "http_server::csrf_http::deadline_tests::pool_readiness_tests::ready_worker2_setup_preserves_same_guarded_http_budget",
+          }
+          if len(names)!=14 or len(set(names))!=14 or not required.issubset(names):
+              raise SystemExit("b1_bootstrap_inventory=invalid")
+          PYLIST
+      - name: Observe existing cases with unchanged default parallelism and deadlines
+        run: cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests -- --show-output
