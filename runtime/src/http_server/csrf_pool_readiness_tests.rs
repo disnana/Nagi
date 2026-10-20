@@ -234,10 +234,11 @@ async fn startup_case(ready: bool) {
         let (status, _, _) = response.await;
         assert_eq!(status, if ready { 200 } else { 504 });
         assert_eq!(state.calls.load(Ordering::SeqCst), usize::from(ready));
-        let window = state.window.lock().unwrap();
-        let (until, lease) = window.as_ref().expect("actual guarded preparation selected original lease");
-        if !ready { assert!(Instant::now() >= *until); assert!(lease.validate().is_err()); }
-        drop(window);
+        {
+            let window = state.window.lock().unwrap();
+            let (until, lease) = window.as_ref().expect("actual guarded preparation selected original lease");
+            if !ready { assert!(Instant::now() >= *until); assert!(lease.validate().is_err()); }
+        }
         assert_eq!(startup.created(), 2, "request cannot require a third worker");
         startup.release();
         sqlite::rollback(held.take().unwrap()).await.unwrap();
