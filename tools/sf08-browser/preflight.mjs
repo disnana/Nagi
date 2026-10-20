@@ -1186,7 +1186,14 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     live();
     phase = 'request';
     if (requests === 0) {
-      if (await hostWithin(requestWait, until) !== true) refuse();
+      let requestProved;
+      try { requestProved = await hostWithin(requestWait, until); }
+      catch (error) {
+        // This owned signal never rejects. Only its original deadline waiter can
+        // reject here, including a rounded timer firing before the next clock tick.
+        failure('deadline'); throw error;
+      }
+      if (requestProved !== true) refuse();
       live();
     }
     phase = requests !== 1 || !failed ? 'request' : 'response';

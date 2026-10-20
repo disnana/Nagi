@@ -1395,6 +1395,22 @@ test('CA document initiation missing request uses original deadline and ignores 
   assert.deepEqual(rows, ['deadline']);
 });
 
+test('owned request timeout labels deadline even before a rounded clock tick', { timeout: 2000 }, async t => {
+  // Freeze only the observed clock. The real bounded timer still expires, so
+  // this models rounding without relying on a scheduler or elapsed-time race.
+  t.mock.method(performance, 'now', () => 1000);
+  for (const role of ['host', 'ca']) {
+    const rows = [], budgets = [];
+    const f = hostBrowser({ role, missing: true, waiterOptions: value => budgets.push(value.timeout) });
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(f.browser, f.factory, 1035, kind => rows.push(kind)), false);
+    assert.deepEqual(rows, ['deadline']);
+    assert.deepEqual(budgets, [35]);
+    assert.equal(f.closed(), true);
+    assert.equal(f.page.listenerCount('requestfailed'), 0);
+  }
+});
+
 test('one-shot R1 real EOF reset and idle are never certificate alerts', { timeout: 10000 }, async () => {
   hostAPI(); const files = hostCertificateFiles();
   for (const mode of ['eof', 'reset', 'idle']) {
