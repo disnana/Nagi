@@ -1,3 +1,4 @@
+// CI routing probe only; no lexer behavior changes.
 #[derive(Clone, Debug, PartialEq)]
 pub enum K {
     Id(String),
