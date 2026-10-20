@@ -79,7 +79,7 @@ Axum／Towerを第一候補に、現行の標準HTTPと比較します。**採�
 
 公開API、受付容量、本文・header制限、期限、panic応答、停止条件を揃えます。処理量・遅延・CPU・メモリ、過負荷からの回復と保守負担を確認して判断します。既存の[測定](http-stdlib-performance.md)を、この採用比較の結果とは扱いません。
 
-送信HTTP clientも未実装です。reqwest等の再利用を検討しますが、応答statusと通信失敗、受信上限、期限、資源の終了を先に決める必要があります。
+0.2.0の送信[HTTP client](http-client.md)は、trusted Rust hostが固定操作・有限予算を登録し、応答statusと通信失敗、受信上限、期限、実際の終了・joinを区別するAPIです。任意URLやraw header mapを渡す汎用client APIはありません。
 
 ## 実装する順序
 

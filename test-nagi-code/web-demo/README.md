@@ -15,7 +15,7 @@ cargo build --release --locked -p nagic
 
 既定のURLは[http://127.0.0.1:8091](http://127.0.0.1:8091)です。`NAGI_PORT`でportを、`NAGI_DB`でDB pathを変えられます。プロジェクトとして起動すると、既定で`test-nagi-code/web-demo/nagi-tasks.sqlite`を使い、再起動後も保存内容を読みます。既存DBを引き継ぐ場合は`NAGI_DB`に絶対pathを指定してください。
 
-`GET /`はJSON APIの案内をplain textで返します。以前のraw HTML UIは標準HTTP routeから配信しません。`index.html`は型付きHTML応答が利用可能になるまで未接続の資料です。HTML markupをplain text responseとして扱わず、APIはJSONのまま提供します。
+`GET /`はJSON APIの案内をplain textで返します。以前のraw HTML UIは標準HTTP routeから配信しません。`index.html`は未接続の旧UI資料です。Nagi 0.2.0にはtyped HTML subsetがありますが、この例のbrowser UIは移行していません。HTML markupをplain text responseとして扱わず、APIはJSONのまま提供します。
 
 Windows x64の配布用exeを作る場合：
 
@@ -48,7 +48,7 @@ Windows x64の配布用exeを作る場合：
 | `tasks.nagi` | 標準HTTP App、public policy付きroute、HTTP handler |
 | `models.nagi` | JSONとDBの型 |
 | `validation.nagi` | 入力検証 |
-| `index.html` | SF04 typed HTML対応まで未接続の旧UI案 |
+| `index.html` | typed HTML subsetへ未移行の旧UI資料 |
 
 ## 起動済みのserverを確認
 

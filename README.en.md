@@ -39,9 +39,9 @@ nagic --version
 nagic --help
 ```
 
-The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) is available from the Marketplace or [GitHub Releases](https://github.com/disnana/Nagi/releases). [Nagi](editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm is available from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) or [GitHub Releases](https://github.com/disnana/Nagi/releases). For Marketplace installs, check the listing's Versions view for available versions and compatible IDE builds. The published GitHub 0.1.2 release includes one common `nagi-jetbrains-0.1.2.zip` and its `.sha256` for both IDEs. The minimum IDE builds for that ZIP are IDEA 2025.1.1 build 251.25410.109 and PyCharm 2025.1.1 build 251.25410.122. Marketplace installs directly to the compatible IDE; Release ZIPs are installed manually. Plugin 0.1.3 is an unreleased candidate. Published compiler 0.1.11 supports ordinary Check/Run, while candidate completion, diagnostics, and navigation require the matching compiler CI artifact built from the same PR source. See the [editor guide](docs/en/editor.md).
+The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) is available from the Marketplace or [GitHub Releases](https://github.com/disnana/Nagi/releases). [Nagi](editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm is available from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) or [GitHub Releases](https://github.com/disnana/Nagi/releases). For Marketplace installs, check the listing's Versions view for available versions and compatible IDE builds. The published GitHub 0.1.2 release includes one common `nagi-jetbrains-0.1.2.zip` and its `.sha256` for both IDEs. The minimum IDE builds for that ZIP are IDEA 2025.1.1 build 251.25410.109 and PyCharm 2025.1.1 build 251.25410.122. Marketplace installs directly to the compatible IDE; Release ZIPs are installed manually. Plugin 0.1.3 is an unreleased candidate. Published compiler 0.1.11 supports ordinary Check/Run, while candidate completion, diagnostics, and navigation can use compiler 0.2.0. See the [editor guide](docs/en/editor.md).
 
-The install scripts continue to download the published Nagi 0.1.11 release. This README also contains API examples from the unreleased 0.2.0 development source. To check or run those examples, use a compiler built from the same source revision or its matching CI artifact. Published 0.1.11 does not include these APIs. Verify the installed public release with `nagic --version`; for 0.1.11 compatibility, see the [0.1.11 migration guide](docs/en/migration-0.1.11.md).
+Nagi 0.2.0 was [released on 2026-10-20](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0). The install scripts select the latest public release. The HTTP and SQLite examples below require 0.2.0; published 0.1.11 does not include these APIs. Check the installed compiler with `nagic --version` and read the [0.2.0 migration guide](docs/en/migration-0.2.0.md) before upgrading.
 
 ### Uninstall
 
@@ -61,9 +61,9 @@ To preview removals, append `-WhatIf` to the PowerShell command or replace `bash
 
 Modified or unverifiable distributions are retained. Projects, Rust/Cargo, and the VS Code extension remain unchanged. See the [setup guide](docs/en/getting-started.md#uninstall) for details.
 
-## Run the 0.2.0 candidate HTTP example
+## Run the 0.2.0 HTTP example
 
-Save this as `server.nagi`. It is an HTTP sample with no database writes. Check and run it with a candidate compiler built from the same source revision or its matching CI artifact. Published 0.1.11 does not support these APIs.
+Save this as `server.nagi`. This HTTP sample performs no database writes. Check and run it with Nagi 0.2.0.
 
 ```nagi
 import std.http.server as http
@@ -118,13 +118,13 @@ Applications normally use indentation-based High (`.nagi`). Low (`.low`) uses br
 
 Development will prioritize High and Rust integration while preserving Low compatibility. See [High and Low](docs/en/low-language.md) and [Rust integration](docs/en/modules-and-rust.md).
 
-## Current scope (0.2.0 development source)
+## Current scope (0.2.0)
 
 | Available in this source | Main limits |
 |---|---|
 | Typed values, classes, enums, Lists, nullable values, Results, moves, views, and shared values | User-defined generic functions/traits and standard Map operations are unsupported. `owned[T]` has no general constructor or transparent operations |
 | HTTP, headers, response statuses, custom errors, and shared state | The standard server uses loopback HTTP/1. It has no public TLS, WebSocket, or streaming API |
-| JSON, SQLite Pool/Tx, typed Parameters, and opt-in SQL/schema checks | The SQLite API is in unreleased development source. SQL must be one direct literal statement and uses anonymous `?` placeholders. No standard PostgreSQL API |
+| JSON, SQLite Pool/Tx, typed Parameters, and opt-in SQL/schema checks | SQL must be one direct literal statement and uses anonymous `?` placeholders. No standard PostgreSQL API |
 | Async/scopes, typed actors, and Supervisors | Tokio tasks within one process; no custom VM, hot code replacement, or distributed actors |
 | File imports, standard modules, Rust integration, and Low replacements | No direct use of arbitrary Rust types or stable external ABI |
 

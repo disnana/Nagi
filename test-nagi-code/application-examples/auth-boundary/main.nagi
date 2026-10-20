@@ -178,7 +178,7 @@ async def main() -> Result[unit, Error]:
     limits = try http.security_timeout(limits, 1000)
     wire_authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8098")
     limits = try http.authority(limits, "https://localhost", [wire_authority], 1, 256)
-    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    # Explicit illustrative profile only; not a production sizing or SLA recommendation.
     response_budget = try http.response_limits(
         1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 64, 33554432, 8192, 32
     )

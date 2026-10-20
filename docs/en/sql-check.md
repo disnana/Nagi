@@ -1,6 +1,6 @@
 # SQL Preflight Checks
 
-Development-source `std.db.sqlite` requires a Query created from a direct literal during ordinary check. SQL syntax and schema validation are a separate stage enabled by explicit options. SF05 is unreleased; it is neither formal 0.2.0 nor a retroactive feature of published 0.1.x. See [SQLite](sqlite-pool.md) and [migration](migration-0.2.0.md).
+Nagi 0.2.0 `std.db.sqlite` requires a Query created from a direct literal during ordinary check. SQL syntax and schema validation are a separate stage enabled by explicit options. This is not a retroactive feature of published 0.1.x. See [SQLite](sqlite-pool.md) and [migration](migration-0.2.0.md).
 
 ## Usage
 

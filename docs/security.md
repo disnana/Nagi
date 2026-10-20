@@ -1,6 +1,6 @@
-# 認証・認可（未リリース0.2.0 SF01）
+# 認証・認可（0.2.0）
 
-認証は「誰か」を確認し、認可は「この対象へこの操作をしてよいか」を確認します。SF01は標準HTTPの明示Policy、requestに結び付いたproofと終了時の失効を提供します。開発sourceの統合候補にはSF02 Session/CookieとB1 Session CSRF、SF03 CORS、Ed25519 verifier、typed HTML subset、SF06 outbound HTTPが含まれます。public loginを含むSession全経路とSecurity Foundation全体の最終runtime/native/browser/TLS/4 OS acceptanceは未完了です。任意のactive HTMLはサポートしません。正式0.2.0は未リリースで、公開済み0.1.xへ遡及適用しません。
+認証は「誰か」を確認し、認可は「この対象へこの操作をしてよいか」を確認します。Nagi 0.2.0には標準HTTPの明示Policy、requestに結び付くproofと終了時の失効、永続Session/Cookie、Session CSRF、CORS、Ed25519 verifier、typed HTML subset、outbound HTTPが含まれます。[4 OS・browser受入](https://github.com/disnana/Nagi/actions/runs/39422234923)を経て[2026-10-20に公開しました](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0)。任意のactive HTMLはサポートしません。公開済み0.1.xへ遡及適用しません。
 
 ## すべてのrouteで方針を選ぶ
 
@@ -19,7 +19,7 @@ async def hello(request: http.Request, state: shared[State], access: unit) -> Re
     return http.text(context, http.Status.OK, view(state.greeting))
 ```
 
-これはhandlerの形だけを示し、そのまま実行できるserverではありません。0.2.0候補では起動前に応答予算・rate予算と全routeのrate policyを明示します。未検証の値はここでは推奨しません。要件は[HTTP API reference](http-server.md#sf07の明示予算とrate-policy開発候補)を参照してください。runtime acceptanceは未完了です。
+これはhandlerの形だけを示し、そのまま実行できるserverではありません。0.2.0では起動前に応答予算・rate予算と全routeのrate policyを明示します。未検証の値はここでは推奨しません。要件は[HTTP API reference](http-server.md#sf07の明示予算とrate-policy)を参照してください。
 
 完全なloopback serverを組み立てても、HTTPS origin設定だけでTLSは追加されず、browser認証・Secure Cookie・Origin/CSRFも完成しません。TLS frontendと実peer/proxy配置は[authority設定](http-server.md#制限と停止)を参照してください。
 
@@ -56,7 +56,7 @@ leaseの期限は有限security/body/handler予算とverified identityの絶対�
 
 `auth.kind(view(failure))`と`auth.message(view(failure))`で読みます。messageのviewはFailureの借用として扱います。security予算の超過は504、unwind panicは詳細を伏せた500です。handlerの業務Result Errは既定／route mapperが扱い、security Failureとflattenしません。mapperはrequest-borrowed ResponseContextを受け取り、`Result[http.Response, Error]`を返します。response factoryの失敗はそのErrorとして伝播します。
 
-`security_timeout(options, positive_ms)`はverifierとauthorizer共通の絶対予算を設定します。待機ごとにリセットしません。HEAD fallbackはGET policyを使い、明示HEAD/OPTIONSもPolicyが必要です。404/405はproofとhandlerを発行しません。統合候補のCORS層はmetadata専用preflightを追加します。[HTTP CORS](http-server.md)を参照してください。認証・CSRFを免除しません。browser/proxyを含む最終acceptanceは未完了です。
+`security_timeout(options, positive_ms)`はverifierとauthorizer共通の絶対予算を設定します。待機ごとにリセットしません。HEAD fallbackはGET policyを使い、明示HEAD/OPTIONSもPolicyが必要です。404/405はproofとhandlerを発行しません。CORS層はmetadata専用preflightを追加します。[HTTP CORS](http-server.md)を参照してください。認証・CSRFを免除しません。
 
 finalizerがContent-Typeとnosniff、reserved security/framing headersを所有します。raw HTML・Set-Cookie・CORS/CSP・任意cache/challengeの追加による迂回は拒否します。panic=abort、OOM、non-yielding処理の強制停止、任意Rustの二重panic、外部副作用のrollbackは保証しません。標準HTTP外のcustom Rust hostは明示したtrusted境界で、このPolicy保証を自動適用しません。
 
@@ -64,18 +64,18 @@ finalizerがContent-Typeとnosniff、reserved security/framing headersを所有�
 
 ## 保護SQLite操作
 
-未リリースSF05は、Queryを直接literalから作り、実値をParametersへbindする標準入口へ統一します。QueryはSQL構造の出所を制限する型です。Grantやtenant制約を内包する型ではありません。
+0.2.0 SF05は、Queryを直接literalから作り、実値をParametersへbindする標準入口へ統一します。QueryはSQL構造の出所を制限する型です。Grantやtenant制約を内包する型ではありません。
 
-保護された操作はreview済みtrusted adapterに固定SQLと所有者predicateを置き、`Grant.submit` が渡す**実subjectと実target**を `WHERE owner=? AND id=?` などへbindします。任意queryにGrantを追加するだけでは対象の制限を証明できません。保護対象のsession/owner条件が可変なら、同じTxのpredicateまたは同じTxでの再確認が必要です。永続Sessionと世代管理のsourceは統合候補のSF02に含まれますが、これはSF05の保証ではなく、business commitの原子性も保証しません。
+保護された操作はreview済みtrusted adapterに固定SQLと所有者predicateを置き、`Grant.submit` が渡す**実subjectと実target**を `WHERE owner=? AND id=?` などへbindします。任意queryにGrantを追加するだけでは対象の制限を証明できません。保護対象のsession/owner条件が可変なら、同じTxのpredicateまたは同じTxでの再確認が必要です。永続Sessionと世代管理は0.2.0 SF02に含まれますが、これはSF05の保証ではなく、business commitの原子性も保証しません。
 
 trusted Rust hostはTxのopaque `reserve_exec` でbounded queueの容量を待ち、予約後に `Grant.submit` の同期callback内で `reservation.enqueue(Query, Parameters)` を呼びます。容量予約は受理ではありません。admissionはgate内の一回permit発行で順序化します。発行前の失効ならnative enqueueは0、発行後の失効ならcallbackの同期enqueue前でも受理済みで、後の失効やHTTP取消は取り消し・rollbackを保証しません。callbackはFutureを返して後からenqueueする形にせず、同期で実queueへ送ります。
 
 DDL/bootstrapはrequestと分離したtrusted管理処理です。Rust hostの固定SQL factoryや手書きFromRowはreview対象です。動的文字列factoryをrequestへ再exportして標準literal契約を迂回しません。[SQLite](sqlite-pool.md) · [移行](migration-0.2.0.md) · [SF05契約](internal/security-foundation/sf05-contract.md)
 
-## Session policy の暫定制限（未リリース SF02）
+## Session policyとCSRF
 
 標準 runtime の `session_authenticated_policy` と `session_authorized_policy` は、CSRF guard のない unsafe method を登録時に拒否します。許可する method は GET・HEAD・OPTIONS だけで、POST・PUT・PATCH・DELETE とその他の method は `Error` の Invalid として拒否します。`route` と `route_mapped` の両方に適用し、`serve`／`serve_listener` も bind／accept 前に全 route を再検査します。通常の Bearer policy は引き続き全 Cookie を拒否します。免除 boolean や認証 source の fallback はありません。
 
-未リリースの B1 開発 source は `std.auth.csrf`（`Options`・`CsrfStore`・`Failure`、`options`・async `open`・明示 `clone_store`・`kind`・`message`・`outcome`）と `std.http.server.session_csrf_tokens[S, E]`／`session_csrf_policy[S, A]` を追加します。`open` は実 Session store と検査済み HTTP options を借用し、二つの HTTP 操作は CSRF handle を move します。`session_csrf_policy` は同じ実 Session store の未guard policy だけを封じます。runtime は store の同一性と二重guardを検査します。compiler が保証するのは名義型、move／borrow、opaque構築拒否であり、store同一性を静的に証明しません。guard のない unsafe Session route は引き続き拒否し、認証済token endpointとguard付きunsafe routeは別の閉じた経路です。
+Nagi 0.2.0 は `std.auth.csrf`（`Options`・`CsrfStore`・`Failure`、`options`・async `open`・明示 `clone_store`・`kind`・`message`・`outcome`）と `std.http.server.session_csrf_tokens[S, E]`／`session_csrf_policy[S, A]` を追加します。`open` は実 Session store と検査済み HTTP options を借用し、二つの HTTP 操作は CSRF handle を move します。`session_csrf_policy` は同じ実 Session store の未guard policy だけを封じます。runtime は store の同一性と二重guardを検査します。compiler が保証するのは名義型、move／borrow、opaque構築拒否であり、store同一性を静的に証明しません。guard のない unsafe Session route は引き続き拒否し、認証済token endpointとguard付きunsafe routeは別の閉じた経路です。
 
-B1 は unsafe な ambient-cookie request に設定済み Origin の正確な一致、有限のtoken台帳、body後のSession世代checkpointを適用します。token配送は認証済 GET または明示 HEAD に限り no-store で確定します。対象は Session に結び付く CSRF です。統合候補にはCORS policy/preflightも含まれますが、public loginを含むSession全経路と実TLS／browser／proxyの最終acceptanceは未完了です。GET／HEAD／OPTIONS handler の副作用なしを checker は証明せず、mutation を GET に移して制限を回避しません。取消は受理済 DB 操作や後続business commitのrollbackを保証しません。
+B1 は unsafe な ambient-cookie request に設定済み Origin の正確な一致、有限のtoken台帳、body後のSession世代checkpointを適用します。token配送は認証済 GET または明示 HEAD に限り no-store で確定します。対象は Session に結び付く CSRF です。CORS policy/preflightとpublic loginも含み、release CIでは実TLS／browser／proxyのSession経路を検証しています。配備先でも信頼されたTLS frontendと適切なproxy設定が必要です。GET／HEAD／OPTIONS handler の副作用なしを checker は証明せず、mutation を GET に移して制限を回避しません。取消は受理済 DB 操作や後続business commitのrollbackを保証しません。

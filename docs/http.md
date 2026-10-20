@@ -1,6 +1,6 @@
 # HTTP
 
-このページは未リリースの0.2.0 SF01開発source向けです。公開済み0.1.xのコードは[移行ガイド](migration-0.2.0.md)を確認してください。routeはpublicを含めて明示Policyが必要です。
+このページは0.2.0向けです。公開済み0.1.xのコードは[移行ガイド](migration-0.2.0.md)を確認してください。routeはpublicを含めて明示Policyが必要です。
 
 `std.http.server`でHTTPサーバーを作れます。DBは不要です。asyncのhandler、共有する状態、失敗時の応答をNagiで定義します。
 
@@ -20,7 +20,7 @@ async def hello(request: http.Request, state: shared[State], access: unit) -> Re
 
 ```
 
-このhandlerは`Hello, Nagi!`を`Result[Response, Error]`として返します。現在の0.2.0候補では応答予算とrate予算を明示し、全routeへrate policyを設定してから起動します。未検証の値をdefaultとして流用しないでください。詳細は[SF07の予算と起動設定](http-server.md#sf07の明示予算とrate-policy開発候補)を参照してください。
+このhandlerは`Hello, Nagi!`を`Result[Response, Error]`として返します。0.2.0では応答予算とrate予算を明示し、全routeへrate policyを設定してから起動します。未検証の値をdefaultとして流用しないでください。詳細は[SF07の予算と起動設定](http-server.md#sf07の明示予算とrate-policy)を参照してください。
 
 ## リクエストと応答
 
@@ -53,6 +53,6 @@ async def hello(request: http.Request, state: shared[State], access: unit) -> Re
 - [JSON](json.md)：bodyをclassへ変換する
 - [廃止したHTTP API](http-legacy.md)：旧decorator／serveの移行
 
-現在の標準サーバーはloopbackのHTTP/1.1に対応します。TLSや外部公開にはリバースプロキシを使います。接続元IPの取得、ストリーミング、WebSocket、HTTP/2の公開APIはありません。外部APIへリクエストを送る標準HTTP clientも未実装です。
+現在の標準サーバーはloopbackのHTTP/1.1に対応します。TLSや外部公開にはリバースプロキシを使います。接続元IPの取得、ストリーミング、WebSocket、HTTP/2の公開APIはありません。外部APIへの送信には[HTTP client](http-client.md)の固定操作APIを使えます。任意URLをrequestから渡すAPIはありません。
 
 内部ではHyperがHTTP通信、Tokioが非同期実行を担います。Nagiはroute登録、型付き状態、Response、制限とエラー処理のAPIを提供します。Axum／Towerへの変更は比較検討中で、現行サーバーの置き換えや性能改善が決まったわけではありません。

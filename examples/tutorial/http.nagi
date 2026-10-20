@@ -1,5 +1,5 @@
 # A small explicit HTTP app with JSON responses and no database writes.
-# Typed HTML is a later API; the root route returns plain UTF-8 text meanwhile.
+# The root route uses plain UTF-8 text; typed HTML is available via http.html_response.
 import std.http.server as http
 
 class State:
@@ -37,7 +37,7 @@ async def main() -> Result[unit, Error]:
     app = try http.rate_route(app, http.Method.POST, "/echo", route_policy_3)
     limits = http.default_options()
     limits = try http.authority(limits, "https://localhost", ["localhost:8094", "127.0.0.1:8094"], 2, 256)
-    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    # Explicit illustrative profile only; not a production sizing or SLA recommendation.
     response_budget = try http.response_limits(
         1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
     )

@@ -124,7 +124,7 @@ async def main() -> Result[unit, Error]:
     route_policy_7 = try http.rate_policy(1000, 1000)
     app = try http.rate_route(app, http.Method.GET, "/inventory/summary", route_policy_7)
     options = http.default_options()
-    # Explicit illustrative profile only; not a sizing/SLA recommendation; native validation is pending.
+    # Explicit illustrative profile only; not a production sizing or SLA recommendation.
     response_budget = try http.response_limits(
         1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
     )
