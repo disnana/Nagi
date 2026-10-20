@@ -16,6 +16,7 @@ from unittest.mock import patch
 import changes
 import gate
 from sf07_projection_contract import BASE_WORKFLOW_SHA256
+import parallel_regression_projection
 
 
 class ChangeTests(unittest.TestCase):
@@ -500,7 +501,9 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         self.assertIsNotNone(package, "four-platform package job missing")
-        commands = re.findall(r"(?m)^\s+run: (cargo test [^\n]+)$", package.group())
+        regression = re.search(r"(?ms)^  nagi-regression:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
+        self.assertIsNotNone(regression, "four-platform regression job missing")
+        commands = re.findall(r"(?m)^\s+run: (cargo test [^\n]+)$", package.group() + regression.group())
         tokens = [command.split() for command in commands]
         self.assertTrue(any("--lib" in command for command in tokens))
         targets = {
@@ -611,6 +614,7 @@ class GateTests(unittest.TestCase):
                 "package_jetbrains": package_jetbrains,
             }},
             "nagi-package": {"result": "success" if package_nagi == "true" else "skipped"},
+            "nagi-regression": {"result": "success" if package_nagi == "true" else "skipped"},
             "vscode-package": {"result": "success" if package_vscode == "true" else "skipped"},
         }
 
@@ -750,7 +754,7 @@ class GateTests(unittest.TestCase):
         self.assertTrue(gate.errors(needs))
 
     def test_required_packages_cannot_fail_be_canceled_or_skipped(self):
-        for job in ("nagi-package", "vscode-package"):
+        for job in ("nagi-package", "nagi-regression", "vscode-package"):
             for result in ("failure", "cancelled", "skipped"):
                 with self.subTest(job=job, result=result):
                     needs = self.needs(package_nagi="true", package_vscode="true")
@@ -768,7 +772,7 @@ class GateTests(unittest.TestCase):
         self.assertEqual(gate.errors(needs), ["jetbrains: success, expected skipped"])
 
     def test_unplanned_packages_must_be_skipped(self):
-        for job in ("nagi-package", "vscode-package"):
+        for job in ("nagi-package", "nagi-regression", "vscode-package"):
             needs = self.needs("false")
             needs[job]["result"] = "success"
             self.assertTrue(gate.errors(needs))
@@ -885,9 +889,11 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
         )
         anchors = (
             projection.SF08_BROWSER_JOB,
-            projection.READY_NEEDS_WITH_SF08,
-            projection.PUBLISH_NEEDS_WITH_SF08,
-            projection.PUBLISH_IF_WITH_SF08,
+            parallel_regression_projection.READY_NEW,
+            parallel_regression_projection.PUBLISH_NEW,
+            projection.PUBLISH_IF_WITH_SF08.replace(
+                parallel_regression_projection.PUBLISH_CONDITION_OLD,
+                parallel_regression_projection.PUBLISH_CONDITION_NEW, 1),
         )
         for anchor in anchors:
             with self.subTest(anchor=anchor[:32]):
@@ -982,6 +988,20 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertNotIn("release-jetbrains-IC", workflow)
         self.assertNotIn("release-jetbrains-PC", workflow)
 
+    def test_nagi_package_waits_for_early_change_guards_and_keeps_release_selector(self):
+        workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
+        text = workflow.read_text(encoding="utf-8")
+        job = re.search(r"(?ms)^  nagi-package:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
+        self.assertIsNotNone(job, "four-platform package job missing")
+        block = job.group("body")
+        self.assertIn("    needs: [changes, release-plan]\n", block)
+        self.assertIn(
+            "    if: >-\n"
+            "      always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&\n"
+            "      needs.release-plan.outputs.package_nagi == 'true'\n",
+            block,
+        )
+
     def test_existing_pr_merge_gate_waits_for_the_reusable_plugin_workflow(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
         text = workflow.read_text(encoding="utf-8")
@@ -1022,7 +1042,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         publish = re.search(r"^  publish-release:\n((?: {4,}[^\n]*\n|\n)+)", text, re.MULTILINE)
         self.assertIsNotNone(publish)
         block = publish.group(1)
-        self.assertIn("needs: [changes, linux, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package]", block)
+        self.assertIn("needs: [changes, linux, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression]", block)
         self.assertIn("needs.changes.result == 'success'", block)
         self.assertIn("needs.sf08-browser.result == 'success'", block)
         self.assertIn("needs.sf08-browser.result == 'skipped'", block)

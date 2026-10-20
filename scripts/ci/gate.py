@@ -41,7 +41,8 @@ def errors(needs: dict) -> list[str]:
         actual = needs.get("sf08-browser", {}).get("result", "missing")
         if actual != expected:
             failures.append(f"sf08-browser: {actual}, expected {expected}")
-    for component, job in (("vscode", "vscode-package"), ("nagi", "nagi-package")):
+    for component, job in (("vscode", "vscode-package"), ("nagi", "nagi-package"),
+                           ("nagi", "nagi-regression")):
         planned = plan.get(f"package_{component}")
         if planned not in ("true", "false"):
             failures.append(f"{job}: missing or invalid package plan")

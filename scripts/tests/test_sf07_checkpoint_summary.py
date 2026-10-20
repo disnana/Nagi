@@ -11,6 +11,10 @@ SCRIPT = ROOT / "scripts/ci/sf07_checkpoint_summary.py"
 spec = importlib.util.spec_from_file_location("sf07_summary", SCRIPT)
 summary = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(summary)
+projection_spec = importlib.util.spec_from_file_location(
+    "checkpoint_projection", ROOT / "scripts/ci/sf07_request_projection.py")
+projection = importlib.util.module_from_spec(projection_spec)
+projection_spec.loader.exec_module(projection)
 
 
 def fixture(mode):
@@ -157,10 +161,13 @@ class SummaryTests(unittest.TestCase):
 
     def test_both_required_ci_steps_register_source_parser_and_all_native_tests(self):
         text = (ROOT/".github/workflows/ci.yml").read_text()
+        restored = projection.inverse_source_guard_dedup(text)
         for command in ("python -B scripts/tests/test_sf07_checkpoint_summary.py",
                         "| python -B scripts/ci/sf07_checkpoint_summary.py wire",
                         "| python -B scripts/ci/sf07_checkpoint_summary.py quota"):
-            self.assertEqual(text.count(command), 2)
+            current_count = 1 if command.startswith("python -B scripts/tests/") else 2
+            self.assertEqual(text.count(command), current_count)
+            self.assertEqual(restored.count(command), 2)
 
 
 

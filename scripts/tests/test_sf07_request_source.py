@@ -192,8 +192,11 @@ class RequestSourceTests(unittest.TestCase):
 
     def test_required_registration_and_all_three_actual_http_digests(self):
         workflow = read('.github/workflows/ci.yml')
-        self.assertEqual(workflow.count(projection.SOURCE_LINE), 2)
+        self.assertEqual(workflow.count(projection.SOURCE_LINE), 1)
         self.assertEqual(workflow.count(projection.NATIVE_LINE), 2)
+        restored = projection.inverse_source_guard_dedup(workflow)
+        self.assertEqual(restored.count(projection.SOURCE_LINE), 2)
+        self.assertEqual(restored.count(projection.NATIVE_LINE), 2)
         self.assertEqual(hashlib.sha256(read('runtime/src/http_server.rs').encode()).hexdigest(), projection.HTTP_AFTER)
         self.assertEqual(workflow.count(projection.HTTP_AFTER), 2)
         self.assertEqual(read('scripts/ci/session_private_deadline_diagnostic.py').count(projection.HTTP_AFTER), 1)
@@ -229,7 +232,7 @@ class RequestSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             projection.inverse_workflow(workflow.replace('"sf03-b1-csrf-core.log":15', '"sf03-b1-csrf-core.log":16', 1))
         self.assertIn('set -euo pipefail', workflow)
-        changed = workflow.replace('set -euo pipefail', 'set -eu pipefail', 1)
+        changed = workflow + '# unrelated workflow drift\n'
         self.assertNotEqual(hashlib.sha256(projection.inverse_workflow(changed).encode()).hexdigest(), BASE_WORKFLOW_SHA)
 
     def test_session_wait_inventory_is_exact_without_replacing_base_digest(self):

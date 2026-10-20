@@ -190,6 +190,8 @@ B1_STEP = """      - name: Check owned BrowserLogin business stage and cancellat
           python -B scripts/tests/test_browser_login_stage_backport.py
           cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
 """
+B1_NATIVE_STEP = B1_STEP.replace(
+    '          python -B scripts/tests/test_browser_login_stage_backport.py\n', '')
 
 CHILD_TOKENS = {'dispatch': 'e15ba0fc1b4f45cabc893904d0028d51d2cda49edb8d83e236f3efc5d78e263f', 'stage': '61dbb99d727253ac4050226806d00e6e6807a2e1cfee93cdcd75c6a756c358cc', 'public': '95e8a9f83c93c7bb03ddff48d0d01ef104985b3e5cf5621c4d5369fbef5a2378'}
 INVERSE_PUBLIC_SOURCE_SHA256 = 'cc30e6fe54b83806728c40215b091ab5495e0c6a828cdeee033b623f9a134dbf'
@@ -394,7 +396,13 @@ class BackportSourceTests(unittest.TestCase):
     def test_workflow_is_only_two_required_native_steps_and_frozen_sources_remain(self):
         workflow = read('.github/workflows/ci.yml')
         profile_step = projection.BROWSER_COUNTER_PROFILE_STEP
-        self.assertEqual(workflow.count(B1_STEP), 2)
+        self.assertEqual(workflow.count(projection.CI_SOURCE_GUARD_STEP), 1)
+        self.assertEqual(workflow.count(B1_STEP), 0)
+        self.assertEqual(workflow.count(B1_NATIVE_STEP), 2)
+        for line in (*projection.CI_SOURCE_GUARD_LINES, projection.CI_BROWSER_SOURCE_LINE):
+            self.assertEqual(workflow.count(line), 1)
+        self.assertEqual(workflow.count('          python -B scripts/tests/test_sf07_owned_state_summary.py\n'), 2)
+        self.assertEqual(workflow.count('          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary\n'), 2)
         self.assertEqual(workflow.count(profile_step), 1)
         _, linux_tail = workflow.split('  linux:\n', 1)
         linux_job, following_jobs = linux_tail.split('\n  release-plan:', 1)
@@ -432,6 +440,7 @@ class BackportSourceTests(unittest.TestCase):
         self.assertNotIn('RUSTFLAGS', profile_step)
         self.assertNotIn('--test-threads', profile_step)
         restored = _inverse_reviewed_workflow_residuals(workflow)
+        self.assertEqual(restored.count(B1_STEP), 2)
         self.assertEqual(hashlib.sha256(restored.replace(B1_STEP, '').encode()).hexdigest(), PRODUCTION_WORKFLOW_CHILD)
         mutants = (
             profile_step.replace('-- --list', '--', 1),
@@ -459,6 +468,49 @@ class BackportSourceTests(unittest.TestCase):
         http_sha = projection.HTTP_AFTER
         self.assertEqual(workflow.count("'runtime/src/http_server.rs': '" + http_sha + "'"), 2)
         self.assertEqual(read('scripts/ci/session_private_deadline_diagnostic.py').count('expected_digest = "' + http_sha + '"'), 1)
+
+
+    def test_early_source_guard_is_exact_and_package_matrix_waits_for_it(self):
+        workflow = read('.github/workflows/ci.yml')
+        source_step = projection.CI_SOURCE_GUARD_STEP
+        package_gate = projection.CI_NAGI_PACKAGE_CURRENT_GATE
+        self.assertEqual(workflow.count(source_step), 1)
+        self.assertEqual(workflow.count(package_gate), 1)
+        for line in (*projection.CI_SOURCE_GUARD_LINES, projection.CI_BROWSER_SOURCE_LINE):
+            self.assertEqual(workflow.count(line), 1)
+        self.assertEqual(workflow.count(projection.CI_SF07_STEP_ANCHOR), 2)
+        self.assertEqual(workflow.count(projection.CI_BROWSER_STEP_ANCHOR), 2)
+        self.assertEqual(workflow.count('          python -B scripts/tests/test_sf07_owned_state_summary.py\n'), 2)
+        self.assertEqual(
+            workflow.count('          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary\n'),
+            2,
+        )
+        restored = _inverse_reviewed_workflow_residuals(workflow)
+        self.assertEqual(restored.count(B1_STEP), 2)
+        self.assertEqual(hashlib.sha256(restored.replace(B1_STEP, '').encode()).hexdigest(), PRODUCTION_WORKFLOW_CHILD)
+
+        setup = projection.CI_CHANGES_SETUP
+        moved = workflow.replace(source_step, '', 1)
+        moved = moved.replace(setup, source_step + setup, 1)
+        mutants = (
+            ('missing source step', workflow.replace(source_step, '', 1)),
+            ('duplicate source step', workflow.replace(source_step, source_step + source_step, 1)),
+            ('edited source command', workflow.replace('test_sf07_wire_source.py', 'test_sf07_wire_src.py', 1)),
+            ('moved source step before Python setup', moved),
+            ('duplicated per-OS source command', workflow.replace(
+                '          if [ "$RUNNER_OS" = "Windows" ]; then\n',
+                projection.CI_SOURCE_GUARD_LINES[0] + '          if [ "$RUNNER_OS" = "Windows" ]; then\n', 1)),
+            ('missing changes dependency', workflow.replace(
+                package_gate, package_gate.replace('needs: [changes, release-plan]', 'needs: release-plan', 1), 1)),
+            ('missing explicit changes success condition', workflow.replace(
+                package_gate, package_gate.replace("needs.changes.result == 'success' && ", '', 1), 1)),
+            ('changed package selector', workflow.replace(
+                package_gate, package_gate.replace('outputs.package_nagi', 'outputs.package_vscode', 1), 1)),
+        )
+        for label, mutant in mutants:
+            with self.subTest(label=label, mutant_sha=hashlib.sha256(mutant.encode()).hexdigest()):
+                with self.assertRaises(ValueError):
+                    projection.inverse_workflow(mutant)
 
 
     def test_sf07_profile_color_override_is_required_and_step_bound(self):

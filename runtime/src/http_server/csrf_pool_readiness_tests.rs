@@ -130,6 +130,51 @@ impl StartupServer {
             (status, cookie, body.to_owned())
         }).await.expect("HTTP startup calibration watchdog; never a successful timeout oracle")
     }
+    // Setup must not spend the worker2 gate reserved for the /write control.
+    // Observe it without granting a new deadline or accepting a delayed setup.
+    async fn bootstrap_request(
+        &self,
+        startup: &sqlite::HttpStartupTest,
+        pool: &sqlite::Pool,
+        stage: &'static str,
+        method: &str,
+        path: &str,
+        headers: &str,
+    ) -> (u16, String, String) {
+        let started = Instant::now();
+        let response = self.request(method, path, headers);
+        tokio::pin!(response);
+        let response = tokio::select! {
+            biased;
+            _ = startup.wait() => {
+                let created = startup.created();
+                let idle = startup.idle(pool);
+                eprintln!(
+                    "b1_startup_bootstrap_gate stage={stage} created={created} idle={idle} elapsed_us={}",
+                    started.elapsed().as_micros(),
+                );
+                startup.release();
+                let (status, _, _) = response.await;
+                panic!(
+                    "bootstrap worker2 gate: stage={stage} created={created} idle={idle} drained_status={status} elapsed_us={}",
+                    started.elapsed().as_micros(),
+                );
+            }
+            response = &mut response => response,
+        };
+        let created = startup.created();
+        let idle = startup.idle(pool);
+        eprintln!(
+            "b1_startup_bootstrap stage={stage} status={} created={created} idle={idle} elapsed_us={}",
+            response.0,
+            started.elapsed().as_micros(),
+        );
+        assert_eq!(
+            created, 1,
+            "bootstrap worker2 selection: stage={stage} idle={idle}"
+        );
+        response
+    }
     async fn stop(mut self) -> bool {
         if let Some(stopped) = self.stopped.take() {
             let _ = stopped.send(());
@@ -184,10 +229,10 @@ async fn startup_case(ready: bool) {
         let (running, state) = StartupServer::new(&store, &csrf, options).await;
         server = Some(running);
         let running = server.as_ref().unwrap();
-        let (issued, cookie, _) = running.request("POST", "/issue", "Authorization: Bearer owned\r\n").await;
+        let (issued, cookie, _) = running.bootstrap_request(&startup, &pool, "issue", "POST", "/issue", "Authorization: Bearer owned\r\n").await;
         assert_eq!(issued, 200);
         assert!(!cookie.is_empty());
-        let (delivered, _, body) = running.request("GET", "/csrf", &format!("Cookie: {cookie}\r\n")).await;
+        let (delivered, _, body) = running.bootstrap_request(&startup, &pool, "csrf", "GET", "/csrf", &format!("Cookie: {cookie}\r\n")).await;
         assert_eq!(delivered, 200);
         let json: crate::serde_json::Value = crate::serde_json::from_str(&body).unwrap();
         let token = json["csrf_token"].as_str().unwrap();

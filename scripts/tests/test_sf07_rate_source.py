@@ -16,6 +16,10 @@ SCRIPT = ROOT / 'scripts/ci/sf07_checkpoint_summary.py'
 spec = importlib.util.spec_from_file_location('rate_summary', SCRIPT)
 summary = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(summary)
+projection_spec = importlib.util.spec_from_file_location(
+    'rate_projection', ROOT / 'scripts/ci/sf07_request_projection.py')
+projection = importlib.util.module_from_spec(projection_spec)
+projection_spec.loader.exec_module(projection)
 
 
 def fixture():
@@ -68,8 +72,11 @@ class RateSourceTests(unittest.TestCase):
         self.assertIn('pub(crate) mod startup_rate;',
                       (ROOT/'runtime/src/security_sf07_private/mod.rs').read_text())
         workflow = (ROOT/'.github/workflows/ci.yml').read_text()
-        self.assertEqual(workflow.count('python -B scripts/tests/test_sf07_rate_source.py'), 2)
+        source_command = 'python -B scripts/tests/test_sf07_rate_source.py'
+        self.assertEqual(workflow.count(source_command), 1)
         self.assertEqual(workflow.count('| python -B scripts/ci/sf07_checkpoint_summary.py rate-startup'), 2)
+        restored = projection.inverse_source_guard_dedup(workflow)
+        self.assertEqual(restored.count(source_command), 2)
 
     def test_closed_parser_rejects_missing_foreign_ignored_and_wrong_counts(self):
         raw = fixture()

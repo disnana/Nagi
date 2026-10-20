@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MAIN_REF = "refs/heads/main"
 COMPONENTS = ("nagi", "vscode", "jetbrains")
 JOBS = ("changes", "linux", "rust-1-88", "sf08-browser", "release-plan",
-        "jetbrains", "vscode-package", "nagi-package")
+        "jetbrains", "vscode-package", "nagi-package", "nagi-regression")
 ALLOWED_NAMES = {
     "github.event_name", "github.ref", "needs.changes.result",
     "needs.linux.result", "needs.rust-1-88.result", "needs.release-plan.result",
@@ -20,6 +20,7 @@ ALLOWED_NAMES = {
     "needs.release-plan.outputs.release_vscode",
     "needs.release-plan.outputs.release_jetbrains",
     "needs.jetbrains.result", "needs.vscode-package.result", "needs.nagi-package.result",
+    "needs.nagi-regression.result", "needs.release-plan.outputs.package_nagi",
 }
 TOKEN = re.compile(
     r"\s+|&&|\|\||==|!=|[()]|'[^']*'|"
@@ -166,7 +167,11 @@ def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None):
         "jetbrains": {"result": results.get("jetbrains", "success")},
         "vscode-package": {"result": results.get("vscode-package", "success")},
         "nagi-package": {"result": results.get("nagi-package", "success")},
+        "nagi-regression": {"result": results.get("nagi-regression",
+            "skipped" if results.get("nagi-package") == "skipped" else "success")},
     }
+    needs["release-plan"]["outputs"]["package_nagi"] = (
+        "false" if results.get("nagi-package") == "skipped" else "true")
     return {"github": {"event_name": event, "ref": ref}, "needs": needs}
 
 
@@ -440,6 +445,29 @@ class PublishConditionTests(unittest.TestCase):
                             or (linux_status, rust_status, browser_status) == ("skipped", "skipped", "skipped")
                         )
                         self.assertEqual(evaluate(self.expression, context), expected)
+
+    def test_nagi_regression_plan_and_result_must_match_exactly(self):
+        for planned in ("true", "false", None, "", True, False):
+            for result in ("success", "skipped", "failure", "cancelled", "", None):
+                with self.subTest(planned=planned, result=result):
+                    context = fixture(releases=("nagi",))
+                    context["needs"]["release-plan"]["outputs"]["package_nagi"] = planned
+                    context["needs"]["nagi-regression"]["result"] = result
+                    expected = (planned, result) == ("true", "success")
+                    self.assertEqual(evaluate(self.expression, context), expected)
+        # A release of another component may skip the unplanned Nagi shard.
+        context = fixture(releases=("vscode",))
+        context["needs"]["release-plan"]["outputs"]["package_nagi"] = "false"
+        context["needs"]["nagi-regression"]["result"] = "skipped"
+        self.assertTrue(evaluate(self.expression, context))
+        context = fixture(releases=("nagi",))
+        del context["needs"]["nagi-regression"]
+        with self.assertRaisesRegex(ValueError, "Unknown fixture name"):
+            evaluate(self.expression, context)
+        context = fixture(releases=("nagi",))
+        del context["needs"]["release-plan"]["outputs"]["package_nagi"]
+        with self.assertRaisesRegex(ValueError, "Unknown fixture name"):
+            evaluate(self.expression, context)
 
     def test_release_plan_must_succeed_even_if_required_packages_succeeded(self):
         for status in ("skipped", "failure", "cancelled"):

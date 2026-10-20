@@ -185,6 +185,10 @@ class OwnedStateSummaryTests(unittest.TestCase):
                          "643c31aa2c66ac769a3cd478c5bdd57f324f058ba9a314352927b0e63dc4409d")
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         p = projection()
+        restored = p.inverse_source_guard_dedup(workflow)
+        self.assertEqual(workflow.count("python -B scripts/tests/test_sf07_wire_source.py"), 1)
+        self.assertEqual(restored.count("python -B scripts/tests/test_sf07_wire_source.py"), 2)
+        self.assertEqual(workflow.count("python -B scripts/tests/test_sf07_owned_state_summary.py"), 2)
         for mode in summary.EXPECTED:
             self.assertEqual(workflow.count("| python -B scripts/ci/sf07_checkpoint_summary.py " + mode + "\n"), 2)
         self.assertEqual(workflow.count(p.OWNED_STATE_CI_ADDITIONS[0]), 2)
@@ -290,7 +294,7 @@ class OwnedStateSummaryTests(unittest.TestCase):
         private_mutant = workflow.replace(p.PRIVATE_CORE_COLOR_COMMAND, p.PRIVATE_CORE_COLOR_BASELINE, 1)
         with self.assertRaises(ValueError):
             p.inverse_workflow(private_mutant)
-        changed = workflow.replace("set -euo pipefail", "set -eu pipefail", 1)
+        changed = workflow + '# unrelated workflow drift\n'
         self.assertNotEqual(hashlib.sha256(p.inverse_workflow(changed).encode()).hexdigest(),
                             BASE_WORKFLOW_SHA256)
 

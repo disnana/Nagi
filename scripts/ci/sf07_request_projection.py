@@ -1,6 +1,18 @@
 """Historical U1 inverses and reviewed U4 production profiles; no native proof."""
 import hashlib
 import re
+import importlib.util
+from pathlib import Path
+
+_PARALLEL_SPEC = importlib.util.spec_from_file_location(
+    "parallel_regression_projection", Path(__file__).with_name("parallel_regression_projection.py"))
+_PARALLEL = importlib.util.module_from_spec(_PARALLEL_SPEC)
+_PARALLEL_SPEC.loader.exec_module(_PARALLEL)
+
+_B1_SPEC = importlib.util.spec_from_file_location(
+    "b1_bootstrap_observation", Path(__file__).with_name("b1_bootstrap_observation.py"))
+_B1 = importlib.util.module_from_spec(_B1_SPEC)
+_B1_SPEC.loader.exec_module(_B1)
 
 
 def norm(source):
@@ -237,7 +249,113 @@ PUBLISH_IF_WITHOUT_SF08 = """    if: >-
 """
 
 
+CI_SOURCE_GUARD_STEP = """      - name: Check OS-independent SF07 and BrowserLogin source guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf07_wire_source.py
+          python -B scripts/tests/test_sf07_transport_source.py
+          python -B scripts/tests/test_sf07_request_source.py
+          python -B scripts/tests/test_sf07_rate_source.py
+          python -B scripts/tests/test_sf07_checkpoint_summary.py
+          python -B scripts/tests/test_browser_login_stage_backport.py
+"""
+CI_SOURCE_GUARD_LINES = (
+    '          python -B scripts/tests/test_sf07_wire_source.py\n',
+    '          python -B scripts/tests/test_sf07_transport_source.py\n',
+    '          python -B scripts/tests/test_sf07_request_source.py\n',
+    '          python -B scripts/tests/test_sf07_rate_source.py\n',
+    '          python -B scripts/tests/test_sf07_checkpoint_summary.py\n',
+)
+CI_BROWSER_SOURCE_LINE = '          python -B scripts/tests/test_browser_login_stage_backport.py\n'
+CI_CHANGES_SETUP = """      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+"""
+CI_NAGI_PACKAGE_CURRENT_GATE = """  nagi-package:
+    needs: [changes, release-plan]
+    if: >-
+      always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
+      needs.release-plan.outputs.package_nagi == 'true'
+"""
+CI_NAGI_PACKAGE_BASE_GATE = """  nagi-package:
+    needs: release-plan
+    if: needs.release-plan.outputs.package_nagi == 'true'
+"""
+CI_SF07_STEP_ANCHOR = """      - name: Check SF07 charged native wire checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ \"$RUNNER_OS\" = \"Windows\" ]; then
+"""
+CI_SF07_STEP_RESTORED = """      - name: Check SF07 charged native wire checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf07_wire_source.py
+          python -B scripts/tests/test_sf07_transport_source.py
+          python -B scripts/tests/test_sf07_request_source.py
+          python -B scripts/tests/test_sf07_rate_source.py
+          python -B scripts/tests/test_sf07_checkpoint_summary.py
+          if [ \"$RUNNER_OS\" = \"Windows\" ]; then
+"""
+CI_BROWSER_STEP_ANCHOR = """      - name: Check owned BrowserLogin business stage and cancellation witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
+"""
+CI_BROWSER_STEP_RESTORED = """      - name: Check owned BrowserLogin business stage and cancellation witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_browser_login_stage_backport.py
+          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
+"""
+
+
+def inverse_source_guard_dedup(source):
+    # Restore the reviewed per-OS source calls and package dependency before
+    # applying older inverses. The new early step is exact, unique, and located
+    # immediately after Python setup in the existing changes gate. Keeping this
+    # normalization separate lets source guards inspect their historical
+    # two-platform registration contract while still rejecting any drift in
+    # the deduplicated workflow itself.
+    if source.count(CI_SOURCE_GUARD_STEP) != 1:
+        raise ValueError('early CI source guard registration mismatch')
+    for line in (*CI_SOURCE_GUARD_LINES, CI_BROWSER_SOURCE_LINE):
+        if source.count(line) != 1:
+            raise ValueError('early CI source guard command inventory mismatch')
+    changes_header = '  changes:\n'
+    if source.count(changes_header) != 1:
+        raise ValueError('changes job anchor mismatch')
+    changes_start = source.index(changes_header)
+    next_job = re.search(r'(?m)^  [A-Za-z0-9_-]+:\n', source[changes_start + len(changes_header):])
+    if next_job is None:
+        raise ValueError('changes job boundary mismatch')
+    changes_end = changes_start + len(changes_header) + next_job.start()
+    changes_block = source[changes_start:changes_end]
+    if changes_block.count(CI_CHANGES_SETUP + CI_SOURCE_GUARD_STEP) != 1:
+        raise ValueError('early CI source guard placement mismatch')
+    source = source.replace(CI_SOURCE_GUARD_STEP, '', 1)
+
+    if source.count(CI_NAGI_PACKAGE_CURRENT_GATE) != 1:
+        raise ValueError('nagi-package changes gate mismatch')
+    source = source.replace(CI_NAGI_PACKAGE_CURRENT_GATE, CI_NAGI_PACKAGE_BASE_GATE, 1)
+
+    if source.count(CI_SF07_STEP_ANCHOR) != 2:
+        raise ValueError('per-OS SF07 native step anchor mismatch')
+    source = source.replace(CI_SF07_STEP_ANCHOR, CI_SF07_STEP_RESTORED, 2)
+    if source.count(CI_BROWSER_STEP_ANCHOR) != 2:
+        raise ValueError('per-OS BrowserLogin native step anchor mismatch')
+    source = source.replace(CI_BROWSER_STEP_ANCHOR, CI_BROWSER_STEP_RESTORED, 2)
+    return source
+
+
 def inverse_workflow(source):
+    source = _B1.inverse_failure_diagnostic(source)
+    source = _PARALLEL.inverse_workflow(source)
+    source = inverse_source_guard_dedup(source)
     for added, inherited, label in (
         (SF08_BROWSER_JOB, '', 'SF08 browser reusable job'),
         (READY_NEEDS_WITH_SF08, READY_NEEDS_WITHOUT_SF08, 'ready dependencies'),

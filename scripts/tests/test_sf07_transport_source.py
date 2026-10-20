@@ -50,7 +50,9 @@ class TransportSourceTests(unittest.TestCase):
                          {"http_server::response_send::tests::" + name for name in names})
         workflow = text(".github/workflows/ci.yml")
         self.assertEqual(workflow.count("| python -B scripts/ci/sf07_checkpoint_summary.py transport"), 2)
-        self.assertEqual(workflow.count("python -B scripts/tests/test_sf07_transport_source.py"), 2)
+        self.assertEqual(workflow.count("python -B scripts/tests/test_sf07_transport_source.py"), 1)
+        restored = projection.inverse_source_guard_dedup(workflow)
+        self.assertEqual(restored.count("python -B scripts/tests/test_sf07_transport_source.py"), 2)
 
     def test_original_http_production_path_and_all_frozen_digest_copies(self):
         http = (ROOT/"runtime/src/http_server.rs").read_bytes().replace(b"\r\n", b"\n")
