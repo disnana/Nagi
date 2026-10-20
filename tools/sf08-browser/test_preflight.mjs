@@ -1554,6 +1554,36 @@ test('one-shot event observations classify once, cap at32, and never serialize c
   assert.equal(records[0].trace.length, 34);
 });
 
+test('text fingerprint is bounded owned failure metadata and never certificate proof', async () => {
+  const text = 'Failed to load resource: unit PRIVATE_SENTINEL transport failure';
+  let locationReads = 0;
+  const accessor = {};
+  Object.defineProperty(accessor, 'url', { get() { locationReads++; throw new Error('PRIVATE_SENTINEL'); } });
+  const variants = [
+    { name: 'owned bounded text', override: { text }, expected: createHash('sha256').update(text).digest('hex') },
+    { name: 'oversize text', override: { text: 'x'.repeat(1025) } },
+    { name: 'oversize UTF8', override: { text: '界'.repeat(400) } },
+    { name: 'foreign location', override: { text, location: { url: 'https://private.invalid/' } } },
+    { name: 'accessor location', override: { text, location: accessor } },
+    { name: 'arguments present', override: { text, args: ['PRIVATE_SENTINEL'] } },
+    { name: 'wrong type', override: { text, type: 'log' } },
+  ];
+  for (const item of variants) {
+    const records = [];
+    const f = hostBrowser({ duringGoto: ({ page, endpoint }) => {
+      page.emit('console', webkitConsoleError(endpoint.url, item.override));
+    } });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
+      (kind, trace, fingerprint) => records.push({ kind, trace, fingerprint })), false, item.name);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].kind, 'console_malformed');
+    assert.equal(records[0].fingerprint, item.expected, item.name);
+    assert.match(records[0].trace, /^[ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_0$/);
+    assert.doesNotMatch(JSON.stringify(records), /PRIVATE_SENTINEL|private\.invalid/);
+  }
+  assert.equal(locationReads, 0, 'diagnostics never invoke a location getter skipped by the original text comparison');
+});
+
 test('one-shot R5 duplicate missing wrong SNI TCP and request events veto', async () => {
   for (const mode of ['no_sni', 'wrong_sni', 'duplicate_sni', 'duplicate_tcp', 'bad_receiver', 'wrong_tuple']) {
     const f = await hostPeerFixture(); f.connect();

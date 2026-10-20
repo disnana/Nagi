@@ -249,9 +249,14 @@ export function checkedFailure(stage, engine) {
     stage.match(/^(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_[01])$/);
   const observed = observation && observation[0] === stage && engine === 'webkit' && FAILURE_STAGES.includes(observation[1]) &&
     validWebkitEventTrace(observation[2]);
+  const textObservation = typeof stage === 'string' && stage.length <= 192 &&
+    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_console_malformed)_events_([ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_[01])_text_([a-f0-9]{64})$/);
+  const observedText = textObservation && textObservation[0] === stage && engine === 'webkit' &&
+    FAILURE_STAGES.includes(textObservation[1]) && validWebkitEventTrace(textObservation[2]) &&
+    textObservation[2].slice(0, -2).includes('X');
   const peerFingerprint = typeof stage === 'string' && stage.length <= 108 &&
     stage.match(/^engine_wrong_(?:ca|host)_one_shot_peer_code_sha256_[a-f0-9]{64}$/)?.[0] === stage;
-  if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage) && !peerFingerprint && !observed) || !FAILURE_ENGINES.includes(engine) ||
+  if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage) && !peerFingerprint && !observed && !observedText) || !FAILURE_ENGINES.includes(engine) ||
       (stage.startsWith('engine_') !== (engine !== 'none')) ||
       (FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'firefox') ||
       (WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||

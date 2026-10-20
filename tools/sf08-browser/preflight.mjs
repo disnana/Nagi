@@ -974,7 +974,7 @@ export function validWebkitEventTrace(value) {
 
 async function probeWebkitCertificate(browser, factory, until, diagnose, profile) {
   const events = [];
-  let eventOverflow = false, eventsClosed = false;
+  let eventOverflow = false, eventsClosed = false, textFingerprint;
   const event = kind => {
     if (eventsClosed) return;
     if (events.length < 32) events.push(kind);
@@ -1044,7 +1044,25 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         else if (text !== WEBKIT_CONSOLE_RESOURCE_ERROR) mismatch = 'X';
         else if (!location || location.url !== endpoint.url) mismatch = 'L';
         else if (!Array.isArray(args) || args.length !== 0) mismatch = 'A';
-        if (mismatch) { event(mismatch); hardVeto('console_malformed'); return; }
+        if (mismatch) {
+          event(mismatch); hardVeto('console_malformed');
+          // Failure-only identity, never proof. Do not invoke location/length
+          // accessors skipped by the original text-mismatch short circuit.
+          if (mismatch === 'X' && textFingerprint === undefined && type === 'error' &&
+              typeof text === 'string' && text.length <= 1024) {
+            try {
+              const owner = Object.getOwnPropertyDescriptor(endpoint, 'url');
+              const where = location && typeof location === 'object' && Object.getOwnPropertyDescriptor(location, 'url');
+              const count = Array.isArray(args) && Object.getOwnPropertyDescriptor(args, 'length');
+              if (owner && Object.hasOwn(owner, 'value') && typeof owner.value === 'string' &&
+                  where && Object.hasOwn(where, 'value') && where.value === owner.value &&
+                  count && Object.hasOwn(count, 'value') && count.value === 0 &&
+                  Buffer.byteLength(text, 'utf8') <= 1024)
+                textFingerprint = createHash('sha256').update(text, 'utf8').digest('hex');
+            } catch {} // Diagnostic failure cannot clear the original veto.
+          }
+          return;
+        }
         event('E');
         consoleCertificateProof = true;
         signalConsoleWait(true);
@@ -1124,7 +1142,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     try { hostBudget(until); } catch { failure('deadline'); good = false; }
   }
   if (!(good && !bad)) {
-    try { if (typeof diagnose === 'function') diagnose(firstFailure ?? 'unknown', events.join('') + '_' + (eventOverflow ? '1' : '0')); } catch {}
+    try { if (typeof diagnose === 'function') diagnose(firstFailure ?? 'unknown', events.join('') + '_' + (eventOverflow ? '1' : '0'), textFingerprint); } catch {}
   }
   return good && !bad;
 }
@@ -1166,17 +1184,21 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
         checkpoint(reason === 'ca' ? 'engine_wrong_ca' : 'engine_wrong_host', name);
         const factory = reason === 'host' ? wrongHostFactory : wrongCAFactory;
         if (name === 'webkit' && factory !== undefined) {
-          let detail = 'unknown', eventTrace;
+          let detail = 'unknown', eventTrace, textFingerprint;
           const probe = reason === 'host' ? probeWebkitWrongHost : probeWebkitWrongCA;
           const stages = reason === 'host' ? HOST_FAILURE_STAGES : CA_FAILURE_STAGES;
           if (!await probe(browser, factory, performance.now() + 10000,
-            (kind, trace) => {
+            (kind, trace, fingerprint) => {
               if (hostDiagnosticKind(kind)) detail = kind;
               if (validWebkitEventTrace(trace)) eventTrace = trace;
+              if (typeof fingerprint === 'string' && fingerprint.length === 64 && /^[a-f0-9]{64}$/.test(fingerprint))
+                textFingerprint = fingerprint;
             })) {
             const fingerprint = peerCodeFingerprintKind(detail);
             const base = fingerprint ? `engine_wrong_${reason}_one_shot_${detail}` : stages[detail];
-            checkpoint(eventTrace !== undefined && !fingerprint ? `${base}_events_${eventTrace}` : base, name);
+            const observed = eventTrace !== undefined && !fingerprint ? `${base}_events_${eventTrace}` : base;
+            const text = detail === 'console_malformed' && eventTrace?.slice(0, -2).includes('X') && textFingerprint;
+            checkpoint(text ? `${observed}_text_${textFingerprint}` : observed, name);
             refuse();
           }
           continue;

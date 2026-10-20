@@ -1,0 +1,10 @@
+name: SF08 console text observation
+on:
+  push:
+    branches:
+      - test/nagi020-webkit-console-20261020
+permissions:
+  contents: read
+jobs:
+  browser:
+    uses: ./.github/workflows/sf08-browser.yml
