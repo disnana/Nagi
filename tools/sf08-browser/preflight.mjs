@@ -961,13 +961,15 @@ export async function probeWebkitWrongCA(browser, factory, until, diagnose) {
 // Failure-only event vocabulary. Each console callback has exactly one of
 // E/T/X/L/A/Z/U/I (exact/type/text/location/args/accessor/duplicate/not-live).
 // G/N/V navigation start/rejected/returned; R/M requestfailed/bound request;
+// Q exact certificate text after M; M without Q means generic cancellation
+// only in a complete trace (overflow must be0).
 // S/F/B/Y finish start/true/false/fault; W/D original wait/deadline;
 // P/C response/lifecycle veto; J/K/H join start/true/false; O observation end.
 // F is observed JS continuation order, not a browser/native timestamp.
-export const WEBKIT_EVENT_CODES = 'ETXLAZUIRMNGVSFBYWDPCJKHO';
+export const WEBKIT_EVENT_CODES = 'ETXLAZUIRMNGVSFBYWDPCJKHOQ';
 export function validWebkitEventTrace(value) {
   const match = typeof value === 'string' && value.length <= 34 &&
-    value.match(/^[ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_[01]$/);
+    value.match(/^[ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01]$/);
   return Boolean(match && match[0] === value &&
     (!value.endsWith('_1') || value.length === 34));
 }
@@ -986,7 +988,8 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     const remaining = Math.floor(until - performance.now());
     note(!Number.isFinite(remaining) || remaining < 1 || remaining > 10000 ? 'deadline' : kind);
   };
-  let context, page, endpoint, bad = false, requests = 0, failed, good = false;
+  let context, page, endpoint, bad = false, consolePoison = false, privateExactAlert = false,
+    requests = 0, failed, good = false;
   let wakeConsoleWait;
   let consoleWaitSettled = false;
   const consoleWait = new Promise(resolve => { wakeConsoleWait = resolve; });
@@ -999,6 +1002,9 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     if (kind === 'lifecycle') event('C');
     if (kind === 'response') event('P');
     failure(kind); bad = true; signalConsoleWait(false);
+  };
+  const poisonConsole = () => {
+    failure('console_malformed'); consolePoison = true; signalConsoleWait(false);
   };
   const listeners = [];
   const listen = (target, event, callback) => { target.on(event, callback); listeners.push({ target, event, callback }); };
@@ -1033,7 +1039,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
       try { live(); }
       catch { event('I'); failure('deadline'); bad = true; signalConsoleWait(false); return; }
       try {
-        if (consoleEvents !== 1) { event('U'); hardVeto('console_malformed'); return; }
+        if (consoleEvents !== 1) { event('U'); poisonConsole(); return; }
         const type = message.type();
         const text = message.text();
         const location = message.location();
@@ -1045,7 +1051,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         else if (!location || location.url !== endpoint.url) mismatch = 'L';
         else if (!Array.isArray(args) || args.length !== 0) mismatch = 'A';
         if (mismatch) {
-          event(mismatch); hardVeto('console_malformed');
+          event(mismatch); poisonConsole();
           // Failure-only identity, never proof. Do not invoke location/length
           // accessors skipped by the original text-mismatch short circuit.
           if (mismatch === 'X' && textFingerprint === undefined && type === 'error' &&
@@ -1066,7 +1072,7 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         event('E');
         consoleCertificateProof = true;
         signalConsoleWait(true);
-      } catch { event('Z'); hardVeto('console_malformed'); }
+      } catch { event('Z'); poisonConsole(); }
     });
     listen(page, 'requestfailed', request => {
       event('R');
@@ -1076,9 +1082,11 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         if (requests !== 1 || request.url() !== endpoint.url || request.isNavigationRequest() !== true ||
             request.frame() !== frame) refuse();
         const failure = request.failure();
-        if (!failure || !['Operation was cancelled', 'Unacceptable TLS certificate'].includes(failure.errorText)) refuse();
+        const failureText = failure ? failure.errorText : undefined;
+        if (!failure || !['Operation was cancelled', 'Unacceptable TLS certificate'].includes(failureText)) refuse();
         failed = request;
         event('M');
+        if (failureText === 'Unacceptable TLS certificate') event('Q'); // Diagnostic only; never a replacement proof.
       } catch { hardVeto('request'); }
     });
     live();
@@ -1105,7 +1113,8 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     event(finished === true ? 'F' : 'B');
     if (finished !== true) refuse();
     live();
-    if (consoleReset?.resetObserved()) {
+    const resetObserved = consoleReset?.resetObserved();
+    if (consoleReset && resetObserved === true) {
       if (requests !== 1 || failed !== boundFailed) refuse();
       if (!consoleCertificateProof) {
         event('W');
@@ -1117,6 +1126,14 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         if (finished !== true || !consoleCertificateProof || consoleEvents !== 1 ||
             requests !== 1 || failed !== boundFailed) refuse();
       }
+    } else if (consoleReset && resetObserved === false) {
+      // Only the private production endpoint's successful non-reset finish
+      // carries the exact native alert fact. Console format is independent on
+      // this branch; the global request/response/lifecycle/deadline/native
+      // vetoes remain live and are still checked below and after endpoint join.
+      privateExactAlert = true;
+    } else if (consoleReset) {
+      refuse();
     }
     live();
     good = true;
@@ -1135,6 +1152,11 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     // Lifecycle vetoes remain armed through actual endpoint join. Detach only
     // these owned callbacks before intentional page/context teardown.
     for (const { target, event, callback } of listeners) { try { target.off(event, callback); } catch { failure('cleanup'); good = false; } }
+    // Check after owned listener removal because EventEmitter removeListener
+    // hooks can synchronously emit console events while the console callback is
+    // still attached. Only the private successful non-reset native proof is
+    // console-independent; reset and custom endpoint branches retain poison.
+    if (consolePoison && !privateExactAlert) { failure('console_malformed'); good = false; }
     event('O');
     eventsClosed = true;
     if (page) { try { await hostWithin(page.close(), until); } catch { failure('cleanup'); good = false; } }

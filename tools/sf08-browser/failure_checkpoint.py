@@ -103,14 +103,14 @@ WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES = {
 ENGINES = {'none','chromium','firefox','webkit'}
 
 
-WEBKIT_EVENT_CODES = 'ETXLAZUIRMNGVSFBYWDPCJKHO'
+WEBKIT_EVENT_CODES = 'ETXLAZUIRMNGVSFBYWDPCJKHOQ'
 
 
 def event_stage(stage, engine):
     if type(stage) is not str or len(stage) > 192 or engine != 'webkit':
         return False
     match = re.fullmatch(
-        r'(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32})_([01])(?:_text_([a-f0-9]{64}))?', stage)
+        r'(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32})_([01])(?:_text_([a-f0-9]{64}))?', stage)
     return bool(match and match[1] in STAGES and
                 (match[3] == '0' or len(match[2]) == 32) and
                 ((match[4] is None and len(stage) <= 108) or

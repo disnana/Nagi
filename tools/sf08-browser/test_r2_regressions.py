@@ -59,13 +59,13 @@ class R2Tests(unittest.TestCase):
                     f.validate(dict(value,stage=invalid))
 
     def test_bounded_one_shot_event_suffix_is_strict_and_keeps_exact_schema(self):
-        expected_codes = 'ETXLAZUIRMNGVSFBYWDPCJKHO'
+        expected_codes = 'ETXLAZUIRMNGVSFBYWDPCJKHOQ'
         self.assertEqual(f.WEBKIT_EVENT_CODES, expected_codes)
         js = (c.HERE/'preflight.mjs').read_text()
         self.assertIn("export const WEBKIT_EVENT_CODES = '" + expected_codes + "'", js)
         for role in ('ca', 'host'):
             base = f'engine_wrong_{role}_one_shot_deadline'
-            for trace in ('_0', 'GRMNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'*32+'_1'):
+            for trace in ('_0', 'GRMNSFWDJHO_0', 'GRMQNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'*32+'_1'):
                 stage = base + '_events_' + trace
                 value = dict(schema_version=1, stage=stage, engine='webkit')
                 self.assertEqual(f.validate(value), value)

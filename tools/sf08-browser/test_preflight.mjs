@@ -1182,6 +1182,101 @@ test('one-shot R13 exact native alert path remains valid without console witness
   assert.equal(browser.closed(), true);
 });
 
+test('one-shot R18 console poison is branch-local only after the private exact native alert', { timeout: 8000 }, async () => {
+  const cases = [
+    { label: 'malformed before alert', console: (page, url) => page.emit('console', webkitConsoleError(url, { text: 'TLS error' })),
+      beforeAlert: true },
+    { label: 'accessor failure before alert', console: (page, url) => page.emit('console', webkitConsoleError(url, {
+      type: () => { throw new Error('PRIVATE_SENTINEL'); },
+    })), beforeAlert: true },
+    { label: 'duplicate console after exact witness', console: (page, url) => {
+      page.emit('console', webkitConsoleError(url));
+      page.emit('console', webkitConsoleError(url));
+    } },
+  ];
+  for (const role of ['host', 'ca']) for (const item of cases) {
+    const peer = await hostPeerFixture({ role, nodeMirroredErrors: true });
+    const browser = hostBrowser({ role, endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      duringGoto: ({ page }) => {
+        peer.connect(); peer.sni();
+        if (item.beforeAlert) item.console(page, peer.endpoint.url);
+        peer.alert();
+        if (!item.beforeAlert) item.console(page, peer.endpoint.url);
+      } });
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    assert.equal(await probe(browser.browser, browser.factory, peer.until), true, `${role}/${item.label}`);
+    assert.equal(browser.closed(), true, `${role}/${item.label}`);
+    assert.equal(peer.raw.destroyed && peer.socket.destroyed, true, `${role}/${item.label}: actual mock join`);
+    assert.equal(peer.credentials.key, null, `${role}/${item.label}: key released after join`);
+  }
+
+  const exactVetoes = [
+    { label: 'foreign bound request', browser: { foreignURL: true } },
+    { label: 'HTTP response', browser: { httpResponse: true } },
+    { label: 'global lifecycle veto', lifecycle: true },
+    { label: 'failed private finish', nativeError: true },
+    { label: 'failed actual join', peer: { closeHang: true, budget: 60 } },
+  ];
+  for (const item of exactVetoes) {
+    const peer = await hostPeerFixture({ role: 'host', nodeMirroredErrors: true, ...item.peer });
+    const browser = hostBrowser({ ...item.browser, endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      duringGoto: ({ page }) => {
+        page.emit('console', webkitConsoleError(peer.endpoint.url, { text: 'TLS error' }));
+        peer.connect(); peer.sni();
+        if (item.lifecycle) page.emit('crash');
+        peer.alert(item.nativeError ? 'ERR_TLS_HANDSHAKE_TIMEOUT' : undefined);
+      } });
+    assert.equal(await hostProof.probeWebkitWrongHost(browser.browser, browser.factory, peer.until), false, item.label);
+    assert.equal(browser.closed(), true, item.label);
+  }
+
+  let resetPage, resetPeer;
+  resetPeer = await hostPeerFixture({ role: 'host', nodeMirroredErrors: true,
+    beforeServerClose: () => resetPage.emit('console', webkitConsoleError(resetPeer.endpoint.url, { text: 'TLS error' })) });
+  const resetBrowser = hostBrowser({ endpoint: resetPeer.endpoint, text: 'Unacceptable TLS certificate',
+    duringGoto: ({ page }) => {
+      resetPage = page;
+      resetPeer.connect(); resetPeer.sni();
+      page.emit('console', webkitConsoleError(resetPeer.endpoint.url));
+      resetPeer.socket.emit('error', Object.assign(new Error('PRIVATE_SENTINEL'), { code: 'ECONNRESET' }));
+    } });
+  assert.equal(await hostProof.probeWebkitWrongHost(resetBrowser.browser, resetBrowser.factory, resetPeer.until), false,
+    'a duplicate malformed console during the private reset join remains a veto after close');
+  assert.equal(resetBrowser.closed(), true);
+  assert.equal(resetPeer.credentials.key, null, 'reset endpoint join completes before refusing');
+
+  let browser;
+  let consoleListenersAtClose = 0;
+  const stub = { url: 'https://sf08-wronghost.invalid:33005/',
+    async finish() { return true; },
+    async close() {
+      consoleListenersAtClose = browser.page.listenerCount('console');
+      browser.page.emit('console', webkitConsoleError(this.url, { text: 'TLS error' }));
+      return true;
+    } };
+  browser = hostBrowser({ endpoint: stub, text: 'Operation was cancelled' });
+  assert.equal(await hostProof.probeWebkitWrongHost(browser.browser, browser.factory,
+    performance.now() + 1000), false, 'late console poison cannot be hidden by a custom successful close');
+  assert.equal(consoleListenersAtClose, 1, 'console listener remains active through endpoint close');
+});
+
+test('one-shot R19 console poison is checked after synchronous listener-removal callbacks', async () => {
+  let browser, consoleListenersAtRemoval = 0;
+  const stub = { url: 'https://sf08-wronghost.invalid:33005/',
+    async finish() { return true; }, async close() { return true; } };
+  browser = hostBrowser({ endpoint: stub, text: 'Operation was cancelled' });
+  const onRemoveListener = eventName => {
+    if (eventName !== 'close') return;
+    consoleListenersAtRemoval = browser.page.listenerCount('console');
+    browser.page.emit('console', webkitConsoleError(stub.url, { text: 'TLS error' }));
+  };
+  browser.page.on('removeListener', onRemoveListener);
+  const result = await hostProof.probeWebkitWrongHost(browser.browser, browser.factory, performance.now() + 1000);
+  browser.page.off('removeListener', onRemoveListener);
+  assert.equal(consoleListenersAtRemoval, 1, 'console listener is live during earlier listener removal');
+  assert.equal(result, false, 'malformed console emitted by off() cannot bypass the final poison gate');
+});
+
 for (const role of ['host', 'ca']) test(`one-shot R16 Node mirrors the same bound reset Error before the owned TLS error listener (${role})`, { timeout: 5000 }, async () => {
   for (const consoleFirst of [false, true]) {
     const rows = [], peer = await hostPeerFixture({ role, nodeMirroredErrors: true,
@@ -1501,7 +1596,7 @@ test('one-shot R17 delayed console ordering waits only for exact proof within th
     assert.doesNotMatch(JSON.stringify(diagnostics), /PRIVATE_SENTINEL|foreign\.invalid/);
     if (item.expected === false) {
       assert.equal(eventTraces.length, 1, `${item.label}: one bounded failure trace`);
-      assert.match(eventTraces[0], /^[ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_0$/);
+      assert.match(eventTraces[0], /^[ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_0$/);
       const codes = eventTraces[0].slice(0, -2);
       assert.equal(codes.endsWith('O'), true, 'owned observation ended before intentional teardown');
       if (item.event === 'absent') {
@@ -1550,7 +1645,10 @@ test('one-shot event observations classify once, cap at32, and never serialize c
   assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
     (kind, trace) => records.push({ kind, trace })), false);
   assert.equal(records.length, 1);
-  assert.match(records[0].trace, /^GRMEUI{27}_1$/, 'first32 events only; overflow forbids complete-count/absence claims');
+  // Console poison is no longer the global bad bit, so duplicate callbacks
+  // remain truthfully classified as U through the same 32-event cap.
+  assert.match(records[0].trace, /^GRMEU{28}_1$/,
+    'first32 events only; overflow forbids complete-count/absence claims');
   assert.equal(records[0].trace.length, 34);
 });
 
@@ -1578,10 +1676,22 @@ test('text fingerprint is bounded owned failure metadata and never certificate p
     assert.equal(records.length, 1);
     assert.equal(records[0].kind, 'console_malformed');
     assert.equal(records[0].fingerprint, item.expected, item.name);
-    assert.match(records[0].trace, /^[ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_0$/);
+    assert.match(records[0].trace, /^[ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_0$/);
     assert.doesNotMatch(JSON.stringify(records), /PRIVATE_SENTINEL|private\.invalid/);
   }
   assert.equal(locationReads, 0, 'diagnostics never invoke a location getter skipped by the original text comparison');
+});
+
+test('bound request error class is diagnostic only and never substitutes for native proof', async () => {
+  for (const text of ['Operation was cancelled', 'Unacceptable TLS certificate']) {
+    const records = [];
+    const f = hostBrowser({ text, peer: false });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
+      (kind, trace) => records.push({ kind, trace })), false, 'failed native finish remains a refusal');
+    assert.equal(records.length, 1);
+    assert.equal(records[0].trace.includes('Q'), text === 'Unacceptable TLS certificate');
+    assert.match(records[0].trace, /GRMQ?NSBJKO_0/);
+  }
 });
 
 test('one-shot R5 duplicate missing wrong SNI TCP and request events veto', async () => {
@@ -2192,7 +2302,7 @@ test('wrong-CA socket event category reaches its fixed checkpoint and stays refu
     (stage, engine) => checkpoints.push({ stage, engine }), undefined, undefined,
     async (_until, diagnose) => { diagnose('socket_eof'); return endpoint; }),
   /^Error: SF08 browser trust preflight refused$/);
-  assert.deepEqual(checkpoints.at(-1), { stage: 'engine_wrong_ca_one_shot_socket_eof_events_GRMNSBJKO_0', engine: 'webkit' });
+  assert.deepEqual(checkpoints.at(-1), { stage: 'engine_wrong_ca_one_shot_socket_eof_events_GRMQNSBJKO_0', engine: 'webkit' });
   assert.equal(type.trace.closed && type.trace.contextClosed, true);
 });
 

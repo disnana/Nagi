@@ -22,7 +22,7 @@ test('text identity suffix is bounded static WebKit failure metadata only', () =
 test('bounded one-shot event suffix is a strict failure-only WebKit vocabulary', () => {
   for (const role of ['ca', 'host']) {
     const base = `engine_wrong_${role}_one_shot_deadline`;
-    for (const trace of ['_0', 'GRMNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'.repeat(32) + '_1']) {
+    for (const trace of ['_0', 'GRMNSFWDJHO_0', 'GRMQNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'.repeat(32) + '_1']) {
       const stage = `${base}_events_${trace}`;
       assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
       for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine));

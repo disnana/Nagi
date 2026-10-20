@@ -246,11 +246,11 @@ const WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES = [
 export const FAILURE_ENGINES = ['none','chromium','firefox','webkit'];
 export function checkedFailure(stage, engine) {
   const observation = typeof stage === 'string' && stage.length <= 108 &&
-    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_[01])$/);
+    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])$/);
   const observed = observation && observation[0] === stage && engine === 'webkit' && FAILURE_STAGES.includes(observation[1]) &&
     validWebkitEventTrace(observation[2]);
   const textObservation = typeof stage === 'string' && stage.length <= 192 &&
-    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_console_malformed)_events_([ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_[01])_text_([a-f0-9]{64})$/);
+    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_console_malformed)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])_text_([a-f0-9]{64})$/);
   const observedText = textObservation && textObservation[0] === stage && engine === 'webkit' &&
     FAILURE_STAGES.includes(textObservation[1]) && validWebkitEventTrace(textObservation[2]) &&
     textObservation[2].slice(0, -2).includes('X');
