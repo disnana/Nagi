@@ -114,7 +114,7 @@ public final class NagiAssistProcessTest {
                     eof instanceof IOException && eof.getMessage().contains("ended before responding"));
             assertTrue(eof.getMessage(), eof.getMessage().contains("startup failure or unsupported protocol"));
             assertTrue(eof.getMessage(), eof.getMessage().contains("Published nagic 0.1.11 supports normal Check/Run"));
-            assertTrue(eof.getMessage(), eof.getMessage().contains("matching compiler artifact built from this PR source"));
+            assertTrue(eof.getMessage(), eof.getMessage().contains("compiler with the assistance protocol, such as published Nagi 0.2.0 from GitHub Releases"));
         } finally {
             session.close();
             java.nio.file.Files.deleteIfExists(directory);
