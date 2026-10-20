@@ -104,25 +104,50 @@ ENGINES = {'none','chromium','firefox','webkit'}
 
 
 WEBKIT_EVENT_CODES = 'ETXLAZUIRMNGVSFBYWDPCJKHOQ'
-WRONG_HOST_CONSOLE_FORMATS = frozenset({
-    'resource_empty', 'resource_certificate_suffix', 'resource_tls_closed',
-    'resource_tls_handshake', 'resource_tls_read', 'resource_tls_write',
-    'resource_receive', 'resource_http_status', 'resource_other', 'other',
-})
+
+
+def valid_event_timing(trace, encoded):
+    if (type(trace) is not str or not re.fullmatch(
+            rf'[{WEBKIT_EVENT_CODES}]{{0,32}}_[01]', trace)
+            or (trace.endswith('_1') and len(trace) != 34)
+            or type(encoded) is not str):
+        return False
+    count = len(trace) - 2
+    if len(encoded) != count * 3:
+        return False
+    previous = -1
+    for offset in range(0, len(encoded), 3):
+        token = encoded[offset:offset + 3]
+        if token == 'zzz':
+            continue
+        if not re.fullmatch(r'[0-9a-z]{3}', token):
+            return False
+        elapsed = int(token, 36)
+        if elapsed > 10000 or elapsed < previous:
+            return False
+        previous = elapsed
+    return True
 
 
 def event_stage(stage, engine):
-    if type(stage) is not str or len(stage) > 192 or engine != 'webkit':
+    if type(stage) is not str or len(stage) > 320 or engine != 'webkit':
+        return False
+    timed = re.fullmatch(
+        r'(engine_wrong_host_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32})_([01])'
+        r'(?:_text_([a-f0-9]{64}))?_ms_((?:[0-9a-z]{3}){0,32})', stage)
+    if timed:
+        trace = timed[2] + '_' + timed[3]
+        return (timed[1] in STAGES and valid_event_timing(trace, timed[5])
+                and (timed[4] is None or
+                     (timed[1].endswith('_console_malformed') and 'X' in timed[2])))
+    if len(stage) > 192:
         return False
     match = re.fullmatch(
-        r'(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32})_([01])(?:_text_([a-f0-9]{64})(?:_fmt_([a-z_]+))?)?', stage)
+        r'(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32})_([01])(?:_text_([a-f0-9]{64}))?', stage)
     return bool(match and match[1] in STAGES and
                 (match[3] == '0' or len(match[2]) == 32) and
                 ((match[4] is None and len(stage) <= 108) or
-                 (match[4] is not None and match[1].endswith('_console_malformed') and 'X' in match[2])) and
-                (match[5] is None or
-                 (match[1] == 'engine_wrong_host_one_shot_console_malformed' and
-                  match[5] in WRONG_HOST_CONSOLE_FORMATS)))
+                 (match[4] is not None and match[1].endswith('_console_malformed') and 'X' in match[2])))
 
 
 def validate(value, *, outer=False):

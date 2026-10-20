@@ -4,22 +4,6 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { stage, businessConfig, trustEnv, FAILURE_STAGES, checkedFailure } from './browser_stage.mjs';
 
-test('temporary wrong-host format suffix is bounded fixed failure metadata only', () => {
-  const base = 'engine_wrong_host_one_shot_console_malformed_events_GRMNXSFWJKO_0_text_' + 'a'.repeat(64);
-  for (const format of ['resource_empty', 'resource_certificate_suffix', 'resource_tls_closed',
-    'resource_tls_handshake', 'resource_tls_read', 'resource_tls_write', 'resource_receive',
-    'resource_http_status', 'resource_other', 'other']) {
-    const stage = base + '_fmt_' + format;
-    assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
-    for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine));
-    for (const invalid of [stage + '\n', stage + '_extra', stage.replace('wrong_host', 'wrong_ca'),
-      stage.replace('GRMNXSFWJKO', 'GRMNSFWJKO'), stage.replace('console_malformed', 'accepted')])
-      assert.throws(() => checkedFailure(invalid, 'webkit'));
-  }
-  for (const suffix of ['', 'PRIVATE_SENTINEL', 'https://secret.invalid/', 'a'.repeat(193)])
-    assert.throws(() => checkedFailure(base + '_fmt_' + suffix, 'webkit'));
-});
-
 test('text identity suffix is bounded static WebKit failure metadata only', () => {
   const digest = 'a'.repeat(64);
   for (const role of ['ca', 'host']) {
@@ -50,6 +34,44 @@ test('bounded one-shot event suffix is a strict failure-only WebKit vocabulary',
       `engine_wrong_${role}_one_shot_peer_code_sha256_${'a'.repeat(64)}_events_E_0`,
       `engine_wrong_${role}_events_E_0`]) assert.throws(() => checkedFailure(invalid, 'webkit'));
   }
+});
+
+test('temporary wrong-host event timing suffix is closed and cannot change success', () => {
+  const digest = 'a'.repeat(64);
+  const base = 'engine_wrong_host_one_shot_console_malformed';
+  const trace = 'GRMNXSFWJKO_0';
+  const samples = Array.from({ length: 11 }, (_, index) => (index * 7).toString(36).padStart(3, '0')).join('');
+  const stage = `${base}_events_${trace}_text_${digest}_ms_${samples}`;
+  assert.ok(stage.length <= 320);
+  assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+  for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine));
+
+  const overflowTrace = `${'E'.repeat(32)}_1`;
+  const overflow = `engine_wrong_host_one_shot_deadline_events_${overflowTrace}_ms_${'000'.repeat(32)}`;
+  assert.deepEqual(checkedFailure(overflow, 'webkit'), { schema_version: 1, stage: overflow, engine: 'webkit' });
+  const unknown = `engine_wrong_host_one_shot_deadline_events_GRMNSF_0_ms_${'zzz'.repeat(6)}`;
+  assert.deepEqual(checkedFailure(unknown, 'webkit'), { schema_version: 1, stage: unknown, engine: 'webkit' });
+
+  const ca = `engine_wrong_ca_one_shot_deadline_events_GRMNSF_0_ms_${'000'.repeat(6)}`;
+  const nonFailure = `engine_wrong_host_one_shot_accepted_events_GRMNSF_0_ms_${'000'.repeat(6)}`;
+  const malformed = [
+    stage.slice(0, -3),
+    stage + '000',
+    stage.replace('_ms_' + samples, '_ms_' + samples.slice(3)),
+    stage.replace(samples, '001000' + samples.slice(6)), // decreasing elapsed values
+    stage.replace(samples, '7pt' + samples.slice(3)), // 10,001 ms is out of range
+    stage.replace(samples, '000ABC' + samples.slice(6)),
+    stage.replace('GRMNXSFWJKO_0', 'GRMNXJKO_0'), // event count no longer aligns
+    stage.replace('GRMNXSFWJKO_0', 'GRMNXSFWJKO_1'), // overflow requires 32 retained events
+    stage.replace('console_malformed', 'deadline'), // text fingerprint remains shape-bound
+    ca,
+    nonFailure,
+    stage + '_extra',
+  ];
+  for (const invalid of malformed) assert.throws(() => checkedFailure(invalid, 'webkit'), invalid);
+  const oversized = `engine_wrong_host_one_shot_console_malformed_events_${trace}_text_${digest}_ms_${'000'.repeat(32)}`;
+  assert.ok(oversized.length <= 320);
+  assert.throws(() => checkedFailure(oversized + '0', 'webkit'));
 });
 const IMAGE = 'sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9';
 const home = '/run/nagi-sf08/trust-unit/home';

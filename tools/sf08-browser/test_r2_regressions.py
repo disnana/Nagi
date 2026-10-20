@@ -41,23 +41,6 @@ def business_failure_report(secret='unit-private-sentinel'):
 
 
 class R2Tests(unittest.TestCase):
-    def test_temporary_wrong_host_format_suffix_is_failure_only_and_private(self):
-        base = 'engine_wrong_host_one_shot_console_malformed_events_GRMNXSFWJKO_0_text_'+'a'*64
-        for label in f.WRONG_HOST_CONSOLE_FORMATS:
-            stage = base+'_fmt_'+label
-            value = dict(schema_version=1, stage=stage, engine='webkit')
-            self.assertEqual(f.validate(value), value)
-            self.assertEqual(f.validate(dict(value, phase='browser'), outer=True), dict(value, phase='browser'))
-            for engine in ('none', 'chromium', 'firefox'):
-                with self.assertRaises(ValueError): f.validate(dict(value, engine=engine))
-            for invalid in (stage+'\n', stage+'_extra', stage.replace('wrong_host', 'wrong_ca'),
-                            stage.replace('GRMNXSFWJKO', 'GRMNSFWJKO'),
-                            stage.replace('console_malformed', 'accepted')):
-                with self.assertRaises(ValueError): f.validate(dict(value, stage=invalid))
-        for label in ('', 'PRIVATE_SENTINEL', 'https://secret.invalid/', 'a'*193):
-            with self.assertRaises(ValueError):
-                f.validate(dict(schema_version=1, stage=base+'_fmt_'+label, engine='webkit'))
-
     def test_text_identity_suffix_is_failure_only_bounded_and_closed(self):
         digest = 'a'*64
         for role in ('ca', 'host'):
@@ -98,6 +81,60 @@ class R2Tests(unittest.TestCase):
             for stage in invalid:
                 with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
                     f.validate(dict(schema_version=1, stage=stage, engine='webkit'))
+
+    def test_temporary_wrong_host_event_times_are_closed_monotonic_and_failure_only(self):
+        digits = '0123456789abcdefghijklmnopqrstuvwxyz'
+        def token(value):
+            if value is None:
+                return 'zzz'
+            chars = ''
+            for _ in range(3):
+                chars = digits[value % 36] + chars
+                value //= 36
+            return chars
+        codes = 'GRMNXSFWJKO'
+        trace = codes + '_0'
+        values = [0, 2, 2, 8, 45, 46, 50, 100, 101, 102, 103]
+        encoded = ''.join(token(value) for value in values)
+        digest = 'b' * 64
+        base = 'engine_wrong_host_one_shot_console_malformed'
+        stage = base + '_events_' + trace + '_text_' + digest + '_ms_' + encoded
+        value = {'schema_version': 1, 'stage': stage, 'engine': 'webkit'}
+        self.assertLessEqual(len(stage), 320)
+        self.assertTrue(f.valid_event_timing(trace, encoded))
+        self.assertEqual(f.validate(value), value)
+        self.assertEqual(f.validate(dict(value, phase='browser'), outer=True), dict(value, phase='browser'))
+
+        max_trace = 'E' * 32 + '_1'
+        max_encoded = '000' * 32
+        max_stage = 'engine_wrong_host_one_shot_deadline_events_' + max_trace + '_ms_' + max_encoded
+        self.assertTrue(f.valid_event_timing(max_trace, max_encoded))
+        self.assertEqual(f.validate({'schema_version': 1, 'stage': max_stage, 'engine': 'webkit'})['stage'], max_stage)
+        self.assertTrue(f.valid_event_timing('GRMNSF_0', '000001zzz002003004'))
+        self.assertFalse(f.valid_event_timing('GRMNSF_0', '000001zzz000003004'))
+
+        out_of_range = token(10001) + encoded[3:]
+        bad_count = encoded[:-3]
+        nonmonotonic = token(2) + token(1) + encoded[6:]
+        invalid_stages = (
+            stage + '0',
+            stage.replace('_ms_' + encoded, '_ms_' + bad_count),
+            stage.replace('_ms_' + encoded, '_ms_' + nonmonotonic),
+            stage.replace('_ms_' + encoded, '_ms_' + out_of_range),
+            stage.replace('_ms_' + encoded, '_ms_' + '000ABC' + encoded[6:]),
+            stage.replace('GRMNXSFWJKO_0', 'GRMNXJKO_0'),
+            stage.replace('GRMNXSFWJKO_0', 'GRMNXSFWJKO_1'),
+            stage.replace('console_malformed', 'deadline'),
+            'engine_wrong_host_one_shot_deadline_events_GRMNSF_0_ms_000',
+            'engine_wrong_ca_one_shot_deadline_events_GRMNSF_0_ms_' + '000' * 6,
+            'engine_wrong_host_one_shot_accepted_events_GRMNSF_0_ms_' + '000' * 6,
+        )
+        for invalid in invalid_stages:
+            with self.subTest(stage=invalid[:96]), self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                f.validate({'schema_version': 1, 'stage': invalid, 'engine': 'webkit'})
+        for engine in ('none', 'chromium', 'firefox'):
+            with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                f.validate(dict(value, engine=engine))
 
     def setUp(self):
         self.base=Path(tempfile.mkdtemp(prefix='sf08-bi-r2-unit-',dir=os.environ.get('SF08_UNIT_ROOT','/tmp')))

@@ -1643,88 +1643,76 @@ test('one-shot event observations classify once, cap at32, and never serialize c
     for (let index = 0; index < 40; index++) page.emit('console', webkitConsoleError(endpoint.url));
   } });
   assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
-    (kind, trace) => records.push({ kind, trace })), false);
+    (kind, trace, fingerprint, timing) => records.push({ kind, trace, fingerprint, timing })), false);
   assert.equal(records.length, 1);
   // Console poison is no longer the global bad bit, so duplicate callbacks
   // remain truthfully classified as U through the same 32-event cap.
   assert.match(records[0].trace, /^GRMEU{28}_1$/,
     'first32 events only; overflow forbids complete-count/absence claims');
   assert.equal(records[0].trace.length, 34);
+  assert.equal(records[0].timing.length, 96, 'overflow keeps exactly the first 32 aligned time samples');
+  assert.equal(hostProof.validWebkitEventTiming(records[0].trace, records[0].timing), true);
 });
 
-test('temporary wrong-host console format stays closed, private and never proof', async () => {
-  const cases = [
-    ['Failed to load resource', 'resource_empty'],
-    ['Failed to load resource: Unacceptable TLS certificate PRIVATE_SENTINEL', 'resource_certificate_suffix'],
-    ['Failed to load resource: TLS connection closed unexpectedly', 'resource_tls_closed'],
-    ['Failed to load resource: Error performing TLS handshake: PRIVATE_SENTINEL', 'resource_tls_handshake'],
-    ['Failed to load resource: Peer failed to perform TLS handshake: PRIVATE_SENTINEL', 'resource_tls_handshake'],
-    ['Failed to load resource: Error reading data from TLS socket: PRIVATE_SENTINEL', 'resource_tls_read'],
-    ['Failed to load resource: Error writing data to TLS socket: PRIVATE_SENTINEL', 'resource_tls_write'],
-    ['Failed to load resource: Error receiving data: PRIVATE_SENTINEL', 'resource_receive'],
-    ['Failed to load resource: the server responded with a status of PRIVATE_SENTINEL', 'resource_http_status'],
-    ['Failed to load resource: PRIVATE_SENTINEL https://secret.invalid/?token=PRIVATE_SENTINEL', 'resource_other'],
-    ['PRIVATE_SENTINEL https://secret.invalid/?token=PRIVATE_SENTINEL', 'other'],
-  ];
-  for (const [text, expected] of cases) {
-    const records = [];
-    const f = hostBrowser({ duringGoto: ({ page, endpoint }) => {
-      page.emit('console', webkitConsoleError(endpoint.url, { text }));
-    } });
-    const goto = f.page.goto;
-    f.page.goto = (url, options) => {
-      assert.equal(options.waitUntil, 'load');
-      assert.ok(options.timeout > 0 && options.timeout <= 10000);
-      return goto(url, options);
-    };
-    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 10000,
-      (kind, trace, fingerprint, format) => records.push({ kind, trace, fingerprint, format })), false);
-    assert.equal(f.closed(), true, 'actual owned mock close/join paths complete');
-    assert.equal(records.length, 1);
-    assert.equal(records[0].kind, 'console_malformed');
-    assert.equal(records[0].format, expected);
-    assert.equal(records[0].fingerprint, createHash('sha256').update(text).digest('hex'));
-    assert.equal(records[0].trace, 'GRMXNSFJKO_0', 'format adds no events or order changes');
-    assert.doesNotMatch(JSON.stringify(records), /PRIVATE_SENTINEL|secret\.invalid|token=/);
-    const checkpoint = `engine_wrong_host_one_shot_console_malformed_events_${records[0].trace}_text_${records[0].fingerprint}_fmt_${records[0].format}`;
-    assert.equal(checkedFailure(checkpoint, 'webkit').stage, checkpoint);
-  }
+test('wrong-host event timing is monotonic, failure-only, bounded, and aligned', async () => {
   const records = [];
-  const ca = hostBrowser({ role: 'ca', duringGoto: ({ page, endpoint }) => {
-    page.emit('console', webkitConsoleError(endpoint.url, { text: cases[2][0] }));
-  } });
-  assert.equal(await hostProof.probeWebkitWrongCA(ca.browser, ca.factory, performance.now() + 10000,
-    (kind, trace, fingerprint, format) => records.push({ kind, trace, fingerprint, format })), false);
-  assert.equal(records[0].format, undefined, 'temporary observation is wrong-host only');
-  const exact = hostBrowser({ duringGoto: ({ page, endpoint }) => {
-    page.emit('console', webkitConsoleError(endpoint.url));
-  } });
-  assert.equal(await hostProof.probeWebkitWrongHost(exact.browser, exact.factory, performance.now() + 10000,
-    () => assert.fail('unchanged exact success has no failure diagnostic')), true);
+  const f = hostBrowser({
+    response: async () => { await new Promise(resolve => setTimeout(resolve, 70)); return null; },
+    duringGoto: ({ page, endpoint }) => {
+      page.emit('console', webkitConsoleError(endpoint.url, { text: 'TLS error' }));
+    },
+  });
+  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 2000,
+    (kind, trace, fingerprint, timing) => records.push({ kind, trace, fingerprint, timing })), false);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].kind, 'console_malformed');
+  assert.equal(typeof records[0].timing, 'string');
+  assert.equal(hostProof.validWebkitEventTiming(records[0].trace, records[0].timing), true);
+  const codes = records[0].trace.slice(0, -2);
+  assert.equal(records[0].timing.length, codes.length * 3, 'one fixed-width sample per retained event');
+  const elapsed = Array.from({ length: codes.length }, (_, index) => {
+    const token = records[0].timing.slice(index * 3, index * 3 + 3);
+    return token === 'zzz' ? null : Number.parseInt(token, 36);
+  });
+  let previous = -1;
+  for (const value of elapsed) {
+    if (value === null) continue;
+    assert.ok(value >= previous, 'known monotonic samples do not decrease');
+    previous = value;
+  }
+  const navigationRejected = codes.indexOf('N'), finishStarted = codes.indexOf('S');
+  assert.ok(navigationRejected >= 0 && finishStarted > navigationRejected);
+  assert.ok(elapsed[finishStarted] - elapsed[navigationRejected] >= 50,
+    'the bounded mock delay is visible between navigation rejection and endpoint finish');
+  assert.doesNotMatch(JSON.stringify(records), /TLS error|private\.invalid|https:\/\//);
+
+  const peer = await hostPeerFixture({ role: 'host' });
+  peer.connect(); peer.sni(); peer.alert();
+  const exact = hostBrowser({ endpoint: peer.endpoint, text: 'Unacceptable TLS certificate' });
+  const successDiagnostics = [];
+  assert.equal(await hostProof.probeWebkitWrongHost(exact.browser, exact.factory, peer.until,
+    (...values) => successDiagnostics.push(values)), true);
+  assert.deepEqual(successDiagnostics, [], 'successful proof emits no timing metadata');
 });
 
-test('temporary wrong-host format refuses foreign, secret and accessor metadata', async () => {
-  let reads = 0;
-  const accessor = {};
-  Object.defineProperty(accessor, 'url', { get() { reads++; throw new Error('PRIVATE_SENTINEL'); } });
-  for (const override of [
-    { text: 'x'.repeat(1025) }, { text: '界'.repeat(400) },
-    { text: 'Failed to load resource: PRIVATE_SENTINEL', location: { url: 'https://secret.invalid/' } },
-    { text: 'Failed to load resource: PRIVATE_SENTINEL', location: accessor },
-    { text: 'Failed to load resource: PRIVATE_SENTINEL', args: ['PRIVATE_SENTINEL'] },
-    { text: 'Failed to load resource: PRIVATE_SENTINEL', type: 'log' },
-    { text: () => { throw new Error('PRIVATE_SENTINEL'); } },
-  ]) {
-    const records = [];
-    const f = hostBrowser({ duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url, override)) });
-    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 10000,
-      (kind, trace, fingerprint, format) => records.push({ kind, trace, fingerprint, format })), false);
-    assert.equal(records.length, 1);
-    assert.equal(records[0].format, undefined);
-    assert.equal(records[0].fingerprint, undefined);
-    assert.doesNotMatch(JSON.stringify(records), /PRIVATE_SENTINEL|secret\.invalid/);
-  }
-  assert.equal(reads, 0, 'diagnostics do not read skipped location accessors');
+test('probeEngine emits a timed WebKit failure checkpoint accepted by Python', async () => {
+  const type = fake('webkit', 'normal', { reason: 'host', kind: 'cancelled', requestCertificate: true });
+  const endpoint = { url: negative.hostOrigin + '/', async finish() { return false; }, async close() { return true; } };
+  const checkpoints = [];
+  await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
+    (stage, engine) => checkpoints.push({ stage, engine }), undefined, async () => endpoint));
+  const observed = checkpoints.find(({ stage }) => stage.includes('_events_') && stage.includes('_ms_'));
+  assert.ok(observed, 'failed host proof records the temporary timing suffix');
+  assert.equal(observed.engine, 'webkit');
+  assert.deepEqual(checkedFailure(observed.stage, observed.engine),
+    { schema_version: 1, stage: observed.stage, engine: 'webkit' });
+  const match = observed.stage.match(/_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])_ms_([0-9a-z]*)$/);
+  assert.ok(match, 'timing remains aligned after the retained event trace');
+  assert.equal(hostProof.validWebkitEventTiming(match[1], match[2]), true);
+  const validator = 'import sys\nsys.path.insert(0, sys.argv[1])\nimport failure_checkpoint as f\nf.validate({"schema_version": 1, "stage": sys.argv[2], "engine": "webkit"})';
+  const py = spawnSync('python3', ['-B', '-c', validator,
+    path.dirname(fileURLToPath(import.meta.url)), observed.stage], { encoding: 'utf8' });
+  assert.equal(py.status, 0, py.stderr || 'Python rejected the generated checkpoint');
 });
 
 test('text fingerprint is bounded owned failure metadata and never certificate proof', async () => {
@@ -2578,7 +2566,11 @@ test('one-shot fingerprint propagates only exact digest kinds and only on failed
   const kind = 'peer_code_sha256_' + 'a'.repeat(64);
   for (const role of ['ca', 'host']) {
     const stages = [], type = fake('webkit', 'normal'), f = hostBrowser({ role, peer: false });
-    const factory = async (_until, diagnose) => { diagnose(kind); diagnose('setup'); return f.endpoint; };
+    const factory = async (_until, diagnose) => {
+      diagnose(kind, role === 'host' ? 'G_0' : undefined, undefined, role === 'host' ? '000' : undefined);
+      diagnose('setup');
+      return f.endpoint;
+    };
     await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
       (stage, engine) => stages.push(checkedFailure(stage, engine)), undefined,
       role === 'host' ? factory : undefined, role === 'ca' ? factory : undefined));

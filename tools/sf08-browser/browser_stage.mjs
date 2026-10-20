@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import https from 'node:https';
 import { runPreflight, settings, readWebkitWrongHostCredentials, createWebkitWrongHostEndpoint,
   readWebkitWrongCACredentials, createWebkitWrongCAEndpoint, validWebkitEventTrace,
-  validWrongHostConsoleFormat } from './preflight.mjs';
+  validWebkitEventTiming } from './preflight.mjs';
 
 export function trustEnv(home, inherited) {
   return { ...inherited, HOME: home, XDG_DATA_HOME: home + '/.local/share',
@@ -251,16 +251,20 @@ export function checkedFailure(stage, engine) {
   const observed = observation && observation[0] === stage && engine === 'webkit' && FAILURE_STAGES.includes(observation[1]) &&
     validWebkitEventTrace(observation[2]);
   const textObservation = typeof stage === 'string' && stage.length <= 192 &&
-    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_console_malformed)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])_text_([a-f0-9]{64})(?:_fmt_([a-z_]+))?$/);
+    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_console_malformed)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])_text_([a-f0-9]{64})$/);
   const observedText = textObservation && textObservation[0] === stage && engine === 'webkit' &&
     FAILURE_STAGES.includes(textObservation[1]) && validWebkitEventTrace(textObservation[2]) &&
-    textObservation[2].slice(0, -2).includes('X') &&
-    (textObservation[4] === undefined ||
-      (textObservation[1] === 'engine_wrong_host_one_shot_console_malformed' &&
-       validWrongHostConsoleFormat(textObservation[4])));
+    textObservation[2].slice(0, -2).includes('X');
+  const timedObservation = typeof stage === 'string' && stage.length <= 320 &&
+    stage.match(/^(engine_wrong_host_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])(?:_text_([a-f0-9]{64}))?_ms_((?:[0-9a-z]{3}){0,32})$/);
+  const observedTiming = timedObservation && timedObservation[0] === stage && engine === 'webkit' &&
+    FAILURE_STAGES.includes(timedObservation[1]) && validWebkitEventTrace(timedObservation[2]) &&
+    validWebkitEventTiming(timedObservation[2], timedObservation[4]) &&
+    (timedObservation[3] === undefined ||
+      (timedObservation[1].endsWith('_console_malformed') && timedObservation[2].slice(0, -2).includes('X')));
   const peerFingerprint = typeof stage === 'string' && stage.length <= 108 &&
     stage.match(/^engine_wrong_(?:ca|host)_one_shot_peer_code_sha256_[a-f0-9]{64}$/)?.[0] === stage;
-  if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage) && !peerFingerprint && !observed && !observedText) || !FAILURE_ENGINES.includes(engine) ||
+  if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage) && !peerFingerprint && !observed && !observedText && !observedTiming) || !FAILURE_ENGINES.includes(engine) ||
       (stage.startsWith('engine_') !== (engine !== 'none')) ||
       (FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'firefox') ||
       (WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||
