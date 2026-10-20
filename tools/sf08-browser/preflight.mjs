@@ -1182,7 +1182,11 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         event('W');
         let proved;
         try { proved = await hostWithin(consoleWait, until); }
-        catch (error) { event('D'); throw error; }
+        catch (error) {
+          // This owned signal never rejects. Its bounded timer can expire
+          // before the observed clock advances, just like the request wait.
+          event('D'); failure('deadline'); throw error;
+        }
         if (proved !== true) refuse();
         live();
         if (finished !== true || !consoleCertificateProof || consoleEvents !== 1 ||

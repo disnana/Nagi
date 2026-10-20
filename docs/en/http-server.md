@@ -1,6 +1,6 @@
 # HTTP API reference
 
-These are unreleased 0.2.0 development APIs. See [migration](migration-0.2.0.md) and [authentication and authorization](security.md).
+These APIs are included in Nagi 0.2.0. See [migration](migration-0.2.0.md) and [authentication and authorization](security.md).
 
 ```nagi
 import std.http.server as http
@@ -62,7 +62,7 @@ Header names are case-insensitive. Single-header getters reject duplicates; `hea
 
 `context` is borrowed from the current Request with `response_context`. It is an opaque response-budget context, not an authentication proof. It cannot outlive its Request or be constructed with a default. The factories return an owned response with a retained budget claim; allocating or serializing beyond the explicit limits returns `Err`. Use `try` or return the factory Result directly. Handle these allocation/budget failures separately from the handler's business error.
 
-The development candidate connects these compiler and runtime APIs. Scoped native checks do not establish final acceptance: all required checks on the final integrated HEAD, including four-OS and resource validation, remain pending. This is not a released-feature claim.
+The [0.2.0 release CI](https://github.com/disnana/Nagi/actions/runs/39422234923) passed all four OSes and browser acceptance. The budgets below bound the stated resources; they do not guarantee total process memory, an SLA, or universal recovery from allocation failure.
 
 `text` and `bytes` copy borrowed input into a body owned by the Response. `json` borrows its value, so it does not move the original. String literals can be passed directly to view parameters; borrow variables with `view(value)`.
 
@@ -93,9 +93,9 @@ In Nagi 0.1.10, an unwinding panic in a handler or mapper before the response st
 
 When an error response needs a request ID, retain the validated ID in the handler and move it into a custom error only on failure. The [quote API example](../../test-nagi-code/application-examples/quote-api/README.en.md) passes its ID to a shared mapper this way.
 
-## Explicit SF07 budgets and rate policy (development candidate)
+## Explicit SF07 budgets and rate policy
 
-Response and rate budgets have no implicit defaults. `default_options()` retains the existing transport settings but does not supply the new budgets. Configure both budgets and every route's pre-authentication rate policy before starting the listener. Missing or inconsistent configuration is rejected before listening. Final integrated native/four-OS acceptance remains pending.
+Response and rate budgets have no implicit defaults. `default_options()` retains the existing transport settings but does not supply the new budgets. Configure both budgets and every route's pre-authentication rate policy before starting the listener. Missing or inconsistent configuration is rejected before listening.
 
 | Configuration operation | Contract |
 |---|---|
@@ -113,9 +113,9 @@ The adopted consumption order is entry checks → route bucket → authenticatio
 
 Token shortage maps to 429; table/quota capacity exhaustion or closing/clock faults map to 503. Internal or mapper failure maps to 500. Existing security/deadline rejections keep their priority. A finite fallback is attempted only within its independent allowance; if that allowance is exhausted, the transport closes.
 
-A configuration's accepted arithmetic bounds do not establish a whole-process memory limit or a latency SLA. Exact startup catalogue accounting, measured small profiles, native concurrency and final four-OS verification are release blockers, not completed guarantees.
+Arithmetically accepted settings do not guarantee total process memory or a latency SLA. See the measured small configuration below and choose budgets for the deployment.
 
-## Measured small configuration (scoped candidate checks)
+## Measured small configuration
 
 The public-API fixture [sf07_small_profile.rs](../../runtime/tests/sf07_small_profile.rs) uses eight connection/request slots, four routes, and these explicit budgets. This is a tested example, not an implicit default or a production sizing recommendation.
 
@@ -141,7 +141,7 @@ Allocation counters are cumulative calling-thread events, including the loopback
 
 ## Limits and shutdown
 
-The 0.2.0 development source requires checked authority configuration for `serve` and Rust `serve_listener`. Bare `default_options()`/`options(...)` fails startup.
+Nagi 0.2.0 requires checked authority configuration for `serve` and Rust `serve_listener`. Bare `default_options()`/`options(...)` fails startup.
 
 | Startup setting | Contract |
 |---|---|
@@ -154,7 +154,7 @@ Reconfiguring authority or overwriting a proxy ACL fails. Setters move Options; 
 
 Before every route, 404/405, body reception, verifier and proof issuance, the gate checks HTTP/1.1 origin-form and exactly one nonempty Host. Malformed/missing/duplicate/nonallowlisted authority, absolute-form/authority-form/`*`, and any Forwarded or X-Forwarded-* presence return 400; HTTP/1.0 returns 505. These runtime rejections use no-store and close. HTTP syntax rejected by Hyper before service invocation, including HTTP/2 prefaces, is delegated to its official parser and reaches no handler/proof. The standard listener is HTTP/1 only.
 
-Direct/proxy profiles are fixed at startup. Proxies must strip Forwarded headers before backend transmission and use a registered internal or pass-through Host. Only the real peer returned by `accept` selects ACL admission; headers never choose trust or origin. A loopback ACL does not authenticate other processes on the same host. Host matching does not waive Origin/CSRF/CORS; the unreleased SF03 candidate defines these separately below.
+Direct/proxy profiles are fixed at startup. Proxies must strip Forwarded headers before backend transmission and use a registered internal or pass-through Host. Only the real peer returned by `accept` selects ACL admission; headers never choose trust or origin. A loopback ACL does not authenticate other processes on the same host. Host matching does not waive Origin/CSRF/CORS; these have separate contracts below.
 
 `serve` provides plaintext loopback HTTP; configuring an origin does not add TLS. Public local response checks and browser authentication have separate requirements. Use a TLS frontend with a browser-trusted certificate, for example external origin `https://localhost:8443`, backend wire `localhost:8080`, peer `127.0.0.1`. HTTP/2 frontends must terminate to HTTP/1.1. Secure Cookies have no localhost exception. Actual TLS/browser and four-OS verification are separate acceptance gates.
 
@@ -202,7 +202,7 @@ The API is implemented in the [standard module registry](../../compiler/src/stdl
 
 [HTTP runtime tests](../../runtime/src/http_server/tests.rs) use real sockets to check responses, limits, deadlines, and connection closure. [Rust integration](modules-and-rust.md) can provide a custom server, but these limits and failure handling do not apply to it automatically.
 
-## Explicit CORS route metadata (unreleased SF03 candidate)
+## Explicit CORS route metadata
 
 `CorsPolicy` is opaque, owned configuration; it is not an authentication proof. `CorsCredentials.OMIT` omits Allow-Credentials; `ALLOW` emits `true`. Neither mode removes credentials or waives Policy/CSRF. Construct it with `cors_policy(origins: List[str], request_headers: List[str], credentials: CorsCredentials, max_age_seconds: i64, max_origins: i64, max_origin_bytes: i64, max_headers: i64, max_header_bytes: i64) -> Result[CorsPolicy, Error]`. All count/byte ceilings must be positive native sizes; lists may be empty. Max-age is explicitly 0..4294967295 seconds, and zero has no positive preflight lifetime. There is no server preflight cache.
 
@@ -217,4 +217,4 @@ Origins use exact canonical http/https scheme, ASCII host and effective port. DN
 
 OPTIONS with Access-Control-Request-Method or Access-Control-Request-Headers uses only target route metadata: success is empty 204, requested method/header allow metadata and explicit Max-Age, no-store, and no verifier/handler/proof/Session/DB work. Ordinary OPTIONS requires its own normal Policy. Unknown paths/methods retain 404/405 and no grant. Duplicate/malformed metadata fails 400; a valid unlisted origin/header or default-deny record fails 403. Admission and declared-body errors keep 503/413 precedence; preflight bodies fail 400 and close.
 
-On actual requests an unlisted/malformed/missing Origin receives no CORS grant while normal authentication, CSRF, status and handler behavior remain. Allowlisted cross-origin preflight does not permit unsafe Session POST: the existing exact external HTTPS Origin and token binding still apply. The outer finalizer preserves Cookie delivery, no-store, CSP, nosniff, challenge and framing, and unions finite typed Vary dependencies even on selected early errors. Authenticated/Session 304 still becomes secret-free 500; public DTO 304 retains its status. These source APIs do not establish native/four-OS or real TLS/browser acceptance; this candidate is unreleased and depends on B1.
+On actual requests an unlisted/malformed/missing Origin receives no CORS grant while normal authentication, CSRF, status and handler behavior remain. Allowlisted cross-origin preflight does not permit unsafe Session POST: the existing exact external HTTPS Origin and token binding still apply. The outer finalizer preserves Cookie delivery, no-store, CSP, nosniff, challenge and framing, and unions finite typed Vary dependencies even on selected early errors. Authenticated/Session 304 still becomes secret-free 500; public DTO 304 retains its status. CORS is included in 0.2.0 with Session CSRF. Release CI covers TLS/browser/proxy acceptance; deployment-specific TLS and proxy configuration still need verification.

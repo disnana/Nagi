@@ -1395,7 +1395,7 @@ test('CA document initiation missing request uses original deadline and ignores 
   assert.deepEqual(rows, ['deadline']);
 });
 
-test('owned request timeout labels deadline even before a rounded clock tick', { timeout: 2000 }, async t => {
+test('owned request and console timeouts label deadline even before a rounded clock tick', { timeout: 2000 }, async t => {
   // Freeze only the observed clock. The real bounded timer still expires, so
   // this models rounding without relying on a scheduler or elapsed-time race.
   t.mock.method(performance, 'now', () => 1000);
@@ -1408,6 +1408,19 @@ test('owned request timeout labels deadline even before a rounded clock tick', {
     assert.deepEqual(budgets, [35]);
     assert.equal(f.closed(), true);
     assert.equal(f.page.listenerCount('requestfailed'), 0);
+
+    const peer = await hostPeerFixture({ role, budget: 35 });
+    const consoleRows = [], consoleTraces = [];
+    const consoleBrowser = hostBrowser({ role, endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      duringGoto: () => { peer.connect(); peer.sni(); peer.alert('ECONNRESET'); } });
+    assert.equal(await probe(consoleBrowser.browser, consoleBrowser.factory, peer.until,
+      (kind, trace) => { consoleRows.push(kind); consoleTraces.push(trace); }), false);
+    assert.deepEqual(consoleRows, ['deadline']);
+    assert.equal(consoleTraces.length, 1);
+    assert.match(consoleTraces[0], /FWD/, 'native finish succeeded before the original console wait expired');
+    assert.equal(consoleBrowser.closed(), true);
+    assert.equal(consoleBrowser.page.listenerCount('console'), 0);
+    assert.equal(peer.credentials.key, null, 'joined native reset releases credentials');
   }
 });
 

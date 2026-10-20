@@ -2,7 +2,7 @@
 
 初めて使うなら[インストール](getting-started.md)から[最初のCLIアプリ](first-app.md)まで順に進めます。言語全体の道筋は[言語機能索引](#言語機能索引)、書式や関数を引くには[文法](syntax.md)・[組み込み関数](builtins.md)へ。
 
-このDocsは2026-10-07に公開したNagi 0.1.11をcompiler基準版とし、VS Code拡張0.1.13とJetBrainsプラグイン0.1.1は別componentとして扱います。公式サイトは通常mainから生成するため、まだ公開されていない変更も含むことがあります。JetBrains版の配布版とIDE別ZIPの選び方は[導入方法](../editors/jetbrains-nagi/README.md)を参照してください。版ごとの変更は[Changelog](../CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](migration-0.1.11.md)にあります。
+このDocsのcompiler基準版は[2026-10-20に公開したNagi 0.2.0](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0)です。エディター拡張は別の版で管理します。[エディターの案内](editor.md)を参照してください。公式サイトは通常mainから生成するため、その後の変更も含むことがあります。版ごとの差分は[Changelog](../CHANGELOG.md)と[0.2.0移行ガイド](migration-0.2.0.md)にあります。
 
 目的と現在の範囲は[Nagiについて](introduction.md)へ。以下のリファレンスは実装済みAPIの使い方と制限を示します。未実装の案は[設計](library-design.md)・[開発予定](roadmap.md)に分けています。
 
@@ -57,7 +57,7 @@
 | DBなしのHTTP、ヘッダー、応答status | [HTTP](http.md)、[APIリファレンス](http-server.md) |
 | JSONを読み書きする | [JSON](json.md) |
 | 旧SQLite APIとSQLの事前検査 | [SQLite](database.md)、[SQLの事前検査](sql-check.md) |
-| 型付きparameters・Pool・transactionを使う | [SQLite PoolとTransaction（開発source・未リリース）](sqlite-pool.md) |
+| 型付きparameters・Pool・transactionを使う | [SQLite PoolとTransaction](sqlite-pool.md) |
 | 複数ファイルに分ける、Rustを呼ぶ | [importとRust連携](modules-and-rust.md) |
 | 自作の共通コードやRustのcrateを使う | [ライブラリとRustの資産](libraries.md) |
 | 入口やビルド設定を保存する | [nagi.toml](projects.md) |
@@ -71,7 +71,7 @@
 
 入門のコードは現行の書き方です。明示moveとTask結果handleはNagi 0.1.11で公開済みです。利用するcompilerが0.1.11以降であることを`nagic --version`で確認してください。[移行ガイド](migration-0.1.11.md)と[Task結果handle](task-handles.md)に使い方をまとめています。actorのshared messageは将来の設計対象です。
 
-新しい[SQLite Pool/Tx](sqlite-pool.md)は開発sourceのみで、0.1.11には含まれません。
+[SQLite Pool/Tx API](sqlite-pool.md)は0.2.0に含まれます。0.1.11には含まれません。
 
 ## 仕組みと開発状況
 
@@ -81,6 +81,6 @@
 
 `std.actor`はNagi 0.1.8から使える標準ライブラリです。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)で登録・呼び出し・停止を試せます。旧actor／Supervisorの組み込み関数と[キュー](queue.md)は検証用APIです。性能を調べる場合は、[測定方法](performance.md)、[測定結果](../PERFORMANCE.md)、[通信の負荷試験](http-capacity.md)を確認してください。
 
-現在のソースと0.1系が対象です。版ごとの変更は[変更履歴](../CHANGELOG.md)、未対応の機能は各ページに記載しています。
+Nagi 0.2.0と現在のソースが対象です。版ごとの変更は[変更履歴](../CHANGELOG.md)、未対応の機能は各ページに記載しています。
 
-- [認証・認可（未リリースSF01）](security.md)と[0.2.0移行](migration-0.2.0.md)
+- [認証・認可](security.md)と[0.2.0移行](migration-0.2.0.md)

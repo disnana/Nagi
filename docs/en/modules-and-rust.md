@@ -63,7 +63,7 @@ A module name exposes functions, classes, and enums defined in that file. Import
 
 Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select registered modules such as `std.http.server`, `std.actor`, and `std.result`. Nagi 0.1.11 and later also provide the registered modules `std.auth`, `std.ownership`, and `std.task`. Confirm the installed compiler version. General package discovery and visibility declarations are unsupported.
 
-Unreleased 0.2.0 SF01 uses request-bound `AuthScope` and `Grant[P]` in `std.auth`. Principal and indefinite issuers are removed. See [authentication and authorization](security.md) for type, lease and trusted-adapter duties, and [migration](migration-0.2.0.md) for changes. The [example](../../test-nagi-code/application-examples/auth-boundary/README.en.md) uses standard Policy with bounded fixture credentials; it does not implement production cryptographic verification or durable Sessions.
+Nagi 0.2.0 SF01 uses request-bound `AuthScope` and `Grant[P]` in `std.auth`. Principal and indefinite issuers are removed. See [authentication and authorization](security.md) for type, lease and trusted-adapter duties, and [migration](migration-0.2.0.md) for changes. The [example](../../test-nagi-code/application-examples/auth-boundary/README.en.md) uses standard Policy with bounded fixture credentials; it does not implement production cryptographic verification or durable Sessions.
 
 ### Use the same definition in Low and Rust
 
@@ -83,7 +83,7 @@ The limits are 128 files, depth 64, 8 MB total, and 2 MB per file. Type-checking
 
 ## Import the standard HTTP library
 
-`std.http.server` and `std.actor` are standard libraries available from Nagi 0.1.8. The response-factory example below uses the unreleased 0.2.0 Context-first API.
+`std.http.server` and `std.actor` are standard libraries available from Nagi 0.1.8. The response-factory example below uses the 0.2.0 Context-first API.
 
 ```nagi
 import std.http.server as http
@@ -94,7 +94,7 @@ def greeting(request: Request) -> Result[Response, Error]:
     return http.text(context, Code.OK, "Hello, Nagi!")
 ```
 
-This is a request-context response-factory fragment, not a server startup. See the [HTTP API reference](http-server.md#explicit-sf07-budgets-and-rate-policy-development-candidate) for response and rate budgets and the required rate policy on every route.
+This is a request-context response-factory fragment, not a server startup. See the [HTTP API reference](http-server.md#explicit-sf07-budgets-and-rate-policy) for response and rate budgets and the required rate policy on every route.
 
 Standard modules are registered libraries provided with the compiler. A same-named file in the current directory or an editor buffer cannot replace them. A module import requires `as`; `from` selects individual definitions. Importing starts no listener or worker. Generated Low retains standard definition IDs, and aliases of a standard type refer to the same native type.
 

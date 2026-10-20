@@ -1,6 +1,6 @@
-# Migrating to 0.2.0 SF01/SF05 (unreleased)
+# Migrating to 0.2.0
 
-This describes SF01/SF05 development-source changes. Neither all of Security Foundation nor formal 0.2.0 is released. Published 0.1.x binaries do not provide the new Policy APIs. The change avoids preserving policy-free standard HTTP and indefinite issuers through legacy coexistence.
+Nagi 0.2.0 was [released on 2026-10-20](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0). This page describes its HTTP, authentication/authorization, response/rate-budget and SQLite API changes. Published 0.1.x binaries do not provide these APIs. The change avoids preserving policy-free standard HTTP and indefinite issuers through legacy coexistence.
 
 | Retired API/behavior | Diagnostic and migration | Equivalent business verification |
 |---|---|---|
@@ -11,11 +11,11 @@ This describes SF01/SF05 development-source changes. Neither all of Security Fou
 | Implicit `/health` | Register explicitly with public policy; unregistered path is 404 | High/Low native and socket tests |
 | Implicit `/stream` and `/ws` | Removed; complete bounded bytes require explicit registration. General streaming/WS remain unimplemented | No implicit route; equivalent WS business remains outstanding |
 | Raw `html`/`Html`/`http.html` | Standard entry rejected; text stays text. The supported typed HTML subset is built with `http.html_response` in the [HTTP API](http.md); arbitrary active HTML is unsupported | Raw-entry rejection, octet-stream/text and nosniff. Migration of the old HTML screen is limited to the typed subset |
-| Arbitrary Set-Cookie/CORS/CSP/cache/challenge/framing headers | append returns Invalid; dedicated security layers own them, and the integration candidate includes CORS policy/finalizer | Managed-header and wire regressions. Session-CSRF/CORS source is included; final acceptance for complete Cookie/Session flows and browser/proxy remains pending |
+| Arbitrary Set-Cookie/CORS/CSP/cache/challenge/framing headers | append returns Invalid; dedicated security layers own them, including CORS policy/finalizer | Managed-header and wire regressions; Session/CSRF/CORS browser/proxy acceptance in release CI |
 | Arbitrary Host / startup with unconfigured Options | Before startup call `try http.authority(options, https_origin, wire_list, count_limit, byte_limit)`; missing, duplicate canonical or invalid settings fail. Authority/proxy overwrites also fail | Parser/config, gate before all routes, actual socket/peer Host slice. Full Cargo/four-OS and TLS/browser acceptance remain separate |
 | HTTP/1.0, absolute/authority-form, `*`, interpreted Forwarded | Migrate to HTTP/1.1 origin-form. Register omitted/explicit ports separately; strip Forwarded headers and configure real peer IPs with `trusted_proxy`. Runtime rejection is 400, HTTP/1.0 is 505, before 404/405 | Small bounded Host/port/IPv6/duplicate/peer negative requests and capacity recovery on the next valid request |
 
-The Host change is an unreleased SF03 slice. Migrate arbitrary Hosts, trailing dots, special port spellings and internal proxy Hosts to explicit registration/rewriting. Setters use move and Result; failure cannot revive earlier Options. APIs use the existing resource registry, checked facts and sealed emission, with the same contract for High, saved Low and handwritten Low.
+The Host change is included in 0.2.0. Migrate arbitrary Hosts, trailing dots, special port spellings and internal proxy Hosts to explicit registration/rewriting. Setters use move and Result; failure cannot revive earlier Options. APIs use the existing resource registry, checked facts and sealed emission, with the same contract for High, saved Low and handwritten Low.
 
 Local examples set the listener port and wire Host to the same value. The default supervised-service uses port `8090` and `localhost:8090`. If you change the port, update `NAGI_HTTP_AUTHORITY` too. This variable is one HTTP Host authority, separate from the HTTPS external origin. Unix:
 
@@ -41,12 +41,12 @@ Owned local Option/Result and same-task async calls remain available for AuthSco
 
 Move, Task/spawn semantics and SQLite Pool/Tx acquisition budgets, close, actual join and Outcome are preserved. Unifying old Db/dynamic SQL belongs to SF05. Custom Rust/Axum hosts remain explicit trusted boundaries outside the standard dispatcher guarantee; no compatibility layer automatically falls back to them.
 
-## SF07 response and rate migration (development candidate)
+## SF07 response and rate migration
 
 - Replace status-first `empty/text/bytes/json/html_response` calls with a borrowed context from `http.response_context(view(request))` as their first argument. Every factory returns `Result[Response, Error]`; return it directly or use `try`. Do not wrap a factory Result in a second `ok`.
 - Change both App and route-specific mappers to `fn(view[http.ResponseContext], E) -> Result[http.Response, Error]`. The business error E and the mapper's own Error are different failures.
 - Add explicit `response_limits`/`with_response_limits` and `rate_limits`/`with_rate_limits` to Options, then `rate_policy`/`rate_route` for every route. Use `rate_subject` only for verified-subject profiles. There is no implicit new budget and no executable unbounded compatibility factory.
-- See the [API reference](http-server.md#explicit-sf07-budgets-and-rate-policy-development-candidate) for argument order, process-local scope and refusal behavior. This is an adopted cutover with compiler checks, not completed runtime/native/four-OS acceptance. The final measured startup example and integration tests remain release requirements.
+- See the [API reference](http-server.md#explicit-sf07-budgets-and-rate-policy) for argument order, process-local scope and refusal behavior. The [release CI](https://github.com/disnana/Nagi/actions/runs/39422234923) passed all four OSes and browser acceptance. Example budgets remain illustrative, without a production sizing or latency guarantee.
 
 ## SQLite SF05
 
@@ -58,6 +58,6 @@ Move, Task/spawn semantics and SQLite Pool/Tx acquisition budgets, close, actual
 | INSERT/UPDATE RETURNING, multi-statement exec | exec+readonly query in the same Tx; anonymous ? in SQL occurrence order; trusted fixed bootstrap | Native CRUD/inventory/task/device-settings/result API |
 | Protected SQL | Bind actual Grant subject/target into owner/tenant predicate; reserve then synchronously enqueue inside Grant.submit | Other tenant/target affects zero; earlier revoke enqueues zero; admitted work executes; revoke while waiting capacity |
 
-Ordinary check needs no SQL engine. Opt-in checks prepare direct Query and Parameters builder chains, leaving unknown structure and actual types/NULL to runtime. FromRow and fixed Rust SQL remain trusted adapter boundaries, without reexporting request-facing dynamic factories. Session generation checks in the same Tx remain SF02 work. Adding a Grant to a generic query cannot promise tenant isolation.
+Ordinary check needs no SQL engine. Opt-in checks prepare direct Query and Parameters builder chains, leaving unknown structure and actual types/NULL to runtime. FromRow and fixed Rust SQL remain trusted adapter boundaries, without reexporting request-facing dynamic factories. Session generation management is included in SF02. Protected business updates still need session-generation/owner predicates or revalidation in the same Tx and SQLite file; arbitrary adapters are not checked automatically. Adding a Grant to a generic query cannot promise tenant isolation.
 
 [SQLite](sqlite-pool.md) · [Protected operations](security.md#protected-sqlite-operations) · [SF05 contract](../internal/security-foundation/sf05-contract.en.md)

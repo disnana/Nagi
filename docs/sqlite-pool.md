@@ -1,6 +1,6 @@
 # SQLite PoolとTransaction
 
-> `std.db.sqlite` は現在の開発ソースにある未リリースAPIです。Nagi 0.1.11には含まれていません。SF05で旧Db/db_*を廃止するため、開発sourceへ移行する際は[移行](migration-0.2.0.md)を参照してください。
+> `std.db.sqlite` はNagi 0.2.0に含まれ、0.1.11には含まれません。SF05で旧Db/db_*を廃止したため、更新前に[移行](migration-0.2.0.md)を参照してください。
 
 [Docs目次](README.md) · [SQLiteと移行](database.md) · [SQLの事前検査](sql-check.md)
 
@@ -15,10 +15,10 @@ Rustからcompilerの標準module/resource/operation metadata enumを網羅match
 ### 必要なもの
 
 - Rust toolchain（`rustc` と `cargo`）とRust crateをビルドできるC toolchain。
-- このページと`examples/sqlite_pool.nagi`、未リリースの`std.db.sqlite` APIを含むNagiのソースcheckout（取得したソースの作業用フォルダー）。手順はrepository rootで実行します。
+- このページと`examples/sqlite_pool.nagi`、Nagi 0.2.0のソースcheckout（取得したソースの作業用フォルダー）。手順はrepository rootで実行します。
 - SQLiteのコマンドラインツールは不要です。SQLiteはNagi runtimeに同梱されます。
 
-ソースの取得方法は[ソースからcompilerをbuildする手順](getting-started.md#ソースからビルドする場合)を参照してください。`main`にまだこのsampleとAPIがない場合は、それらを含む開発branchのcheckoutを使います。配布版0.1.11のbinaryだけでは、この手順は実行できません。
+ソースの取得方法は[ソースからcompilerをbuildする手順](getting-started.md#ソースからビルドする場合)を参照してください。この手順は0.2.0のソースとcompilerを使います。インストール済み0.2.0を使う場合は、下記の`./target/release/nagic`を`nagic`に置き換え、compilerのbuildを省略できます。
 
 `cargo build` がnative dependencyで止まる場合は、Rust toolchainに加えてOS向けC compiler/linkerが使えることを確認してください。`nagic` が見つからない場合は、下のrelease binaryを直接実行するか `target/release` をPATHへ追加します。
 
