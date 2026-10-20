@@ -6,11 +6,13 @@ mod adapter;
 mod adapter_tests;
 #[cfg(test)]
 mod comparison;
+mod main_source;
 #[cfg(test)]
 mod public_tests;
 #[cfg(test)]
 mod security_sf05_tests;
 mod session;
+pub(crate) use main_source::MainSource;
 #[cfg(test)]
 mod tests;
 use crate::{Error, ErrorKind, FromRow};
@@ -225,6 +227,43 @@ pub fn open(
         })
     }
 }
+// Closed startup fork: independent manager/ledger/permits, same attested main.
+pub(crate) fn fork_same_main(
+    pool: &Pool,
+    source: &MainSource,
+    options: Options,
+) -> Result<Pool, Failure> {
+    if pool.adapter.is_closing() || !source.still_same() {
+        return Err(Failure::primary(
+            FailureKind::Closed,
+            Outcome::NotApplicable,
+            "checked source unavailable",
+        ));
+    }
+    if !pool.adapter.matches_main_source(source) {
+        return Err(Failure::primary(
+            FailureKind::Invalid,
+            Outcome::NotApplicable,
+            "checked source mismatch",
+        ));
+    }
+    let config = session::Config {
+        path: Some(source.canonical_path()),
+        queue_capacity: Some(options.queue_capacity),
+        busy: options.busy,
+        ..Default::default()
+    };
+    Ok(Pool {
+        adapter: adapter::Adapter::with_capacity(config, Default::default(), options.connections),
+        acquire: options.acquire,
+    })
+}
+#[cfg(test)]
+impl Pool {
+    pub(crate) fn same_private_queue(&self, other: &Self) -> bool {
+        self.adapter.same_handle(&other.adapter)
+    }
+}
 pub fn clone_pool(pool: &Pool) -> Pool {
     Pool {
         adapter: pool.adapter.clone_handle(),
@@ -347,4 +386,74 @@ pub(crate) fn logout_test_pool(path: std::path::PathBuf, fault: LogoutTestFault)
         adapter: adapter::Adapter::with_capacity(config, Default::default(), 1),
         acquire: Duration::from_secs(1),
     }
+}
+
+// Private HTTP cold-start calibration reuses the adapter's existing worker gate.
+#[cfg(test)]
+pub(crate) struct HttpStartupTest {
+    gate: std::sync::Arc<session::Gate>,
+    released: std::sync::atomic::AtomicBool,
+    observer: adapter::Observer,
+}
+#[cfg(test)]
+impl HttpStartupTest {
+    pub(crate) async fn wait(&self) {
+        self.gate.wait().await;
+    }
+    pub(crate) fn release(&self) {
+        if !self
+            .released
+            .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
+            // A native watchdog failure may already have dropped the receiver.
+            // Still proceed to the explicit close/join checks on that path.
+            let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.gate.release()));
+        }
+    }
+    pub(crate) fn created(&self) -> usize {
+        self.observer.snapshot().created
+    }
+    pub(crate) fn idle(&self, pool: &Pool) -> usize {
+        pool.adapter.available()
+    }
+    pub(crate) fn all_joined(&self) -> bool {
+        let s = self.observer.snapshot();
+        s.created == s.joined && s.created == s.native_closed && s.pending_workers == 0
+    }
+}
+#[cfg(test)]
+impl Drop for HttpStartupTest {
+    fn drop(&mut self) {
+        self.release();
+    }
+}
+#[cfg(test)]
+pub(crate) fn http_startup_test_pool(path: std::path::PathBuf) -> (Pool, HttpStartupTest) {
+    let gate = std::sync::Arc::new(session::Gate::new());
+    let adapter = adapter::Adapter::with_capacity(
+        session::Config {
+            path: Some(path),
+            queue_capacity: Some(4),
+            busy: Duration::from_secs(1),
+            ..Default::default()
+        },
+        adapter::AdapterSeams {
+            target_worker: Some(2),
+            startup: Some(std::sync::Arc::clone(&gate)),
+            ..Default::default()
+        },
+        2,
+    );
+    let control = HttpStartupTest {
+        gate,
+        released: std::sync::atomic::AtomicBool::new(false),
+        observer: adapter.observer(),
+    };
+    (
+        Pool {
+            adapter,
+            acquire: Duration::from_secs(1),
+        },
+        control,
+    )
 }

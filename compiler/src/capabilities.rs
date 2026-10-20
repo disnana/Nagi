@@ -130,8 +130,16 @@ fn security_nonclone(resource: crate::stdlib::Resource) -> bool {
     matches!(
         resource,
         crate::stdlib::Resource::HttpPolicy
+            | crate::stdlib::Resource::CorsPolicy
+            | crate::stdlib::Resource::ProtectedOperation
+            | crate::stdlib::Resource::PublicOperation
+            | crate::stdlib::Resource::ClientResponse
+            | crate::stdlib::Resource::ClientFailure
             | crate::stdlib::Resource::VerifiedIdentity
             | crate::stdlib::Resource::AuthFailure
+            | crate::stdlib::Resource::CsrfOptions
+            | crate::stdlib::Resource::CsrfStore
+            | crate::stdlib::Resource::CsrfFailure
             | crate::stdlib::Resource::SessionOptions
             | crate::stdlib::Resource::SessionCookieOptions
             | crate::stdlib::Resource::SessionStore
@@ -176,6 +184,7 @@ pub(crate) fn contains_security_nonshared(
             crate::stdlib::Resource::HttpPolicy
                 | crate::stdlib::Resource::VerifiedIdentity
                 | crate::stdlib::Resource::AuthFailure
+                | crate::stdlib::Resource::CsrfFailure
                 | crate::stdlib::Resource::SessionFailure
         ) && !crate::stdlib::resource_info(resource).shared
     })
@@ -606,6 +615,8 @@ mod tests {
         // must not silently be defaulted to absent runtime payload.
         for &resource in crate::stdlib::RESOURCES {
             let [inline, shared, indirect, signature, phantom]: [&[usize]; 5] = match resource {
+                R::ProtectedOperation => [&[], &[0], &[2], &[], &[1]],
+                R::PublicOperation => [&[], &[0], &[1], &[], &[]],
                 R::App => [&[], &[0], &[], &[1], &[]],
                 R::Supervisor => [&[], &[0], &[], &[], &[]],
                 R::Actor => [&[], &[], &[0, 1, 2], &[], &[]],

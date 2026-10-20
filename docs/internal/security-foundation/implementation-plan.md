@@ -2,9 +2,43 @@
 
 [RFC](rfc.md) · [English plan](implementation-plan.en.md) · [現行調査](baseline-audit.md)
 
+## 2026-10-19: 統合PR #133と原因別のCI修復
+
+[統合PR #133](https://github.com/disnana/Nagi/pull/133) はDraftで、旧 #121・#122・#123・#126・#131・#132 は履歴を保持して閉じた。下記10月18日の結果は過去の各HEADの証拠であり、現在の合格を表さない。
+
+PRの初回HEAD `688ea61a62630d50597213e6ba006e5dac4bef5e` は4 OSと実ブラウザを含む必須CIが失敗した。Sessionの20msテストは、DB touchの待機を含む場合の504と、その待機を準備段階で完了させた後のmapper/finalizer動作を別の回帰に分け、期限と元の拒否条件を維持した。HTTPの固定500/408/413本文と有限テスト容量の修復、Cache-Control競合を正規化前に拒否するテスト用経路の修復は、原因を観測し独立レビューした。ローカル通常並列runtimeは860成功・失敗0、明示実行のTaskコスト測定も成功した。これは最終HEADの4 OS成功ではない。
+
+[検証専用HEAD `0b9e4f24`](https://github.com/disnana/Nagi/actions/runs/39228101806) はHTTP/Sessionの限定検証が4 OSで成功した。途中のWebKitホスト名不一致試験は、証明書固有の拒否証拠が不足して失敗した。[`b7e38467`の実ブラウザCI](https://github.com/disnana/Nagi/actions/runs/39234029025) は厳格な受理条件を保ち、3 enginesのTLS/業務12実行・12リセットと実子プロセス終了確認が成功した。追加変更は失敗理由の閉じた診断であり、以前の取消の原因は未確定である。この成功を原因修正の証拠にはせず、単なる通信取消、timeout、後片付け時のイベントも証明書拒否の証拠にしない。実ブラウザ成功を必須公開ゲートへ接続したが、これらは各検証HEADの証拠であり、最終統合HEADの受入を代替しない。一時的な検証workflowは取り込まない。古いWindowsログイン失敗の非再現も、元原因の解消とは扱わない。
+
+残る完了条件は最終統合HEADの必須CI・4 OS・High/保存Low/手書きLow/native・HTTP/TLS/実ブラウザ・配布物・性能/資源・日英Docs・独立最終レビューと必要なGUI受入である。IDE自動テスト/Plugin Verifierの成功をGUI成功へ読み替えない。正式公開済みはNagi 0.1.11で、0.2.0候補の版更新はマージ・タグ・release・Marketplace公開の許可ではない。
+
+## 2026-10-18: 統合候補と残る受入条件
+
+**採用済み仕様・候補実装・実行確認・正式公開を分ける。** mainの確認HEADは `7da0068254c1895ed4e6f2c824aab45eb2fbbf2c`。#121・#122・#123・#126・#131・#132で進めた差分をmain向けの単一0.2.0統合PRへ集約する。元PRは実装・レビュー履歴の参照先として保持し、受入判定は統合PRの最新HEADと必要な検証へ結び付ける。以下の専用検証ブランチはマージ済みでも正式配布でもなく、限定検証のスナップショットである。
+
+以前の限定検証スナップショット `4337422f5f632fe73e65d512a9ea170001301952` は、Session/CSRF/CORS、Ed25519検証専用profile、typed HTML/SQL、用途別外向きHTTP、SF07の借用ResponseContext・Result factory/mapper・明示route rate/予算、SF08のbrowser fixtureを接続している。[限定CI 39126273963](https://github.com/disnana/Nagi/actions/runs/39126273963)でproduction runtime型検査、全runtime test targetコンパイル、protected操作の実HTTP/TLS 1件、Ed25519 core14件/public1件、Cargoが更新した依存graphによるstandalone fixtureの `cargo check --locked`（型検査）を確認した。これは全テスト実行・4 OS・実ブラウザ受入の代替ではない。
+
+現在の統合PRは、候補 `9dd70dc73b2722fb537edc34452916030670d027` の全差分に、レビュー済みsource gate・SF06生成fixture・SF08 browser fixture・日英Docsの修正を加えて構成する。検証用の一時workflowは取り込まない。Nagi本体の0.1.11→0.2.0への版更新は明示承認済みで、外部依存版を変更せず統合PRへ含める。版更新は正式公開を意味しない。
+
+[9ddのCI](https://github.com/disnana/Nagi/actions/runs/39128739265)はIDEA/PyCharm stable・EAP、Plugin Verifier、共通ZIP、MSRV Ed25519、Docs、VSIXが成功したが、source gate・生成fixtureの失敗を含み4 OS全体は失敗した。修正後の限定検証では、[SF06のHigh・Highなし保存Low・手書きLowからの実TLS/Grant実行](https://github.com/disnana/Nagi/actions/runs/39130975356)と[3 browser enginesの実TLS/business 12実行](https://github.com/disnana/Nagi/actions/runs/39129492943)が成功した。[Windows限定CI](https://github.com/disnana/Nagi/actions/runs/39131370586)は送信期限3件・停止/終了確認2件・SF07 wire検証群が成功し、private Session診断のhead_finalizerが20msのhandler予算中に失敗した。DB commit中の期限到達を観測したが、元の失敗と同一原因とも解消済みとも判断しない。診断と原因別の回帰検証が残る。これらは各HEADの限定結果であり、最終統合HEADの全体成功へ流用しない。
+
+残るrelease条件は、最終候補の4 OS/MSRV・High/保存Low/手書きLow native・Session/ログイン/取消/解放の回帰・実ブラウザ/TLS・配布物・性能/資源・日英Docs/移行・最終独立監査である。既知のSession 504とB1短TTLの失敗は、限定実行の非再現だけで解消扱いしない。未確認の範囲を「制約」と呼んで完了条件から外さない。候補検証と版更新の承認は、マージ、タグ、release、Marketplace公開の承認を含まない。
+
+以下の2026-10-10の状態・CI記述は当日の履歴であり、上記候補の現在の実装・CI結果を示さない。
+
 2026-10-10 UTC。**計画でありFoundation全体の完了記録ではない。** GitHub main `e609aba158921226a632f16d41eb8b0f4ad5aebd`にはSF00 #100とSF01 #101がmerge済みで、SF05のcanonical Query/Parameters実装とSF07 bounded reader変更も開発sourceに統合済み。SF02/SF03/SF04/SF06は未完了、SF07の横断budget acceptanceとSF08も未完了。正式0.2.0は未リリースで、公開0.1.11は変更されない。統合済みコードだけでは他のacceptance完了を意味しない。SF01[専用契約](sf01-contract.md)と結果、SF05[契約](sf05-contract.md)・[結果](../security-foundation-sf05-results.md)で個別の確認範囲と制限を記録する。最新ユーザー指示に従う[D1–D3判断・移行](decisions-and-migration.md)を基準とし、旧資料の互換性保留を再承認待ちにしない。各featureの公開signature/contractはRED追加前に固定する。意味論が一意な内部調査、依存比較、test harness設計は並行して進められる。
 
 2026-10-10 14:04 UTCのGitHub readbackでは、main checks `38055073417` のLinux、4 OS package、4つのIDE Stable/EAP、common ZIPが成功し、websiteも成功した。`publish-release`はCHANGELOGに必要な `## JetBrains 0.1.3` 見出しがなく失敗し、0.1.3のtag/Releaseは作成されていない。公開処理の再実行は承認まで行わない。CodeQL run `38055084000`はC/C++ extractionで `Extraction failed: No source files found` と報告した。全check成功とは扱わない。
+
+## 2026-10-16: SF07で採用済みの有限予算方針
+
+ユーザーの明示回答により、Q1の公開API・全route明示設定、Q2の予算必須設定、Q3の有限fallback方針を採用した。これは設計判断の記録であり、公開runtime・compiler接続や受入検証の完了宣言ではない。上記の2026-10-10のCI・公開状況は当時の履歴である。
+
+- 0.2.0は有限予算を必須の明示設定とする。必要な設定が欠ければlisten前に診断して拒否し、`default_options`にも新予算を黙って注入しない。
+- 4096を固定の公開上限にはしない。件数・保存byte・探索workと応答保持・fallback容量をchecked検査し、起動時の有限確保と実装上の受理範囲を検証する。設定可能は無制限を意味しない。
+- 日英Docsには実測した小規模構成例、測定条件、調整方法を用意する。説明用数値を暗黙default、全Appの推奨値、SLAとして扱わない。
+- 上限式、境界での拒否、予算保持と解放、有限fallback不足時の最終close、並行動作、4 OS性能を必要な検証として残す。既存の期限・取消・actual join・CORS/managed headersの契約とrelease gateは緩めない。
+- 公開Context/factory/mapper/rate接続とHigh・保存Low・手書きLow/nativeの実証、統合後の独立レビューが揃うまではSF07を完成扱いしない。常にHTTP応答できることやOOMからの普遍的回復は保証しない。
 
 ## 実装の分割と依存
 

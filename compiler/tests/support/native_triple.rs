@@ -2,6 +2,8 @@
 // 承認済みの狭い所有代入移行。型・move・origin拒否と実生成Rustを別に観測する。
 #[path = "checked_emission.rs"]
 pub(crate) mod checked_emission;
+#[path = "native_run_summary.rs"]
+mod native_run_summary;
 use nagic::{check, emit, source};
 use std::{
     collections::HashSet,
@@ -240,8 +242,8 @@ impl Fixture {
                 Duration::from_secs(15),
             );
             assert!(
-                ran.status.success(),
-                "{name} backend run:\n{}{}",
+                native_run_summary::successful_native_test(ran.status.success(), &ran.stdout),
+                "{name} backend run requires a nonempty successful libtest summary:\n{}{}",
                 String::from_utf8_lossy(&ran.stdout),
                 String::from_utf8_lossy(&ran.stderr)
             );

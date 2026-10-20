@@ -106,12 +106,12 @@ class Holder:
     callback_app: http.App[i64, fn[auth.Grant[Read], i64]]
 @rust("native::verify")
 extern def verify(value: Holder) -> unit
-def principal_error(proof: auth.AuthScope) -> http.Response:
-    return http.empty(http.Status.UNAUTHORIZED)
-def grant_error(proof: auth.Grant[Read]) -> http.Response:
-    return http.empty(http.Status.FORBIDDEN)
-def callback_error(callback: fn[auth.Grant[Read], i64]) -> http.Response:
-    return http.empty(http.Status.INTERNAL_SERVER_ERROR)
+def principal_error(context: view[http.ResponseContext], proof: auth.AuthScope) -> Result[http.Response, Error]:
+    return http.empty(context, http.Status.UNAUTHORIZED)
+def grant_error(context: view[http.ResponseContext], proof: auth.Grant[Read]) -> Result[http.Response, Error]:
+    return http.empty(context, http.Status.FORBIDDEN)
+def callback_error(context: view[http.ResponseContext], callback: fn[auth.Grant[Read], i64]) -> Result[http.Response, Error]:
+    return http.empty(context, http.Status.INTERNAL_SERVER_ERROR)
 def main():
     value = Holder(principal_app=http.app[i64, auth.AuthScope](1, principal_error), grant_app=http.app[i64, auth.Grant[Read]](2, grant_error), callback_app=http.app[i64, fn[auth.Grant[Read], i64]](3, callback_error))
     verify(value)

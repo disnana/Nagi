@@ -661,6 +661,9 @@ pub(crate) fn register_standard_module(
     // Cross-module types in standard signatures must survive saved Low without
     // requiring applications to import those modules just to infer a result.
     // These are canonical module definitions, not aliases in the user's scope.
+    if id.0 == crate::stdlib::CLIENT_MODULE_ID {
+        register_standard_module(metadata, &ModuleId(crate::stdlib::AUTH_MODULE_ID.into()))?;
+    }
     if id.0 == crate::stdlib::AUTH_SESSION_MODULE_ID {
         for dependency in [
             crate::stdlib::AUTH_MODULE_ID,

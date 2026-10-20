@@ -83,16 +83,18 @@ Rustのアダプターからは、rootで読み込んだmoduleのclassを`super:
 
 ## 標準HTTP libraryを読み込む
 
-`std.http.server`と`std.actor`はNagi 0.1.8から使える標準ライブラリです。
+`std.http.server`と`std.actor`はNagi 0.1.8から使える標準ライブラリです。以下の応答factory例は未リリース0.2.0のContext-first APIを使います。
 
 ```nagi
 import std.http.server as http
 from std.http.server import Request, Response, Status as Code
 
-def main():
-    response = http.text(Code.OK, "Hello, Nagi!")
-    print(response.status.value)
+def greeting(request: Request) -> Result[Response, Error]:
+    context = http.response_context(view(request))
+    return http.text(context, Code.OK, "Hello, Nagi!")
 ```
+
+この例はrequest-borrowed contextを使うresponse factory断片で、listenerを起動しません。response予算、rate予算、各routeのrate policyを設定する起動手順は[HTTP APIリファレンス](http-server.md#sf07の明示予算とrate-policy開発候補)を参照してください。
 
 標準moduleはコンパイラと一緒に提供する登録済みのlibraryです。カレントディレクトリの同名ファイルやエディターのbufferで差し替えません。module importには`as`を付け、`from`では必要な定義だけを選べます。importするだけでlistenerやworkerは起動しません。生成Lowにも標準定義のIDを残し、標準型のaliasは同じnative型を指します。
 

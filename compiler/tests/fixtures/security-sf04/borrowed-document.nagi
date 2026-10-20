@@ -1,4 +1,5 @@
 import std.html as html
 import std.http.server as web
-def wrong(document: html.HtmlDocument) -> web.Response:
-    return web.html_response(web.Status.OK, view(document))
+def wrong(request: web.Request, document: html.HtmlDocument) -> Result[web.Response, Error]:
+    context = web.response_context(view(request))
+    return web.html_response(context, web.Status.OK, view(document))

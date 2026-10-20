@@ -1,4 +1,3 @@
-#[cfg(test)]
 mod security_sf07_private;
 pub use axum;
 pub use rusqlite;
@@ -10,6 +9,9 @@ mod concurrent;
 mod database;
 pub mod html;
 pub mod http_server;
+// Legacy private phase ports remain internal; canonical operation values are public.
+#[allow(dead_code, unused_imports)]
+pub mod http_client;
 pub mod metrics;
 pub mod result;
 pub mod sqlite;

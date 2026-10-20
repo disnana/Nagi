@@ -1,4 +1,4 @@
-# Nagi 0.1.11 — 開発中のバックエンド向け言語
+# Nagi 0.2.0 — 開発中のバックエンド向け言語
 
 [English](README.en.md)
 
@@ -41,7 +41,7 @@ nagic --help
 
 [VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)はMarketplaceまたは[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。IntelliJ IDEA・PyCharm向けの[Nagi](editors/jetbrains-nagi/README.md)は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから入れる場合は、一覧のVersionsで利用可能な版とIDE対応を確認してください。GitHubの公開済み0.1.2 Releaseには、両IDE共通の`nagi-jetbrains-0.1.2.zip`と`.sha256`があります。このZIPの最低対応はIntelliJ IDEA 2025.1.1 build 251.25410.109、PyCharm 2025.1.1 build 251.25410.122です。Marketplaceからは対応IDEへ直接インストールでき、Release ZIPは手動インストールします。0.1.3は未公開候補です。公開済みcompiler 0.1.11は通常のCheck/Runに使えますが、候補の補完・診断・定義移動には同じPR sourceから作ったcompiler CI artifactが必要です。操作は[エディターの案内](docs/editor.md)を参照してください。
 
-インストーラーはmainから、コンパイラは公開Releaseから取得します。このREADMEの例は、2026-10-07に公開したNagi 0.1.11を対象にしています。インストールした版は`nagic --version`で確かめてください。変更内容は[CHANGELOG](CHANGELOG.md)、互換性の変更は[0.1.11移行ガイド](docs/migration-0.1.11.md)を参照してください。
+インストールスクリプトは引き続き公開ReleaseのNagi 0.1.11を取得します。このREADMEには未公開の0.2.0開発sourceのAPI例が含まれます。例を検査・実行するには、同じsource revisionからbuildしたcompilerか、そのrevisionに対応するCI artifactを使ってください。公開0.1.11にはこれらのAPIはありません。インストールした公開版は`nagic --version`で確かめてください。0.1.11との互換性は[0.1.11移行ガイド](docs/migration-0.1.11.md)を参照してください。
 
 ### アンインストール
 
@@ -61,30 +61,42 @@ Linux / macOS（bash）:
 
 変更済み・検証できない配布物は残します。プロジェクト、Rust/Cargo、VS Code拡張は変更しません。詳細は[導入ガイド](docs/getting-started.md#アンインストールする)へ。
 
-## 最初に動かす
+## 0.2.0候補のHTTP例を動かす
 
-次を`server.nagi`に保存します。DBなしのHTTPサーバーです。
+次を`server.nagi`に保存します。DB書き込みのないHTTPサンプルです。同じsource revisionからbuildした候補compilerか、対応するCI artifactで検査・実行してください。公開0.1.11ではこのAPIを使えません。
 
-```python
+```nagi
 import std.http.server as http
 
 class State:
     greeting: str
 
-async def hello(request: http.Request, state: shared[State]) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, view(state.greeting)))
+async def hello(request: http.Request, state: shared[State], policy: unit) -> Result[http.Response, Error]:
+    return http.text(http.response_context(view(request)), http.Status.OK, view(state.greeting))
 
 async def main() -> Result[unit, Error]:
     app = http.app_default[State](State(greeting="Hello, Nagi!"))
-    app = try http.route(app, http.Method.GET, "/", hello)
-    return await http.serve(app, 8080, http.default_options())
+    app = try http.route(app, http.Method.GET, "/", http.public_policy[State](), hello)
+    route_policy = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/", route_policy)
+    limits = http.default_options()
+    limits = try http.authority(limits, "https://localhost", ["localhost:8080", "127.0.0.1:8080"], 2, 256)
+    # 明示的な有限予算の例。用途に応じて調整してください。
+    response_budget = try http.response_limits(
+        1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32
+    )
+    limits = try http.with_response_limits(limits, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    limits = try http.with_rate_limits(limits, rate_budget)
+    return await http.serve(app, 8080, limits)
+
 ```
 
 ```sh
 nagic run server.nagi
 ```
 
-[http://127.0.0.1:8080/](http://127.0.0.1:8080/)を開くと`Hello, Nagi!`が返ります。Ctrl+Cで停止します。ソースからコンパイラを作る場合は、`cargo build --release --locked`の後に`./target/release/nagic`を使います。
+[http://127.0.0.1:8080/](http://127.0.0.1:8080/)を開くと`Hello, Nagi!`が返ります。Ctrl+Cで停止します。予算値は説明用であり、容量・SLAや安全な本番設定の推奨ではありません。同じrevisionのリポジトリからcompilerを作る場合は、rootで`cargo build --release --locked`を実行し、`./target/release/nagic run server.nagi`を使います。Windows PowerShellでは`.\target\release\nagic.exe run server.nagi`です。APIの変更点は[0.2.0移行ガイド](docs/migration-0.2.0.md)を参照してください。
 
 ヘッダー、JSON、独自エラー、共有状態の使い方は[HTTP](docs/http.md)と[認証サンプル](test-nagi-code/library-examples/http-auth/README.md)へ。
 
@@ -106,17 +118,18 @@ SVG・PNGには別途D2が必要です。絞り込み、推論できない関係
 
 Lowの互換性を保ちながら、当面はHighとRust連携を優先します。使い方は[HighとLow](docs/low-language.md)、Rustの資産を呼ぶ方法は[Rust連携](docs/modules-and-rust.md)へ。
 
-## 現在の範囲
+## 現在の範囲（0.2.0開発source）
 
-| このソースで使えるもの | 主な制限 |
+| このsourceで使えるもの | 主な制限 |
 |---|---|
-| 型付きの値、class・enum、List、nullable、Result、move・view・shared | 利用者が定義するgeneric・trait、Mapの標準操作は未対応。ownedの扱いは未完成 |
-| HTTP、ヘッダー、応答status、独自エラー、共有状態 | 標準サーバーはloopbackのHTTP/1。TLS・WebSocket・streamingの公開APIはない |
-| JSON、SQLite、schemaを指定したSQLの事前検査 | 事前検査は明示指定。値の型・NULL・動的SQLは実行時検査。bindは固定形。標準PostgreSQL・pool・transaction APIはない |
-| async・scope、typed actor・Supervisor | Tokio上の同一プロセス。独自VM、無停止更新、分散actorはない |
-| ファイルのimport、標準module、Rust連携、Lowの関数差し替え | 任意のRust型をそのまま使う機能や、安定した外部ABIはない |
+| 型付きの値、class・enum、List、nullable、Result、move・view・shared | 利用者定義のgeneric関数・traitと標準Map操作は未対応。`owned[T]`に汎用constructorや透過的な演算はありません |
+| HTTP、ヘッダー、応答status、独自エラー、共有状態 | 標準サーバーはloopbackのHTTP/1。TLS・WebSocket・streamingの公開APIはありません |
+| JSON、SQLite Pool/Tx、型付きParameters、SQL/schemaのopt-in事前検査 | SQLite APIは未公開の開発sourceに含まれます。SQLは直接literalの一文で、placeholderは匿名`?`のみ。標準PostgreSQLはありません |
+| async・scope、typed actor・Supervisor | Tokio上の同一プロセス。独自VM、無停止更新、分散actorはありません |
+| ファイルのimport、標準module、Rust連携、Lowの関数差し替え | 任意のRust型をそのまま使う機能や、安定した外部ABIはありません |
 
-SQLiteの文字列SQLは、schemaを明示した[事前検査](docs/sql-check.md)で名前・必要な返却列・bind数を確認できます。値の型・NULL可否や配備先schemaの一致は保証しません。公開版への収録状況は[CHANGELOG](CHANGELOG.md)を参照してください。
+SQLiteの固定SQLは直接literalを`sqlite.literal(...)`へ渡して`Query`にし、値は型付き`Parameters`でbindします。request由来文字列をSQL構造として実行するfactoryはありません。schemaを明示する[事前検査](docs/sql-check.md)は、直接QueryのSQL形・schema名・必要な列と、直接Parameters builder列のbind数を確認できます。実値の型・NULL・数値範囲はruntime検査に残り、事前検査は配備先DBとの一致を保証しません。Pool/Txの詳細は[SQLite](docs/sqlite-pool.md)を参照してください。このAPIは公開0.1.11には含まれません.
+
 
 各APIの条件は[リファレンス](docs/README.md)で確認してください。Nagiの検査とrustcの役割は[所有権](docs/ownership.md)、実装基盤の分担は[紹介](docs/introduction.md#コンパイラと既存ライブラリ)に記載しています。
 

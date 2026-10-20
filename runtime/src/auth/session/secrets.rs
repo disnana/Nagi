@@ -16,7 +16,7 @@ const MAX_NAME_BYTES: usize = 128;
 const MAX_COOKIE_BYTES: usize = 8192;
 const MAX_COOKIE_HEADERS: usize = 64;
 const MAX_COOKIE_PAIRS: usize = 64;
-const MAX_SET_COOKIE_BYTES: usize = 512;
+pub(super) const MAX_SET_COOKIE_BYTES: usize = 512;
 pub(super) struct RawEntropy([u8; 32]);
 pub(super) struct SessionId(String);
 pub(super) struct Digest([u8; 32]);

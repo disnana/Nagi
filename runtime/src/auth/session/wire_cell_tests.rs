@@ -79,8 +79,14 @@ async fn already_sealed_response_rejects_second_ready_right_and_poison_is_redact
     let (dir, pool, store) = fixture().await;
     let first = LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap();
     let second = LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap();
+    let response_request = crate::http_server::bounded_response_request_fixture(64);
     let response = session::apply(
-        crate::http_server::text(crate::http_server::Status::OK, "owned"),
+        crate::http_server::text(
+            crate::http_server::response_context(&response_request),
+            crate::http_server::Status::OK,
+            "owned",
+        )
+        .unwrap(),
         session::issue(&store, scope(&first)).await.unwrap(),
     )
     .unwrap();

@@ -125,10 +125,10 @@ fn list_detail_high_saved_and_handwritten_low_generate_checked_calls() {
 #[test]
 fn renamed_imports_keep_nominal_document_identity() {
     let fixture = Fixture::new();
-    let text = "import std.html as markup\nimport std.http.server as web\nclass HtmlDocument:\n    value: i64\ndef respond(document: markup.HtmlDocument) -> web.Response:\n    return web.html_response(web.Status.OK, document)\n";
+    let text = "import std.html as markup\nimport std.http.server as web\nclass HtmlDocument:\n    value: i64\ndef respond(request: web.Request, document: markup.HtmlDocument) -> Result[web.Response, Error]:\n    context = web.response_context(view(request))\n    return web.html_response(context, web.Status.OK, document)\n";
     let high = fixture.checked(text, true);
     let saved = fixture.checked(&emit::low(&high), false);
-    let manual = fixture.checked("import std.html as markup;\nimport std.http.server as web;\nrecord HtmlDocument { value: i64; }\nfn respond(document: markup.HtmlDocument) -> web.Response {\n    return web.html_response(web.Status.OK, document);\n}\n", false);
+    let manual = fixture.checked("import std.html as markup;\nimport std.http.server as web;\nrecord HtmlDocument { value: i64; }\nfn respond(request: web.Request, document: markup.HtmlDocument) -> Result[web.Response, Error] {\n    let context = web.response_context(view(request));\n    return web.html_response(context, web.Status.OK, document);\n}\n", false);
     for program in [high, saved, manual] {
         let document = program
             .functions
@@ -139,14 +139,14 @@ fn renamed_imports_keep_nominal_document_identity() {
             })
             .unwrap();
         assert_eq!(
-            document.params[0].1,
+            document.params[1].1,
             super::resource_type(super::Resource::HtmlDocument, vec![])
         );
         let rust = fixture.rust(program);
         assert!(rust.contains("::nagi_runtime::http_server::html_response"));
         assert!(rust.contains("::nagi_runtime::html::HtmlDocument"));
     }
-    fixture.reject_high_and_saved_low("import std.http.server as web\nclass HtmlDocument:\n    value: i64\ndef wrong(document: HtmlDocument) -> web.Response:\n    return web.html_response(web.Status.OK, document)\n", "型", "return");
+    fixture.reject_high_and_saved_low("import std.http.server as web\nclass HtmlDocument:\n    value: i64\ndef wrong(request: web.Request, document: HtmlDocument) -> Result[web.Response, Error]:\n    context = web.response_context(view(request))\n    return web.html_response(context, web.Status.OK, document)\n", "型", "return");
 }
 
 #[test]
@@ -167,7 +167,7 @@ fn owned_reuse_copy_and_opaque_fields_are_checker_negatives() {
         "encoded",
         "fragment.encoded",
     );
-    fixture.reject_high_and_saved_low("import std.html as html\nimport std.http.server as http\ndef wrong(document: html.HtmlDocument) -> http.Response:\n    return http.html_response(http.Status.OK, view(document))\n", "型", "return");
+    fixture.reject_high_and_saved_low("import std.html as html\nimport std.http.server as http\ndef wrong(request: http.Request, document: html.HtmlDocument) -> Result[http.Response, Error]:\n    context = http.response_context(view(request))\n    return http.html_response(context, http.Status.OK, view(document))\n", "型", "return");
 }
 
 #[test]
@@ -212,10 +212,10 @@ fn nested_owned_clone_serde_and_debug_are_rejected_but_shared_data_is_allowed() 
 #[test]
 fn existing_http_without_html_import_keeps_local_names_and_canonical_policy() {
     let fixture = Fixture::new();
-    let text = "import std.http.server as web\nclass HtmlDocument:\n    value: i64\ndef plain() -> web.Response:\n    policy = web.public_policy[i64]()\n    return web.text(web.Status.OK, \"plain\")\n";
+    let text = "import std.http.server as web\nclass HtmlDocument:\n    value: i64\ndef plain(request: web.Request) -> Result[web.Response, Error]:\n    context = web.response_context(view(request))\n    policy = web.public_policy[i64]()\n    return web.text(context, web.Status.OK, \"plain\")\n";
     let high = fixture.checked(text, true);
     let saved = fixture.checked(&emit::low(&high), false);
-    let manual = fixture.checked("import std.http.server as web;\nrecord HtmlDocument { value: i64; }\nfn plain() -> web.Response {\n    let policy = web.public_policy[i64]();\n    return web.text(web.Status.OK, \"plain\");\n}\n", false);
+    let manual = fixture.checked("import std.http.server as web;\nrecord HtmlDocument { value: i64; }\nfn plain(request: web.Request) -> Result[web.Response, Error] {\n    let context = web.response_context(view(request));\n    let policy = web.public_policy[i64]();\n    return web.text(context, web.Status.OK, \"plain\");\n}\n", false);
     for program in [high, saved, manual] {
         assert!(!program
             .modules
@@ -232,6 +232,6 @@ fn existing_http_without_html_import_keeps_local_names_and_canonical_policy() {
         assert!(rust.contains("::nagi_runtime::http_server::public_policy::<"));
         assert!(!rust.contains("::nagi_runtime::html::HtmlDocument"));
     }
-    fixture.reject("import std.http.server as web;\nrecord HtmlDocument { value: i64; }\nfn wrong(document: HtmlDocument) -> web.Response {\n    return web.html_response(web.Status.OK, document);\n}\n", false, "型", "return");
+    fixture.reject("import std.http.server as web;\nrecord HtmlDocument { value: i64; }\nfn wrong(request: web.Request, document: HtmlDocument) -> Result[web.Response, Error] {\n    let context = web.response_context(view(request));\n    return web.html_response(context, web.Status.OK, document);\n}\n", false, "型", "return");
     fixture.reject("import std.html as markup;\nfn wrong(fragments: List[List[markup.HtmlFragment]]) {\n    copy(view(fragments));\n}\n", false, "Clone", "copy(view(fragments))");
 }

@@ -1,11 +1,80 @@
 use super::*;
 use axum::body::Body;
+use std::io::Write as _;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
     sync::{oneshot, Notify},
 };
+
+pub(super) fn with_response_fixture(options: Options) -> Options {
+    if options.response_limits.is_none() {
+        // Explicit finite test-only response profile: enough for the
+        // existing 16 MiB stalled-send fixture and no production default.
+        let body_bytes = options.body_bytes.max(STALLED_BODY_LENGTH);
+        let retained_bytes = body_bytes
+            .checked_mul(8)
+            .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
+            .expect("test response retained bound fits usize");
+        let fallback_retained_bytes = options
+            .connections
+            .checked_mul(262_144)
+            .and_then(|bytes| bytes.checked_add(16 * 1024 * 1024))
+            .expect("test fallback retained bound fits usize");
+        // A native connection retains its prior response's charge through the
+        // next request. Concurrent handlers need their own finite output slots.
+        let live_responses = options
+            .requests
+            .checked_add(options.connections)
+            .expect("test live response count fits usize");
+        let limits = response_limits(
+            i64::try_from(body_bytes).expect("test body bound fits i64"),
+            65_536,
+            256,
+            4096,
+            32,
+            131_072,
+            i64::try_from(live_responses).expect("test response count fits i64"),
+            i64::try_from(retained_bytes).expect("test retained bound fits i64"),
+            i64::try_from(options.connections).expect("test connection count fits i64"),
+            i64::try_from(fallback_retained_bytes).expect("test fallback retained bound fits i64"),
+            4096,
+            32,
+        )
+        .expect("fixed test response limits are valid");
+        with_response_limits(options, limits).expect("fixed test response profile validates")
+    } else {
+        options
+    }
+}
+
+// Explicit finite profile for old lifecycle fixtures only. Startup-refusal and
+// rate tests use the public API directly and never pass through this helper.
+pub(crate) fn with_rate_fixture<S, E>(
+    mut app: App<S, E>,
+    options: Options,
+) -> (App<S, E>, Options) {
+    for route in app.routes.values_mut().flatten() {
+        if route.rate.is_none() {
+            route.rate = Some(rate_policy(1_000_000, 1000).expect("finite test route policy"));
+        }
+    }
+    let options = if options.rate_limits.is_none() {
+        with_rate_limits(
+            options,
+            rate_limits(64, 64, 4096, 4 * 1024 * 1024, 65_536).unwrap(),
+        )
+        .expect("finite test rate metadata fits")
+    } else {
+        options
+    };
+    (app, options)
+}
+
+fn response_fixture_request(body_bound: usize) -> Request {
+    super::response_public::tests::request_fixture(body_bound)
+}
 
 #[path = "authority_tests.rs"]
 mod authority_tests;
@@ -19,6 +88,17 @@ struct Server {
 }
 impl Server {
     async fn new<S, E>(app: App<S, E>, options: Options) -> Self
+    where
+        S: Send + Sync + 'static,
+        E: 'static,
+    {
+        Self::new_with_send_buffer(app, options, None).await
+    }
+    async fn new_with_send_buffer<S, E>(
+        app: App<S, E>,
+        options: Options,
+        send_buffer_bytes: Option<u32>,
+    ) -> Self
     where
         S: Send + Sync + 'static,
         E: 'static,
@@ -37,7 +117,21 @@ impl Server {
         } else {
             options
         };
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let options = with_response_fixture(options);
+        let (app, options) = with_rate_fixture(app, options);
+        let listener = if let Some(bytes) = send_buffer_bytes {
+            // Only stalled-send fixtures constrain native buffering. The
+            // accepted socket inherits this listener setting; actual write
+            // Pending, expiry and join remain the evidence below.
+            let socket = tokio::net::TcpSocket::new_v4().unwrap();
+            #[cfg(not(windows))]
+            socket.set_reuseaddr(true).unwrap();
+            socket.set_send_buffer_size(bytes).unwrap();
+            socket.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+            socket.listen(128).unwrap()
+        } else {
+            TcpListener::bind("127.0.0.1:0").await.unwrap()
+        };
         let address = listener.local_addr().unwrap();
         let (stopped, shutdown) = oneshot::channel();
         let task = tokio::spawn(serve_listener(listener, app, options, async {
@@ -84,13 +178,35 @@ impl Received {
             .collect()
     }
 }
+#[derive(Clone, Copy, Debug)]
+enum TestIoPhase {
+    RequestWrite,
+    ResponseStatus,
+    ResponseHeaders,
+    ResponseBody,
+    ConnectionEof,
+}
+fn test_io<T>(phase: TestIoPhase, result: std::io::Result<T>) -> T {
+    result.unwrap_or_else(|error| {
+        panic!(
+            "HTTP test I/O failed: phase={phase:?} kind={:?}",
+            error.kind()
+        )
+    })
+}
 async fn send(socket: &mut BufReader<TcpStream>, data: &[u8]) {
-    socket.get_mut().write_all(data).await.unwrap();
+    test_io(
+        TestIoPhase::RequestWrite,
+        socket.get_mut().write_all(data).await,
+    );
 }
 async fn response(socket: &mut BufReader<TcpStream>, head: bool) -> Received {
     tokio::time::timeout(Duration::from_secs(3), async {
         let mut line = String::new();
-        socket.read_line(&mut line).await.unwrap();
+        test_io(
+            TestIoPhase::ResponseStatus,
+            socket.read_line(&mut line).await,
+        );
         let status: u16 = line
             .split_whitespace()
             .nth(1)
@@ -102,7 +218,13 @@ async fn response(socket: &mut BufReader<TcpStream>, head: bool) -> Received {
         let mut chunked = false;
         loop {
             line.clear();
-            assert_ne!(socket.read_line(&mut line).await.unwrap(), 0);
+            assert_ne!(
+                test_io(
+                    TestIoPhase::ResponseHeaders,
+                    socket.read_line(&mut line).await
+                ),
+                0
+            );
             if line == "\r\n" {
                 break;
             }
@@ -121,22 +243,28 @@ async fn response(socket: &mut BufReader<TcpStream>, head: bool) -> Received {
             if chunked {
                 loop {
                     line.clear();
-                    socket.read_line(&mut line).await.unwrap();
+                    test_io(TestIoPhase::ResponseBody, socket.read_line(&mut line).await);
                     let length = usize::from_str_radix(line.trim(), 16).unwrap();
                     if length == 0 {
-                        socket.read_line(&mut line).await.unwrap();
+                        test_io(TestIoPhase::ResponseBody, socket.read_line(&mut line).await);
                         break;
                     }
                     let start = body.len();
                     body.resize(start + length, 0);
-                    socket.read_exact(&mut body[start..]).await.unwrap();
+                    test_io(
+                        TestIoPhase::ResponseBody,
+                        socket.read_exact(&mut body[start..]).await,
+                    );
                     let mut end = [0; 2];
-                    socket.read_exact(&mut end).await.unwrap();
+                    test_io(TestIoPhase::ResponseBody, socket.read_exact(&mut end).await);
                     assert_eq!(&end, b"\r\n");
                 }
             } else {
                 body.resize(length, 0);
-                socket.read_exact(&mut body).await.unwrap();
+                test_io(
+                    TestIoPhase::ResponseBody,
+                    socket.read_exact(&mut body).await,
+                );
             }
         }
         Received {
@@ -150,17 +278,46 @@ async fn response(socket: &mut BufReader<TcpStream>, head: bool) -> Received {
 }
 async fn closed(socket: &mut BufReader<TcpStream>) -> Vec<u8> {
     let mut rest = Vec::new();
-    tokio::time::timeout(Duration::from_secs(3), socket.read_to_end(&mut rest))
-        .await
-        .unwrap()
-        .unwrap();
+    test_io(
+        TestIoPhase::ConnectionEof,
+        tokio::time::timeout(Duration::from_secs(3), socket.read_to_end(&mut rest))
+            .await
+            .unwrap(),
+    );
     rest
 }
+// An intentional parser rejection or expired send closes the transport without
+// promising FIN. This helper is never used to accept a failed normal response.
+async fn terminal_close_after_abort(
+    socket: &mut BufReader<TcpStream>,
+    max_bytes: usize,
+) -> Vec<u8> {
+    let mut rest = Vec::new();
+    let result = tokio::time::timeout(
+        Duration::from_secs(3),
+        (&mut *socket)
+            .take(max_bytes as u64 + 1)
+            .read_to_end(&mut rest),
+    )
+    .await
+    .unwrap();
+    match result {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset => {}
+        Err(error) => test_io(TestIoPhase::ConnectionEof, Err::<(), _>(error)),
+    }
+    assert!(
+        rest.len() <= max_bytes,
+        "unexpected bytes after terminal close"
+    );
+    rest
+}
+
 fn basic_request() -> Request {
     Request {
         method: Method::GET,
         uri: "/users/7?q=yes".parse().unwrap(),
-        headers: HeaderMap::new(),
+        headers: HeaderMap::new().into(),
         body: Bytes::from_static(b"body"),
     }
 }
@@ -218,7 +375,10 @@ async fn heterogeneous_route_erasure_adds_exactly_one_future_allocation() {
     .unwrap();
     let owner = LeaseOwner::new(Instant::now() + Duration::from_secs(30)).unwrap();
     let route = &app.routes["/"][0];
-    let prepared = (route.prepare)(
+    let RouteKind::Ordinary(prepare) = &route.kind else {
+        panic!("expected ordinary route");
+    };
+    let prepared = prepare(
         basic_request().security_snapshot(),
         Arc::clone(&app.state),
         Arc::clone(&owner.lease),
@@ -455,6 +615,8 @@ fn borrowed_lookup_validation_agrees_with_native_token_rules_and_length_limits()
 
 #[test]
 fn response_headers_reject_managed_values_and_keep_ordinary_duplicates() {
+    let request = response_fixture_request(16);
+    let context = response_context(&request);
     for (name, value) in [
         ("bad name", b"v".as_slice()),
         ("valid", b"a\r\nb"),
@@ -468,16 +630,21 @@ fn response_headers_reject_managed_values_and_keep_ordinary_duplicates() {
         ("Content-Security-Policy", b"default-src 'self'"),
         ("X-Content-Type-Options", b"nosniff"),
     ] {
-        assert!(append_header(empty(Status::OK), name, value).is_err());
+        assert!(append_header(empty(context, Status::OK).unwrap(), name, value).is_err());
     }
-    assert!(append_header_text(empty(Status::OK), "x-value", "a\r\nb").is_err());
+    assert!(append_header_text(empty(context, Status::OK).unwrap(), "x-value", "a\r\nb").is_err());
     // SF01 intentionally removes the raw-HTML activation path and user-managed
     // Set-Cookie output. HTML bytes remain an inert binary representation;
     // ordinary duplicate application headers remain available.
-    let inactive_html = bytes(Status::CREATED, b"<p>ok</p>");
+    let inactive_html = bytes(context, Status::CREATED, b"<p>ok</p>").unwrap();
     assert!(append_header_text(inactive_html, "Content-Type", "text/html").is_err());
     let result = append_header(
-        append_header(bytes(Status::CREATED, b"ok"), "X-Trace", b"a=1").unwrap(),
+        append_header(
+            bytes(context, Status::CREATED, b"ok").unwrap(),
+            "X-Trace",
+            b"a=1",
+        )
+        .unwrap(),
         "X-Trace",
         b"b=2",
     )
@@ -502,41 +669,48 @@ fn response_headers_reject_managed_values_and_keep_ordinary_duplicates() {
 
 #[test]
 fn ordinary_response_framing_uses_the_native_body_length_without_allocating_a_header_value() {
-    let (_, normal) = crate::metrics::measure(|| text(Status::OK, "hello").into_http(false));
-    let (_, head) = crate::metrics::measure(|| text(Status::OK, "hello").into_http(true));
-    let (_, framing) = crate::metrics::measure(|| HeaderValue::from(5usize));
-    // The locked native builder allocates the decimal buffer and, because its
-    // capacity exceeds the length, Bytes ownership metadata. Ordinary frames
-    // need neither allocation; Hyper writes their exact length itself.
-    assert_eq!(normal.allocations, 3);
-    assert_eq!(framing.allocations, 2);
+    let request = response_fixture_request(16);
+    let context = response_context(&request);
+    let normal_response = text(context, Status::OK, "hello").unwrap();
+    let head_response = text(context, Status::OK, "hello").unwrap();
+    let (_, normal) = crate::metrics::measure(|| normal_response.into_http(false));
+    let (_, head) = crate::metrics::measure(|| head_response.into_http(true));
+    let (_, framing) = crate::metrics::measure(|| HeaderValue::from_bytes(b"5").unwrap());
+    // The managed plan uses a stack decimal buffer and copies only the final
+    // digits into HeaderValue. Ordinary frames omit Content-Length entirely;
+    // Hyper writes their exact length itself.
+    // The bounded response path now also prepares its managed plan and
+    // charged native map here. The former constructor's three allocations
+    // are not the current handoff baseline. Preserve the exact HEAD delta and
+    // byte/realloc checks against the same primitive used by the managed plan.
+    assert_eq!(normal.allocations, 7);
+    assert_eq!(framing.allocations, 1);
     assert_eq!(head.allocations, normal.allocations + framing.allocations);
     assert_eq!(
         head.allocated_bytes,
         normal.allocated_bytes + framing.allocated_bytes
     );
-    assert_eq!(
-        framing.allocated_bytes,
-        (std::mem::size_of::<usize>() * 3 + if usize::BITS == 64 { 20 } else { 10 }) as u64
-    );
+    assert_eq!(framing.allocated_bytes, 1);
     assert_eq!(normal.reallocations, 0);
     assert_eq!(head.reallocations, 0);
 }
 
 #[test]
 fn json_encoding_is_fallible_and_default_internal_mapping_hides_details() {
+    let request = response_fixture_request(256);
+    let context = response_context(&request);
     struct Fails;
     impl Serialize for Fails {
         fn serialize<S: serde::Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
             Err(serde::ser::Error::custom("private serializer failure"))
         }
     }
-    let error = json(Status::OK, &Fails).unwrap_err();
+    let error = json(context, Status::OK, &Fails).unwrap_err();
     assert!(matches!(error.kind, ErrorKind::Internal));
-    let response = default_error(error);
+    let response = default_error(context, error).unwrap();
     assert_eq!(response.status(), Status::INTERNAL_SERVER_ERROR);
     assert_eq!(response.body(), b"internal error");
-    let response = json(Status::CREATED, &vec![1, 2]).unwrap();
+    let response = json(context, Status::CREATED, &vec![1, 2]).unwrap();
     assert_eq!(response.status(), Status::CREATED);
     assert_eq!(response.body(), b"[1,2]");
 }
@@ -558,8 +732,8 @@ fn options_validate_capacity_deadlines_and_leave_state_out_of_debug() {
     assert!(!format!("{:?}", app_default("very secret state")).contains("secret"));
 }
 
-async fn hello(_: Request, state: Arc<String>, _: ()) -> Result<Response, Error> {
-    Ok(text(Status::OK, &state))
+async fn hello(request: Request, state: Arc<String>, _: ()) -> Result<Response, Error> {
+    text(response_context(&request), Status::OK, &state)
 }
 #[test]
 fn route_validation_returns_errors_without_panicking_and_supports_templates() {
@@ -632,7 +806,10 @@ async fn buffered_native_response_body_is_unboxed_exact_and_moves_its_frame() {
     use hyper::body::Body as _;
     let bytes = Bytes::from(vec![1, 2, 3]);
     let pointer = bytes.as_ptr();
-    let (mut body, allocations) = crate::metrics::measure(|| BufferedBody { bytes });
+    let (mut body, allocations) = crate::metrics::measure(|| BufferedBody {
+        bytes,
+        sending: None,
+    });
     assert_eq!(allocations.allocations, 0);
     assert_eq!(allocations.reallocations, 0);
     assert_eq!(body.size_hint().exact(), Some(3));
@@ -747,7 +924,7 @@ async fn oversized_headers_and_header_counts_are_rejected_without_reusing_the_co
     send(&mut socket, request.as_bytes()).await;
     let result = response(&mut socket, false).await;
     assert_eq!(result.status, 431);
-    assert!(closed(&mut socket).await.is_empty());
+    assert!(terminal_close_after_abort(&mut socket, 0).await.is_empty());
     let mut socket = server.connect().await;
     send(
         &mut socket,
@@ -755,7 +932,7 @@ async fn oversized_headers_and_header_counts_are_rejected_without_reusing_the_co
     )
     .await;
     assert_eq!(response(&mut socket, false).await.status, 431);
-    assert!(closed(&mut socket).await.is_empty());
+    assert!(terminal_close_after_abort(&mut socket, 0).await.is_empty());
     server.stop().await;
     let app = route(
         app_default("ok".to_owned()),
@@ -777,14 +954,14 @@ async fn oversized_headers_and_header_counts_are_rejected_without_reusing_the_co
         send(&mut socket, request.as_bytes()).await;
         assert_eq!(response(&mut socket, false).await.status, expected);
     }
-    assert!(closed(&mut socket).await.is_empty());
+    assert!(terminal_close_after_abort(&mut socket, 0).await.is_empty());
     server.stop().await;
 }
 
 #[tokio::test]
 async fn head_uses_get_representation_length_explicit_head_wins_and_allow_is_correct() {
-    async fn head_only(_: Request, _: Arc<String>, _: ()) -> Result<Response, Error> {
-        Ok(text(Status::CREATED, "explicit"))
+    async fn head_only(request: Request, _: Arc<String>, _: ()) -> Result<Response, Error> {
+        text(response_context(&request), Status::CREATED, "explicit")
     }
     let app = route(
         app_default("hello".to_owned()),
@@ -834,19 +1011,22 @@ enum Business {
     Auth,
     Conflict,
     Limited,
+    Factory(Error),
 }
-fn business(error: Business) -> Response {
-    text(
-        match error {
-            Business::Auth => Status::UNAUTHORIZED,
-            Business::Conflict => Status::CONFLICT,
-            Business::Limited => Status::TOO_MANY_REQUESTS,
-        },
-        "default",
-    )
+fn business(context: &ResponseContext, error: Business) -> Result<Response, Error> {
+    let status = match error {
+        Business::Factory(error) => return Err(error),
+        Business::Auth => Status::UNAUTHORIZED,
+        Business::Conflict => Status::CONFLICT,
+        Business::Limited => Status::TOO_MANY_REQUESTS,
+    };
+    text(context, status, "default")
 }
-fn override_business(_: Business) -> Response {
-    text(Status::FORBIDDEN, "override")
+fn override_business(context: &ResponseContext, error: Business) -> Result<Response, Error> {
+    if let Business::Factory(error) = error {
+        return Err(error);
+    }
+    text(context, Status::FORBIDDEN, "override")
 }
 #[tokio::test]
 async fn async_handlers_use_app_mapping_route_override_and_leave_success_alone() {
@@ -860,15 +1040,15 @@ async fn async_handlers_use_app_mapping_route_override_and_leave_success_alone()
     async fn limited(_: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
         Err(Business::Limited)
     }
-    async fn success(_: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
-        Ok(text(Status::CREATED, "created"))
+    async fn success(request: Request, _: Arc<()>, _: ()) -> Result<Response, Business> {
+        text(response_context(&request), Status::CREATED, "created").map_err(Business::Factory)
     }
     async fn independent(_: Request, _: Arc<()>, _: ()) -> Result<Response, i64> {
         Err(42)
     }
-    fn map_number(error: i64) -> Response {
+    fn map_number(context: &ResponseContext, error: i64) -> Result<Response, Error> {
         assert_eq!(error, 42);
-        text(Status::CONFLICT, "independent")
+        text(context, Status::CONFLICT, "independent")
     }
     let app = route(
         app((), business),
@@ -933,7 +1113,11 @@ async fn async_handlers_use_app_mapping_route_override_and_leave_success_alone()
 async fn forbidden_response_bodies_do_not_desynchronize_keepalive() {
     async fn suppress(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         let code: i64 = request.path().trim_start_matches('/').parse().unwrap();
-        Ok(text(status(code).unwrap(), "must not be transmitted"))
+        text(
+            response_context(&request),
+            status(code).unwrap(),
+            "must not be transmitted",
+        )
     }
     let mut app = app_default(());
     for code in [204, 205, 304] {
@@ -971,10 +1155,10 @@ async fn forbidden_response_bodies_do_not_desynchronize_keepalive() {
 async fn sockets_preserve_raw_duplicate_headers_and_strict_authorization() {
     async fn inspect(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         if header_text(&request, "authorization")?.is_none() {
-            return Ok(empty(Status::UNAUTHORIZED));
+            return empty(response_context(&request), Status::UNAUTHORIZED);
         }
         let raw = headers(&request, "x-many")?;
-        let result = bytes(Status::OK, &raw.concat());
+        let result = bytes(response_context(&request), Status::OK, &raw.concat())?;
         append_header_text(
             append_header_text(result, "x-trace", "a=1")?,
             "x-trace",
@@ -1011,7 +1195,7 @@ async fn sockets_preserve_raw_duplicate_headers_and_strict_authorization() {
 #[tokio::test]
 async fn actual_chunk_sizes_and_absolute_body_deadlines_are_bounded() {
     async fn echo(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(bytes(Status::OK, request.body()))
+        bytes(response_context(&request), Status::OK, request.body())
     }
     let server = Server::new(
         route(app_default(()), Method::POST, "/", public_policy(), echo).unwrap(),
@@ -1054,9 +1238,13 @@ struct OversizedBodyState {
 }
 
 async fn oversized_body_server() -> (Server, Arc<AtomicUsize>) {
-    async fn counted(_: Request, state: Arc<OversizedBodyState>, _: ()) -> Result<Response, Error> {
+    async fn counted(
+        request: Request,
+        state: Arc<OversizedBodyState>,
+        _: (),
+    ) -> Result<Response, Error> {
         state.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(text(Status::OK, "accepted"))
+        text(response_context(&request), Status::OK, "accepted")
     }
     let calls = Arc::new(AtomicUsize::new(0));
     let state = OversizedBodyState {
@@ -1361,11 +1549,11 @@ impl Drop for Dropped {
         self.0.fetch_add(1, Ordering::SeqCst);
     }
 }
-async fn wait(_: Request, state: Arc<Gate>, _: ()) -> Result<Response, Error> {
+async fn wait(request: Request, state: Arc<Gate>, _: ()) -> Result<Response, Error> {
     let _dropped = Dropped(Arc::clone(&state.cancelled));
     state.started.notify_one();
     state.released.notified().await;
-    Ok(text(Status::OK, "released"))
+    text(response_context(&request), Status::OK, "released")
 }
 fn gate() -> (Gate, Arc<Notify>, Arc<Notify>, Arc<AtomicUsize>) {
     let started = Arc::new(Notify::new());
@@ -1438,14 +1626,14 @@ async fn handler_timeout_cancels_future_and_releases_request_capacity() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn handler_timeout_rejects_a_ready_response_after_blocking_poll() {
-    async fn slow(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+    async fn slow(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
         // A timer cannot preempt this poll. Once it returns, the server must
         // still reject a response completed after the handler deadline.
         std::thread::sleep(Duration::from_millis(80));
-        Ok(text(Status::OK, "late"))
+        text(response_context(&request), Status::OK, "late")
     }
-    async fn fast(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(text(Status::OK, "fast"))
+    async fn fast(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+        text(response_context(&request), Status::OK, "fast")
     }
     let app = route(app_default(()), Method::GET, "/slow", public_policy(), slow).unwrap();
     let app = route(app, Method::GET, "/fast", public_policy(), fast).unwrap();
@@ -1481,8 +1669,8 @@ async fn handler_panic_after_deadline_returns_500_and_releases_admission() {
         std::thread::sleep(Duration::from_millis(80));
         panic!("private late handler failure");
     }
-    async fn healthy(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(text(Status::OK, "healthy"))
+    async fn healthy(request: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
+        text(response_context(&request), Status::OK, "healthy")
     }
     let app = route(
         app_default(()),
@@ -1548,27 +1736,27 @@ async fn connection_capacity_and_shutdown_deadline_leave_no_handler_tasks() {
 #[tokio::test]
 async fn graceful_shutdown_finishes_an_in_flight_handler_and_response() {
     let (state, started, released, dropped) = gate();
+    let probe = Arc::new(lifecycle_probe::Probe::default());
     let app = route(app_default(state), Method::GET, "/", public_policy(), wait).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let (stop, stopping) = oneshot::channel();
     let (observed, shutdown_observed) = oneshot::channel();
-    let task = tokio::spawn(serve_listener(
-        listener,
-        app,
-        authority(
-            options(1024, 1000, 1000, 1200).unwrap(),
-            "https://localhost",
-            vec!["localhost".to_owned()],
-            1,
-            128,
-        )
-        .unwrap(),
-        async {
-            stopping.await.unwrap();
-            observed.send(()).unwrap();
-        },
-    ));
+    let mut config = authority(
+        options(1024, 1000, 1000, 1200).unwrap(),
+        "https://localhost",
+        vec!["localhost".to_owned()],
+        1,
+        128,
+    )
+    .unwrap();
+    config.lifecycle_probe = Some(Arc::clone(&probe));
+    let config = with_response_fixture(config);
+    let (app, config) = with_rate_fixture(app, config);
+    let task = tokio::spawn(serve_listener(listener, app, config, async {
+        stopping.await.unwrap();
+        observed.send(()).unwrap();
+    }));
     let mut server = Server {
         address,
         stopped: Some(stop),
@@ -1587,7 +1775,7 @@ async fn graceful_shutdown_finishes_an_in_flight_handler_and_response() {
         .unwrap();
     // The current-thread runtime observes this acknowledgement after the
     // server has stopped accepting and notified its connection tasks.
-    assert!(TcpStream::connect(address).await.is_err());
+    assert!(probe.listener_closed.load(Ordering::SeqCst));
     assert_eq!(dropped.load(Ordering::SeqCst), 0);
     released.notify_one();
     let result = response(&mut socket, false).await;
@@ -1600,6 +1788,10 @@ async fn graceful_shutdown_finishes_an_in_flight_handler_and_response() {
         .unwrap()
         .unwrap();
     assert_eq!(dropped.load(Ordering::SeqCst), 1);
+    assert_eq!(probe.joins.load(Ordering::SeqCst), 1);
+    // Closed-listener connect rejection can take substantial platform time.
+    // It must not consume the in-flight handler/shutdown budget before release.
+    assert!(TcpStream::connect(address).await.is_err());
 }
 
 #[tokio::test]
@@ -1713,86 +1905,294 @@ async fn connection_capacity_supports_more_than_128_idle_sockets_and_shutdown_cl
     }
 }
 
+const STALLED_BODY_LENGTH: usize = 16 * 1024 * 1024;
+
+#[derive(Clone, Copy)]
+enum StalledFixtureCase {
+    Capacity,
+    Graceful,
+}
+impl StalledFixtureCase {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Capacity => "Capacity",
+            Self::Graceful => "Graceful",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum StalledFixturePhase {
+    Setup,
+    AwaitPending,
+    ArmedStatus,
+    ArmedBody,
+    AwaitJoin,
+    Expired,
+    EndUnchanged,
+    FreshConnect,
+    FreshRequestWrite,
+    FreshResponse,
+    FreshStatus,
+    FreshBody,
+    StopJoin,
+    ShutdownSignal,
+    AwaitShutdown,
+    GraceBeforeEnd,
+    JoinCount,
+    TerminalRead,
+    TerminalPartial,
+}
+impl StalledFixturePhase {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Setup => "Setup",
+            Self::AwaitPending => "AwaitPending",
+            Self::ArmedStatus => "ArmedStatus",
+            Self::ArmedBody => "ArmedBody",
+            Self::AwaitJoin => "AwaitJoin",
+            Self::Expired => "Expired",
+            Self::EndUnchanged => "EndUnchanged",
+            Self::FreshConnect => "FreshConnect",
+            Self::FreshRequestWrite => "FreshRequestWrite",
+            Self::FreshResponse => "FreshResponse",
+            Self::FreshStatus => "FreshStatus",
+            Self::FreshBody => "FreshBody",
+            Self::StopJoin => "StopJoin",
+            Self::ShutdownSignal => "ShutdownSignal",
+            Self::AwaitShutdown => "AwaitShutdown",
+            Self::GraceBeforeEnd => "GraceBeforeEnd",
+            Self::JoinCount => "JoinCount",
+            Self::TerminalRead => "TerminalRead",
+            Self::TerminalPartial => "TerminalPartial",
+        }
+    }
+}
+
+struct StalledFixtureFailureMarker {
+    case: StalledFixtureCase,
+    phase: StalledFixturePhase,
+    probe: Arc<lifecycle_probe::Probe>,
+    end_changed: Option<bool>,
+}
+impl StalledFixtureFailureMarker {
+    fn new(case: StalledFixtureCase, probe: Arc<lifecycle_probe::Probe>) -> Self {
+        Self {
+            case,
+            phase: StalledFixturePhase::Setup,
+            probe,
+            end_changed: None,
+        }
+    }
+
+    fn at(&mut self, phase: StalledFixturePhase) {
+        self.phase = phase;
+    }
+
+    fn end_changed(&mut self, changed: bool) {
+        self.end_changed = Some(changed);
+    }
+}
+impl Drop for StalledFixtureFailureMarker {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            return;
+        }
+        let armed = self.probe.first.get();
+        let status = armed.map(|value| value.status);
+        let body_bytes = armed
+            .filter(|value| value.body_bytes <= STALLED_BODY_LENGTH)
+            .map(|value| value.body_bytes);
+        let joins = u32::try_from(self.probe.joins.load(Ordering::SeqCst)).ok();
+        let _ = writeln!(
+            std::io::stderr().lock(),
+            "http_stalled_fixture case={} phase={} armed={} pending={} expired={} grace_before_end={} joins={:?} status={:?} body_bytes={:?} end_changed={:?}",
+            self.case.label(),
+            self.phase.label(),
+            armed.is_some(),
+            self.probe.pending.load(Ordering::SeqCst),
+            self.probe.expired.load(Ordering::SeqCst),
+            self.probe.graceful_before_end.load(Ordering::SeqCst),
+            joins,
+            status,
+            body_bytes,
+            self.end_changed,
+        );
+    }
+}
+
+struct PreparedLarge {
+    body: Bytes,
+}
+fn prepared_large() -> PreparedLarge {
+    // Allocate once before any request/response timer. Handler work is then a
+    // bounded Bytes clone, rather than 16MiB allocation plus a second copy.
+    PreparedLarge {
+        body: Bytes::from(vec![b'x'; STALLED_BODY_LENGTH]),
+    }
+}
+async fn prepared_large_response(
+    request: Request,
+    state: Arc<PreparedLarge>,
+    _: (),
+) -> Result<Response, Error> {
+    response_public::tests::adopt_bytes_fixture(
+        response_context(&request),
+        Status::OK,
+        state.body.clone(),
+        BodyKind::Binary,
+    )
+}
+async fn prepared_healthy_response(
+    request: Request,
+    _: Arc<PreparedLarge>,
+    _: (),
+) -> Result<Response, Error> {
+    text(response_context(&request), Status::OK, "ok")
+}
+async fn backpressured_socket(server: &Server) -> BufReader<TcpStream> {
+    let socket = tokio::net::TcpSocket::new_v4().unwrap();
+    socket.set_recv_buffer_size(4096).unwrap();
+    BufReader::new(socket.connect(server.address).await.unwrap())
+}
+
 #[tokio::test]
 async fn stalled_response_send_expires_and_releases_connection_permit() {
-    async fn large(_: Request, _: Arc<String>, _: ()) -> Result<Response, Error> {
-        Ok(bytes(Status::OK, &vec![b'x'; 16 * 1024 * 1024]))
-    }
+    let probe = Arc::new(lifecycle_probe::Probe::default());
+    let mut failure_marker =
+        StalledFixtureFailureMarker::new(StalledFixtureCase::Capacity, Arc::clone(&probe));
     let app = route(
-        app_default("ok".to_owned()),
+        app_default(prepared_large()),
         Method::GET,
         "/large",
         public_policy(),
-        large,
+        prepared_large_response,
     )
     .unwrap();
-    let app = route(app, Method::GET, "/", public_policy(), hello).unwrap();
-    let server = Server::new(
+    let app = route(
         app,
-        send_timeout(capacity(default_options(), 1, 1).unwrap(), 80).unwrap(),
+        Method::GET,
+        "/",
+        public_policy(),
+        prepared_healthy_response,
     )
-    .await;
-    let mut blocked = server.connect().await;
+    .unwrap();
+    let mut config = send_timeout(capacity(default_options(), 1, 1).unwrap(), 80).unwrap();
+    config.lifecycle_probe = Some(Arc::clone(&probe));
+    // Windows uses the reviewed bounded-prefix native schedule. Actual native
+    // Pending is still required; this is not a natural full-buffer OS premise.
+    #[cfg(windows)]
+    {
+        config.windows_stalled_fixture = true;
+    }
+    let server = Server::new_with_send_buffer(app, config, Some(4096)).await;
+    let mut blocked = backpressured_socket(&server).await;
     send(
         &mut blocked,
         b"GET /large HTTP/1.1\r\nHost: localhost\r\n\r\n",
     )
     .await;
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    failure_marker.at(StalledFixturePhase::AwaitPending);
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        probe.wait(|p| p.pending.load(Ordering::SeqCst)),
+    )
+    .await
+    .unwrap();
+    failure_marker.at(StalledFixturePhase::ArmedStatus);
+    let armed = *probe.first.get().unwrap();
+    assert_eq!(armed.status, 200);
+    failure_marker.at(StalledFixturePhase::ArmedBody);
+    assert_eq!(armed.body_bytes, STALLED_BODY_LENGTH);
+    // Native write Pending proves backpressure. JoinSet observation, rather
+    // than sleep or child Drop, proves the original socket task has finished.
+    failure_marker.at(StalledFixturePhase::AwaitJoin);
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        probe.wait(|p| p.joins.load(Ordering::SeqCst) == 1),
+    )
+    .await
+    .unwrap();
+    failure_marker.at(StalledFixturePhase::Expired);
+    assert!(probe.expired.load(Ordering::SeqCst));
+    failure_marker.at(StalledFixturePhase::EndUnchanged);
+    failure_marker.end_changed(probe.first.get().unwrap().end != armed.end);
+    assert_eq!(probe.first.get().unwrap().end, armed.end);
+    failure_marker.at(StalledFixturePhase::FreshConnect);
     let mut next = server.connect().await;
+    failure_marker.at(StalledFixturePhase::FreshRequestWrite);
     send(&mut next, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
-    assert_eq!(response(&mut next, false).await.status, 200);
+    failure_marker.at(StalledFixturePhase::FreshResponse);
+    let healthy = response(&mut next, false).await;
+    failure_marker.at(StalledFixturePhase::FreshStatus);
+    assert_eq!(healthy.status, 200);
+    failure_marker.at(StalledFixturePhase::FreshBody);
+    assert_eq!(healthy.body, b"ok");
     drop(blocked);
+    failure_marker.at(StalledFixturePhase::StopJoin);
     server.stop().await;
 }
 
 #[tokio::test]
 async fn graceful_shutdown_preserves_stalled_response_send_deadline() {
-    const BODY_LENGTH: usize = 16 * 1024 * 1024;
-    async fn large(_: Request, _: Arc<()>, _: ()) -> Result<Response, Error> {
-        Ok(bytes(Status::OK, &vec![b'x'; BODY_LENGTH]))
-    }
-    let app = route(app_default(()), Method::GET, "/", public_policy(), large).unwrap();
-    let mut server = Server::new(
-        app,
-        send_timeout(options(1024, 1000, 1000, 1200).unwrap(), 150).unwrap(),
+    let probe = Arc::new(lifecycle_probe::Probe::default());
+    let mut failure_marker =
+        StalledFixtureFailureMarker::new(StalledFixtureCase::Graceful, Arc::clone(&probe));
+    let app = route(
+        app_default(prepared_large()),
+        Method::GET,
+        "/",
+        public_policy(),
+        prepared_large_response,
     )
-    .await;
-    let mut blocked = server.connect().await;
+    .unwrap();
+    let mut config = send_timeout(options(1024, 1000, 1000, 1200).unwrap(), 150).unwrap();
+    config.lifecycle_probe = Some(Arc::clone(&probe));
+    // Windows uses the reviewed bounded-prefix native schedule. Actual native
+    // Pending is still required; this is not a natural full-buffer OS premise.
+    #[cfg(windows)]
+    {
+        config.windows_stalled_fixture = true;
+    }
+    let mut server = Server::new_with_send_buffer(app, config, Some(4096)).await;
+    let mut blocked = backpressured_socket(&server).await;
     send(&mut blocked, b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n").await;
-
-    // Receiving the headers proves that the response and its send deadline are
-    // active. Keep the much larger body unread so socket backpressure remains.
-    tokio::time::timeout(Duration::from_secs(2), async {
-        let mut line = String::new();
-        blocked.read_line(&mut line).await.unwrap();
-        assert!(line.starts_with("HTTP/1.1 200 "));
-        let mut length = None;
-        loop {
-            line.clear();
-            assert_ne!(blocked.read_line(&mut line).await.unwrap(), 0);
-            if line == "\r\n" {
-                break;
-            }
-            let (name, value) = line.split_once(':').unwrap();
-            if name.eq_ignore_ascii_case("content-length") {
-                length = Some(value.trim().parse::<usize>().unwrap());
-            }
-        }
-        assert_eq!(length, Some(BODY_LENGTH));
-    })
+    failure_marker.at(StalledFixturePhase::AwaitPending);
+    tokio::time::timeout(
+        Duration::from_secs(2),
+        probe.wait(|p| p.pending.load(Ordering::SeqCst)),
+    )
     .await
     .unwrap();
-
+    failure_marker.at(StalledFixturePhase::ArmedStatus);
+    let armed = *probe.first.get().unwrap();
+    assert_eq!(armed.status, 200);
+    failure_marker.at(StalledFixturePhase::ArmedBody);
+    assert_eq!(armed.body_bytes, STALLED_BODY_LENGTH);
+    failure_marker.at(StalledFixturePhase::ShutdownSignal);
     server.stopped.take().unwrap().send(()).unwrap();
-    // Allow scheduling jitter around the 150ms send deadline, but distinguish
-    // it from falling back to the entire 1200ms server shutdown deadline.
+    failure_marker.at(StalledFixturePhase::AwaitShutdown);
     tokio::time::timeout(Duration::from_millis(600), &mut server.task)
         .await
         .expect("graceful shutdown lost the stalled response send deadline")
         .unwrap()
         .unwrap();
-    assert!(closed(&mut blocked).await.len() < BODY_LENGTH);
+    failure_marker.at(StalledFixturePhase::GraceBeforeEnd);
+    assert!(probe.graceful_before_end.load(Ordering::SeqCst));
+    failure_marker.at(StalledFixturePhase::Expired);
+    assert!(probe.expired.load(Ordering::SeqCst));
+    failure_marker.at(StalledFixturePhase::EndUnchanged);
+    failure_marker.end_changed(probe.first.get().unwrap().end != armed.end);
+    assert_eq!(probe.first.get().unwrap().end, armed.end);
+    failure_marker.at(StalledFixturePhase::JoinCount);
+    assert_eq!(probe.joins.load(Ordering::SeqCst), 1);
+    // An expired partial send cannot promise header delivery/FIN on every OS.
+    // The complete healthy 200 remains asserted in the capacity and graceful
+    // in-flight tests; this socket proves terminal partial-send disposition.
+    failure_marker.at(StalledFixturePhase::TerminalRead);
+    let terminal = terminal_close_after_abort(&mut blocked, STALLED_BODY_LENGTH - 1).await;
+    failure_marker.at(StalledFixturePhase::TerminalPartial);
+    assert!(terminal.len() < STALLED_BODY_LENGTH);
 }
 
 #[path = "security_tests.rs"]
@@ -1800,3 +2200,9 @@ mod security_tests;
 
 #[path = "unsafe_session_tests.rs"]
 mod unsafe_session_tests;
+
+#[path = "transport_lifecycle_tests.rs"]
+mod transport_lifecycle_tests;
+
+#[path = "send_deadline_tests.rs"]
+mod send_deadline_tests;

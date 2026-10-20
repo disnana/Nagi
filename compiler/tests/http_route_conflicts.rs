@@ -29,7 +29,7 @@ fn route_source(routes: &[(&str, &str)]) -> String {
 class State:
     count: i64
 async def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.text(http.Status.OK, "registered"))
+    return http.text(http.response_context(view(request)), http.Status.OK, "registered")
 def setup() -> Result[http.App[State, Error], Error]:
     app = http.app_default[State](State(count=0))
 "#,
@@ -115,7 +115,7 @@ fn conflict_matrix_source(cases: &[(&str, &str, &str, &str)]) -> String {
 class State:
     count: i64
 async def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
-    return ok(http.empty(http.Status.OK))
+    return http.empty(http.response_context(view(request)), http.Status.OK)
 "#,
     );
     for (index, (left_method, left, right_method, right)) in cases.iter().enumerate() {

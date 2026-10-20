@@ -15,14 +15,18 @@ def errors(needs: dict) -> list[str]:
         failures.append("linux: missing or invalid check plan")
     else:
         expected = "success" if full == "true" else "skipped"
-        actual = needs.get("linux", {}).get("result", "missing")
-        if actual != expected:
-            failures.append(f"linux: {actual}, expected {expected}")
+        for job in ("linux", "rust-1-88"):
+            actual = needs.get(job, {}).get("result", "missing")
+            if actual != expected:
+                failures.append(f"{job}: {actual}, expected {expected}")
     jetbrains = needs.get("changes", {}).get("outputs", {}).get("jetbrains_checks")
     if jetbrains not in ("true", "false"):
         failures.append("jetbrains: missing or invalid check plan")
     plan = needs.get("release-plan", {}).get("outputs", {})
+    if not isinstance(plan, dict):
+        plan = {}
     package_jetbrains = plan.get("package_jetbrains")
+    package_nagi = plan.get("package_nagi")
     if package_jetbrains not in ("true", "false"):
         failures.append("jetbrains: missing or invalid package plan")
     if jetbrains in ("true", "false") and package_jetbrains in ("true", "false"):
@@ -30,7 +34,15 @@ def errors(needs: dict) -> list[str]:
         actual = needs.get("jetbrains", {}).get("result", "missing")
         if actual != expected:
             failures.append(f"jetbrains: {actual}, expected {expected}")
-    for component, job in (("vscode", "vscode-package"), ("nagi", "nagi-package")):
+    if full not in ("true", "false") or package_nagi not in ("true", "false"):
+        failures.append("sf08-browser: missing or invalid selector")
+    else:
+        expected = "success" if full == "true" or package_nagi == "true" else "skipped"
+        actual = needs.get("sf08-browser", {}).get("result", "missing")
+        if actual != expected:
+            failures.append(f"sf08-browser: {actual}, expected {expected}")
+    for component, job in (("vscode", "vscode-package"), ("nagi", "nagi-package"),
+                           ("nagi", "nagi-regression")):
         planned = plan.get(f"package_{component}")
         if planned not in ("true", "false"):
             failures.append(f"{job}: missing or invalid package plan")

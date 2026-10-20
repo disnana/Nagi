@@ -163,14 +163,14 @@ class StoredResponse:
 enum Failure:
     Denied
     Unavailable
-def default_error(problem: Failure) -> Output:
+def default_error(context: view[http.ResponseContext], problem: Failure) -> Result[Output, Error]:
     match problem:
         case Failure.Denied:
-            return http.text(Code.UNAUTHORIZED, "denied")
+            return http.text(context, Code.UNAUTHORIZED, "denied")
         case Failure.Unavailable:
-            return http.empty(Code.SERVICE_UNAVAILABLE)
-def route_error(problem: str) -> Output:
-    return http.text(Code.FORBIDDEN, "overridden")
+            return http.empty(context, Code.SERVICE_UNAVAILABLE)
+def route_error(context: view[http.ResponseContext], problem: str) -> Result[Output, Error]:
+    return http.text(context, Code.FORBIDDEN, view(problem))
 def store(request: Input) -> StoredRequest:
     return StoredRequest(input=request)
 def direct_phrase() -> view[str]:
@@ -186,7 +186,12 @@ async def handler(request: Input, state: shared[State], authority: unit) -> Resu
     await sleep(1)
     assert_true(request.method == http.Method.GET)
     assert_true(request.is_get)
-    return ok(http.text(Code.OK, view(state.label)))
+    context = http.response_context(request)
+    match http.text(context, Code.OK, state.label):
+        case Ok(response):
+            return ok(response)
+        case Err(_):
+            return fail(Failure.Unavailable)
 def json_request(request: view[Input]) -> Result[bool, Error]:
     return http.is_json_content_type(request)
 def json_then_store(request: Input) -> Result[StoredRequest, Error]:
@@ -288,7 +293,7 @@ fn standard_resolution_ignores_cwd_files_and_unsaved_lookalikes() {
 fn ordinary_classes_and_local_shadows_cannot_impersonate_standard_resources() {
     let f = Fixture::new();
     f.rejected("from std.http.server import Request as Input\nclass Request:\n    value: i64\ndef wrong(request: Request) -> Input:\n    return request\n", 5);
-    f.rejected("import std.http.server as http\ndef main():\n    http = 7\n    response = http.empty(http.Status.OK)\n", 4);
+    f.rejected("import std.http.server as http\ndef shadowed(context: view[http.ResponseContext], status: http.Status):\n    http = 7\n    response = http.empty(context, status)\n", 4);
     f.rejected("from std.http.server import Status as Code\ndef main():\n    Code = 7\n    status = Code.OK\n", 4);
     f.write("main.nagi", "from std.http.server import Status as Code\nclass Status:\n    value: i64\ndef read(code: Code) -> i64:\n    return code.value\ndef main():\n    ordinary = Status(value=7)\n    print(read(Code.OK) + ordinary.value)\n");
     f.roundtrip();
@@ -347,9 +352,710 @@ fn saved_low_cannot_change_registry_identity_or_define_resource_implementations(
 }
 
 #[test]
+fn u4_response_context_fixtures_have_valid_high_and_low_syntax() {
+    for (relative, high) in [
+        ("http-response-context-red.nagi", true),
+        ("http-response-context-red.low", false),
+    ] {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/resource-contract")
+            .join(relative);
+        let text = fs::read_to_string(&path).unwrap();
+        parser::parse(&text, high).unwrap_or_else(|error| {
+            panic!("{} must be syntactically valid: {error}", path.display())
+        });
+    }
+}
+
+#[test]
+fn u4_explicit_response_limits_check_high_and_handwritten_low() {
+    let fixture = Fixture::new();
+    let mut failures = Vec::new();
+    for (name, high, text) in [
+        ("limits.nagi", true, "import std.http.server as http\ndef setup() -> Result[http.Options, Error]:\n    limits = try http.response_limits(256, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512, 12)\n    return http.with_response_limits(http.default_options(), limits)\n"),
+        ("limits.low", false, "import std.http.server as http;\nfn setup() -> Result[http.Options, Error] {\n    let limits = try http.response_limits(256, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512, 12);\n    return http.with_response_limits(http.default_options(), limits);\n}\n"),
+    ] {
+        parser::parse(text, high).expect("limits fixture syntax must precede registry checks");
+        fixture.write(name, text);
+        match source::load(&fixture.0.join(name), high) {
+            Ok(mut loaded) => {
+                if let Err(error) = check::check(&mut loaded.program) {
+                    failures.push(loaded.diagnostic(&error));
+                } else if high {
+                    let low = emit::low(&loaded.program);
+                    fixture.write("limits-saved.low", &low);
+                    fixture.checked("limits-saved.low");
+                }
+            }
+            Err(error) => failures.push(error),
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "explicit response limits API: {failures:?}"
+    );
+}
+
+#[test]
+fn u5_explicit_rate_settings_keep_app_generic_identity_in_three_forms() {
+    let fixture = Fixture::new();
+    let mut failures = Vec::new();
+    for (name, high, text) in [
+        ("rate-settings.nagi", true, "import std.http.server as http\ndef settings() -> Result[http.Options, Error]:\n    limits = try http.rate_limits(4, 1, 2, 131072, 4096)\n    return http.with_rate_limits(http.default_options(), limits)\ndef bind(app: http.App[i64, Error]) -> Result[http.App[i64, Error], Error]:\n    policy = try http.rate_policy(2, 1000)\n    policy = try http.rate_subject(policy, 2, 1000, 2, 1000)\n    return http.rate_route(app, http.Method.GET, \"/\", policy)\n"),
+        ("rate-settings.low", false, "import std.http.server as http;\nfn settings() -> Result[http.Options, Error] {\n    let limits = try http.rate_limits(4, 1, 2, 131072, 4096);\n    return http.with_rate_limits(http.default_options(), limits);\n}\nfn bind(app: http.App[i64, Error]) -> Result[http.App[i64, Error], Error] {\n    let policy = try http.rate_policy(2, 1000);\n    policy = try http.rate_subject(policy, 2, 1000, 2, 1000);\n    return http.rate_route(app, http.Method.GET, \"/\", policy);\n}\n"),
+    ] {
+        parser::parse(text, high).expect("rate configuration wrappers must parse");
+        fixture.write(name, text);
+        match source::load(&fixture.0.join(name), high) {
+            Ok(mut loaded) => match check::check(&mut loaded.program) {
+                Ok(()) if high => {
+                    fixture.write("rate-settings-saved.low", &emit::low(&loaded.program));
+                    fixture.checked("rate-settings-saved.low");
+                }
+                Ok(()) => {}
+                Err(error) => failures.push(loaded.diagnostic(&error)),
+            },
+            Err(error) => failures.push(error),
+        }
+    }
+    assert!(failures.is_empty(), "explicit rate API: {failures:?}");
+}
+
+#[test]
+fn u5_rate_attachment_rejects_spoofed_apps_wrong_errors_and_policy_reuse() {
+    let fixture = Fixture::new();
+    for (name, high, text, call_line, reason) in [
+        ("rate-fake-app.nagi", true, "import std.http.server as http\nclass App:\n    value: i64\ndef bind(app: App, policy: http.RatePolicy) -> Result[http.App[i64, Error], Error]:\n    return http.rate_route(app, http.Method.GET, \"/\", policy)\n", 5, "app"),
+        ("rate-fake-app.low", false, "import std.http.server as http;\nrecord App { value: i64; }\nfn bind(app: App, policy: http.RatePolicy) -> Result[http.App[i64, Error], Error] {\n    return http.rate_route(app, http.Method.GET, \"/\", policy);\n}\n", 4, "app"),
+        ("rate-wrong-error.nagi", true, "import std.http.server as http\ndef bind(app: http.App[i64, str], policy: http.RatePolicy) -> Result[http.App[i64, Error], Error]:\n    return http.rate_route(app, http.Method.GET, \"/\", policy)\n", 3, "error"),
+        ("rate-wrong-error.low", false, "import std.http.server as http;\nfn bind(app: http.App[i64, str], policy: http.RatePolicy) -> Result[http.App[i64, Error], Error] {\n    return http.rate_route(app, http.Method.GET, \"/\", policy);\n}\n", 3, "error"),
+        ("rate-reused-policy.nagi", true, "import std.http.server as http\ndef bind(app: http.App[i64, Error], policy: http.RatePolicy) -> Result[http.App[i64, Error], Error]:\n    changed = try http.rate_subject(policy, 2, 1000, 2, 1000)\n    return http.rate_route(app, http.Method.GET, \"/\", policy)\n", 4, "move"),
+        ("rate-reused-policy.low", false, "import std.http.server as http;\nfn bind(app: http.App[i64, Error], policy: http.RatePolicy) -> Result[http.App[i64, Error], Error] {\n    let changed = try http.rate_subject(policy, 2, 1000, 2, 1000);\n    return http.rate_route(app, http.Method.GET, \"/\", policy);\n}\n", 4, "move"),
+    ] {
+        parser::parse(text, high).expect("negative rate fixture must parse");
+        fixture.write(name, text);
+        let mut loaded = source::load(&fixture.0.join(name), high)
+            .unwrap_or_else(|error| panic!("{name} must resolve before rate rejection: {error}"));
+        let error = check::check(&mut loaded.program)
+            .expect_err("invalid rate attachment must fail in the checker");
+        let diagnostic = loaded.diagnostic(&error);
+        assert!(diagnostic.contains(&format!("{name}:{call_line}")), "{diagnostic}");
+        let correct_cause = match reason {
+            "app" => error.contains("rate_routeには標準App[State,E]が必要です"),
+            "error" => error.contains("str") && error.contains("Error") && error.contains("型"),
+            "move" => error.contains("policy") && error.contains("move"),
+            _ => unreachable!(),
+        };
+        assert!(correct_cause, "{name}: unexpected rejection: {diagnostic}");
+    }
+}
+
+#[test]
+fn u4_typed_html_uses_the_same_borrowed_response_context() {
+    let fixture = Fixture::new();
+    for (name, high, text) in [
+        ("html-context.nagi", true, "import std.html as html\nimport std.http.server as http\ndef page(context: view[http.ResponseContext], document: html.HtmlDocument) -> Result[http.Response, Error]:\n    return http.html_response(context, http.Status.OK, document)\n"),
+        ("html-context.low", false, "import std.html as html;\nimport std.http.server as http;\nfn page(context: view[http.ResponseContext], document: html.HtmlDocument) -> Result[http.Response, Error] {\n    return http.html_response(context, http.Status.OK, document);\n}\n"),
+    ] {
+        parser::parse(text, high).expect("typed HTML Context fixture must parse");
+        fixture.write(name, text);
+        let checked = fixture.checked(name);
+        if high {
+            fixture.write("html-context-saved.low", &emit::low(&checked.program));
+            fixture.checked("html-context-saved.low");
+        }
+    }
+}
+
+#[test]
+fn u4_response_limits_reject_wrong_types_arity_and_reuse_before_backend() {
+    let fixture = Fixture::new();
+    for (name, high, text, call_line, reason) in [
+        ("wrong-type.nagi", true, "import std.http.server as http\ndef setup() -> Result[http.ResponseLimits, Error]:\n    return http.response_limits(true, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512, 12)\n", 3, "type"),
+        ("wrong-type.low", false, "import std.http.server as http;\nfn setup() -> Result[http.ResponseLimits, Error] {\n    return http.response_limits(true, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512, 12);\n}\n", 3, "type"),
+        ("missing-limit.nagi", true, "import std.http.server as http\ndef setup() -> Result[http.ResponseLimits, Error]:\n    return http.response_limits(256, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512)\n", 3, "arity"),
+        ("missing-limit.low", false, "import std.http.server as http;\nfn setup() -> Result[http.ResponseLimits, Error] {\n    return http.response_limits(256, 128, 4, 512, 12, 128, 1, 131072, 1, 131072, 512);\n}\n", 3, "arity"),
+        ("reused-limit.nagi", true, "import std.http.server as http\ndef setup(limits: http.ResponseLimits) -> Result[http.Options, Error]:\n    first = try http.with_response_limits(http.default_options(), limits)\n    return http.with_response_limits(first, limits)\n", 4, "move"),
+        ("reused-limit.low", false, "import std.http.server as http;\nfn setup(limits: http.ResponseLimits) -> Result[http.Options, Error] {\n    let first = try http.with_response_limits(http.default_options(), limits);\n    return http.with_response_limits(first, limits);\n}\n", 4, "move"),
+    ] {
+        parser::parse(text, high).expect("negative limits fixture must parse");
+        fixture.write(name, text);
+        let mut loaded = source::load(&fixture.0.join(name), high)
+            .unwrap_or_else(|error| panic!("{name} must resolve before rejection: {error}"));
+        let error = check::check(&mut loaded.program)
+            .expect_err("invalid limits call must fail before backend");
+        let diagnostic = loaded.diagnostic(&error);
+        assert!(diagnostic.contains(&format!("{name}:{call_line}")), "{diagnostic}");
+        let correct_cause = match reason {
+            "type" => error.contains("i64") && error.contains("bool"),
+            "arity" => error.contains("response_limitsの引数は12個です"),
+            "move" => error.contains("limits") && error.contains("move"),
+            _ => unreachable!(),
+        };
+        assert!(correct_cause, "{name}: unexpected rejection: {diagnostic}");
+    }
+}
+
+#[test]
+fn u4_context_first_app_mapper_is_accepted_in_high_and_low() {
+    let mut failures = Vec::new();
+    for (relative, high) in [
+        ("http-response-context-red.nagi", true),
+        ("http-response-context-red.low", false),
+    ] {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/resource-contract")
+            .join(relative);
+        match source::load(&path, high) {
+            Ok(mut loaded) => {
+                if let Err(error) = check::check(&mut loaded.program) {
+                    failures.push(format!("{relative}: {}", loaded.diagnostic(&error)));
+                }
+            }
+            Err(error) => failures.push(format!("{relative}: {error}")),
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "U4 app mapper API must resolve after Context-first factories in High and Low:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn legacy_app_mapper_gets_context_migration_guidance_in_high_and_low() {
+    let f = Fixture::new();
+    for (name, high, text, call_line) in [
+        (
+            "legacy-app.nagi",
+            true,
+            "import std.http.server as http\nclass State:\n    count: i64\ndef old_mapper(problem: Error) -> Result[http.Response, Error]:\n    return fail(problem)\ndef setup(state: State) -> Result[http.App[State, Error], Error]:\n    return http.app[State, Error](state, old_mapper)\n",
+            7,
+        ),
+        (
+            "legacy-app.low",
+            false,
+            "import std.http.server as http;\nrecord State { count: i64; }\nfn old_mapper(problem: Error) -> Result[http.Response, Error] { return fail(problem); }\nfn setup(state: State) -> Result[http.App[State, Error], Error] { return http.app[State, Error](state, old_mapper); }\n",
+            4,
+        ),
+    ] {
+        f.write(name, text);
+        let mut loaded = source::load(&f.0.join(name), high)
+            .unwrap_or_else(|error| panic!("{name} must load before mapper rejection: {error}"));
+        let error = check::check(&mut loaded.program)
+            .expect_err("legacy one-argument App mapper must be rejected");
+        assert!(
+            error.contains("旧App mapperは単一引数")
+                && error.contains("view[ResponseContext]")
+                && error.contains("Result[Response, Error]"),
+            "{name}: expected concrete Context-first migration guidance: {error}"
+        );
+        let diagnostic = loaded.diagnostic(&error);
+        assert!(
+            diagnostic.contains(&format!("{name}:{call_line}")),
+            "{name}: expected mapper diagnostic at App call line {call_line}: {diagnostic}"
+        );
+    }
+}
+
+#[test]
+fn route_mapped_uses_context_first_result_mapper_in_high_and_low() {
+    let f = Fixture::new();
+    for (name, high, text) in [
+        (
+            "route-mapped.nagi",
+            true,
+            r#"import std.http.server as http
+
+class State:
+    value: i64
+
+async def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, str]:
+    return fail("failure")
+
+def mapper(context: view[http.ResponseContext], problem: str) -> Result[http.Response, Error]:
+    return http.text(context, http.Status.INTERNAL_SERVER_ERROR, view(problem))
+
+def register(state: State) -> Result[http.App[State, Error], Error]:
+    app = http.app_default[State](state)
+    return http.route_mapped(app, http.Method.POST, "/", http.public_policy[State](), handler, mapper)
+"#,
+        ),
+        (
+            "route-mapped.low",
+            false,
+            r#"import std.http.server as http;
+record State { value: i64; }
+async fn handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, str] { return fail("failure"); }
+fn mapper(context: view[http.ResponseContext], problem: str) -> Result[http.Response, Error] { return http.text(context, http.Status.INTERNAL_SERVER_ERROR, view(problem)); }
+fn register(state: State) -> Result[http.App[State, Error], Error] {
+    let app = http.app_default[State](state);
+    return http.route_mapped(app, http.Method.POST, "/", http.public_policy[State](), handler, mapper);
+}
+"#,
+        ),
+    ] {
+        f.write(name, text);
+        let mut loaded = source::load(&f.0.join(name), high)
+            .unwrap_or_else(|error| panic!("{name} must load before route mapper check: {error}"));
+        check::check(&mut loaded.program)
+            .unwrap_or_else(|error| panic!("{name}: {}", loaded.diagnostic(&error)));
+    }
+}
+
+#[test]
+fn legacy_route_mapped_mapper_gets_specific_context_migration_guidance_in_high_and_low() {
+    let f = Fixture::new();
+    for (name, high, text, call_line) in [
+        (
+            "legacy-route-mapped.nagi",
+            true,
+            r#"import std.html as html
+import std.http.server as http
+
+class State:
+    value: i64
+
+async def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, str]:
+    return fail("failure")
+
+def error_document() -> html.HtmlDocument:
+    match html.policy("https://example.invalid"):
+        case Ok(policy):
+            match html.document(view(policy), "Error", html.empty(view(policy))):
+                case Ok(document):
+                    return document
+                case Err(_):
+                    return error_document()
+        case Err(_):
+            return error_document()
+
+def legacy_mapper(problem: str) -> http.Response:
+    return legacy_mapper(problem)
+
+def register(state: State) -> Result[http.App[State, Error], Error]:
+    app = http.app_default[State](state)
+    return http.route_mapped(app, http.Method.POST, "/", http.public_policy[State](), handler, legacy_mapper)
+"#,
+            26,
+        ),
+        (
+            "legacy-route-mapped.low",
+            false,
+            r#"import std.html as html;
+import std.http.server as http;
+record State { value: i64; }
+async fn handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, str] { return fail("failure"); }
+fn error_document() -> html.HtmlDocument {
+    match html.policy("https://example.invalid") {
+        case Ok(policy) {
+            match html.document(view(policy), "Error", html.empty(view(policy))) {
+                case Ok(document) { return document; }
+                case Err(_) { return error_document(); }
+            }
+        }
+        case Err(_) { return error_document(); }
+    }
+}
+fn legacy_mapper(problem: str) -> http.Response { return legacy_mapper(problem); }
+fn register(state: State) -> Result[http.App[State, Error], Error] {
+    let app = http.app_default[State](state);
+    return http.route_mapped(app, http.Method.POST, "/", http.public_policy[State](), handler, legacy_mapper);
+}
+"#,
+            19,
+        ),
+    ] {
+        // The legacy signature needs a well-typed body without a removed
+        // unbounded factory. This recursive stub is never executed: rejection
+        // must happen at registration, with the mapper migration diagnostic.
+        f.write(name, text);
+        let mut loaded = source::load(&f.0.join(name), high).unwrap_or_else(|error| {
+            panic!("{name} must load before legacy mapper rejection: {error}")
+        });
+        let error = check::check(&mut loaded.program)
+            .expect_err("legacy single-argument route mapper must be rejected");
+        assert!(
+            error.contains("旧route_mapped mapper fn[F, Response]")
+                && error.contains("view[ResponseContext]")
+                && error.contains("Result[Response, Error]"),
+            "{name}: expected route_mapped-specific migration guidance: {error}"
+        );
+        let diagnostic = loaded.diagnostic(&error);
+        assert!(
+            diagnostic.contains(&format!("{name}:{call_line}")),
+            "{name}: expected mapper diagnostic at route_mapped call line {call_line}: {diagnostic}"
+        );
+    }
+}
+
+#[test]
+fn app_and_route_mapped_accept_local_mapper_aliases_in_high_and_low() {
+    let f = Fixture::new();
+    let high = r#"import std.http.server as http
+
+class State:
+    value: i64
+
+def mapper(context: view[http.ResponseContext], failure: str) -> Result[http.Response, Error]:
+    return http.empty(context, http.Status.INTERNAL_SERVER_ERROR)
+
+async def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, str]:
+    return fail("failure")
+
+def register(state: State) -> Result[http.App[State, str], Error]:
+    mapper_alias = mapper
+    app = http.app[State, str](state, mapper_alias)
+    return http.route_mapped(app, http.Method.POST, "/", http.public_policy[State](), handler, mapper_alias)
+"#;
+    f.write("mapper-alias.nagi", high);
+    let mut loaded = source::load(&f.0.join("mapper-alias.nagi"), true)
+        .expect("High local mapper alias must load");
+    check::check(&mut loaded.program)
+        .unwrap_or_else(|error| panic!("High local mapper alias: {}", loaded.diagnostic(&error)));
+
+    let low = emit::low(&loaded.program);
+    f.write("mapper-alias.low", &low);
+    let mut loaded = source::load(&f.0.join("mapper-alias.low"), false)
+        .expect("saved Low local mapper alias must load");
+    check::check(&mut loaded.program).unwrap_or_else(|error| {
+        panic!(
+            "saved Low local mapper alias: {}",
+            loaded.diagnostic(&error)
+        )
+    });
+}
+
+fn assert_http_mapper_rejected_at_call(
+    fixture: &Fixture,
+    name: &str,
+    high: bool,
+    text: &str,
+    call_line: usize,
+    causes: &[&str],
+) {
+    fixture.write(name, text);
+    let mut loaded = source::load(&fixture.0.join(name), high).unwrap_or_else(|error| {
+        panic!("{name} must load before mapper checker rejection: {error}")
+    });
+    let error =
+        check::check(&mut loaded.program).expect_err("invalid mapper unexpectedly passed checking");
+    for cause in causes {
+        assert!(
+            error.contains(cause),
+            "{name}: expected `{cause}` at mapper call, got: {error}"
+        );
+    }
+    let diagnostic = loaded.diagnostic(&error);
+    assert!(
+        diagnostic.contains(&format!("{name}:{call_line}")),
+        "{name}: expected mapper checker error at call line {call_line}, got: {diagnostic}"
+    );
+}
+
+fn assert_http_mapper_rejected_in_high_and_saved_low(
+    fixture: &Fixture,
+    name: &str,
+    high_source: &str,
+    high_call_line: usize,
+    call_marker: &str,
+    causes: &[&str],
+) {
+    fixture.write(name, high_source);
+    let parsed = source::load(&fixture.0.join(name), true)
+        .unwrap_or_else(|error| panic!("{name} High source must load: {error}"));
+    let low = emit::low(&parsed.program);
+    assert_http_mapper_rejected_at_call(fixture, name, true, high_source, high_call_line, causes);
+    let low_name = format!("{name}.low");
+    let low_call_line = low
+        .lines()
+        .position(|line| line.contains(call_marker))
+        .unwrap_or_else(|| panic!("{name}: generated Low is missing call marker `{call_marker}`"))
+        + 1;
+    assert_http_mapper_rejected_at_call(fixture, &low_name, false, &low, low_call_line, causes);
+}
+
+#[test]
+fn http_mapper_borrowed_async_and_result_contracts_reject_at_call_in_high_and_low() {
+    let f = Fixture::new();
+    let expected = "expected fn[view[stdlib:std.http.server::ResponseContext], str, Result[stdlib:std.http.server::Response, Error]]";
+    let borrowed_error = "HTTP mapperのエラー値にviewは保持できません";
+    assert_http_mapper_rejected_in_high_and_saved_low(
+        &f,
+        "app-borrowed-e.nagi",
+        r#"import std.http.server as http
+class State:
+    value: i64
+def mapper(context: view[http.ResponseContext], problem: view[str]) -> Result[http.Response, Error]:
+    return http.empty(context, http.Status.INTERNAL_SERVER_ERROR)
+def register(state: State) -> Result[http.App[State, Error], Error]:
+    return http.app[State, view[str]](state, mapper)
+"#,
+        7,
+        "_f_617070[",
+        &[borrowed_error],
+    );
+    assert_http_mapper_rejected_in_high_and_saved_low(
+        &f,
+        "app-async-mapper.nagi",
+        r#"import std.http.server as http
+class State:
+    value: i64
+async def mapper(context: view[http.ResponseContext], problem: str) -> Result[http.Response, Error]:
+    return http.empty(context, http.Status.INTERNAL_SERVER_ERROR)
+def register(state: State) -> Result[http.App[State, str], Error]:
+    return http.app[State, str](state, mapper)
+"#,
+        7,
+        "_f_617070[",
+        &[
+            expected,
+            "Future[Result[stdlib:std.http.server::Response, Error]]",
+        ],
+    );
+    assert_http_mapper_rejected_in_high_and_saved_low(
+        &f,
+        "app-wrong-result.nagi",
+        r#"import std.http.server as http
+class State:
+    value: i64
+def mapper(context: view[http.ResponseContext], problem: str) -> Result[http.Response, str]:
+    return fail(problem)
+def register(state: State) -> Result[http.App[State, str], Error]:
+    return http.app[State, str](state, mapper)
+"#,
+        7,
+        "_f_617070[",
+        &[
+            expected,
+            "got fn[view[stdlib:std.http.server::ResponseContext], str, Result[stdlib:std.http.server::Response, str]]",
+        ],
+    );
+    assert_http_mapper_rejected_in_high_and_saved_low(
+        &f,
+        "route-async-mapper.nagi",
+        r#"import std.http.server as http
+class State:
+    value: i64
+async def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, str]:
+    return fail("failure")
+async def mapper(context: view[http.ResponseContext], problem: str) -> Result[http.Response, Error]:
+    return http.empty(context, http.Status.INTERNAL_SERVER_ERROR)
+def register(state: State) -> Result[http.App[State, Error], Error]:
+    app = http.app_default[State](state)
+    return http.route_mapped(app, http.Method.POST, "/", http.public_policy[State](), handler, mapper)
+"#,
+        10,
+        "_f_726f7574655f6d6170706564(",
+        &[
+            expected,
+            "Future[Result[stdlib:std.http.server::Response, Error]]",
+        ],
+    );
+    assert_http_mapper_rejected_in_high_and_saved_low(
+        &f,
+        "route-wrong-result.nagi",
+        r#"import std.http.server as http
+class State:
+    value: i64
+async def handler(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, str]:
+    return fail("failure")
+def mapper(context: view[http.ResponseContext], problem: str) -> Result[http.Response, str]:
+    return fail(problem)
+def register(state: State) -> Result[http.App[State, Error], Error]:
+    app = http.app_default[State](state)
+    return http.route_mapped(app, http.Method.POST, "/", http.public_policy[State](), handler, mapper)
+"#,
+        10,
+        "_f_726f7574655f6d6170706564(",
+        &[
+            expected,
+            "got fn[view[stdlib:std.http.server::ResponseContext], str, Result[stdlib:std.http.server::Response, str]]",
+        ],
+    );
+}
+
+#[test]
+fn response_context_lookup_preserves_request_borrow_in_high_and_low() {
+    let f = Fixture::new();
+    for (name, high, text) in [
+        (
+            "lookup.nagi",
+            true,
+            "import std.http.server as http\ndef borrow(request: view[http.Request]) -> view[http.ResponseContext]:\n    return http.response_context(request)\n",
+        ),
+        (
+            "lookup.low",
+            false,
+            "import std.http.server as http;\nfn borrow(request: view[http.Request]) -> view[http.ResponseContext] {\n    return http.response_context(request);\n}\n",
+        ),
+    ] {
+        f.write(name, text);
+        let mut loaded = source::load(&f.0.join(name), high)
+            .unwrap_or_else(|error| panic!("{name} lookup must resolve: {error}"));
+        check::check(&mut loaded.program)
+            .unwrap_or_else(|error| panic!("{name} borrowed lookup must type-check: {error}"));
+    }
+}
+
+#[test]
+fn response_context_from_owned_request_cannot_escape_in_high_and_low() {
+    let f = Fixture::new();
+    for (name, high, text) in [
+        (
+            "escape.nagi",
+            true,
+            "import std.http.server as http\ndef escape(request: http.Request) -> view[http.ResponseContext]:\n    return http.response_context(view(request))\n",
+        ),
+        (
+            "escape.low",
+            false,
+            "import std.http.server as http;\nfn escape(request: http.Request) -> view[http.ResponseContext] {\n    return http.response_context(view(request));\n}\n",
+        ),
+    ] {
+        f.write(name, text);
+        let mut loaded = source::load(&f.0.join(name), high)
+            .unwrap_or_else(|error| panic!("{name} owned-request escape negative must resolve: {error}"));
+        let error = check::check(&mut loaded.program)
+            .expect_err("a request-local ResponseContext view must not escape its owner");
+        assert!(
+            error.contains("request/local-scoped view escapes its lifetime"),
+            "{name}: expected request-local borrow escape rejection, got: {error}"
+        );
+        let diagnostic = loaded.diagnostic(&error);
+        assert!(
+            diagnostic.contains(&format!("{name}:3")),
+            "{name}: expected the original return line, got: {diagnostic}"
+        );
+    }
+}
+
+#[test]
+fn response_factories_accept_context_first_arguments_in_high_and_low() {
+    let f = Fixture::new();
+    for (name, high, text) in [
+        (
+            "factories.nagi",
+            true,
+            "import std.http.server as http\ndef empty(context: view[http.ResponseContext]) -> Result[http.Response, Error]:\n    return http.empty(context, http.Status.OK)\ndef text(context: view[http.ResponseContext], body: view[str]) -> Result[http.Response, Error]:\n    return http.text(context, http.Status.OK, body)\ndef bytes(context: view[http.ResponseContext], body: view[bytes]) -> Result[http.Response, Error]:\n    return http.bytes(context, http.Status.OK, body)\ndef json(context: view[http.ResponseContext], payload: i64) -> Result[http.Response, Error]:\n    return http.json[i64](context, http.Status.OK, payload)\n",
+        ),
+        (
+            "factories.low",
+            false,
+            "import std.http.server as http;\nfn empty(context: view[http.ResponseContext]) -> Result[http.Response, Error] { return http.empty(context, http.Status.OK); }\nfn text(context: view[http.ResponseContext], body: view[str]) -> Result[http.Response, Error] { return http.text(context, http.Status.OK, body); }\nfn bytes(context: view[http.ResponseContext], body: view[bytes]) -> Result[http.Response, Error] { return http.bytes(context, http.Status.OK, body); }\nfn json(context: view[http.ResponseContext], payload: i64) -> Result[http.Response, Error] { return http.json[i64](context, http.Status.OK, payload); }\n",
+        ),
+    ] {
+        f.write(name, text);
+        let mut loaded = source::load(&f.0.join(name), high)
+            .unwrap_or_else(|error| panic!("{name} factories must resolve: {error}"));
+        check::check(&mut loaded.program)
+            .unwrap_or_else(|error| panic!("{name} Context-first factories: {error}"));
+    }
+}
+
+#[test]
+fn legacy_status_first_factories_fail_with_context_migration_guidance() {
+    let f = Fixture::new();
+    let calls = [
+        (
+            "empty",
+            "http.empty(http.Status.OK)",
+            "http.empty(context, status)",
+        ),
+        (
+            "text",
+            "http.text(http.Status.OK, view(\"body\"))",
+            "http.text(context, status, body)",
+        ),
+        (
+            "bytes",
+            "http.bytes(http.Status.OK, body)",
+            "http.bytes(context, status, body)",
+        ),
+        (
+            "json",
+            "http.json[i64](http.Status.OK, 42)",
+            "http.json[T](context, status, value)",
+        ),
+    ];
+    for (factory, call, migration) in calls {
+        for (suffix, high, import, function, line) in [
+            (
+                "nagi",
+                true,
+                "import std.http.server as http\n",
+                "def old_call(body: view[bytes]) -> Result[http.Response, Error]:\n    return CALL\n",
+                3,
+            ),
+            (
+                "low",
+                false,
+                "import std.http.server as http;\n",
+                "fn old_call(body: view[bytes]) -> Result[http.Response, Error] { return CALL; }\n",
+                2,
+            ),
+        ] {
+            let name = format!("legacy-{factory}.{suffix}");
+            let text = format!("{import}{}", function.replace("CALL", call));
+            f.write(&name, &text);
+            let mut loaded = source::load(&f.0.join(&name), high)
+                .unwrap_or_else(|error| panic!("{name} must load before checker rejection: {error}"));
+            let error = check::check(&mut loaded.program)
+                .expect_err("legacy status-first factory call must be rejected by the checker");
+            assert!(error.contains(migration), "{name}: missing migration `{migration}`: {error}");
+            let diagnostic = loaded.diagnostic(&error);
+            assert!(
+                diagnostic.contains(&format!("{name}:{line}")),
+                "{name}: expected checker diagnostic at original return line {line}: {diagnostic}"
+            );
+        }
+    }
+    // The checker points each former status-first call to its adopted Context-first form.
+}
+
+#[test]
+fn context_first_json_rejects_nonserializable_request_payload_at_return_line_high_low() {
+    let f = Fixture::new();
+    for (name, high, text, line) in [
+        (
+            "json-request.nagi",
+            true,
+            "import std.http.server as http\ndef invalid(context: view[http.ResponseContext], request: http.Request) -> Result[http.Response, Error]:\n    return http.json[http.Request](context, http.Status.OK, request)\n",
+            3,
+        ),
+        (
+            "json-request.low",
+            false,
+            "import std.http.server as http;\nfn invalid(context: view[http.ResponseContext], request: http.Request) -> Result[http.Response, Error] { return http.json[http.Request](context, http.Status.OK, request); }\n",
+            2,
+        ),
+    ] {
+        f.write(name, text);
+        let mut loaded = source::load(&f.0.join(name), high)
+            .unwrap_or_else(|error| panic!("{name} must load before JSON checker rejection: {error}"));
+        let error = check::check(&mut loaded.program)
+            .expect_err("Request is not a JSON-serializable payload");
+        assert!(
+            error.contains("HTTP JSON builderの値はSerializeに対応していません"),
+            "{name}: expected payload serializer rejection at argument 2, got: {error}"
+        );
+        let diagnostic = loaded.diagnostic(&error);
+        assert!(
+            diagnostic.contains(&format!("{name}:{line}")),
+            "{name}: expected JSON checker diagnostic at original return line {line}: {diagnostic}"
+        );
+    }
+}
+
+#[test]
 fn status_method_and_db_free_app_execute_from_high_and_saved_low() {
     let f = Fixture::new();
-    let source = APP.replace(
+    let source = APP.replace("async def main() -> Result[unit, Error]:", &format!("{FACTORY_PROBE}\nasync def main() -> Result[unit, Error]:"))
+    .replace(
+        "    other = http.app_default[State](State(label=\"second\", count=9))",
+        "    probe_app = http.app_default[State](State(label=\"probe\", count=0))\n    probe_app = try http.route(probe_app, http.Method.GET, view(\"/factory\"), http.public_policy[State](), factory_probe)\n    try await exercise(probe_app)\n    other = http.app_default[State](State(label=\"second\", count=9))",
+    )
+    .replace(
         "    return ok(print(\"HTTP application checked\"))",
         r#"    status = try http.status(599)
     assert_true(status.value == 599)
@@ -367,23 +1073,8 @@ fn status_method_and_db_free_app_execute_from_high_and_saved_low() {
     assert_true(Code.INTERNAL_SERVER_ERROR.is_server_error)
     assert_true(Code.CONTENT_TOO_LARGE == Code.PAYLOAD_TOO_LARGE)
     assert_true(Code.UNPROCESSABLE_CONTENT == Code.UNPROCESSABLE_ENTITY)
-    codes = [Code.OK, Code.CREATED, Code.NOT_FOUND]
-    first = codes[0]
-    assert_true(first.value == 200)
-    total = 0
-    for code in codes:
-        response = http.empty(code)
-        total += response.status.value
-    assert_true(total == 805)
     named = try http.method("PROPFIND")
     assert_true(http.method_name(view(named)) == "PROPFIND")
-    response = http.text(Code.CREATED, "created")
-    assert_true(response.status.value == 201)
-    assert_true(len(response.body) == 7)
-    stored = StoredResponse(output=http.empty(Code.NO_CONTENT))
-    assert_true(stored.output.status.value == 204)
-    encoded = try http.json[i64](Code.OK, 42)
-    assert_true(len(encoded.body) == 2)
     opts = try http.options(1024, 1000, 500, 1000)
     opts = try http.capacity(opts, 32, 8)
     opts = try http.header_timeout(opts, 200)
@@ -397,8 +1088,82 @@ fn status_method_and_db_free_app_execute_from_high_and_saved_low() {
     );
     f.write("main.nagi", &source);
     f.roundtrip();
-    f.run_high_and_saved_low("invalid status rejected\ninvalid status rejected\ninvalid status rejected\ninvalid status rejected\ninvalid status rejected\ninvalid status rejected\ninvalid status rejected\nHTTP application checked");
+    f.write("nagi.toml", "entry = \"main.nagi\"\n[rust.dependencies]\ntokio = { version = \"1.48\", features = [\"net\", \"io-util\", \"sync\", \"time\", \"rt\"] }\n");
+    f.write("native.rs", FACTORY_PROBE_NATIVE);
+    for input in ["main.nagi", "saved.low"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .arg("run")
+            .arg(f.0.join(input))
+            .arg("--project")
+            .arg(&f.0)
+            .arg("--rust")
+            .arg(f.0.join("native.rs"))
+            .arg("--out")
+            .arg(f.0.join(format!("build-{input}")))
+            .env("NAGI_NATIVE_TARGET_DIR", f.0.join("native-target"))
+            .env("CARGO_NET_OFFLINE", "true")
+            .output()
+            .unwrap();
+        let application = successful(output);
+        assert_eq!(
+            application.trim(),
+            "invalid status rejected\ninvalid status rejected\ninvalid status rejected\ninvalid status rejected\ninvalid status rejected\ninvalid status rejected\ninvalid status rejected\nHTTP application checked",
+            "{input}"
+        );
+    }
 }
+
+const FACTORY_PROBE: &str = r#"@rust("native::exercise")
+extern async def exercise(app: http.App[State, Error]) -> Result[unit, Error]
+async def factory_probe(request: Input, state: shared[State], authority: unit) -> Result[Output, Error]:
+    context = http.response_context(view(request))
+    codes = [Code.OK, Code.CREATED, Code.NOT_FOUND]
+    first = codes[0]
+    assert_true(first.value == 200)
+    total = 0
+    for code in codes:
+        response = try http.empty(context, code)
+        total += response.status.value
+    assert_true(total == 805)
+    response = try http.text(context, Code.CREATED, "created")
+    assert_true(response.status.value == 201)
+    assert_true(len(response.body) == 7)
+    empty = try http.empty(context, Code.NO_CONTENT)
+    stored = StoredResponse(output=empty)
+    assert_true(stored.output.status.value == 204)
+    encoded = try http.json[i64](context, Code.OK, 42)
+    assert_true(len(encoded.body) == 2)
+    return ok(response)
+"#;
+
+const FACTORY_PROBE_NATIVE: &str = r#"
+pub async fn exercise(app: nagi_runtime::http_server::App<super::State, nagi_runtime::Error>) -> Result<(), nagi_runtime::Error> {
+    use nagi_runtime::http_server as http;
+    use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::{TcpListener, TcpStream}, sync::oneshot};
+    let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
+    let address = listener.local_addr().map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
+    // The probe retains text, a stored empty response and JSON simultaneously.
+    // Keep exactly three finite ordinary slots; one actual socket/request.
+    let app = http::rate_route(app, http::Method::GET, "/factory", http::rate_policy(10, 1000)?)?;
+    let limits = http::response_limits(1024, 128, 4, 512, 12, 128, 3, 393216, 1, 131072, 512, 12)?;
+    let options = http::with_response_limits(http::capacity(http::default_options(), 1, 1)?, limits)?;
+    let options = http::with_rate_limits(options, http::rate_limits(1, 1, 1, 131072, 1000)?)?;
+    let options = http::authority(options, "https://localhost", vec!["localhost".to_owned()], 1, 128)?;
+    let (stop, shutdown) = oneshot::channel();
+    let task = tokio::spawn(http::serve_listener(listener, app, options, async { let _ = shutdown.await; }));
+    let mut stream = TcpStream::connect(address).await.map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
+    stream.write_all(b"GET /factory HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").await.map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
+    let mut raw = Vec::new();
+    tokio::time::timeout(std::time::Duration::from_secs(3), stream.read_to_end(&mut raw)).await.map_err(|_| nagi_runtime::Error::internal("factory probe timed out"))?.map_err(|error| nagi_runtime::Error::internal(error.to_string()))?;
+    let separator = raw.windows(4).position(|window| window == b"\r\n\r\n").ok_or_else(|| nagi_runtime::Error::internal("factory probe response missing header separator"))?;
+    let head = std::str::from_utf8(&raw[..separator]).map_err(|_| nagi_runtime::Error::internal("factory probe response header invalid"))?;
+    assert!(head.starts_with("HTTP/1.1 201 "), "{head}");
+    assert_eq!(&raw[separator + 4..], b"created");
+    stop.send(()).map_err(|_| nagi_runtime::Error::internal("factory probe shutdown failed"))?;
+    tokio::time::timeout(std::time::Duration::from_secs(3), task).await.map_err(|_| nagi_runtime::Error::internal("factory probe server shutdown timed out"))?.map_err(|error| nagi_runtime::Error::internal(error.to_string()))??;
+    Ok(())
+}
+"#;
 
 #[test]
 fn handlers_require_exact_async_request_shared_state_and_error_contracts() {
@@ -431,7 +1196,7 @@ fn handlers_require_exact_async_request_shared_state_and_error_contracts() {
         ),
         (
             APP.replace("selected, route_error", "selected, default_error"),
-            "expected fn[str, stdlib:std.http.server::Response]",
+            "Failure",
         ),
     ] {
         // A sync function must not fail merely because its body still awaits.
@@ -445,6 +1210,28 @@ fn handlers_require_exact_async_request_shared_state_and_error_contracts() {
         let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
         let error = check::check(&mut loaded.program).expect_err("accepted wrong handler");
         assert!(error.contains(expected), "{error}\n{changed}");
+        if changed.contains("selected, default_error") {
+            assert!(
+                error.contains("expected fn[view[stdlib:std.http.server::ResponseContext], str, Result[stdlib:std.http.server::Response, Error]]"),
+                "expected handler error type `str` in the RouteMapped mapper contract: {error}"
+            );
+            assert!(
+                error.contains("got fn[view[stdlib:std.http.server::ResponseContext], ")
+                    && error
+                        .contains("::Failure, Result[stdlib:std.http.server::Response, Error]]"),
+                "expected the actual `Failure` mapper type as the mismatch cause: {error}"
+            );
+            let line = changed
+                .lines()
+                .position(|line| line.contains("selected, default_error"))
+                .unwrap()
+                + 1;
+            let diagnostic = loaded.diagnostic(&error);
+            assert!(
+                diagnostic.contains(&format!("main.nagi:{line}")),
+                "expected mapper mismatch at RouteMapped call line {line}: {diagnostic}"
+            );
+        }
     }
 }
 
@@ -483,7 +1270,7 @@ fn apps_validate_generic_arity_owned_state_and_mapper_error_type() {
         2,
     );
     f.rejected(
-        "import std.http.server as http\ndef mapped(problem: Error) -> http.Response:\n    return http.empty(http.Status.BAD_REQUEST)\ndef main():\n    state = \"borrowed\"\n    app = http.app[view[str], Error](view(state), mapped)\n",
+        "import std.http.server as http\ndef mapped(context: view[http.ResponseContext], problem: Error) -> Result[http.Response, Error]:\n    return http.empty(context, http.Status.BAD_REQUEST)\ndef main():\n    state = \"borrowed\"\n    app = http.app[view[str], Error](view(state), mapped)\n",
         6,
     );
     f.rejected(
@@ -521,9 +1308,9 @@ fn resource_construction_serialization_and_shared_field_moves_fail_before_build(
     for (source, line) in [
         ("import std.http.server as http\ndef main():\n    request = http.Request()\n", 3),
         ("import std.http.server as http\ndef main():\n    code = http.Status(value=200)\n", 3),
-        ("import std.http.server as http\ndef main() -> Result[unit, Error]:\n    encoded = try json_encode(http.empty(http.Status.OK))\n    return ok(print(encoded))\n", 3),
-        ("import std.http.server as http\nclass Wrapped:\n    output: http.Response\ndef main() -> Result[unit, Error]:\n    encoded = try json_encode(Wrapped(output=http.empty(http.Status.OK)))\n    return ok(print(encoded))\n", 5),
-        ("import std.http.server as http\nclass Wrapped:\n    output: http.Response\ndef main() -> Result[unit, Error]:\n    encoded = try http.json[Wrapped](http.Status.OK, Wrapped(output=http.empty(http.Status.OK)))\n    return ok(print(encoded.status.value))\n", 5),
+        ("import std.http.server as http\ndef invalid(context: view[http.ResponseContext]) -> Result[unit, Error]:\n    encoded = try json_encode(try http.empty(context, http.Status.OK))\n    return ok(print(encoded))\n", 3),
+        ("import std.http.server as http\nclass Wrapped:\n    output: http.Response\ndef invalid(context: view[http.ResponseContext]) -> Result[unit, Error]:\n    response = try http.empty(context, http.Status.OK)\n    encoded = try json_encode(Wrapped(output=response))\n    return ok(print(encoded))\n", 6),
+        ("import std.http.server as http\nclass Wrapped:\n    output: http.Response\ndef invalid(context: view[http.ResponseContext]) -> Result[unit, Error]:\n    response = try http.empty(context, http.Status.OK)\n    encoded = try http.json[Wrapped](context, http.Status.OK, Wrapped(output=response))\n    return ok(print(encoded.status.value))\n", 6),
         ("class State:\n    label: str\ndef take(state: shared[State]) -> str:\n    return state.label\n", 4),
         ("import std.http.server as http\ndef bad(response: http.Response) -> Result[http.Response, Error]:\n    return http.append_header(response, \"X-Demo\", response.body)\n", 3),
         ("import std.http.server as http\ndef bad(response: http.Response) -> Result[http.Response, Error]:\n    return http.append_header_text(response, \"X-Demo\", response.status.phrase)\n", 3),

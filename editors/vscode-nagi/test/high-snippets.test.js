@@ -36,7 +36,7 @@ for (const [name, snippet] of Object.entries(snippets)) {
     }
     const file = path.join(folder, 'main.nagi');
     fs.writeFileSync(file, text);
-    const result = spawnSync(compiler.compilerPath('', root, root), ['check', file, '--out', path.join(folder, 'check')],
+    const result = spawnSync(compiler.compilerPath(process.env.NAGI_TEST_COMPILER || '', root, root), ['check', file, '--out', path.join(folder, 'check')],
       { cwd: folder, encoding: 'utf8', timeout: 10000 });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stdout + result.stderr);

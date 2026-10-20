@@ -195,6 +195,7 @@ mod tests {
         let (_, state) = tokio::sync::watch::channel(super::super::Sending {
             deadline: None,
             discard_remaining,
+            body_transferred: true,
         });
         ClosingIo::new(Probe::new(reading), timeout, state)
     }

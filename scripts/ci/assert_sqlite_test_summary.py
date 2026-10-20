@@ -12,7 +12,7 @@ _SUMMARY = re.compile(
 
 def expected_count(platform):
     if platform == "win32":
-        return 80
+        return 81
     if platform in {"linux", "darwin"}:
         return 80
     raise ValueError(f"unsupported platform for SQLite test-count guard: {platform}")
