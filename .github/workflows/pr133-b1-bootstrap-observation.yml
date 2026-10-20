@@ -5,75 +5,891 @@ on:
 permissions:
   contents: read
 jobs:
-  existing-deadline-fixtures:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+
+  nagi-package:
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            executable: nagic
+            rust_host: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
     env:
-      CARGO_TERM_COLOR: never
-      CARGO_INCREMENTAL: 0
+      NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Compile the existing runtime unit fixtures
-        run: cargo test --locked -p nagi-runtime --lib --no-run
-      - name: Require the existing fourteen deadline fixtures
+        id: rust
+      - name: Cache the target platform's Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
+          restore-keys: |
+            nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+            nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check SF06 signature diagnostic fake cases
+        run: python -m unittest discover -s tests -p 'test_sf06_http_client_signature_diagnostic.py'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify the compiler host architecture
+        env:
+          RELEASE_RUST_HOST: ${{ matrix.rust_host }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, subprocess
+          lines = subprocess.check_output(['rustc', '-vV'], text=True).splitlines()
+          host = next(line.removeprefix('host: ') for line in lines if line.startswith('host: '))
+          assert host == os.environ['RELEASE_RUST_HOST'], host
+          PY
+      - name: Fetch locked runtime dependencies before offline tests
+        env:
+          RELEASE_RUST_HOST: ${{ matrix.rust_host }}
+        shell: bash
+        run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Check native buffered send deadline and idle Keep-Alive early on Windows
+        if: runner.os == 'Windows'
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests -- --list > "$RUNNER_TEMP/b1-bootstrap-list.log"
-          python3 - <<'PYLIST'
-          import os,pathlib,re
-          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-list.log").read_text()
-          names=re.findall(r"(?m)^([a-zA-Z0-9_:]+): test$",text)
-          required={
-              "http_server::csrf_http::deadline_tests::pool_readiness_tests::cold_worker2_startup_spends_original_guarded_http_budget",
-              "http_server::csrf_http::deadline_tests::pool_readiness_tests::ready_worker2_setup_preserves_same_guarded_http_budget",
+          python - <<'PYSOURCE'
+          import hashlib, pathlib
+          expected = {
+              'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
+              'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
+              'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
+              'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
+              'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
           }
-          if len(names)!=14 or len(set(names))!=14 or not required.issubset(names):
-              raise SystemExit("b1_bootstrap_inventory=invalid")
-          PYLIST
-      - name: Observe the existing fifteen CSRF unit tests before the deadline fixtures
+          for name, digest in expected.items():
+              source = pathlib.Path(name).read_bytes()
+              if b"\r" in source.replace(b"\r\n", b"\n"):
+                  raise AssertionError("unexpected lone CR in native fixture source")
+              actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+              if actual != digest:
+                  raise AssertionError("reviewed native send fixture source differs: " + name)
+              print("native send fixture sha256=" + actual + " file=" + name)
+          PYSOURCE
+          cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-send-deadline.log").read_text(encoding="utf-8")
+          required={
+              "header_flush_before_buffered_frame_keeps_original_send_end",
+              "empty_response_completion_does_not_expire_idle_keep_alive",
+              "buffered_response_completion_does_not_expire_idle_keep_alive",
+          }
+          summaries=re.findall(r"(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;.*$",text)
+          if len(summaries)!=1:
+              raise AssertionError("three actual native send-deadline cases required")
+          for name in required:
+              pattern=rf"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \.\.\. ok$"
+              if len(re.findall(pattern,text))!=1:
+                  raise AssertionError("native send-deadline case missing, duplicate or failed")
+          PYCODE
+      - name: Check stalled send permit release and graceful join early on Windows
+        if: runner.os == 'Windows'
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: -- --list > "$RUNNER_TEMP/b1-bootstrap-auth-csrf-list.log"
-          python3 - <<'PYLIST'
-          import os,pathlib,re
-          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-auth-csrf-list.log").read_text()
-          names=re.findall(r"(?m)^([a-zA-Z0-9_:]+): test$",text)
-          if len(names)!=15 or len(set(names))!=15:
-              raise SystemExit("b1_bootstrap_auth_csrf_inventory=invalid")
-          PYLIST
-          cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/b1-bootstrap-auth-csrf-run.log"
-          python3 - <<'PYSUMMARY'
-          import os,pathlib,re
-          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-auth-csrf-run.log").read_text(encoding="utf-8")
-          summaries=re.findall(r"(?m)^test result: (.+)$",text)
-          expected=r"ok\. 15 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out; finished in [0-9.]+s"
-          if len(summaries)!=1 or re.fullmatch(expected,summaries[0]) is None:
-              raise SystemExit("b1_bootstrap_auth_csrf_summary=invalid")
-          PYSUMMARY
-      - name: Observe existing cases with unchanged default parallelism and deadlines
-        run: cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests -- --show-output
-      - name: Observe the ten public Session CSRF API tests after the deadline fixtures
+          cargo test --locked -p nagi-runtime --lib stalled_response_send_ 2>&1 | tee "$RUNNER_TEMP/http-stalled-send.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-stalled-send.log").read_text(encoding="utf-8")
+          required={
+              "stalled_response_send_expires_and_releases_connection_permit",
+              "graceful_shutdown_preserves_stalled_response_send_deadline",
+          }
+          summaries=re.findall(r"(?m)^test result: ok\. 2 passed; 0 failed; 0 ignored;.*$",text)
+          if len(summaries)!=1:
+              raise AssertionError("two actual stalled-send lifecycle cases required")
+          for name in required:
+              pattern=rf"(?m)^test http_server::tests::{re.escape(name)} \.\.\. ok$"
+              if len(re.findall(pattern,text))!=1:
+                  raise AssertionError("stalled-send case missing, duplicate or failed")
+          PYCODE
+      - name: Check call_member_ recovery first with exact result on the target platform
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p nagi-runtime --test session_csrf_public_api -- --list > "$RUNNER_TEMP/b1-bootstrap-session-csrf-api-list.log"
-          python3 - <<'PYLIST'
-          import os,pathlib,re
-          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-session-csrf-api-list.log").read_text()
-          names=re.findall(r"(?m)^([a-zA-Z0-9_:]+): test$",text)
-          if len(names)!=10 or len(set(names))!=10:
-              raise SystemExit("b1_bootstrap_session_csrf_api_inventory=invalid")
-          PYLIST
-          cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/b1-bootstrap-session-csrf-api-run.log"
-          python3 - <<'PYSUMMARY'
-          import os,pathlib,re
-          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"b1-bootstrap-session-csrf-api-run.log").read_text(encoding="utf-8")
-          summaries=re.findall(r"(?m)^test result: (.+)$",text)
-          expected=r"ok\. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in [0-9.]+s"
-          if len(summaries)!=1 or re.fullmatch(expected,summaries[0]) is None:
-              raise SystemExit("b1_bootstrap_session_csrf_api_summary=invalid")
-          PYSUMMARY
+          cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
+          python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
+      - name: Check SF06 public HTTP client across package targets
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/native-target
+          CARGO_PROFILE_DEV_DEBUG: '0'
+          CARGO_PROFILE_TEST_DEBUG: '0'
+          CARGO_INCREMENTAL: '0'
+          NAGI_NATIVE_TARGET_DIR: ${{ github.workspace }}/native-target
+          NAGI_TEST_ARTIFACT_DIR: ${{ runner.temp }}/sf06-http-client-native
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cat > "$RUNNER_TEMP/sf06-http-client-guard.py" <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          RUNTIME_CASES = {
+              "http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join",
+              "http_client::ledger::tracked_dns::hickory::tests::owned_udp_two_families_actual_tracked_resolver_and_join",
+              "http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock",
+              'http_client::address::socket_pin::tls_http1::tests::equal_numeric_service_identity_does_not_union_trust_stores',
+              'http_client::address::socket_pin::tls_http1::tests::native_io_drops_stream_before_the_final_trust_claim',
+              'http_client::address::socket_pin::tls_http1::tests::unpolled_driver_drop_and_abort_actual_join_release_native_trust',
+              'http_client::ledger::operation::startup::retention::tests::all_three_exact_boundaries_aggregate_rollback_and_last_owner',
+              'http_client::ledger::operation::startup::retention::tests::bearer_is_sensitive_budgeted_and_bound_to_catalog_service_and_operation',
+              'http_client::ledger::operation::startup::retention::tests::explicit_positive_limits_and_checked_arithmetic_without_large_allocations',
+              'http_client::ledger::operation::startup::retention::tests::native_header_clone_keeps_measured_capacity_and_claim_after_descriptor_drop',
+              'http_client::ledger::operation::startup::retention::tests::normalized_der_keeps_order_and_some_empty_but_discards_hidden_capacity',
+              'http_client::ledger::operation::startup::retention::tests::oversized_header_and_string_capacity_are_rejected_and_invalid_payloads_refund',
+              'http_client::ledger::operation::startup::retention::tests::parent_no_runtime_refusal_and_cross_catalog_registration_refund_all_partial_config',
+              'http_client::ledger::operation::startup::retention::tests::partial_allocation_failures_refund_after_accepted_partial_data_is_dropped',
+              'http_client::ledger::operation::startup::retention::tests::root_byte_preflight_fails_before_der_copy_and_catalog_drop_closes_authority',
+              'http_client::ledger::operation::startup::retention::tests::same_service_operations_share_one_trust_and_duplicate_registration_refunds',
+              'http_client::ledger::operation::startup::retention::tests::unregistered_header_aggregate_uses_actual_capacity_and_refunds_rejected_constructor',
+              'http_client::ledger::operation::startup::retention::tests::unregistered_services_count_individually_before_root_copy_and_refund_on_drop',
+          }
+          SUITES = {
+              "runtime-http-client": (221, None, RUNTIME_CASES),
+              "production-dns": (1, {
+                  "production_public_handle_rejects_loopback_before_tcp_or_http",
+              }, None),
+              "registry": (3, {
+                  "adopted_client_resource_inventory_has_owned_nonclone_and_distinct_operations",
+                  "adopted_client_passing_and_borrow_inventory",
+                  "adopted_client_failure_constants_keep_business_status_separate",
+              }, None),
+              "contracts": (11, {
+                  "owned_response_body_views_and_transfer_check_in_three_forms",
+                  "actual_grant_protected_operation_checks_in_three_forms",
+                  "explicit_public_operation_checks_without_grant_in_three_forms",
+                  "response_move_while_body_view_lives_rejects_at_checker_in_both_forms",
+                  "owned_response_wrapper_copy_is_rejected_but_shared_handle_copy_remains_valid",
+                  "protected_permission_mismatch_and_public_downgrade_are_checker_errors",
+                  "protocol_view_and_non_nominal_permission_are_rejected_at_declaration",
+                  "returned_header_views_do_not_borrow_lookup_name_in_three_forms",
+                  "security_kind_cross_module_metadata_survives_saved_low_without_auth_alias",
+                  "actual_future_grant_capture_cannot_be_delegated_to_spawn",
+                  "only_context_payload_is_shared_and_permission_is_nominal",
+              }, None),
+              "native": (2, {
+                  "public_signatures_and_failure_projections_build_and_run_in_three_forms",
+                  "generated_operations_execute_real_tls_and_grant_in_three_test_network_paths",
+              }, None),
+          }
+          ROW = re.compile(r"^test ([A-Za-z0-9_:]+) \.\.\. (ok|FAILED|ignored)$", re.M)
+          RUNNING = re.compile(r"^running ([0-9]+) tests?$", re.M)
+          SUMMARY = re.compile(
+              r"^test result: ok\. ([0-9]+) passed; 0 failed; 0 ignored; "
+              r"0 measured; [0-9]+ filtered out; finished in [^\n]+$",
+              re.M,
+          )
+          RESULT = re.compile(
+              r"^test result: (ok|FAILED)\. ([0-9]+) passed; ([0-9]+) failed; "
+              r"([0-9]+) ignored; [0-9]+ measured; [0-9]+ filtered out; finished in [^\n]+$",
+              re.M,
+          )
+          NATIVE_FORM_CASE = re.compile(
+              r"(?m)^test (generated_operation_oracle::real_tls_and_grant) \.\.\. (ok|FAILED|ignored)$"
+          )
+
+          DIAGNOSTIC_RAW_LIMIT = 256 * 1024
+          DIAGNOSTIC_COUNT_LIMIT = 1023
+
+          def bounded_diagnostic_text(path):
+              try:
+                  with path.open("rb") as stream:
+                      raw = stream.read(DIAGNOSTIC_RAW_LIMIT + 1)
+                  if len(raw) > DIAGNOSTIC_RAW_LIMIT:
+                      return "", "oversize"
+                  return raw.decode("utf-8"), "ok"
+              except (OSError, UnicodeError):
+                  return "", "unreadable"
+
+          def marker_in_file(path, marker):
+              text, _ = bounded_diagnostic_text(path)
+              return marker in text
+
+          def record_native_diagnostic(status, text):
+              try:
+                  root = pathlib.Path(os.environ["NAGI_TEST_ARTIFACT_DIR"])
+                  root.mkdir(parents=True, exist_ok=True)
+              except (KeyError, OSError, ValueError):
+                  root = None
+              running = RUNNING.findall(text)
+              results = RESULT.findall(text)
+              rows = ROW.findall(text)
+              expected = SUITES["native"][1]
+              case_status = {}
+              for case in sorted(expected):
+                  seen = [result for name, result in rows if name == case]
+                  case_status[case] = seen[0] if len(seen) == 1 else ("duplicate" if seen else "not_observed")
+              error_codes = sorted(set("E" + code for code in re.findall(r"\berror\[E([0-9]{4})\]", text)))
+              forms = {}
+              for form in ("high", "saved-low", "manual-low"):
+                  stem = f"http-client-{form}"
+                  files = ({
+                      "generated_present": root / f"{stem}-generated.rs",
+                      "wrapper_present": root / f"{stem}-native-wrapper.rs",
+                      "build_stdout_present": root / f"{stem}-build.stdout",
+                      "build_stderr_present": root / f"{stem}-build.stderr",
+                      "native_stdout_present": root / f"{stem}-native.stdout",
+                      "native_stderr_present": root / f"{stem}-native.stderr",
+                  } if root else {})
+                  present = {key: path.is_file() for key, path in files.items()} if root else {
+                      "generated_present": False, "wrapper_present": False,
+                      "build_stdout_present": False, "build_stderr_present": False,
+                      "native_stdout_present": False, "native_stderr_present": False,
+                  }
+                  native_text, read_state = bounded_diagnostic_text(root / f"{stem}-native.stdout") if root else ("", "unreadable")
+                  native_rows = NATIVE_FORM_CASE.findall(native_text)
+                  form_status = (native_rows[0][1] if len(native_rows) == 1 else
+                                 ("duplicate" if native_rows else "not_observed")) if read_state == "ok" else read_state
+                  timeout_states = {}
+                  for stage in ("build", "native"):
+                      marker = f"{form}-{stage}-timeout"
+                      observed = marker in text
+                      if root:
+                          observed = observed or any(
+                              marker_in_file(root / f"{stem}-{stage}.{stream}", marker)
+                              for stream in ("stdout", "stderr")
+                          )
+                      timeout_states[f"{stage}_timeout"] = "observed" if observed else "not_observed"
+                  forms[form] = {**present, "native_test_status": form_status, **timeout_states}
+              result = results[0] if len(results) == 1 else None
+              record = {
+                  "schema": "sf06-http-client-native-diagnostic-v1",
+                  "cargo_exit": status if 0 <= status <= 255 else None,
+                  "running_count": min(DIAGNOSTIC_COUNT_LIMIT, int(running[0])) if len(running) == 1 else None,
+                  "result_kind": result[0] if result else ("multiple" if results else "missing"),
+                  "passed_count": min(DIAGNOSTIC_COUNT_LIMIT, int(result[1])) if result else None,
+                  "failed_count": min(DIAGNOSTIC_COUNT_LIMIT, int(result[2])) if result else None,
+                  "ignored_count": min(DIAGNOSTIC_COUNT_LIMIT, int(result[3])) if result else None,
+                  "rust_error_codes": error_codes[:16],
+                  "rust_error_code_loss": len(error_codes) > 16,
+                  "known_native_cases": case_status,
+                  "unknown_test_row_count": min(DIAGNOSTIC_COUNT_LIMIT, sum(name not in expected for name, _ in rows)),
+                  "forms": forms,
+              }
+              saved = False
+              try:
+                  if root:
+                      temporary = root / "sf06-native-diagnostic.json.tmp"
+                      temporary.write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
+                      temporary.replace(root / "sf06-native-diagnostic.json")
+                      saved = True
+              except OSError:
+                  pass
+              forms_complete = sum(all(values[key] for key in (
+                  "generated_present", "wrapper_present", "build_stdout_present",
+                  "build_stderr_present", "native_stdout_present", "native_stderr_present",
+              )) for values in forms.values())
+              timeout_markers = [
+                  f"{form}-{stage}-timeout"
+                  for form, values in forms.items()
+                  for stage in ("build", "native")
+                  if values[f"{stage}_timeout"] == "observed"
+              ]
+              if status != 0 or timeout_markers or not (running == ["2"] and len(results) == 1 and
+                                     result and result[0] == "ok" and result[2:] == ("0", "0")):
+                  print(
+                      f"sf06_http_client_native_diag=v1 cargo_exit={record['cargo_exit']} "
+                      f"result={record['result_kind']} running={record['running_count']} "
+                      f"passed={record['passed_count']} failed={record['failed_count']} "
+                      f"ignored={record['ignored_count']} rust_error_codes={','.join(error_codes[:16]) or 'none'} "
+                      f"timeout_markers={','.join(timeout_markers) or 'none'} "
+                      f"forms_complete={forms_complete}/3 artifact_saved={'true' if saved else 'false'}"
+                  )
+                  for case, outcome in case_status.items():
+                      if outcome != "ok":
+                          print(f"sf06_http_client_native_case={case} status={outcome}")
+              return record
+
+          def fail(label):
+              print(f"sf06_http_client_check={label} result=failed")
+              raise SystemExit(1)
+
+          def check_suite(label, status, log_path):
+              suite = SUITES.get(label)
+              if suite is None:
+                  fail("unknown")
+              count, exact_names, required_names = suite
+              if status != 0 and label != "native":
+                  fail(label)
+              diagnostic_read_state = "ok"
+              if label == "native":
+                  text, diagnostic_read_state = bounded_diagnostic_text(pathlib.Path(log_path))
+              else:
+                  try:
+                      text = pathlib.Path(log_path).read_text(encoding="utf-8")
+                  except (OSError, UnicodeError):
+                      fail(label)
+              if label == "native":
+                  record_native_diagnostic(status, text)
+                  if diagnostic_read_state != "ok":
+                      print(f"sf06_http_client_native_raw={diagnostic_read_state}")
+                      fail(label)
+              if status != 0:
+                  fail(label)
+              rows = ROW.findall(text)
+              names = [name for name, result in rows]
+              passed = {name for name, result in rows if result == "ok"}
+              summaries = SUMMARY.findall(text)
+              running = RUNNING.findall(text)
+              if (running != [str(count)] or summaries != [str(count)] or
+                      len(rows) != count or len(set(names)) != count or
+                      len(passed) != count or
+                      (exact_names is not None and passed != exact_names) or
+                      (required_names is not None and
+                       not required_names.issubset(passed))):
+                  fail(label)
+              print(f"sf06_http_client_check={label} tests={count} result=ok")
+
+          def check_native_forms():
+              root = pathlib.Path(os.environ["NAGI_TEST_ARTIFACT_DIR"])
+              forms = ("high", "saved-low", "manual-low")
+              for form in forms:
+                  stem = f"http-client-{form}"
+                  generated = root / f"{stem}-generated.rs"
+                  wrapper = root / f"{stem}-native-wrapper.rs"
+                  if (not generated.is_file() or not generated.stat().st_size or
+                          not wrapper.is_file() or not wrapper.stat().st_size):
+                      fail("native-forms")
+                  for stage in ("build", "native"):
+                      for stream in ("stdout", "stderr"):
+                          if not (root / f"{stem}-{stage}.{stream}").is_file():
+                              fail("native-forms")
+                  try:
+                      output = (root / f"{stem}-native.stdout").read_text(encoding="utf-8")
+                  except (OSError, UnicodeError):
+                      fail("native-forms")
+                  rows = re.findall(
+                      r"(?m)^test (generated_operation_oracle::real_tls_and_grant) \.\.\. (ok|FAILED)$",
+                      output,
+                  )
+                  summaries = SUMMARY.findall(output)
+                  if rows != [("generated_operation_oracle::real_tls_and_grant", "ok")] or summaries != ["1"]:
+                      fail("native-forms")
+              print("sf06_http_client_native_forms=3 result=ok")
+
+          if len(sys.argv) != 4:
+              fail("arguments")
+          label, status_text, path = sys.argv[1:]
+          if label == "native-forms":
+              if status_text != "0":
+                  fail("native-forms")
+              check_native_forms()
+          else:
+              try:
+                  status = int(status_text)
+              except ValueError:
+                  fail("arguments")
+              check_suite(label, status, path)
+          PY
+          run_check() {
+            local label="$1"
+            shift
+            local log="$RUNNER_TEMP/sf06-${label}.log"
+            local status=0
+            "$@" > "$log" 2>&1 || status=$?
+            python "$RUNNER_TEMP/sf06-http-client-guard.py" "$label" "$status" "$log"
+          }
+          run_check runtime-http-client cargo test --locked -p nagi-runtime --lib http_client::
+          run_check production-dns cargo test --locked -p nagi-runtime --test http_client_operation_public_api production_public_handle_rejects_loopback_before_tcp_or_http -- --exact
+          run_check registry cargo test --locked -p nagic --test http_client_registry
+          run_check contracts cargo test --locked -p nagic --test http_client_contracts
+          run_check native cargo test --locked -p nagic --test http_client_native
+          python "$RUNNER_TEMP/sf06-http-client-guard.py" native-forms 0 "$NAGI_TEST_ARTIFACT_DIR"
+      - name: Preserve closed SF06 native diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf06-http-client-native-${{ matrix.platform }}
+          path: ${{ runner.temp }}/sf06-http-client-native/sf06-native-diagnostic.json
+          if-no-files-found: ignore
+      - name: Classify SF06 public signature failure from captured output
+        if: always()
+        shell: bash
+        run: |
+          if ! python scripts/ci/sf06_http_client_signature_diagnostic.py \
+            "$RUNNER_TEMP/sf06-native.log" \
+            "$RUNNER_TEMP/sf06-http-client-native" 2>/dev/null; then
+            printf '%s\n' 'sf06_http_client_signature_diag=v1 status=unavailable reason=invocation_error stage=unavailable form=unavailable rust_error_code=none code_status=not_applicable newline=unavailable artifact_saved=false'
+          fi
+      - name: Preserve closed SF06 signature failure diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf06-http-client-signature-${{ matrix.platform }}
+          path: ${{ runner.temp }}/sf06-http-client-native/sf06-signature-diagnostic.json
+          if-no-files-found: ignore
+      - name: Diagnose G3 generation-token failure before crypto checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api guarded_rotation_and_logout_invalidate_old_generation_tokens -- --exact 2>&1 | tee "$RUNNER_TEMP/g3-generation-target.log"
+          python - <<'PY'
+          import os, pathlib, re
+          text = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "g3-generation-target.log").read_text(encoding="utf-8")
+          summaries = re.findall(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
+          if summaries != [("ok", "1", "0", "0")]:
+              raise AssertionError(f"expected exactly one passing focused test (1 passed, 0 failed, 0 ignored), got {summaries}")
+          PY
+      - name: Check SF06 private native modules before broad runtime checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib http_client::ledger:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-ledger.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-transport.log"
+          cargo test --locked -p nagi-runtime --lib auth::admission_bridge_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-admission.log"
+          cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-auth-core.log"
+          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-credential.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-core.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::hickory::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-hickory.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address::q1_dial::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-q1-pure.log"
+          python - <<'PY_SUMMARY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 82, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          for name, count in expected.items():
+              data = (root / name).read_text(encoding="utf-8")
+              running = re.findall(r"(?m)^running (\d+) tests?$", data)
+              results = re.findall(r"(?m)^test result: ok\. (\d+) passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in .+$", data)
+              if running != [str(count)] or results != [str(count)]:
+                  raise AssertionError(f"{name}: expected exactly {count} real, passing tests")
+          required_parent = {
+              'http_client::ledger::admission::tests::auth_enqueue_winning_entry_retains_record_after_concurrent_stop',
+              'http_client::ledger::admission::tests::branded_driver_history_rejects_second_driver_after_first_actual_join',
+              'http_client::ledger::admission::tests::branded_phase_winner_finishes_once_then_stop_denies_next_entry',
+              'http_client::ledger::admission::tests::branded_runner_rejects_foreign_same_id_at_every_port',
+              'http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock',
+              'http_client::ledger::admission::tests::entry_guard_preserves_stop_after_a_winning_cas',
+              'http_client::ledger::admission::tests::last_sender_drop_does_not_wait_for_watch_value_borrow',
+              'http_client::ledger::admission::tests::old_key_cannot_authorize_reused_numeric_slot',
+              'http_client::ledger::admission::tests::owner_destructor_posts_stop_without_waiting_for_waiter_gate',
+              'http_client::ledger::admission::tests::parent_drop_posts_stop_and_pending_grant_cannot_enqueue',
+              'http_client::ledger::admission::tests::repeated_stop_has_no_self_wake_while_pending_root_is_joined',
+              'http_client::ledger::admission::tests::runner_handle_is_not_counted_and_last_sender_closes_eof',
+              'http_client::ledger::admission::tests::stop_after_consumed_real_auth_permit_refuses_record_publication',
+              'http_client::ledger::admission::tests::unwinding_entry_guard_closes_without_clearing_stop',
+          }
+          ledger_text = (root / "sf06-private-ledger.log").read_text(encoding="utf-8")
+          passed_parent = set(re.findall(
+              r"(?m)^test (http_client::ledger::admission::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          ))
+          if not required_parent.issubset(passed_parent):
+              raise AssertionError("SF06 branded parent test names missing or unsuccessful")
+          required_added = {
+              'http_client::ledger::admission::tests::abandon_popped_unstarted_retires_without_parent_stop',
+              'http_client::ledger::admission::tests::abandon_drop_under_owner_waiter_watch_gates_is_prompt_and_reaped',
+              'http_client::ledger::admission::tests::abandon_unwind_before_root_registration_retires',
+              'http_client::ledger::admission::tests::abandon_cancel_keeps_popped_payload_until_drop',
+              'http_client::ledger::admission::tests::borrowed_root_requires_command_and_keeps_join_distinct_from_payload_drop',
+              'http_client::ledger::admission::tests::rejected_root_future_drops_outside_owner_and_command_remains_armed',
+              'http_client::ledger::admission::tests::rejected_root_future_unwind_leaves_command_abandonment_reapable',
+              'http_client::ledger::admission::tests::successful_root_completion_does_not_report_command_abandonment',
+              'http_client::ledger::admission::tests::unexpected_root_abort_retains_sticky_fault_not_abandonment',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_abort',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_panic',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_foreign_same_numeric_id_must_not_construct',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_stale_phase_fail_must_not_poison_reused_id',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_native_poll_must_hold_busy_entry_through_stop',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_unregistered_root_refuses_then_same_key_starts',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_stop_before_entry_keeps_native_and_fault_zero',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_entry_winner_registers_one_child_after_stop',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_cancelled_root_keeps_ticket_until_receipt_and_join',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_joined_root_refuses_start_but_same_key_receipt_drains',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_deadline_after_entry_skips_native_primitive',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_root_finishes_during_book_wait_skips_io',
+          }
+          required_delivery = {
+              'http_client::ledger::admission::tests::sf06_closed_runtime_child_drop_is_outside_owner_and_entry',
+              'http_client::ledger::admission::tests::sf06_closed_runtime_root_drop_is_outside_owner_and_entry',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_fallback_retains_external_child_and_wakes_after_cancelled_waiter',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_monitor_retains_external_child_paused_delivery',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_poisoned_owner_retains_external_child_until_delivery',
+              'http_client::ledger::tests::sf06_delivery_drop_panic_does_not_acknowledge',
+              'http_client::ledger::tests::sf06_delivery_register_recheck_and_independent_broadcast_wakes',
+              'http_client::ledger::tests::sf06_failed_send_blocking_drop_retains_debt_and_cancelled_bare_drain',
+              'http_client::ledger::tests::sf06_paused_delivery_retains_actual_handle_quota_and_join_bit',
+              'http_client::ledger::tests::sf06_receipt_tracks_exact_reused_task_slot',
+              'http_client::ledger::tests::sf06_stop_expiry_and_fault_cannot_join_before_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_closed_runtime_dns_drop_is_outside_owner_book_and_entry',
+              'http_client::ledger::tracked_dns::tests::sf06_multiple_dns_waiters_and_cancelled_waiter_wake_on_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_paused_dns_delivery_retains_io_ticket_until_failed_send_drop',
+          }
+          passed_ledger = set(re.findall(
+              r"(?m)^test (http_client::ledger::[a-z0-9_:]+) \.\.\. ok$", ledger_text,
+          ))
+          if not required_added.issubset(passed_ledger):
+              raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
+          if not required_delivery.issubset(passed_ledger):
+              raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
+          required_operation = {
+              'http_client::ledger::operation::tests::adapter_panic_remains_fault_after_actual_root_join',
+              'http_client::ledger::operation::tests::dropped_execute_retains_cleanup_until_actual_native_joins',
+              'http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join',
+              'http_client::ledger::operation::tests::owner_close_refuses_publish_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unpolled_execute_starts_no_admission_or_native_resolution',
+              'http_client::ledger::operation::tests::original_deadline_survives_provisional_response_and_join_wait',
+              'http_client::ledger::operation::tests::unreceived_response_keeps_core_budget_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unsupported_encoding_is_unknown_and_never_replayed',
+          }
+          passed_operation = re.findall(
+              r"(?m)^test (http_client::ledger::operation::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_operation) != required_operation or len(passed_operation) != len(required_operation):
+              raise AssertionError("SF06 operation test names missing, duplicated, or unsuccessful")
+          required_h0 = {
+              'http_client::ledger::admission::tests::sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings',
+              'http_client::ledger::admission::tests::sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority',
+              'http_client::ledger::admission::tests::sf06_h0_paused_root_return_preserves_stage_through_stop_expiry_and_poison',
+              'http_client::ledger::admission::tests::sf06_h0_pre_bind_unwind_retains_debt_and_original_payload',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_inner_unwind_retains_debt_and_reaps_known_client_fault',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_outer_unwind_cannot_retire_monitor_record_as_joined',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_unresolved_outer_drains_known_inner_without_retiring',
+              'http_client::ledger::tests::sf06_h0_launch_publication_wakes_independent_waiters_and_retains_receipt',
+              'http_client::ledger::tracked_dns::tests::sf06_h0_paused_dns_root_retains_quota_without_io_authority',
+          }
+          passed_h0 = re.findall(
+              r"(?m)^test ([a-z0-9_:]*::sf06_h0_[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_h0) != required_h0 or len(passed_h0) != len(required_h0):
+              raise AssertionError("SF06 H0 test names missing, duplicated, or unsuccessful")
+          required_q1_native = {
+              'http_client::address::socket_pin::q1_native::tests::q1_native_attempt_cap_prevents_second_connector_and_releases_first_slot',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_closed_plan_starts_no_connector',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_close_during_pending_connect_does_not_attempt_second_address',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_terminal_connect_failure_does_not_try_another_candidate',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_cancelled_caller_is_joined_before_reusing_socket_quota',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_ttl_zero_is_usable_for_one_owned_operation_without_cache',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_refused_first_address_connects_only_checked_second_peer',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_expired_original_connect_end_does_not_reset_budget',
+          }
+          transport_text = (root / "sf06-private-transport.log").read_text(encoding="utf-8")
+          passed_q1_native = re.findall(
+              r"(?m)^test (http_client::address::socket_pin::q1_native::tests::q1_native_[a-z0-9_]+) \.\.\. ok$",
+              transport_text,
+          )
+          if set(passed_q1_native) != required_q1_native or len(passed_q1_native) != len(required_q1_native):
+              raise AssertionError("SF06 Q1 native test names missing, duplicated, unexpected, or unsuccessful")
+          PY_SUMMARY
+      - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib auth::ed25519:: 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-core.log"
+          cargo test --locked -p nagi-runtime --test ed25519_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-public.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf02-ed25519-core.log": 14, "sf02-ed25519-public.log": 1}.items():
+              text = (root / name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;", text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
+      - name: Check SF07 charged native wire checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf07_wire_source.py
+          python -B scripts/tests/test_sf07_transport_source.py
+          python -B scripts/tests/test_sf07_request_source.py
+          python -B scripts/tests/test_sf07_rate_source.py
+          python -B scripts/tests/test_sf07_checkpoint_summary.py
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            NAGI_TEST_BASH="$(cygpath -w "$BASH")"
+          else
+            NAGI_TEST_BASH="$BASH"
+          fi
+          export NAGI_TEST_BASH
+          python -B scripts/tests/test_sf07_owned_state_summary.py
+          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
+          cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
+          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::retained_catalog_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py catalog-retained
+          cargo test --locked -p nagi-runtime --lib auth::csrf::fixed_body::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py fixed-owner
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py csrf-issuer
+          cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py prelogin-issuer
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send
+      - name: Check SF02 public Session runtime and one-use delivery before other checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          python -c 'import os; print("ICU4X_DATA_DIR present:", "ICU4X_DATA_DIR" in os.environ)'
+          unset ICU4X_DATA_DIR
+          cargo check --locked -p nagi-runtime --lib
+          cargo test --locked -p nagi-runtime --lib auth::session::http_bridge::delivery_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-delivery-wire.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::delivery::wire_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-delivery-cell.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::delivery::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-delivery-core.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::http_bridge::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-http-bridge.log"
+          cargo test --locked -p nagi-runtime --test session_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-public-api.log"
+          cargo test --locked -p nagi-runtime --lib http_server::tests::unsafe_session_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-unsafe-session.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-persistent-store.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::delivery::lease_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-lease-owner.log"
+          cargo test --locked -p nagi-runtime --lib auth::session::secrets::tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-secret-components.log"
+          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-credential-metadata.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {'sf02-delivery-wire.log': 11, 'sf02-delivery-cell.log': 2, 'sf02-delivery-core.log': 11, 'sf02-http-bridge.log': 7, 'sf02-public-api.log': 5, 'sf02-unsafe-session.log': 3, 'sf02-persistent-store.log': 41, 'sf02-lease-owner.log': 6, 'sf02-secret-components.log': 6, 'sf02-credential-metadata.log': 2}
+          for name, count in expected.items():
+              text = (root / name).read_text(encoding="utf-8")
+              pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
+              if not re.search(pattern, text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
+      - name: Diagnose private Session phase deadlines on Windows
+        if: always() && runner.os == 'Windows'
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set +e
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          python -B scripts/tests/test_session_private_deadline_diagnostic.py
+          fake_rc=$?
+          python -B scripts/ci/session_private_deadline_diagnostic.py --run
+          native_rc=$?
+          if [ "$fake_rc" -ne 0 ] || [ "$native_rc" -ne 0 ]; then exit 1; fi
+      - name: Capture bounded Session auth stages before broad checks
+        id: auth_stage_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -e
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          python scripts/tests/test_auth_stage_diagnostic.py
+          set +e
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2>&1
+          csrf_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2>&1
+          prelogin_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
+          broad_rc=$?
+          python -B scripts/tests/test_browser_login_stage_coverage.py
+          stage_unit_rc=$?
+          python -B scripts/ci/browser_login_stage_coverage.py "$RUNNER_TEMP/auth-stage-broad.raw" "$broad_rc" "$RUNNER_TEMP/auth-stage-browser-native.json"
+          stage_rc=$?
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
+          cases_rc=$?
+          python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc" "$cases_rc"
+          sanitize_rc=$?
+          if [ "$stage_unit_rc" -ne 0 ] || [ "$stage_rc" -ne 0 ]; then sanitize_rc=1; fi
+          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw"
+          exit "$sanitize_rc"
+      - name: Preserve bounded Session auth-stage traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-stage-${{ matrix.platform }}
+          path: |
+            ${{ runner.temp }}/auth-stage-csrf.trace
+            ${{ runner.temp }}/auth-stage-prelogin.trace
+            ${{ runner.temp }}/auth-stage-broad.trace
+            ${{ runner.temp }}/auth-stage-browser-native.json
+          if-no-files-found: ignore
+      - name: Capture bounded Session deadline public tests
+        id: session_deadline_diag
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          python scripts/tests/test_session_deadline_diagnostic.py
+          python -B scripts/tests/test_session_native_finish_diagnostic.py
+          python -B scripts/tests/test_session_native_finish_summary.py
+          set +e
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-session.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          session_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-session.raw"; fi
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --test browser_login_public_api 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-browser.raw"
+          pipeline_status=("${PIPESTATUS[@]}")
+          browser_rc=${pipeline_status[0]}
+          if [ "${pipeline_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-browser.raw"; fi
+          python scripts/ci/session_deadline_diagnostic.py "$RUNNER_TEMP" "$session_rc" "$browser_rc" "$RUNNER_TEMP/session-deadline-diagnostic.json"
+          diagnose_rc=$?
+          rm -f "$RUNNER_TEMP/session-deadline-session.raw" "$RUNNER_TEMP/session-deadline-browser.raw"
+          delivery_fail=0
+          while read -r delivery_label delivery_name; do
+            CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib "$delivery_name" -- --exact 2>&1 | python -c 'import sys
+          limit=256*1024+1
+          remaining=limit
+          while True:
+           data=sys.stdin.buffer.read(8192)
+           if not data:
+            break
+           if remaining>0:
+            sys.stdout.buffer.write(data[:remaining])
+            remaining-=min(remaining,len(data))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+            delivery_status=("${PIPESTATUS[@]}")
+            delivery_rc=${delivery_status[0]}
+            if [ "${delivery_status[1]}" -ne 0 ]; then rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"; fi
+            python -B scripts/ci/session_deadline_diagnostic.py --delivery "$delivery_label" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw" "$delivery_rc" "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.json"
+            if [ "$?" -ne 0 ]; then delivery_fail=1; fi
+            rm -f "$RUNNER_TEMP/session-deadline-delivery-$delivery_label.raw"
+          done <<'DELIVERY_CASES'
+          applied auth::session::http_bridge::delivery_tests::applied_real_issue_commit_has_exactly_one_wire_cookie
+          not_modified auth::session::http_bridge::delivery_tests::applied_304_and_private_cache_conflict_are_fixed_no_cookie_500
+          head auth::session::http_bridge::delivery_tests::head_applied_response_transfers_cookie_once_without_body
+          expiry auth::session::http_bridge::delivery_tests::expiry_after_real_commit_retires_applied_material_without_cookie
+          DELIVERY_CASES
+          if [ "$delivery_fail" -ne 0 ]; then diagnose_rc=1; fi
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib native_finish 2>&1 | python -B scripts/ci/session_native_finish_summary.py
+          native_finish_status=("${PIPESTATUS[@]}")
+          if [ "${native_finish_status[0]}" -ne 0 ] || [ "${native_finish_status[1]}" -ne 0 ]; then diagnose_rc=1; fi
+          exit "$diagnose_rc"
+      - name: Preserve sanitized Session deadline diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: session-deadline-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            ${{ runner.temp }}/session-deadline-diagnostic.json
+            ${{ runner.temp }}/session-deadline-delivery-applied.json
+            ${{ runner.temp }}/session-deadline-delivery-not_modified.json
+            ${{ runner.temp }}/session-deadline-delivery-head.json
+            ${{ runner.temp }}/session-deadline-delivery-expiry.json
+          if-no-files-found: ignore
+      - name: Check owned BrowserLogin business stage and cancellation witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_browser_login_stage_backport.py
+          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
+      - name: Observe bounded runner resources before B1
+        shell: bash
+        run: |
+          python3 - <<'PYRESOURCE'
+          import json,os,pathlib
+          observed={"cpu_count":os.cpu_count()}
+          try:
+              observed["load_average"]=list(os.getloadavg())
+              fs=os.statvfs(".")
+              observed["filesystem_available_bytes"]=fs.f_bavail*fs.f_frsize
+              with pathlib.Path("/proc/meminfo").open("rb") as source:
+                  raw=source.read(8193)
+              if len(raw)>8192:
+                  raise ValueError("resource observation exceeds cap")
+              selected={"MemTotal","MemAvailable","SwapFree","Dirty","Writeback"}
+              observed["memory_kib"]={parts[0].rstrip(":"):int(parts[1]) for line in raw.decode("ascii").splitlines() if (parts:=line.split()) and parts[0].rstrip(":") in selected}
+          except (OSError,ValueError,UnicodeError):
+              observed["resource_observation_unavailable"]=True
+          print("B1_RUNNER_RESOURCES="+json.dumps(observed,sort_keys=True,separators=(",",":")))
+          PYRESOURCE
+      - name: Check B1 Session CSRF runtime and public socket contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          python -B scripts/tests/test_csrf_deadline_mutations.py
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-core.log"
+          cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":14, "sf03-b1-csrf-public.log":10}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          required_csrf_capacity = {
+              "auth::csrf::tests::bytes_limit_is_independent_and_expired_cleanup_spends_one_batch",
+              "auth::csrf::tests::expired_token_reclaims_byte_capacity_without_relaxing_live_token_cap",
+              "auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry",
+              "auth::csrf::tests::reopened_context_preserves_original_token_expiry_and_rejects_after_deadline",
+          }
+          csrf_text=(root/"sf03-b1-csrf-core.log").read_text(encoding="utf-8")
+          for required in required_csrf_capacity:
+              passed=re.findall(rf"(?m)^test {re.escape(required)} \.\.\. ok$",csrf_text)
+              if len(passed)!=1:
+                  raise AssertionError("CSRF capacity oracle missing, duplicate, or unsuccessful")
+          PYCODE
+          python -B scripts/ci/csrf_deadline_mutations.py --coverage "$RUNNER_TEMP/sf03-b1-csrf-deadline.log" 0 "$RUNNER_TEMP/csrf-deadline-coverage.json"
