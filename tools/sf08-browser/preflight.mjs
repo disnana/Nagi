@@ -1264,7 +1264,7 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
             const observed = eventTrace !== undefined && !fingerprint ? `${base}_events_${eventTrace}` : base;
             const text = detail === 'console_malformed' && eventTrace?.slice(0, -2).includes('X') && textFingerprint;
             const failedStage = text ? `${observed}_text_${textFingerprint}` : observed;
-            checkpoint(!fingerprint && eventTrace !== undefined && eventTiming !== undefined
+            checkpoint(text && !fingerprint && eventTrace !== undefined && eventTiming !== undefined
               ? `${failedStage}_ms_${eventTiming}` : failedStage, name);
             refuse();
           }

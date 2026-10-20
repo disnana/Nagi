@@ -1696,19 +1696,29 @@ test('wrong-host event timing is monotonic, failure-only, bounded, and aligned',
 });
 
 test('probeEngine emits a timed WebKit failure checkpoint accepted by Python', async () => {
-  const type = fake('webkit', 'normal', { reason: 'host', kind: 'cancelled', requestCertificate: true });
-  const endpoint = { url: negative.hostOrigin + '/', async finish() { return false; }, async close() { return true; } };
+  const consoleText = 'Failed to load resource: Operation was cancelled';
+  const type = fake('webkit', 'normal');
+  const dedicated = hostBrowser({ text: 'Operation was cancelled',
+    duringGoto: ({ page, endpoint }) => page.emit('console', webkitConsoleError(endpoint.url, { text: consoleText })) });
+  const launch = type.launch.bind(type); let contexts = 0;
+  type.launch = async options => {
+    const browser = await launch(options), newContext = browser.newContext.bind(browser);
+    browser.newContext = options => ++contexts === 1 ? newContext(options) : dedicated.browser.newContext(options);
+    return browser;
+  };
   const checkpoints = [];
   await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
-    (stage, engine) => checkpoints.push({ stage, engine }), undefined, async () => endpoint));
+    (stage, engine) => checkpoints.push({ stage, engine }), undefined, async () => dedicated.endpoint));
   const observed = checkpoints.find(({ stage }) => stage.includes('_events_') && stage.includes('_ms_'));
-  assert.ok(observed, 'failed host proof records the temporary timing suffix');
+  assert.ok(observed, 'owned console mismatch records the temporary timing suffix');
   assert.equal(observed.engine, 'webkit');
   assert.deepEqual(checkedFailure(observed.stage, observed.engine),
     { schema_version: 1, stage: observed.stage, engine: 'webkit' });
-  const match = observed.stage.match(/_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])_ms_([0-9a-z]*)$/);
-  assert.ok(match, 'timing remains aligned after the retained event trace');
-  assert.equal(hostProof.validWebkitEventTiming(match[1], match[2]), true);
+  const match = observed.stage.match(/^engine_wrong_host_one_shot_console_malformed_events_([ETXLAZUIRMNGVSFBYWDPCJKHOQ]{0,32}_[01])_text_([a-f0-9]{64})_ms_([0-9a-z]*)$/);
+  assert.ok(match, 'timing is restricted to the actual owned console-mismatch path');
+  assert.equal(match[2], createHash('sha256').update(consoleText).digest('hex'));
+  assert.equal(hostProof.validWebkitEventTiming(match[1], match[3]), true);
+  assert.equal(dedicated.closed(), true, 'failure still joins and closes the owned context');
   const validator = 'import sys\nsys.path.insert(0, sys.argv[1])\nimport failure_checkpoint as f\nf.validate({"schema_version": 1, "stage": sys.argv[2], "engine": "webkit"})';
   const py = spawnSync('python3', ['-B', '-c', validator,
     path.dirname(fileURLToPath(import.meta.url)), observed.stage], { encoding: 'utf8' });
