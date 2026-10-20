@@ -23,6 +23,7 @@ runner-minutesはOS料金倍率・課金丸めを適用していない実行区�
 - 変更判定→release-plan→ci-planの後、独立したRust包括検査、OS別package/回帰、browser、IDEを別runnerで並行実行する。重いnativeテストを同じrunner内で一斉起動せず、既存のport・一時directory・Cargo lockの分離と検査を維持する。
 - L1は限定したfront-end変更だけ。未分類やruntime/security/control-plane変更はL2。main/週次は3 OS、明示RCと正式配布はIntelを含む4 OS。Intelを外すことによる通常CIの削減は選択変更であり、各テスト自体が高速化したという意味ではない。
 - Readyは全選択jobを確認する。公開直前に同じ計画とsource SHAを再確認する。PR・手動RC・tagから公開しない。既存のversion/CHANGELOGによる公開判定を維持し、mainの公開runを後続commitで取消しない。新しいmerge承認機構を設定済みと仮定しない。
+- 失敗時にも判定が必要な6 jobは `always() && !cancelled()` とする。[GitHubの取消仕様](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation)ではjob条件がtrueなら取消後も継続するため、公開jobも取消時には拒否する。stepの後片付け用 `always()` は維持する。既に外部で受理された公開の取り消しや、旧runへの遡及は保証しない。
 - 外部Actionを確認したcommit SHAへ固定。checkoutの資格情報を残さず、診断artifactは7日、配布候補は14日の明示保持期間（既存の個別指定は維持）。ソース・秘密情報・私有鍵をcacheへ追加しない。
 - 歴史的なBrowserLogin追加観測とeditor-stage観測は手動専用。必須のruntime/実browser検査は本体CIに残す。editor-stageは旧source束に限定した観測で、現在のcompiler変更を受け入れる汎用性能検査ではない。元のsource bindingは維持し、不一致なら拒否する。
 
@@ -48,6 +49,8 @@ runner-minutesはOS料金倍率・課金丸めを適用していない実行区�
 
 repository rootで `python -B -m unittest discover -s scripts/ci -p 'test_*.py'` と `python -B -m unittest discover -s scripts/ci -p 'test_nextest_evaluation.py'` を実行する。必須CIは従来のsource/mutation guardsも実行する。許可した配線の逆変換だけで元の検査commandへ戻ること、不正なpin/matrix/公開条件・command削除を拒否することを維持する。歴史的hashの新しい値への置換ではない。
 
-GitHub上では最終HEADのL2を確認し、リリースCI終了後に任意nextest評価を起動する。L3は手動RCで4 OSを検証するが公開しない。改善後のwall/job時間、非加重runner-minutes、cache hit/miss・転送量・復元/保存時間は、同一HEADの結果で更新する。現段階で削減率、nextest実測速度、総課金削減額は未確認。
+実Actionsの[L1 run 39511768690](https://github.com/disnana/Nagi/actions/runs/39511768690)（HEAD `44b9d13`、一時PR #137は未マージで終了）では、lexerのcommentだけを変更し、重要Rust検査・browser・4 IDE検証・Readyが成功した。wallは584秒、非加重job実行区間合計は31.38 runner-minutes。包括検査はこの選択では実行せず、上の基準runとは作業集合が異なるため、同条件の高速化率ではない。
+
+4 OSの[nextest実測](nextest-evaluation.md#2026-10-20の実測)では、この軽い2対象は従来Cargoより約1.6〜2.0倍長くかかり、必須runnerは置換しない。最終HEADのL2結果・wall/job・cache観測はPRの検証欄で同一HEADを明記する。新しいL3配線の手動4 OS実行と、実プラットフォームでの取消は未確認であり、ローカルの厳格なmatrix/拒否条件検証とは区別する。L3の公開前必須ゲートは維持し、未完了から公開しない。総課金削減額や一般的な性能保証は示さない。
 
 参照（2026-10-20確認）: [GitHub cache境界](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)、[cache restore/save](https://github.com/actions/cache/tree/0057852bfaa89a56745cba8c7296529d2fc39830)、[rust-cache](https://github.com/Swatinem/rust-cache)、[sccache](https://github.com/mozilla/sccache)、[uvのGitHub案内](https://docs.astral.sh/uv/guides/integration/github/)、[nextest文書](https://nexte.st/docs/)。
