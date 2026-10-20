@@ -133,10 +133,12 @@ class LevelsTests(unittest.TestCase):
         for original, bad in [
             ('    needs: [changes, ci-plan, critical, linux,', '    needs: [changes, linux,'),
             ('      matrix: ${{ fromJSON(needs.ci-plan.outputs.matrix) }}', '      matrix: {}'),
-            ("    name: Ready to merge\n    if: always()\n", "    name: Ready to merge\n    if: false\n"),
+            ("    name: Ready to merge\n    if: always() && !cancelled()\n", "    name: Ready to merge\n    if: false\n"),
             ('      - run: cargo test --locked --doc', '      - run: true'),
             ('  ci-plan:\n','  no-plan:\n')]:
-            with self.assertRaises(ValueError):levels_projection.inverse_workflow(source.replace(original,bad,1))
+            mutated = source.replace(original, bad, 1)
+            self.assertNotEqual(mutated, source, 'mutation anchor must match the current workflow')
+            with self.assertRaises(ValueError):levels_projection.inverse_workflow(mutated)
         # Unchanged original command drift remains visible to the existing historical guard.
         mutated=source.replace('cargo test --locked -p nagi-runtime --lib auth::ed25519::', 'cargo test --locked -p nagi-runtime --lib typo::',1)
         self.assertNotEqual(levels_projection.inverse_workflow(mutated),restored)

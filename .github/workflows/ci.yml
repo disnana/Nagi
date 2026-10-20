@@ -57,7 +57,7 @@ jobs:
 
   ci-plan:
     needs: [changes, release-plan]
-    if: always() && needs.changes.result == 'success' && needs.release-plan.result == 'success'
+    if: always() && !cancelled() && needs.changes.result == 'success' && needs.release-plan.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       level: ${{ steps.level.outputs.level }}
@@ -140,7 +140,7 @@ jobs:
   jetbrains:
     needs: [changes, release-plan]
     if: >-
-      always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
+      always() && !cancelled() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
       (needs.changes.outputs.jetbrains_checks == 'true' || needs.release-plan.outputs.package_jetbrains == 'true')
     uses: ./.github/workflows/jetbrains.yml
     with:
@@ -149,7 +149,7 @@ jobs:
   sf08-browser:
     needs: [changes, release-plan, ci-plan]
     if: >-
-      always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
+      always() && !cancelled() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
       (needs.ci-plan.result == 'success' && (needs.ci-plan.outputs.comprehensive_checks == 'true' || needs.changes.outputs.full_checks == 'true') || needs.release-plan.outputs.package_nagi == 'true')
     uses: ./.github/workflows/sf08-browser.yml
 
@@ -1078,7 +1078,7 @@ jobs:
   nagi-package:
     needs: [changes, release-plan, ci-plan]
     if: >-
-      always() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
+      always() && !cancelled() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
       needs.ci-plan.result == 'success' && needs.ci-plan.outputs.package_checks == 'true'
     strategy:
       fail-fast: false
@@ -2592,7 +2592,7 @@ jobs:
           key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
   ready:
     name: Ready to merge
-    if: always()
+    if: always() && !cancelled()
     needs: [changes, ci-plan, critical, linux, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression]
     runs-on: ubuntu-latest
     steps:
@@ -2610,7 +2610,7 @@ jobs:
   publish-release:
     needs: [changes, ci-plan, critical, linux, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, ready]
     if: >-
-      always() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      always() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       needs.ready.result == 'success' && needs.ci-plan.result == 'success' &&
       needs.ci-plan.outputs.level == '3' && needs.release-plan.result == 'success' &&
       (needs.release-plan.outputs.release_vscode == 'true' || needs.release-plan.outputs.release_nagi == 'true' || needs.release-plan.outputs.release_jetbrains == 'true')

@@ -22,6 +22,24 @@ JOB = re.compile(r'^  [a-z][a-z0-9-]*:\n.*?(?=^  [a-z][a-z0-9-]*:|\Z)', re.M | r
 STEP = re.compile(r'^      - .*?(?=^      - |\Z)', re.M | re.S)
 SAVE_IF = "success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''"
 CRITICAL_SAVE_IF = "success() && github.event_name == 'pull_request' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''"
+CANCELLABLE_JOBS = frozenset({'ci-plan', 'jetbrains', 'sf08-browser', 'nagi-package', 'ready', 'publish-release'})
+
+
+def cancellation_edit(job, inverse=False):
+    """Change only the six failure-independent job guards, never cleanup steps."""
+    if job.split(':', 1)[0].strip() not in CANCELLABLE_JOBS:
+        return job
+    header, separator, steps = job.partition('    steps:\n')
+    original = r'^(    if: (?:>-\n      )?)always\(\)'
+    guarded = original + r' && !cancelled\(\)'
+    if inverse and header.count('!cancelled()') != 1:
+        raise ValueError('missing or duplicated job cancellation guard')
+    pattern = guarded if inverse else original
+    replacement = r'\1always()' + ('' if inverse else ' && !cancelled()')
+    restored, count = re.subn(pattern, replacement, header, flags=re.M)
+    if count != 1:
+        raise ValueError('changed job cancellation guard')
+    return restored + separator + steps
 
 
 def action_key(action, ref):
@@ -119,6 +137,7 @@ def isolation_step(block):
 
 
 def infrastructure(source):
+    source = JOB.sub(lambda m: cancellation_edit(m.group()), source)
     source = JOB.sub(lambda m: cache_edit(m.group()), source)
     source = STEP.sub(lambda m: isolation_step(m.group()), source)
     return pin(source)
@@ -126,6 +145,7 @@ def infrastructure(source):
 
 def inverse_infrastructure(source):
     source = unpin(source)
+    source = JOB.sub(lambda m: cancellation_edit(m.group(), inverse=True), source)
     for line in source.splitlines():
         if '# ci-isolation' in line and line != '          persist-credentials: false # ci-isolation':
             raise ValueError('checkout isolation weakened')

@@ -50,6 +50,27 @@ class OptimizationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.validate_infrastructure(source.replace('uses: actions/checkout@', 'uses: malicious/checkout@', 1))
 
+    def test_job_cancellation_guards_roundtrip_without_changing_cleanup_steps(self):
+        source = self.source()
+        seen = set()
+        for match in opt.JOB.finditer(source):
+            block = match.group()
+            name = block.split(':', 1)[0].strip()
+            if name not in opt.CANCELLABLE_JOBS:
+                self.assertEqual(opt.cancellation_edit(block, inverse=True), block)
+                continue
+            seen.add(name)
+            restored = opt.cancellation_edit(block, inverse=True)
+            self.assertEqual(opt.cancellation_edit(restored), block)
+            self.assertEqual(restored.partition('    steps:\n')[2], block.partition('    steps:\n')[2])
+            for guard in ('always()', 'always() && cancelled()',
+                          '!cancelled() && always()', 'always() && !cancelled() && !cancelled()'):
+                changed = block.replace('always() && !cancelled()', guard, 1)
+                mutant = source[:match.start()] + changed + source[match.end():]
+                with self.subTest(job=name, guard=guard), self.assertRaises(ValueError):
+                    opt.inverse_infrastructure(mutant)
+        self.assertEqual(seen, {'ci-plan', 'jetbrains', 'sf08-browser', 'nagi-package', 'ready', 'publish-release'})
+
     def test_cache_save_is_successful_main_only_and_not_a_test_skip(self):
         source = self.source()
         for before, after in (("success() && github.event_name", "always() && github.event_name"),

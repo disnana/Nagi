@@ -26,34 +26,45 @@ ALLOWED_NAMES = {
     "needs.release-plan.outputs.release_jetbrains",
     "needs.jetbrains.result", "needs.vscode-package.result", "needs.nagi-package.result",
     "needs.nagi-regression.result", "needs.release-plan.outputs.package_nagi",
+    "needs.changes.outputs.full_checks", "needs.changes.outputs.jetbrains_checks",
+    "needs.release-plan.outputs.package_jetbrains",
+    "needs.ci-plan.outputs.comprehensive_checks", "needs.ci-plan.outputs.package_checks",
 }
 TOKEN = re.compile(
-    r"\s+|&&|\|\||==|!=|[()]|'[^']*'|"
+    r"\s+|&&|\|\||==|!=|[()!]|'[^']*'|"
     r"[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*"
 )
 
 
-def publish_expression() -> str:
-    """Read only the publish-release YAML folded scalar; do not evaluate YAML or code."""
+def job_expression(name: str) -> str:
+    """Read only a job's if scalar; do not evaluate YAML or code."""
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     job = re.search(
-        r"(?ms)^  publish-release:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)", workflow
+        r"(?ms)^  " + re.escape(name) + r":\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)", workflow
     )
     if not job:
-        raise AssertionError("publish-release job is missing")
+        raise AssertionError(name + " job is missing")
     condition = re.search(
         r"(?m)^    if:\s*>-\s*\n(?P<lines>(?:^      .*\n?)+)", job.group("body")
     )
     if not condition:
-        raise AssertionError("publish-release must use a folded if expression")
-    expression = " ".join(line.strip() for line in condition.group("lines").splitlines() if line.strip())
+        condition = re.search(r"(?m)^    if: (?P<inline>[^\n]+)$", job.group("body"))
+        if not condition:
+            raise AssertionError(name + " condition is missing")
+        expression = condition.group("inline")
+    else:
+        expression = " ".join(line.strip() for line in condition.group("lines").splitlines() if line.strip())
     if not expression:
         raise AssertionError("publish-release condition is empty")
     return expression
 
 
+def publish_expression() -> str:
+    return job_expression('publish-release')
+
+
 class RestrictedExpression:
-    """Parser for literals, whitelisted dot names, comparisons, booleans, and always()."""
+    """Parser for literals, whitelisted names, booleans, and status functions."""
 
     def __init__(self, expression: str, context: dict):
         self.context = context
@@ -119,6 +130,9 @@ class RestrictedExpression:
 
     def _parse_primary(self):
         token = self._peek()
+        if token == "!":
+            self._take("!")
+            return not self._boolean(self._parse_primary())
         if token == "(":
             self._take("(")
             value = self._parse_or()
@@ -128,11 +142,13 @@ class RestrictedExpression:
             raise ValueError("Unexpected end of expression")
         if token.startswith("'") and token.endswith("'"):
             return self._take()[1:-1]
-        if token == "always":
-            self._take("always")
+        if token in ("always", "cancelled"):
+            self._take()
             self._take("(")
             self._take(")")
-            return True
+            if token == "always":
+                return True
+            return self._boolean(self.context.get('cancelled'))
         if token in ALLOWED_NAMES:
             self._take()
             value = self.context
@@ -163,7 +179,7 @@ RELEASE_MATRIX = {'include': [
 ]}
 
 
-def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None):
+def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None, cancelled=False):
     results = results or {}
     releases = set(releases)
     # Each legacy row explicitly chooses whether Nagi analysis was selected.
@@ -190,7 +206,7 @@ def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None):
     needs['rust-1-88'] = {'result':results.get('rust-1-88', results.get('linux','success'))}
     needs['nagi-regression'] = {'result':results.get('nagi-regression',
         'skipped' if results.get('nagi-package') == 'skipped' else 'success')}
-    return {'github': {'event_name':event, 'ref':ref}, 'needs':needs}
+    return {'github': {'event_name':event, 'ref':ref}, 'needs':needs, 'cancelled':cancelled}
 
 
 def can_publish(expression, context):
@@ -212,6 +228,41 @@ class PublishConditionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.expression = publish_expression()
+
+    def test_cancelled_function_requires_explicit_boolean_context(self):
+        for cancelled in (False, True):
+            self.assertEqual(evaluate('cancelled()', {'cancelled': cancelled}), cancelled)
+            self.assertEqual(evaluate('!cancelled()', {'cancelled': cancelled}), not cancelled)
+        for context in ({}, {'cancelled': None}, {'cancelled': 'false'}, {'cancelled': 0}):
+            with self.subTest(context=context), self.assertRaises(ValueError):
+                evaluate('!cancelled()', context)
+
+    def test_failure_independent_jobs_stop_on_cancellation(self):
+        jobs = ('ci-plan', 'jetbrains', 'sf08-browser', 'nagi-package', 'ready', 'publish-release')
+        for event in ('push', 'pull_request'):
+            for cancelled in (False, True):
+                context = fixture(event=event, releases=COMPONENTS, cancelled=cancelled)
+                for job in jobs:
+                    with self.subTest(event=event, cancelled=cancelled, job=job):
+                        expected = not cancelled and (job != 'publish-release' or event == 'push')
+                        self.assertEqual(evaluate(job_expression(job), context), expected)
+
+    def test_ready_still_observes_failed_or_skipped_dependencies_unless_cancelled(self):
+        for result in ('failure', 'skipped'):
+            context = fixture(releases=COMPONENTS, results={'linux': result})
+            self.assertTrue(evaluate(job_expression('ready'), context))
+            self.assertTrue(gate.errors(context['needs']))
+            context['cancelled'] = True
+            self.assertFalse(evaluate(job_expression('ready'), context))
+
+    def test_manual_cancellation_blocks_main_publication_after_successful_ready(self):
+        for releases in (('nagi',), ('vscode',), ('jetbrains',), COMPONENTS):
+            context = fixture(releases=releases)
+            self.assertTrue(can_publish(self.expression, context))
+            context['cancelled'] = True
+            self.assertEqual(context['needs']['ready']['result'], 'success')
+            self.assertFalse(evaluate(self.expression, context))
+            self.assertFalse(can_publish(self.expression, context))
 
     def test_evaluator_rejects_unlisted_functions_and_expression_features(self):
         for expression in (
