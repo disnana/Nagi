@@ -1100,6 +1100,7 @@ function hostBrowser(options = {}) {
       isNavigationRequest: () => !options.nonNavigation, frame: () => options.foreignFrame ? {} : frame,
       failure: () => ({ errorText: options.text ?? 'Operation was cancelled' }),
       response: options.response ?? (async () => null) };
+    options.requestObserved?.(request);
     if (!options.missing) page.emit('requestfailed', request);
     if (options.duplicate) page.emit('requestfailed', request);
     if (options.httpResponse) page.emit('response', {});
@@ -1294,7 +1295,7 @@ test('one-shot R16 standalone reset stays false and mirrored exact native alerts
 
 test('one-shot R13 reset and console remain jointly bound and veto poisoned evidence', { timeout: 8000 }, async () => {
   const cases = [
-    { label: 'reset only', native: 'reset', diagnostic: 'console_missing' },
+    { label: 'reset only', native: 'reset', diagnostic: 'deadline' },
     { label: 'console only', console: [true], budget: 80 },
     { label: 'console without terminal after owned connection', native: 'idle', console: [true], budget: 250 },
     { label: 'generic console', native: 'reset', console: [{ text: 'TLS error' }], diagnostic: 'console_malformed' },
@@ -1370,6 +1371,187 @@ test('one-shot R13 reset and console remain jointly bound and veto poisoned evid
       `${endpointRole} endpoint cannot satisfy ${probeRole} role`);
     assert.equal(browser.closed(), true, `${endpointRole} endpoint cleanup`);
   }
+});
+
+test('one-shot R17 delayed console ordering waits only for exact proof within the original deadline', { timeout: 8000 }, async () => {
+  const cases = [
+    { label: 'joined host reset then exact console', role: 'host', event: 'exact', budget: 700, expected: true },
+    { label: 'joined CA reset then exact console', role: 'ca', event: 'exact', budget: 700, expected: true },
+    { label: 'joined reset without console', event: 'absent', budget: 140, expected: false },
+    { label: 'joined reset then malformed console', event: 'malformed', budget: 700, expected: false },
+    { label: 'joined reset then malformed then exact console', event: 'malformed_then_exact', budget: 700, expected: false },
+    { label: 'joined reset then foreign console URL', event: 'foreign', budget: 700, expected: false },
+    { label: 'joined reset then console args', event: 'args', budget: 700, expected: false },
+    { label: 'joined reset then duplicate console', event: 'duplicate', budget: 700, expected: false },
+    { label: 'joined reset then wrong console type', event: 'wrong_type', budget: 700, expected: false },
+    { label: 'joined reset then response veto', event: 'response', budget: 700, expected: false },
+    { label: 'joined reset then duplicate request while waiting', event: 'request_duplicate', budget: 700, expected: false },
+    { label: 'joined reset then response veto after exact console', event: 'console_response', budget: 700, expected: false },
+    { label: 'joined reset then duplicate request after exact console', event: 'console_request', budget: 700, expected: false },
+    { label: 'joined reset then lifecycle veto after exact console', event: 'console_lifecycle', budget: 700, expected: false },
+    { label: 'no native binding then late exact console', event: 'exact', nativeUnbound: true, budget: 700, expected: false },
+    { label: 'exact console after the original deadline', event: 'after_deadline', budget: 220, expected: false },
+  ];
+  const timeoutMarker = Symbol('probe-still-pending');
+  for (const item of cases) {
+    const role = item.role ?? 'host';
+    let page, observedRequest, probeSettled = false, settledBeforeEvent, joinedBeforeEvent = false;
+    let lateTimer;
+    const immediates = new Set();
+    const watchdogs = new Set();
+    let resolveDelivery;
+    const delivery = new Promise(resolve => { resolveDelivery = resolve; });
+    const withWatchdog = (promise, timeout, fallback = false) => new Promise(resolve => {
+      let handle;
+      const finish = value => {
+        clearTimeout(handle);
+        watchdogs.delete(handle);
+        resolve(value);
+      };
+      handle = setTimeout(() => finish(fallback), timeout);
+      watchdogs.add(handle);
+      Promise.resolve(promise).then(finish, () => finish(false));
+    });
+    const scheduleImmediate = callback => {
+      let handle;
+      handle = setImmediate(() => { immediates.delete(handle); callback(); });
+      immediates.add(handle);
+    };
+    let peer;
+    const dispatch = () => {
+      joinedBeforeEvent = peer.credentials.key === null && peer.raw.destroyed && peer.socket.destroyed;
+      settledBeforeEvent = probeSettled;
+      if (page) {
+        if (['exact', 'after_deadline', 'console_lifecycle', 'console_response', 'console_request'].includes(item.event))
+          page.emit('console', webkitConsoleError(peer.endpoint.url));
+        else if (item.event === 'malformed' || item.event === 'malformed_then_exact')
+          page.emit('console', webkitConsoleError(peer.endpoint.url, { text: 'TLS error' }));
+        else if (item.event === 'foreign')
+          page.emit('console', webkitConsoleError(peer.endpoint.url, { location: { url: 'https://foreign.invalid/' } }));
+        else if (item.event === 'args')
+          page.emit('console', webkitConsoleError(peer.endpoint.url, { args: [{}] }));
+        else if (item.event === 'duplicate') {
+          page.emit('console', webkitConsoleError(peer.endpoint.url));
+          page.emit('console', webkitConsoleError(peer.endpoint.url));
+        } else if (item.event === 'wrong_type')
+          page.emit('console', webkitConsoleError(peer.endpoint.url, { type: 'log' }));
+        else if (item.event === 'response') page.emit('response', {});
+        else if (item.event === 'request_duplicate') page.emit('requestfailed', observedRequest);
+        if (item.event === 'malformed_then_exact') page.emit('console', webkitConsoleError(peer.endpoint.url));
+        if (item.event === 'console_response') page.emit('response', {});
+        if (item.event === 'console_request') page.emit('requestfailed', observedRequest);
+        if (item.event === 'console_lifecycle') page.emit('crash');
+      }
+      resolveDelivery(true);
+    };
+    peer = await hostPeerFixture({ role, budget: item.budget, beforeServerClose() {
+      if (item.event === 'absent') return;
+      if (item.event === 'after_deadline') {
+        lateTimer = setTimeout(dispatch, item.budget + 40);
+        return;
+      }
+      // The first immediate is queued by the server-close callback; the second
+      // runs after the fixture's destroy turn and socket-close microtasks. For
+      // the bound-reset cases, credential release proves native join completed.
+      scheduleImmediate(() => scheduleImmediate(dispatch));
+    } });
+    const browser = hostBrowser({ role, endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      requestObserved: request => { observedRequest = request; },
+      duringGoto: ({ page: current }) => {
+        page = current;
+        peer.connect();
+        if (item.nativeUnbound) { peer.sni('wrong.example'); peer.alert('ECONNRESET'); }
+        else { peer.sni(); peer.alert('ECONNRESET'); }
+      } });
+    const diagnostics = [], eventTraces = [];
+    const probePromise = (role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost)(
+      browser.browser, browser.factory, peer.until, (kind, trace) => { diagnostics.push(kind); eventTraces.push(trace); })
+      .then(value => { probeSettled = true; return value; });
+    let result;
+    try {
+      if (item.event === 'absent' || item.event === 'after_deadline' || item.nativeUnbound) {
+        result = await probePromise;
+        if (item.event !== 'absent') {
+          const delivered = await withWatchdog(delivery, 2500);
+          assert.equal(delivered, true, `${item.label}: delayed fixture callback must settle`);
+          if (!item.nativeUnbound)
+            assert.equal(joinedBeforeEvent, true, `${item.label}: native resources joined before event`);
+        }
+      } else {
+        const delivered = await withWatchdog(delivery, 2500);
+        assert.equal(delivered, true, `${item.label}: delayed fixture callback must settle`);
+        assert.equal(joinedBeforeEvent, true, `${item.label}: native endpoint joined before event`);
+        assert.equal(settledBeforeEvent, false, `${item.label}: probe waits for this event`);
+        const outcome = await withWatchdog(probePromise, 250, timeoutMarker);
+        const prompt = outcome !== timeoutMarker;
+        result = prompt ? outcome : await probePromise;
+        assert.equal(prompt, true, `${item.label}: console or hard veto wakes the bounded wait`);
+      }
+    } finally {
+      if (lateTimer) clearTimeout(lateTimer);
+      for (const handle of watchdogs) clearTimeout(handle);
+      watchdogs.clear();
+      for (const handle of immediates) clearImmediate(handle);
+      resolveDelivery(false);
+    }
+    if (item.event === 'exact' && !item.nativeUnbound) assert.deepEqual(diagnostics, [], 'exact delayed proof diagnostic');
+    assert.equal(result, item.expected, item.label);
+    assert.equal(browser.closed(), true, `${item.label}: browser cleanup`);
+    assert.equal(peer.credentials.key, null, `${item.label}: native join releases credentials`);
+    assert.doesNotMatch(JSON.stringify(diagnostics), /PRIVATE_SENTINEL|foreign\.invalid/);
+    if (item.expected === false) {
+      assert.equal(eventTraces.length, 1, `${item.label}: one bounded failure trace`);
+      assert.match(eventTraces[0], /^[ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_0$/);
+      const codes = eventTraces[0].slice(0, -2);
+      assert.equal(codes.endsWith('O'), true, 'owned observation ended before intentional teardown');
+      if (item.event === 'absent') {
+        assert.deepEqual(diagnostics, ['deadline']);
+        assert.match(codes, /FWD/, 'finish observed true then original wait expired');
+        assert.doesNotMatch(codes, /[ETXLAZUI]/, 'complete original-window observation without a console callback');
+      }
+      for (const [mode, code] of [['malformed', 'X'], ['foreign', 'L'], ['args', 'A'], ['wrong_type', 'T'],
+        ['duplicate', 'U'], ['console_response', 'E'], ['console_request', 'E'], ['console_lifecycle', 'E']]) {
+        if (item.event === mode) assert.ok(codes.indexOf(code) > codes.indexOf('F'), `${mode}: callback observed after native finish`);
+      }
+      if (item.event === 'request_duplicate' || item.event === 'console_request')
+        assert.equal(codes.split('R').length - 1, 2, 'both requestfailed callbacks retained');
+    } else assert.deepEqual(eventTraces, [], 'successful probe does not emit failure telemetry');
+    if (item.event === 'after_deadline') assert.equal(settledBeforeEvent, true, 'deadline refuses before late event');
+  }
+});
+
+test('one-shot event observations classify once, cap at32, and never serialize console input', async () => {
+  const variants = [
+    { override: {}, expected: 'E' },
+    { override: { type: 'log' }, expected: 'T' },
+    { override: { text: 'PRIVATE_SENTINEL' }, expected: 'X' },
+    { override: { location: { url: 'https://private.invalid/' } }, expected: 'L' },
+    { override: { args: ['PRIVATE_SENTINEL'] }, expected: 'A' },
+    { override: { text: () => { throw new Error('PRIVATE_SENTINEL'); } }, expected: 'Z' },
+  ];
+  for (const item of variants) {
+    const records = [];
+    const f = hostBrowser({ join: false, duringGoto: ({ page, endpoint }) => {
+      page.emit('console', webkitConsoleError(endpoint.url, item.override));
+    } });
+    assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
+      (kind, trace) => records.push({ kind, trace })), false);
+    assert.equal(records.length, 1);
+    assert.equal(typeof records[0].trace, 'string', 'a failure records its bounded event sequence');
+    const codes = records[0].trace.slice(0, -2);
+    assert.equal([...codes].filter(code => 'ETXLAZUI'.includes(code)).join(''), item.expected);
+    if (item.expected === 'E') assert.ok(codes.indexOf('E') < codes.indexOf('F'), 'console before observed finish');
+    assert.doesNotMatch(JSON.stringify(records), /PRIVATE_SENTINEL|private\.invalid/);
+  }
+  const records = [];
+  const f = hostBrowser({ duringGoto: ({ page, endpoint }) => {
+    for (let index = 0; index < 40; index++) page.emit('console', webkitConsoleError(endpoint.url));
+  } });
+  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, performance.now() + 1000,
+    (kind, trace) => records.push({ kind, trace })), false);
+  assert.equal(records.length, 1);
+  assert.match(records[0].trace, /^GRMEUI{27}_1$/, 'first32 events only; overflow forbids complete-count/absence claims');
+  assert.equal(records[0].trace.length, 34);
 });
 
 test('one-shot R5 duplicate missing wrong SNI TCP and request events veto', async () => {
@@ -1644,10 +1826,10 @@ test('one-shot R11 removing independent proof vetoes makes their negative contro
   for (const [anchor, replacement, options] of [
     ['request.url() !== endpoint.url || ', '', { foreignURL: true }],
     ['requests = Math.min(2, requests + 1);', 'requests = 1;', { duplicate: true }],
-    ["for (const event of ['close', 'crash']) listen(page, event, () => { failure('lifecycle'); bad = true; });", '',
+    ["for (const event of ['close', 'crash']) listen(page, event, () => hardVeto('lifecycle'));", '',
       { duringJoin: ({ page }) => page.emit('crash') }],
     ['function hostBudget(until) {\n  const remaining = Math.floor(until - performance.now());', 'function hostBudget(until) {\n  const remaining = 1000;', { expired: true }],
-    ['if (await hostWithin(endpoint.close(), until) !== true) good = false;', 'await hostWithin(endpoint.close(), until);', { join: false }],
+    ['if (joined !== true) good = false;', '', { join: false }],
     ['if (finished !== true) refuse();', '', { peer: false }],
   ]) {
     const original = hostBrowser(options), changed = hostBrowser(options);
@@ -1967,7 +2149,7 @@ test('one-shot failure checkpoint emits only its fixed WebKit category and canno
   await assert.rejects(probeEngine('webkit', type, settings(provisioned, ready, negative),
     (stage, engine) => stages.push(checkedFailure(stage, engine)), undefined,
     async (_until, diagnose) => { diagnose('credential'); diagnose('PRIVATE_SENTINEL'); throw new Error('PRIVATE_SENTINEL'); }));
-  assert.deepEqual(stages.at(-1), { schema_version: 1, stage: 'engine_wrong_host_one_shot_credential', engine: 'webkit' });
+  assert.deepEqual(stages.at(-1), { schema_version: 1, stage: 'engine_wrong_host_one_shot_credential_events_O_0', engine: 'webkit' });
   assert.equal(stages.filter(row => row.stage.startsWith('engine_wrong_host_one_shot_')).length, 1);
   assert.equal(JSON.stringify(stages).includes('PRIVATE_SENTINEL'), false);
 });
@@ -1980,7 +2162,7 @@ test('wrong-CA socket event category reaches its fixed checkpoint and stays refu
     (stage, engine) => checkpoints.push({ stage, engine }), undefined, undefined,
     async (_until, diagnose) => { diagnose('socket_eof'); return endpoint; }),
   /^Error: SF08 browser trust preflight refused$/);
-  assert.deepEqual(checkpoints.at(-1), { stage: 'engine_wrong_ca_one_shot_socket_eof', engine: 'webkit' });
+  assert.deepEqual(checkpoints.at(-1), { stage: 'engine_wrong_ca_one_shot_socket_eof_events_GRMNSBJKO_0', engine: 'webkit' });
   assert.equal(type.trace.closed && type.trace.contextClosed, true);
 });
 
@@ -1991,7 +2173,7 @@ test('wrong-CA one-shot checkpoint retains its fixed category and skips legacy n
     async () => { throw new Error('host branch must not precede CA'); },
     async (_until, diagnose) => { diagnose('credential'); diagnose('PRIVATE_SENTINEL'); throw new Error('PRIVATE_SENTINEL'); }));
   assert.deepEqual(stages.at(-1), { schema_version: 1,
-    stage: 'engine_wrong_ca_one_shot_credential', engine: 'webkit' });
+    stage: 'engine_wrong_ca_one_shot_credential_events_O_0', engine: 'webkit' });
   assert.equal(stages.filter(row => row.stage.startsWith('engine_wrong_ca_one_shot_')).length, 1);
   assert.deepEqual(type.trace.urls, settings(provisioned, ready, negative).origins.map(origin => origin + '/'));
   assert.equal(JSON.stringify(stages).includes('PRIVATE_SENTINEL'), false);

@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CI = ROOT / "scripts/ci"
 sys.path.insert(0, str(CI))
 import session_native_finish_summary as gate
+from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 
 def load_projection():
@@ -22,13 +23,37 @@ def load_projection():
     return module
 
 
+EXPECTED = frozenset((
+    "auth::session_deadline_observer::native_finish::tests::unseen_sentinel_is_distinct_from_zero_and_clamped_elapsed",
+    "auth::session_deadline_observer::native_finish::tests::result_reason_and_checkout_are_closed_independent_boundaries",
+    "auth::session_deadline_observer::native_finish::tests::serial_tx_resets_and_overlapping_or_saturated_tx_is_invalid",
+    "auth::session_deadline_observer::native_finish::tests::duplicate_or_out_of_order_marker_never_fabricates_completion",
+    "auth::session_deadline_observer::native_finish::tests::delayed_worker_updates_only_original_owner_and_not_copied_terminal",
+    "auth::session_deadline_observer::native_finish::tests::closed_numeric_line_and_poisoned_record_cannot_expose_payload",
+    "auth::session_deadline_observer::native_finish::tests::native_call_stamps_distinguish_call_wait_publication_lag_and_published_result",
+    "auth::session_deadline_observer::native_finish::tests::native_call_snapshot_refuses_publication_and_next_begin_during_read",
+    "auth::session_deadline_observer::native_finish::tests::native_call_tag_range_order_duplicate_and_record_changes_are_unavailable",
+    "auth::session_deadline_observer::native_finish::tests::native_call_supplement_is_finite_numeric_failure_only_and_keeps_legacy_shape",
+    "auth::session_deadline_observer::native_finish::tests::native_call_second_lock_poison_keeps_original_terminal_and_unavailable_supplement",
+    "auth::session_deadline_observer::native_finish::tests::native_call_checkout_settlement_cannot_precede_independent_return",
+    "sqlite::session::native_finish_tests::real_pool_commit_ack_follows_original_checkout_drop",
+    "sqlite::session::native_finish_tests::old_commit_gate_is_after_native_return_and_before_checkout",
+    "sqlite::session::native_finish_tests::denied_commit_records_err_then_actual_cleanup_ok_or_err",
+    "sqlite::session::native_finish_tests::eof_cleanup_retains_reason_and_retirement_without_retry",
+    "sqlite::session::native_finish_tests::old_management_panic_has_unseen_commit_and_after_finish_cleanup",
+    "sqlite::session::native_finish_tests::precommit_expired_observer_never_invents_commit_entry",
+    "sqlite::session::native_finish_tests::actual_native_call_return_is_visible_before_record_mutex_publication",
+    "sqlite::session::native_finish_tests::actual_reader_holds_native_commit_but_old_postcommit_gate_has_returned_stamp",
+))
+
+
 def green():
-    return ("running 12 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(gate.REQUIRED))
-            + "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 999 filtered out; finished in 0.01s\n").encode()
+    return ("running 20 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(EXPECTED))
+            + "test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 999 filtered out; finished in 0.01s\n").encode()
 
 
 class NativeFinishSummaryTests(unittest.TestCase):
-    def test_exact_twelve_source_names_match_independent_handwritten_expectation(self):
+    def test_exact_twenty_source_names_match_independent_handwritten_expectation(self):
         expected = {
             "auth::session_deadline_observer::native_finish::tests::": {
                 "unseen_sentinel_is_distinct_from_zero_and_clamped_elapsed",
@@ -37,6 +62,12 @@ class NativeFinishSummaryTests(unittest.TestCase):
                 "duplicate_or_out_of_order_marker_never_fabricates_completion",
                 "delayed_worker_updates_only_original_owner_and_not_copied_terminal",
                 "closed_numeric_line_and_poisoned_record_cannot_expose_payload",
+                "native_call_stamps_distinguish_call_wait_publication_lag_and_published_result",
+                "native_call_snapshot_refuses_publication_and_next_begin_during_read",
+                "native_call_tag_range_order_duplicate_and_record_changes_are_unavailable",
+                "native_call_supplement_is_finite_numeric_failure_only_and_keeps_legacy_shape",
+                "native_call_second_lock_poison_keeps_original_terminal_and_unavailable_supplement",
+                "native_call_checkout_settlement_cannot_precede_independent_return",
             },
             "sqlite::session::native_finish_tests::": {
                 "real_pool_commit_ack_follows_original_checkout_drop",
@@ -45,17 +76,20 @@ class NativeFinishSummaryTests(unittest.TestCase):
                 "eof_cleanup_retains_reason_and_retirement_without_retry",
                 "old_management_panic_has_unseen_commit_and_after_finish_cleanup",
                 "precommit_expired_observer_never_invents_commit_entry",
+                "actual_native_call_return_is_visible_before_record_mutex_publication",
+                "actual_reader_holds_native_commit_but_old_postcommit_gate_has_returned_stamp",
             },
         }
         paths = ("runtime/src/auth/session_native_finish_tests.rs", "runtime/src/sqlite/session_native_finish_tests.rs")
         for (prefix, names), path in zip(expected.items(), paths):
             source = (ROOT / path).read_text()
             actual = re.findall(r"#\[(?:tokio::)?test\]\s*(?:async )?fn (\w+)\(", source)
-            self.assertEqual(len(actual), 6)
+            self.assertEqual(len(actual), 12 if prefix.startswith("auth::") else 8)
             self.assertEqual(set(actual), names)
             self.assertNotIn("#[ignore", source)
         self.assertEqual(gate.REQUIRED, frozenset(prefix + name for prefix, names in expected.items() for name in names))
-        self.assertEqual(len(gate.REQUIRED), 12)
+        self.assertEqual(gate.REQUIRED, EXPECTED)
+        self.assertEqual(len(gate.REQUIRED), 20)
 
     def test_green_lf_crlf_and_reordered_test_rows(self):
         self.assertTrue(gate.accepts(green()))
@@ -74,7 +108,7 @@ class NativeFinishSummaryTests(unittest.TestCase):
     def test_nonzero_exit_failed_summary_and_duplicate_summaries_never_pass(self):
         for code in (-1, 1, 101, True):
             self.assertFalse(gate.accepts(green(), code))
-        for raw in (green().replace(b"12 passed", b"11 passed"),
+        for raw in (green().replace(b"20 passed", b"19 passed"),
                     green().replace(b"0 failed", b"1 failed"),
                     green().replace(b"... ok", b"... FAILED", 1),
                     green() + green(), b"error[E0308]: private/path secret\n"):
@@ -145,7 +179,7 @@ with patch("subprocess.Popen", side_effect=AssertionError("process")), patch("ct
         self.assertEqual(workflow.count("if: always() && steps.session_deadline_diag.outcome != 'skipped'"), 2)
         self.assertEqual(workflow.count("run: test '${{ steps.session_deadline_diag.outcome }}' = success"), 2)
         self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(),
-                         "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79")
+                         BASE_WORKFLOW_SHA256)
         for added in additions:
             for mutated in (workflow.replace(added, "", 1), workflow.replace(added, added + added, 1),
                             workflow.replace(added, added.replace("python", "python -c pass", 1), 1)):

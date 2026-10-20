@@ -35,9 +35,22 @@ def native_witness(terminal=3, **changes):
         f"{name}={values[name]}" for name in diag.native_finish.FIELDS)
 
 
+def native_call_witness(**changes):
+    values = {"status": 504, "origin": 3, "terminal": 3, "diagnostic_valid": 0,
+              "native_call_state": 0, "generation": 0, "call_enter_us": 60000001,
+              "call_return_us": 60000001, "native_state": 0, "commit_result": 0,
+              "settled_us": 60000001, "begins": 0, "commits": 0,
+              "selected_deadline_passed": 0}
+    values.update(changes)
+    fields = ("status", "origin", "terminal", "diagnostic_valid", "native_call_state", "generation",
+              "call_enter_us", "call_return_us", "native_state", "commit_result", "settled_us",
+              "begins", "commits", "selected_deadline_passed")
+    return "session_native_call_diag " + " ".join(f"{name}={values[name]}" for name in fields)
+
+
 def paired_raw(legacy_terminal=3, native_terminal=3, native_changes=None, extra=()):
     legacy = witness(1, 1).replace("terminal=1", f"terminal={legacy_terminal}")
-    markers = [legacy, native_witness(native_terminal, **(native_changes or {}))]
+    markers = [legacy, native_witness(native_terminal, **(native_changes or {})), native_call_witness()]
     return raw(markers=markers + list(extra))
 
 
@@ -115,6 +128,9 @@ class ClosedCollectorTests(unittest.TestCase):
 
     def test_paired_control_requires_exact_pair_and_repairs_only_terminals(self):
         valid = paired_raw()
+        self.assertEqual(valid.count(b" terminal=3"), 3)
+        self.assertEqual(diag.collect("prep_timer", valid, 0)["state"], "invalid",
+                         "ordinary collector continues to reject the swapped control")
         repaired = valid.replace(b" terminal=3", b" terminal=1")
         for observed in (valid, valid.replace(b"\n", b"\r\n")):
             expected = observed.replace(b" terminal=3", b" terminal=1")
@@ -128,11 +144,12 @@ class ClosedCollectorTests(unittest.TestCase):
             with mock.patch.object(diag, "collect", side_effect=capture_collect):
                 self.assertTrue(diag._prep_timer_pair_control_passes(observed, 0))
             self.assertEqual(captured, [expected])
-            self.assertEqual(captured[0].count(b" terminal=1"), 2)
+            self.assertEqual(captured[0].count(b" terminal=1"), 3)
         self.assertEqual(diag.collect("prep_timer", repaired, 0)["state"], "passed")
 
         legacy = witness(1, 1).replace("terminal=1", "terminal=3")
         native = native_witness()
+        native_call = native_call_witness()
         counter_mismatch = native_witness(
             native_state=1, begins=1, commit_enter_us=0)
         commit_mismatch = native_witness(
@@ -140,24 +157,47 @@ class ClosedCollectorTests(unittest.TestCase):
             begins=1, commits=1)
         invalid_fields = native.replace("diagnostic_valid=1", "diagnostic_valid=0")
         variants = [
-            raw(markers=[legacy]),                         # native record missing
-            raw(markers=[native]),                         # legacy record missing
-            raw(markers=[native, legacy]),                 # reversed pair
-            raw(markers=[legacy, native, native]),         # duplicate native
-            raw(markers=[legacy, native, legacy]),         # duplicate legacy
-            raw(markers=[legacy, native_witness(origin=1)]),  # wrong origin
-            raw(markers=[legacy, native_witness(2)]),      # wrong native terminal
-            raw(markers=[witness(4, 1), native]),          # wrong private terminal
-            raw(markers=[witness(3, 2), native]),          # wrong private event
-            raw(markers=[legacy, counter_mismatch]),       # begins mismatch
-            raw(markers=[legacy, commit_mismatch]),        # commits mismatch
-            raw(markers=[legacy, native + " extra=1"]),   # unknown field
-            raw(markers=[legacy, invalid_fields]),         # invalid closed value
-            raw(markers=[legacy, native, "other terminal=3"]),  # extra terminal
-            raw(markers=[legacy, native]).replace(b"running 1 test", b"running 0 tests"),
-            raw(markers=[legacy, native]).replace(b"test result: ok", b"test result: FAILED"),
+            raw(markers=[legacy, native]),                              # obsolete two-line shape / call missing
+            raw(markers=[legacy, native, native_call.replace("session_native_call_diag", "unknown_call_diag")]),
+            raw(markers=[native, legacy, native_call]),                 # reversed pair
+            raw(markers=[legacy, native_call, native]),                 # third line out of order
+            raw(markers=[legacy, native, native, native_call]),         # duplicate native
+            raw(markers=[legacy, native, native_call, native_call]),    # duplicate call
+            raw(markers=[legacy, native, native_call, legacy]),         # duplicate legacy
+            raw(markers=[legacy, native_witness(origin=1), native_call]),  # wrong native origin
+            raw(markers=[legacy, native_witness(2), native_call]),     # wrong native terminal
+            raw(markers=[witness(4, 1), native, native_call]),         # wrong private terminal
+            raw(markers=[witness(3, 2), native, native_call]),         # wrong private event
+            raw(markers=[legacy, counter_mismatch, native_call]),      # begins mismatch
+            raw(markers=[legacy, commit_mismatch, native_call]),       # commits mismatch
+            raw(markers=[legacy, native + " extra=1", native_call]),  # unknown native-finish field
+            raw(markers=[legacy, invalid_fields, native_call]),        # invalid native-finish value
+            raw(markers=[legacy, native, native_call + " extra=1"]),  # unknown third-line suffix
+            raw(markers=[legacy, native, native_call_witness(origin=1)]),  # wrong call origin
+            raw(markers=[legacy, native, native_call_witness(terminal=1)]),  # wrong call terminal
+            raw(markers=[legacy, native, native_call_witness(diagnostic_valid=1)]),
+            raw(markers=[legacy, native, native_call_witness(native_call_state=1)]),
+            raw(markers=[legacy, native, native_call_witness(generation=1)]),
+            raw(markers=[legacy, native, native_call_witness(call_enter_us=60000000)]),
+            raw(markers=[legacy, native, native_call_witness(call_return_us=60000000)]),
+            raw(markers=[legacy, native, native_call_witness(native_state=1)]),
+            raw(markers=[legacy, native, native_call_witness(commit_result=1)]),
+            raw(markers=[legacy, native, native_call_witness(settled_us=60000000)]),
+            raw(markers=[legacy, native, native_call_witness(begins=1)]),
+            raw(markers=[legacy, native, native_call_witness(commits=1)]),
+            raw(markers=[legacy, native, native_call_witness(selected_deadline_passed=1)]),
+            raw(markers=[legacy, native, "other terminal=3"]),      # extra terminal observation
+            raw(markers=[legacy, native, native_call, "other terminal=1"]),
+            raw(markers=[legacy, native, native_call]) + b"terminal=1\n",  # bare extra terminal field
+            raw(markers=[legacy, native, native_call]) + b"terminal=active\n",  # malformed extra terminal field
+            raw(markers=[legacy, native]) + (native_call + "\n").encode(),  # call outside stdout block
+            raw(markers=[legacy, native, native_call]).replace(b"running 1 test", b"running 0 tests"),
+            raw(markers=[legacy, native, native_call]).replace(b"test result: ok", b"test result: FAILED"),
+            raw(markers=[legacy, native, native_call]).replace(b"0 ignored", b"1 ignored"),
+            raw(markers=[legacy, native, native_call]) + raw(markers=[legacy, native, native_call]),
             b"compile failed\n",
             b"\xff" + valid,
+            valid.replace(b"\n", b"\r"),
         ]
         for sample in variants:
             with self.subTest(sample_length=len(sample)):

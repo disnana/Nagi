@@ -11,12 +11,20 @@ REQUIRED = frozenset((
     "auth::session_deadline_observer::native_finish::tests::duplicate_or_out_of_order_marker_never_fabricates_completion",
     "auth::session_deadline_observer::native_finish::tests::delayed_worker_updates_only_original_owner_and_not_copied_terminal",
     "auth::session_deadline_observer::native_finish::tests::closed_numeric_line_and_poisoned_record_cannot_expose_payload",
+    "auth::session_deadline_observer::native_finish::tests::native_call_stamps_distinguish_call_wait_publication_lag_and_published_result",
+    "auth::session_deadline_observer::native_finish::tests::native_call_snapshot_refuses_publication_and_next_begin_during_read",
+    "auth::session_deadline_observer::native_finish::tests::native_call_tag_range_order_duplicate_and_record_changes_are_unavailable",
+    "auth::session_deadline_observer::native_finish::tests::native_call_supplement_is_finite_numeric_failure_only_and_keeps_legacy_shape",
+    "auth::session_deadline_observer::native_finish::tests::native_call_second_lock_poison_keeps_original_terminal_and_unavailable_supplement",
+    "auth::session_deadline_observer::native_finish::tests::native_call_checkout_settlement_cannot_precede_independent_return",
     "sqlite::session::native_finish_tests::real_pool_commit_ack_follows_original_checkout_drop",
     "sqlite::session::native_finish_tests::old_commit_gate_is_after_native_return_and_before_checkout",
     "sqlite::session::native_finish_tests::denied_commit_records_err_then_actual_cleanup_ok_or_err",
     "sqlite::session::native_finish_tests::eof_cleanup_retains_reason_and_retirement_without_retry",
     "sqlite::session::native_finish_tests::old_management_panic_has_unseen_commit_and_after_finish_cleanup",
     "sqlite::session::native_finish_tests::precommit_expired_observer_never_invents_commit_entry",
+    "sqlite::session::native_finish_tests::actual_native_call_return_is_visible_before_record_mutex_publication",
+    "sqlite::session::native_finish_tests::actual_reader_holds_native_commit_but_old_postcommit_gate_has_returned_stamp",
 ))
 
 

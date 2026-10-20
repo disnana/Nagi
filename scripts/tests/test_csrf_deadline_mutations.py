@@ -15,6 +15,23 @@ SPEC = importlib.util.spec_from_file_location("csrf_mutants", ROOT / "scripts/ci
 guard = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(guard)
 
+EXPECTED_NATIVE_REQUIRED = frozenset((
+    "http_server::csrf_http::deadline_tests::guarded_preparation_pending_uses_actual_session_deadline",
+    "http_server::csrf_http::deadline_tests::guarded_preparation_expiry_precedes_late_grant_denial_and_panic",
+    "http_server::csrf_http::deadline_tests::guarded_preparation_same_poll_late_grant_is_504",
+    "http_server::csrf_http::deadline_tests::guarded_preparation_same_poll_late_denied_is_504",
+    "http_server::csrf_http::deadline_tests::guarded_preparation_same_poll_late_panic_is_504",
+    "http_server::csrf_http::deadline_tests::guarded_preparation_initially_expired_session_still_challenges_401",
+    "http_server::csrf_http::deadline_tests::guarded_body_wire_preserves_absolute_deadline_and_strict_precedence",
+    "http_server::csrf_http::deadline_tests::body_selection_tests::existing_budget_tuples_select_absolute_deadline_and_status",
+    "http_server::csrf_http::deadline_tests::body_selection_tests::preparation_spends_original_budget_and_never_restarts_common",
+    "http_server::csrf_http::deadline_tests::body_selection_tests::original_credential_common_can_only_shorten_body_window",
+    "http_server::csrf_http::deadline_tests::body_selection_tests::exact_tie_and_one_nanosecond_neighbors_are_strict",
+    "http_server::csrf_http::deadline_tests::body_selection_tests::unrepresentable_body_deadline_remains_rejected",
+    "http_server::csrf_http::deadline_tests::pool_readiness_tests::cold_worker2_startup_spends_original_guarded_http_budget",
+    "http_server::csrf_http::deadline_tests::pool_readiness_tests::ready_worker2_setup_preserves_same_guarded_http_budget",
+))
+
 
 class MutationEvidenceTests(unittest.TestCase):
     def setUp(self):
@@ -29,8 +46,8 @@ class MutationEvidenceTests(unittest.TestCase):
         self.addCleanup(kill.stop)
 
     def stock(self):
-        return ("running 12 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(guard.REQUIRED))
-                + "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
+        return ("running 14 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(EXPECTED_NATIVE_REQUIRED))
+                + "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
 
     def auth_stock(self, required=None):
         required = guard.AUTH_REQUIRED if required is None else required
@@ -52,12 +69,15 @@ class MutationEvidenceTests(unittest.TestCase):
     def test_source_inventory_is_exact(self):
         source = ROOT / "runtime/src/http_server"
         names = set()
-        for filename, prefix in (("csrf_deadline_tests.rs", ""), ("csrf_body_deadline_tests.rs", "body_selection_tests::")):
+        for filename, prefix in (("csrf_deadline_tests.rs", ""),
+                                 ("csrf_body_deadline_tests.rs", "body_selection_tests::"),
+                                 ("csrf_pool_readiness_tests.rs", "pool_readiness_tests::")):
             text = (source / filename).read_text()
             names.update(guard.BASE + prefix + name for name in
                          re.findall(r"#\[(?:tokio::)?test\]\s*(?:async )?fn ([a-z0-9_]+)", text))
+        self.assertEqual(names, EXPECTED_NATIVE_REQUIRED)
         self.assertEqual(names, guard.REQUIRED)
-        self.assertEqual(len(names), 12)
+        self.assertEqual(len(names), 14)
 
     def test_auth_csrf_source_inventory_is_exact(self):
         source = ROOT / "runtime/src/auth/csrf/tests.rs"
@@ -123,10 +143,14 @@ class MutationEvidenceTests(unittest.TestCase):
 
     def test_zero_missing_duplicate_ignored_other_stage_and_nonzero_fail(self):
         row = "test " + sorted(guard.REQUIRED)[0] + " ... ok\n"
+        old_twelve = frozenset(name for name in EXPECTED_NATIVE_REQUIRED if "pool_readiness_tests::" not in name)
+        old_stock = ("running 12 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(old_twelve))
+                     + "test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
+        self.assertFalse(guard.inventory(old_stock, 0, guard.REQUIRED))
         for raw, code in ((self.stock().replace(row, ""), 0), (self.stock() + row, 0),
                           (self.stock().replace(row, row.replace("... ok", "... ignored")), 0),
                           (self.stock().replace(row, row.replace(guard.BASE, "other::")), 0),
-                          (self.stock().replace("12 passed", "0 passed"), 0), (self.stock(), 101)):
+                          (self.stock().replace("14 passed", "0 passed"), 0), (self.stock(), 101)):
             with self.subTest(code=code):
                 self.assertFalse(guard.inventory(raw, code, guard.REQUIRED))
 

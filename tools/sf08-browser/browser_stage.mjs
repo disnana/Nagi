@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import https from 'node:https';
 import { runPreflight, settings, readWebkitWrongHostCredentials, createWebkitWrongHostEndpoint,
-  readWebkitWrongCACredentials, createWebkitWrongCAEndpoint } from './preflight.mjs';
+  readWebkitWrongCACredentials, createWebkitWrongCAEndpoint, validWebkitEventTrace } from './preflight.mjs';
 
 export function trustEnv(home, inherited) {
   return { ...inherited, HOME: home, XDG_DATA_HOME: home + '/.local/share',
@@ -245,9 +245,13 @@ const WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES = [
   'engine_wrong_host_webkit_shape_oversize','engine_wrong_host_webkit_shape_access_failed'];
 export const FAILURE_ENGINES = ['none','chromium','firefox','webkit'];
 export function checkedFailure(stage, engine) {
+  const observation = typeof stage === 'string' && stage.length <= 108 &&
+    stage.match(/^(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_[01])$/);
+  const observed = observation && observation[0] === stage && engine === 'webkit' && FAILURE_STAGES.includes(observation[1]) &&
+    validWebkitEventTrace(observation[2]);
   const peerFingerprint = typeof stage === 'string' && stage.length <= 108 &&
     stage.match(/^engine_wrong_(?:ca|host)_one_shot_peer_code_sha256_[a-f0-9]{64}$/)?.[0] === stage;
-  if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage) && !peerFingerprint) || !FAILURE_ENGINES.includes(engine) ||
+  if ((!FAILURE_STAGES.includes(stage) && !WEBKIT_WITNESS_STAGES.has(stage) && !peerFingerprint && !observed) || !FAILURE_ENGINES.includes(engine) ||
       (stage.startsWith('engine_') !== (engine !== 'none')) ||
       (FIREFOX_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'firefox') ||
       (WEBKIT_WRONG_CA_DIAGNOSTIC_STAGES.includes(stage) && engine !== 'webkit') ||

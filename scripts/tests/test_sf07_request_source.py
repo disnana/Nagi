@@ -4,9 +4,12 @@ import hashlib
 import importlib.util
 from pathlib import Path
 import re
+import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts/ci"))
+from sf07_projection_contract import BASE_WORKFLOW_SHA256
 SPEC = importlib.util.spec_from_file_location('request_projection', ROOT/'scripts/ci/sf07_request_projection.py')
 projection = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(projection)
@@ -255,7 +258,7 @@ class RequestSourceTests(unittest.TestCase):
         self.assertEqual(summary.classify(b'error[E0382]: private/path\n', 'request'), 'compile_failed')
 
 
-BASE_WORKFLOW_SHA = '6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79'
+BASE_WORKFLOW_SHA = BASE_WORKFLOW_SHA256
 BASE_PRIVATE_COLLECTOR_SHA = '1d0dd3c92e07c374de80d4f968c101141eb6290ba2b935bf9c06dcb85ac60913'
 
 class ReleaseProfileWorkflowTests(unittest.TestCase):

@@ -318,7 +318,7 @@ SESSION_NATIVE_COLLECTOR_INVERSE = (('\nfrom collections import Counter\nimport 
 
 PRIVATE_PAIR_HELPER_START = "\ndef _prep_timer_pair_control_passes("
 PRIVATE_PAIR_HELPER_END = "\ndef wiring_controls("
-PRIVATE_PAIR_HELPER_SHA256 = "ffc45286d83222cd1f349b47ab337987e6a9871acd0bdb23594b14c0084c14a2"
+PRIVATE_PAIR_HELPER_SHA256 = "e2e5e6c31dbed416b76f201baa6cb5da453459ed781598851f64875c17728057"
 PRIVATE_PAIR_CONTROL_AFTER = (
     '            else:\n'
     '                valid_red = _prep_timer_pair_control_passes(raw, code, oversized=oversized)\n'

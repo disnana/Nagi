@@ -41,6 +41,30 @@ def business_failure_report(secret='unit-private-sentinel'):
 
 
 class R2Tests(unittest.TestCase):
+    def test_bounded_one_shot_event_suffix_is_strict_and_keeps_exact_schema(self):
+        expected_codes = 'ETXLAZUIRMNGVSFBYWDPCJKHO'
+        self.assertEqual(f.WEBKIT_EVENT_CODES, expected_codes)
+        js = (c.HERE/'preflight.mjs').read_text()
+        self.assertIn("export const WEBKIT_EVENT_CODES = '" + expected_codes + "'", js)
+        for role in ('ca', 'host'):
+            base = f'engine_wrong_{role}_one_shot_deadline'
+            for trace in ('_0', 'GRMNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'*32+'_1'):
+                stage = base + '_events_' + trace
+                value = dict(schema_version=1, stage=stage, engine='webkit')
+                self.assertEqual(f.validate(value), value)
+                self.assertEqual(f.validate(dict(value, phase='browser'), outer=True), dict(value, phase='browser'))
+                for engine in ('none', 'chromium', 'firefox'):
+                    with self.assertRaises(ValueError): f.validate(dict(value, engine=engine))
+                with self.assertRaises(ValueError): f.validate(dict(value, extra='PRIVATE_SENTINEL'))
+            invalid = [base+'_events_'+trace for trace in ('PRIVATE_SENTINEL_0', 'https://private.invalid/_0',
+                'E'*33+'_0', 'E_1', '_1', 'E_2', 'E_00', 'E_0\n', 'E_0_suffix')]
+            invalid += [f'engine_wrong_{role}_one_shot_accepted_events_E_0',
+                f'engine_wrong_{role}_one_shot_peer_code_sha256_'+('a'*64)+'_events_E_0',
+                f'engine_wrong_{role}_events_E_0']
+            for stage in invalid:
+                with self.assertRaisesRegex(ValueError, '^invalid failure checkpoint$'):
+                    f.validate(dict(schema_version=1, stage=stage, engine='webkit'))
+
     def setUp(self):
         self.base=Path(tempfile.mkdtemp(prefix='sf08-bi-r2-unit-',dir=os.environ.get('SF08_UNIT_ROOT','/tmp')))
         self.work=self.base/'run-unit';self.work.mkdir(mode=0o700)

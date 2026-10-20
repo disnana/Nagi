@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT / "scripts/ci"))
 import sf07_owned_state_summary as gate
+from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 
 def green(names):
@@ -273,7 +274,7 @@ class OwnedStateSummaryTests(unittest.TestCase):
         p = projection()
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertEqual(hashlib.sha256(p.inverse_workflow(workflow).encode()).hexdigest(),
-                         "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79")
+                         BASE_WORKFLOW_SHA256)
         for addition in p.OWNED_STATE_CI_ADDITIONS:
             for changed in (workflow.replace(addition, "", 1), workflow.replace(addition, addition + addition, 1),
                             workflow.replace(addition, addition.replace("python", "python -c pass", 1), 1)):
@@ -291,7 +292,7 @@ class OwnedStateSummaryTests(unittest.TestCase):
             p.inverse_workflow(private_mutant)
         changed = workflow.replace("set -euo pipefail", "set -eu pipefail", 1)
         self.assertNotEqual(hashlib.sha256(p.inverse_workflow(changed).encode()).hexdigest(),
-                            "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79")
+                            BASE_WORKFLOW_SHA256)
 
     def test_quota_import_inverse_is_exact_and_retains_all_old_semantic_bytes(self):
         p = projection()

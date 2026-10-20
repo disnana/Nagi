@@ -958,7 +958,28 @@ export async function probeWebkitWrongCA(browser, factory, until, diagnose) {
   return probeWebkitCertificate(browser, factory, until, diagnose, CA_PROFILE);
 }
 
+// Failure-only event vocabulary. Each console callback has exactly one of
+// E/T/X/L/A/Z/U/I (exact/type/text/location/args/accessor/duplicate/not-live).
+// G/N/V navigation start/rejected/returned; R/M requestfailed/bound request;
+// S/F/B/Y finish start/true/false/fault; W/D original wait/deadline;
+// P/C response/lifecycle veto; J/K/H join start/true/false; O observation end.
+// F is observed JS continuation order, not a browser/native timestamp.
+export const WEBKIT_EVENT_CODES = 'ETXLAZUIRMNGVSFBYWDPCJKHO';
+export function validWebkitEventTrace(value) {
+  const match = typeof value === 'string' && value.length <= 34 &&
+    value.match(/^[ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32}_[01]$/);
+  return Boolean(match && match[0] === value &&
+    (!value.endsWith('_1') || value.length === 34));
+}
+
 async function probeWebkitCertificate(browser, factory, until, diagnose, profile) {
+  const events = [];
+  let eventOverflow = false, eventsClosed = false;
+  const event = kind => {
+    if (eventsClosed) return;
+    if (events.length < 32) events.push(kind);
+    else eventOverflow = true;
+  };
   let firstFailure, phase = 'setup';
   const note = hostFirstDiagnostic(kind => { firstFailure = kind; });
   const failure = kind => {
@@ -966,21 +987,36 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     note(!Number.isFinite(remaining) || remaining < 1 || remaining > 10000 ? 'deadline' : kind);
   };
   let context, page, endpoint, bad = false, requests = 0, failed, good = false;
+  let wakeConsoleWait;
+  let consoleWaitSettled = false;
+  const consoleWait = new Promise(resolve => { wakeConsoleWait = resolve; });
+  const signalConsoleWait = proved => {
+    if (consoleWaitSettled) return;
+    consoleWaitSettled = true;
+    wakeConsoleWait(proved === true);
+  };
+  const hardVeto = kind => {
+    if (kind === 'lifecycle') event('C');
+    if (kind === 'response') event('P');
+    failure(kind); bad = true; signalConsoleWait(false);
+  };
   const listeners = [];
   const listen = (target, event, callback) => { target.on(event, callback); listeners.push({ target, event, callback }); };
   const live = () => {
     hostBudget(until);
-    if (bad || page.isClosed() || !browser.isConnected()) { failure('lifecycle'); refuse(); }
+    if (bad || page.isClosed() || !browser.isConnected()) {
+      failure('lifecycle'); signalConsoleWait(false); refuse();
+    }
   };
   try {
     hostBudget(until);
     if (typeof factory !== 'function') refuse();
     context = await hostWithin(browser.newContext({ ignoreHTTPSErrors: false, serviceWorkers: 'block' }), until);
     page = await hostWithin(context.newPage(), until);
-    for (const event of ['close', 'crash']) listen(page, event, () => { failure('lifecycle'); bad = true; });
-    listen(context, 'close', () => { failure('lifecycle'); bad = true; });
-    listen(browser, 'disconnected', () => { failure('lifecycle'); bad = true; });
-    listen(page, 'response', () => { failure('response'); bad = true; });
+    for (const event of ['close', 'crash']) listen(page, event, () => hardVeto('lifecycle'));
+    listen(context, 'close', () => hardVeto('lifecycle'));
+    listen(browser, 'disconnected', () => hardVeto('lifecycle'));
+    listen(page, 'response', () => hardVeto('response'));
     const frame = page.mainFrame();
     if (!frame) refuse();
     endpoint = await hostWithin(Promise.resolve(factory(until, note)), until);
@@ -995,21 +1031,27 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
     listen(page, 'console', message => {
       consoleEvents = Math.min(2, consoleEvents + 1);
       try { live(); }
-      catch { failure('deadline'); bad = true; return; }
+      catch { event('I'); failure('deadline'); bad = true; signalConsoleWait(false); return; }
       try {
-        if (consoleEvents !== 1) { failure('console_malformed'); bad = true; return; }
+        if (consoleEvents !== 1) { event('U'); hardVeto('console_malformed'); return; }
         const type = message.type();
         const text = message.text();
         const location = message.location();
         const args = message.args();
-        if (type !== 'error' || text !== WEBKIT_CONSOLE_RESOURCE_ERROR || !location ||
-            location.url !== endpoint.url || !Array.isArray(args) || args.length !== 0) {
-          failure('console_malformed'); bad = true; return;
-        }
+        // Evaluate the original comparisons once and in their original order.
+        let mismatch;
+        if (type !== 'error') mismatch = 'T';
+        else if (text !== WEBKIT_CONSOLE_RESOURCE_ERROR) mismatch = 'X';
+        else if (!location || location.url !== endpoint.url) mismatch = 'L';
+        else if (!Array.isArray(args) || args.length !== 0) mismatch = 'A';
+        if (mismatch) { event(mismatch); hardVeto('console_malformed'); return; }
+        event('E');
         consoleCertificateProof = true;
-      } catch { failure('console_malformed'); bad = true; }
+        signalConsoleWait(true);
+      } catch { event('Z'); hardVeto('console_malformed'); }
     });
     listen(page, 'requestfailed', request => {
+      event('R');
       requests = Math.min(2, requests + 1);
       try {
         live();
@@ -1018,41 +1060,71 @@ async function probeWebkitCertificate(browser, factory, until, diagnose, profile
         const failure = request.failure();
         if (!failure || !['Operation was cancelled', 'Unacceptable TLS certificate'].includes(failure.errorText)) refuse();
         failed = request;
-      } catch { failure('request'); bad = true; }
+        event('M');
+      } catch { hardVeto('request'); }
     });
     live();
     phase = 'navigation';
     let navigationError;
-    try { await hostWithin(page.goto(endpoint.url, { waitUntil: 'load', timeout: hostBudget(until) }), until); failure('response'); bad = true; }
+    event('G');
+    try { await hostWithin(page.goto(endpoint.url, { waitUntil: 'load', timeout: hostBudget(until) }), until); event('V'); hardVeto('response'); }
     catch (error) { navigationError = error; }
     if (!(navigationError instanceof Error) || navigationError.name !== 'Error') refuse();
+    event('N');
     live();
     phase = requests !== 1 || !failed ? 'request' : 'response';
     if (requests !== 1 || !failed || await hostWithin(failed.response(), until) !== null) refuse();
+    const boundFailed = failed;
     live();
     phase = 'peer_binding';
-    const finished = consoleReset
-      ? await hostWithin(consoleReset.finish(), until)
-      : await hostWithin(endpoint.finish(), until);
-    if (consoleReset?.resetObserved() && !consoleCertificateProof) {
-      failure(consoleEvents === 0 ? 'console_missing' : 'console_malformed');
-      refuse();
-    }
+    let finished;
+    event('S');
+    try {
+      finished = consoleReset
+        ? await hostWithin(consoleReset.finish(), until)
+        : await hostWithin(endpoint.finish(), until);
+    } catch (error) { event('Y'); throw error; }
+    event(finished === true ? 'F' : 'B');
     if (finished !== true) refuse();
     live();
+    if (consoleReset?.resetObserved()) {
+      if (requests !== 1 || failed !== boundFailed) refuse();
+      if (!consoleCertificateProof) {
+        event('W');
+        let proved;
+        try { proved = await hostWithin(consoleWait, until); }
+        catch (error) { event('D'); throw error; }
+        if (proved !== true) refuse();
+        live();
+        if (finished !== true || !consoleCertificateProof || consoleEvents !== 1 ||
+            requests !== 1 || failed !== boundFailed) refuse();
+      }
+    }
+    live();
     good = true;
-  } catch { failure(phase); good = false; }
+  } catch { signalConsoleWait(false); failure(phase); good = false; }
   finally {
-    if (endpoint) { try { if (await hostWithin(endpoint.close(), until) !== true) good = false; if (!good) failure('join'); } catch { failure('join'); good = false; } }
+    signalConsoleWait(false);
+    if (endpoint) {
+      event('J');
+      try {
+        const joined = await hostWithin(endpoint.close(), until);
+        event(joined === true ? 'K' : 'H');
+        if (joined !== true) good = false;
+        if (!good) failure('join');
+      } catch { event('H'); failure('join'); good = false; }
+    }
     // Lifecycle vetoes remain armed through actual endpoint join. Detach only
     // these owned callbacks before intentional page/context teardown.
     for (const { target, event, callback } of listeners) { try { target.off(event, callback); } catch { failure('cleanup'); good = false; } }
+    event('O');
+    eventsClosed = true;
     if (page) { try { await hostWithin(page.close(), until); } catch { failure('cleanup'); good = false; } }
     if (context) { try { await hostWithin(context.close(), until); } catch { failure('cleanup'); good = false; } }
     try { hostBudget(until); } catch { failure('deadline'); good = false; }
   }
   if (!(good && !bad)) {
-    try { if (typeof diagnose === 'function') diagnose(firstFailure ?? 'unknown'); } catch {}
+    try { if (typeof diagnose === 'function') diagnose(firstFailure ?? 'unknown', events.join('') + '_' + (eventOverflow ? '1' : '0')); } catch {}
   }
   return good && !bad;
 }
@@ -1094,12 +1166,17 @@ export async function probeEngine(name, browserType, config, checkpoint = () => 
         checkpoint(reason === 'ca' ? 'engine_wrong_ca' : 'engine_wrong_host', name);
         const factory = reason === 'host' ? wrongHostFactory : wrongCAFactory;
         if (name === 'webkit' && factory !== undefined) {
-          let detail = 'unknown';
+          let detail = 'unknown', eventTrace;
           const probe = reason === 'host' ? probeWebkitWrongHost : probeWebkitWrongCA;
           const stages = reason === 'host' ? HOST_FAILURE_STAGES : CA_FAILURE_STAGES;
           if (!await probe(browser, factory, performance.now() + 10000,
-            kind => { if (hostDiagnosticKind(kind)) detail = kind; })) {
-            checkpoint(peerCodeFingerprintKind(detail) ? `engine_wrong_${reason}_one_shot_${detail}` : stages[detail], name);
+            (kind, trace) => {
+              if (hostDiagnosticKind(kind)) detail = kind;
+              if (validWebkitEventTrace(trace)) eventTrace = trace;
+            })) {
+            const fingerprint = peerCodeFingerprintKind(detail);
+            const base = fingerprint ? `engine_wrong_${reason}_one_shot_${detail}` : stages[detail];
+            checkpoint(eventTrace !== undefined && !fingerprint ? `${base}_events_${eventTrace}` : base, name);
             refuse();
           }
           continue;

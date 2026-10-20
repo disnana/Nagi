@@ -3,6 +3,23 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { stage, businessConfig, trustEnv, FAILURE_STAGES, checkedFailure } from './browser_stage.mjs';
+
+test('bounded one-shot event suffix is a strict failure-only WebKit vocabulary', () => {
+  for (const role of ['ca', 'host']) {
+    const base = `engine_wrong_${role}_one_shot_deadline`;
+    for (const trace of ['_0', 'GRMNSFWDJHO_0', 'GRMNSFWXJKO_0', 'E'.repeat(32) + '_1']) {
+      const stage = `${base}_events_${trace}`;
+      assert.deepEqual(checkedFailure(stage, 'webkit'), { schema_version: 1, stage, engine: 'webkit' });
+      for (const engine of ['none', 'chromium', 'firefox']) assert.throws(() => checkedFailure(stage, engine));
+    }
+    for (const trace of ['PRIVATE_SENTINEL_0', 'https://private.invalid/_0', 'E'.repeat(33) + '_0',
+      'E_1', '_1', 'E_2', 'E_00', 'E_0\n', 'E_0_suffix'])
+      assert.throws(() => checkedFailure(`${base}_events_${trace}`, 'webkit'));
+    for (const invalid of [`engine_wrong_${role}_one_shot_accepted_events_E_0`,
+      `engine_wrong_${role}_one_shot_peer_code_sha256_${'a'.repeat(64)}_events_E_0`,
+      `engine_wrong_${role}_events_E_0`]) assert.throws(() => checkedFailure(invalid, 'webkit'));
+  }
+});
 const IMAGE = 'sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9';
 const home = '/run/nagi-sf08/trust-unit/home';
 const ca = Buffer.from('synthetic-public-main-ca');

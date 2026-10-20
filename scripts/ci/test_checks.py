@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import changes
 import gate
+from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 
 class ChangeTests(unittest.TestCase):
@@ -880,7 +881,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
         inherited = projection.inverse_workflow(workflow)
         self.assertEqual(
             hashlib.sha256(inherited.encode()).hexdigest(),
-            "4c30a985d983401c9b61ee1a3ca4edbde3ad3e924f64baed0c588eb744bae2a1",
+            BASE_WORKFLOW_SHA256,
         )
         anchors = (
             projection.SF08_BROWSER_JOB,

@@ -245,10 +245,10 @@ def native_command(name: str) -> list[str]:
 
 
 def _prep_timer_pair_control_passes(raw: bytes, returncode: int, *, oversized: bool = False) -> bool:
-    """Prove the swapped-handler mutant emitted one exact paired witness.
+    """Prove the swapped-handler mutant emitted one exact three-line witness.
 
-    This is a counterfactual check only: it repairs the two terminal fields in
-    memory and asks the unchanged collector whether the corrected evidence
+    This is a counterfactual check only: it repairs the three terminal fields
+    in memory and asks the unchanged collector whether the corrected evidence
     passes. It never changes what the native test or collector accepts.
     """
     if oversized or len(raw) > RAW_LIMIT or returncode != 0:
@@ -261,22 +261,49 @@ def _prep_timer_pair_control_passes(raw: bytes, returncode: int, *, oversized: b
         return False
     private_prefix = PREFIX.encode("ascii")
     native_prefix = native_finish.PREFIX.encode("ascii")
-    if raw.count(private_prefix) != 1 or raw.count(native_prefix) != 1:
+    native_call_prefix = b"session_native_call_diag"
+    native_call_line = (
+        b"session_native_call_diag status=504 origin=3 terminal=3 diagnostic_valid=0 "
+        b"native_call_state=0 generation=0 call_enter_us=60000001 call_return_us=60000001 "
+        b"native_state=0 commit_result=0 settled_us=60000001 begins=0 commits=0 "
+        b"selected_deadline_passed=0"
+    )
+    if (raw.count(private_prefix) != 1 or raw.count(native_prefix) != 1
+            or raw.count(native_call_prefix) != 1):
         return False
-    # A private terminal and its native_finish projection are emitted as two
-    # adjacent lines from the same Closed snapshot. Reject any extra terminal
-    # observation before considering a repair.
-    if raw.count(b" terminal=3") != 2:
+    # Count terminal fields at token boundaries, including a bare or malformed
+    # extra field on an otherwise unrelated line. Only the three current rows
+    # may carry this field, and each must report the swapped value.
+    terminal_fields = re.findall(
+        rb"(?<![A-Za-z0-9_])terminal[ \t]*=[ \t]*([^ \t\r\n]*)", raw)
+    if terminal_fields != [b"3", b"3", b"3"]:
         return False
     lines = text.splitlines()
     private_prefix_text = private_prefix.decode("ascii")
     native_prefix_text = native_prefix.decode("ascii")
+    native_call_prefix_text = native_call_prefix.decode("ascii")
     private_positions = [i for i, line in enumerate(lines) if private_prefix_text in line]
     native_positions = [i for i, line in enumerate(lines) if native_prefix_text in line]
-    if len(private_positions) != 1 or len(native_positions) != 1:
+    native_call_positions = [i for i, line in enumerate(lines) if native_call_prefix_text in line]
+    if (len(private_positions) != 1 or len(native_positions) != 1
+            or len(native_call_positions) != 1):
         return False
-    private_index, native_index = private_positions[0], native_positions[0]
-    if native_index != private_index + 1:
+    private_index, native_index, native_call_index = (
+        private_positions[0], native_positions[0], native_call_positions[0])
+    if native_index != private_index + 1 or native_call_index != native_index + 1:
+        return False
+    if lines[native_call_index] != native_call_line.decode("ascii"):
+        return False
+    name = CASES["prep_timer"][0]
+    headings = [index for index, line in enumerate(lines)
+                if line.startswith("---- ") and line.endswith(" stdout ----")]
+    if len(headings) != 1 or lines[headings[0]] != f"---- {name} stdout ----":
+        return False
+    block_start = headings[0]
+    block_end = next((index for index in range(block_start + 1, len(lines))
+                      if lines[index] in ("successes:", "failures:")
+                      or lines[index].startswith("test result:")), len(lines))
+    if not block_start < private_index < native_index < native_call_index < block_end:
         return False
     # The source mutation changes only the enum label from
     # PreparationTimer (1) to HandlerTimer (3). Keep the preparation phase and
@@ -294,11 +321,11 @@ def _prep_timer_pair_control_passes(raw: bytes, returncode: int, *, oversized: b
     if not native_finish.paired(native, paired_legacy, 3):
         return False
 
-    # Preserve LF/CRLF bytes and touch only the two validated terminal fields.
+    # Preserve LF/CRLF bytes and touch only the three validated terminal fields.
     raw_lines = raw.splitlines(keepends=True)
     if len(raw_lines) != len(lines):
         return False
-    for index in (private_index, native_index):
+    for index in (private_index, native_index, native_call_index):
         if raw_lines[index].count(b" terminal=3") != 1:
             return False
         raw_lines[index] = raw_lines[index].replace(b" terminal=3", b" terminal=1", 1)

@@ -34,7 +34,12 @@ CASES = (
     "exact_tie_and_one_nanosecond_neighbors_are_strict",
     "unrepresentable_body_deadline_remains_rejected",
 ))
-REQUIRED = frozenset(BASE + name for name in CASES)
+POOL_READINESS_CASES = (
+    "cold_worker2_startup_spends_original_guarded_http_budget",
+    "ready_worker2_setup_preserves_same_guarded_http_budget",
+)
+REQUIRED = (frozenset(BASE + name for name in CASES)
+            | frozenset(BASE + "pool_readiness_tests::" + name for name in POOL_READINESS_CASES))
 AUTH_CASES = (
     "same_queue_reopen_reuses_data_context_without_refreshing_token_expiry",
     "reopened_context_preserves_original_token_expiry_and_rejects_after_deadline",

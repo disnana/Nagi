@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 from pathlib import Path
 import re
+import sys
 import unittest
 
 _SPEC = importlib.util.spec_from_file_location("request_projection", Path(__file__).resolve().parents[1]/"ci/sf07_request_projection.py")
@@ -11,6 +12,8 @@ projection = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(projection)
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts/ci"))
+from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 
 def text(path):
@@ -21,7 +24,7 @@ class TransportSourceTests(unittest.TestCase):
     def test_native_finish_ci_additions_have_strict_inverse_without_hash_replacement(self):
         workflow = text(".github/workflows/ci.yml")
         self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(),
-                         "6113a9a6f22f9ffc2189316391cac6b35c024f52e854c65d387c925c835bca79")
+                         BASE_WORKFLOW_SHA256)
         for addition in projection.SESSION_NATIVE_FINISH_ADDITIONS:
             self.assertEqual(workflow.count(addition), 2)
             for mutated in (workflow.replace(addition, "", 1), workflow.replace(addition, addition + addition, 1)):

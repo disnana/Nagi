@@ -103,11 +103,24 @@ WEBKIT_WRONG_HOST_DIAGNOSTIC_STAGES = {
 ENGINES = {'none','chromium','firefox','webkit'}
 
 
+WEBKIT_EVENT_CODES = 'ETXLAZUIRMNGVSFBYWDPCJKHO'
+
+
+def event_stage(stage, engine):
+    if type(stage) is not str or len(stage) > 108 or engine != 'webkit':
+        return False
+    match = re.fullmatch(
+        r'(engine_wrong_(?:ca|host)_one_shot_[a-z_]+)_events_([ETXLAZUIRMNGVSFBYWDPCJKHO]{0,32})_([01])', stage)
+    return bool(match and match[1] in STAGES and
+                (match[3] == '0' or len(match[2]) == 32))
+
+
 def validate(value, *, outer=False):
     keys = {'schema_version','stage','engine'} | ({'phase'} if outer else set())
     if (type(value) is not dict or set(value) != keys or type(value['schema_version']) is not int
             or value['schema_version'] != 1 or type(value['stage']) is not str
             or (value['stage'] not in STAGES and value['stage'] not in WEBKIT_WITNESS_STAGES
+                and not event_stage(value['stage'], value['engine'])
                 and not (len(value['stage']) <= 108 and re.fullmatch(
                     r'engine_wrong_(?:ca|host)_one_shot_peer_code_sha256_[a-f0-9]{64}', value['stage'])))
             or type(value['engine']) is not str or value['engine'] not in ENGINES

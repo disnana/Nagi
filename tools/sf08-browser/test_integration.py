@@ -32,9 +32,10 @@ def facts(resets=12):
 
 class Owner:
     def __init__(self, work, fail_browser=False, resets=12, closure=True, failure_stage='engine_wrong_ca',
-                 browser_status=0, browser_report=None):
+                 browser_status=0, browser_report=None, failure_engine='firefox'):
         self.work,self.fail_browser,self.resets,self.closure = work,fail_browser,resets,closure
         self.failure_stage = failure_stage
+        self.failure_engine = failure_engine
         self.browser_status,self.browser_report = browser_status,browser_report
         self.cancelled = False
         self.leaders = {}
@@ -59,7 +60,7 @@ class Owner:
             if self.browser_report is not None:
                 put(self.work/'browser-report.json',self.browser_report)
             if self.fail_browser:
-                put(self.work/'stage-failure.json',{'schema_version':1,'stage':self.failure_stage,'engine':'firefox'})
+                put(self.work/'stage-failure.json',{'schema_version':1,'stage':self.failure_stage,'engine':self.failure_engine})
         return leader
     def peek(self, leader):
         return None if leader.name=='negative' else NS(si_code=os.CLD_EXITED,
@@ -171,8 +172,8 @@ class IntegrationTests(unittest.TestCase):
         self.work=Path(tempfile.mkdtemp(prefix='unit-',dir=os.environ.get('SF08_UNIT_ROOT','/tmp')))
 
     def fake(self, fail_browser=False, bad_ack=False, resets=12, closure=True, cancel=False,
-             failure_stage='engine_wrong_ca',browser_status=0,browser_report=None,wait_error=None):
-        owner=Owner(self.work,fail_browser,resets,closure,failure_stage,browser_status,browser_report)
+             failure_stage='engine_wrong_ca',browser_status=0,browser_report=None,wait_error=None,failure_engine='firefox'):
+        owner=Owner(self.work,fail_browser,resets,closure,failure_stage,browser_status,browser_report,failure_engine)
         deps={**loaded,'owned_processes':NS(LinuxProcessOwner=NS(activate_in_dedicated_cli=lambda:owner))}
         files={n:{'path':'/unit/'+n} for n in ('protocol','budget','provision','fixture','negative','provision_worker','stage','spec','playwright_module','playwright_cli')}
         binding={'files':files,'binary':{'path':'/unit/binary'},'node_modules':'/unit/node_modules'}
@@ -246,6 +247,16 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual((r['browser_executions_accepted'],r['resets_accepted']), (0,0))
         self.assertTrue(r['actual_echild'])
         self.assertEqual((stop.call_count,owner.closed,report.call_count),(1,1,0))
+
+    def test_bounded_webkit_event_suffix_survives_owned_failure_transport(self):
+        stage = 'engine_wrong_host_one_shot_deadline_events_GRMNSFWDJHO_0'
+        r,code,owner,stop,report=self.fake(fail_browser=True,failure_stage=stage,failure_engine='webkit')
+        self.assertEqual((code,r['failure_stage'],r['failure_engine']),(1,stage,'webkit'))
+        saved=json.loads((self.work/'browser-failure.json').read_text())
+        self.assertEqual(saved,dict(schema_version=1,phase='browser',stage=stage,engine='webkit'))
+        self.assertTrue(r['actual_echild'])
+        self.assertEqual((stop.call_count,owner.closed,report.call_count),(1,1,0))
+        self.assertEqual((r['browser_executions_accepted'],r['resets_accepted']),(0,0))
 
     def test_business_failure_projection_waits_for_browser_exit_and_echild(self):
         from test_r2_regressions import business_failure_report
