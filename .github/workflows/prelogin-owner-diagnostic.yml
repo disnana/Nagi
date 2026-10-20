@@ -1,0 +1,69 @@
+name: Prelogin fixed-owner causal observation
+on:
+  push:
+    branches: [test/ci-prelogin-owner-20261020]
+permissions:
+  contents: read
+concurrency:
+  group: prelogin-owner-observation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  owner:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: 0
+      RUST_BACKTRACE: 0
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        id: rust
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: prelogin-observer-${{ github.sha }}
+          restore-keys: |
+            nagi-rust-v1-package-windows-x86_64-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
+            nagi-rust-v1-package-windows-x86_64-${{ steps.rust.outputs.cachekey }}-
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - name: Compile the unchanged runtime unit target once
+        run: cargo test --locked -p nagi-runtime --lib --no-run
+      - name: Observe one owner test and parallel prelogin context separately
+        shell: python
+        run: |
+          import importlib.util, json, re, subprocess
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location('summary', 'scripts/ci/sf07_checkpoint_summary.py')
+          summary = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(summary)
+          owner = summary.EXPECTED['prelogin-issuer'][0]
+          states = []
+          for profile, target, flags in [('isolated', owner, ['--exact']), ('parallel-prelogin', 'auth::prelogin::tests::', [])]:
+              run = subprocess.run(['cargo', 'test', '--locked', '-p', 'nagi-runtime', '--lib', target, '--', *flags], capture_output=True)
+              raw = run.stdout + run.stderr
+              text = raw[:65536].decode('utf-8', errors='replace').replace('\r\n', '\n')
+              row = re.findall(r'^test ' + re.escape(owner) + r' \.\.\. (ok|FAILED|ignored)$', text, re.M)
+              passed = run.returncode == 0 and row == ['ok'] and len(raw) <= 65536
+              if profile == 'isolated':
+                  passed = passed and summary.classify(raw, 'prelogin-issuer') == 'passed'
+              report = {'profile': profile, 'state': 'passed' if passed else 'failed', 'owner': row[0] if len(row) == 1 else 'unavailable', 'locations': []}
+              # Closed source names and numeric line/column only. Never print
+              # arbitrary panic messages, native paths, cookies, SQL or tokens.
+              for source in ('runtime/src/auth/prelogin/fixed_wire_owner_tests.rs', 'runtime/src/auth/prelogin/tests.rs', 'runtime/src/auth/prelogin.rs'):
+                  pattern = re.escape(source).replace('/', r'[/\\]') + r':([0-9]{1,6}):([0-9]{1,6})'
+                  found = set(re.findall(pattern, text))
+                  report['locations'].extend({'source': source, 'line': int(a), 'column': int(b)} for a, b in sorted(found)[:8])
+              kinds = re.findall(r'PreLoginFailure \{ kind: (InvalidCredential|Denied|Expired|InvalidRequest|Unavailable|Internal), outcome: (NotApplicable|Committed|RolledBack|Unknown) \}', text)
+              report['prelogin_failures'] = [{'kind': a, 'outcome': b} for a, b in kinds[:8]]
+              print(json.dumps(report, sort_keys=True), flush=True)
+              states.append(passed)
+          raise SystemExit(0 if all(states) else 1)
