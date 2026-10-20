@@ -246,6 +246,8 @@ _WINDOWS_TEMP_GUARD_SITES = (
     ('nagi-package', 'Check B1 Session CSRF runtime and public socket contracts', 'set -euo pipefail',
      'python -B scripts/tests/test_csrf_deadline_mutations.py'),
 )
+_SF07_PROFILE_STEP_TITLE = 'Measure bounded SF07 response and rate profile'
+_SF07_PROFILE_COLOR_ENV = '        env:\n          CARGO_TERM_COLOR: never\n'
 _CSRF_DEADLINE_CURRENT = '"sf03-b1-csrf-deadline.log":14'
 _CSRF_DEADLINE_HISTORICAL = '"sf03-b1-csrf-deadline.log":12'
 _CSRF_DEADLINE_SITE = (
@@ -458,6 +460,46 @@ class BackportSourceTests(unittest.TestCase):
         self.assertEqual(workflow.count("'runtime/src/http_server.rs': '" + http_sha + "'"), 2)
         self.assertEqual(read('scripts/ci/session_private_deadline_diagnostic.py').count('expected_digest = "' + http_sha + '"'), 1)
 
+
+    def test_sf07_profile_color_override_is_required_and_step_bound(self):
+        workflow = read('.github/workflows/ci.yml')
+        start, end = _workflow_step_span(workflow, 'nagi-package', _SF07_PROFILE_STEP_TITLE)
+        step = workflow[start:end]
+        self.assertEqual(workflow.count(_SF07_PROFILE_COLOR_ENV), 1)
+        self.assertEqual(step.count(_SF07_PROFILE_COLOR_ENV), 1)
+        commands = (
+            'cargo test --locked -p nagi-runtime --test sf07_small_profile --no-run',
+            'cargo test --locked -p nagi-runtime --test sf07_small_profile -- --list',
+            'cargo test --locked -p nagi-runtime --test sf07_small_profile response_profile_reports_closed_measurements -- --exact --show-output',
+        )
+        for command in commands:
+            self.assertEqual(step.count(command), 1)
+
+        restored = _inverse_reviewed_workflow_residuals(workflow)
+        self.assertEqual(hashlib.sha256(restored.replace(B1_STEP, '').encode()).hexdigest(), PRODUCTION_WORKFLOW_CHILD)
+
+        missing = workflow.replace(_SF07_PROFILE_COLOR_ENV, '', 1)
+        duplicate = workflow.replace(_SF07_PROFILE_COLOR_ENV, _SF07_PROFILE_COLOR_ENV + _SF07_PROFILE_COLOR_ENV, 1)
+        edited = workflow.replace(_SF07_PROFILE_COLOR_ENV, _SF07_PROFILE_COLOR_ENV.replace('never', 'always'), 1)
+        moved = workflow.replace(_SF07_PROFILE_COLOR_ENV, '', 1)
+        wrong_start, wrong_end = _workflow_step_span(
+            moved, 'nagi-package', 'Verify an extracted distribution outside the checkout'
+        )
+        wrong_step = moved[wrong_start:wrong_end]
+        wrong_step = wrong_step.replace('        shell: bash\n', _SF07_PROFILE_COLOR_ENV + '        shell: bash\n', 1)
+        moved = moved[:wrong_start] + wrong_step + moved[wrong_end:]
+        for label, mutant in (
+            ('missing', missing), ('duplicate', duplicate), ('edited', edited), ('moved', moved),
+        ):
+            with self.subTest(label=label, mutant_sha=hashlib.sha256(mutant.encode()).hexdigest()):
+                with self.assertRaises(ValueError):
+                    _inverse_reviewed_workflow_residuals(mutant)
+
+        unrelated = _inverse_reviewed_workflow_residuals(workflow + '# unrelated workflow drift\n')
+        self.assertNotEqual(
+            hashlib.sha256(unrelated.replace(B1_STEP, '').encode()).hexdigest(),
+            PRODUCTION_WORKFLOW_CHILD,
+        )
 
     def test_reviewed_workflow_inverse_rejects_moved_or_changed_residuals(self):
         workflow = read('.github/workflows/ci.yml')

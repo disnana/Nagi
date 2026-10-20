@@ -2020,6 +2020,8 @@ jobs:
         shell: bash
         run: test '${{ steps.session_deadline_diag.outcome }}' = success
       - name: Measure bounded SF07 response and rate profile
+        env:
+          CARGO_TERM_COLOR: never
         shell: bash
         run: |
           set -euo pipefail
