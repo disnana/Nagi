@@ -261,8 +261,20 @@ def ensure_no_repo_nextest_config(cwd: Path) -> None:
 
 def require_nextest_version(output: str) -> str:
     version = output.strip()
-    if not re.fullmatch(r"cargo-nextest " + re.escape(NEXTEST_VERSION) + r"(?: \([^\r\n]+\))?", version):
+    lines = version.splitlines()
+    if not lines or not re.fullmatch(r"cargo-nextest " + re.escape(NEXTEST_VERSION) + r"(?: \([^\r\n]+\))?", lines[0]):
         raise EvaluationError("installed nextest does not match the reviewed version")
+    # Published nextest emits build metadata even without --verbose. Check the
+    # release field too; do not mistake these lines for a different version.
+    if len(lines) > 1:
+        fields = {}
+        for line in lines[1:]:
+            key, separator, value = line.partition(": ")
+            if not separator or key in fields or key not in {"release", "commit-hash", "commit-date", "host"}:
+                raise EvaluationError("unrecognized nextest version metadata")
+            fields[key] = value
+        if fields.get("release") != NEXTEST_VERSION:
+            raise EvaluationError("nextest release metadata does not match the reviewed version")
     return version
 
 

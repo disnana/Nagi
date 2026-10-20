@@ -29,6 +29,17 @@ class InventoryTests(unittest.TestCase):
             with self.assertRaises(EvaluationError):
                 require_nextest_version(version)
 
+    def test_official_multiline_build_metadata_keeps_exact_release_validation(self):
+        version = ("cargo-nextest 0.9.148 (cd1d6d546 2026-10-07)\n"
+                   "release: 0.9.148\ncommit-hash: cd1d6d5467322dbc0d39a80cb671d000ac302798\n"
+                   "commit-date: 2026-10-07\nhost: x86_64-unknown-linux-gnu\n")
+        self.assertEqual(require_nextest_version(version), version.strip())
+        for bad in (version.replace("release: 0.9.148", "release: 0.9.147"),
+                    version + "release: 0.9.148\n", version + "unknown: value\n",
+                    version.replace("release: 0.9.148\n", "")):
+            with self.assertRaises(EvaluationError):
+                require_nextest_version(bad)
+
     def test_libtest_full_and_ignored_lists_preserve_membership(self):
         all_tests = parse_libtest_listing(
             "compiler::parser::accepts: test\ncompiler::parser::rejects: test\n"
