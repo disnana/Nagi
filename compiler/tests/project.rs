@@ -412,3 +412,40 @@ fn a_borrowed_record_field_does_not_block_moving_a_disjoint_field() {
     assert!(stdout.lines().any(|line| line == "2"));
     assert!(stdout.lines().any(|line| line == "Nagi"));
 }
+
+#[test]
+fn native_profiles_and_stats_are_additive_and_validated_before_writing() {
+    let root = Path::new(".");
+    for command in ["build", "run"] {
+        let args = [command, "main.nagi"].map(str::to_owned);
+        assert_eq!(
+            project::resolve(&args, root).unwrap().profile,
+            project::BuildProfile::Release
+        );
+        for profile in ["dev", "release"] {
+            let args =
+                [command, "main.nagi", "--profile", profile, "--build-stats"].map(str::to_owned);
+            let options = project::resolve(&args, root).unwrap();
+            assert_eq!(options.profile.as_str(), profile);
+            assert!(options.build_stats);
+        }
+    }
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(1)\n");
+    for args in [
+        vec!["build", "main.nagi", "--profile"],
+        vec!["build", "main.nagi", "--profile", "fast"],
+        vec!["build", "main.nagi", "--profile", "dev", "--profile", "dev"],
+        vec!["build", "main.nagi", "--build-stats", "--build-stats"],
+        vec!["check", "main.nagi", "--profile", "dev"],
+        vec!["lower", "main.nagi", "--build-stats"],
+        vec!["map", "main.nagi", "--profile", "dev"],
+    ] {
+        let output = f.run(&f.0, &args);
+        assert!(!output.status.success(), "{args:?}");
+        assert!(
+            !f.0.join("build").exists(),
+            "invalid options must not create output: {args:?}"
+        );
+    }
+}

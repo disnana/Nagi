@@ -1,4 +1,5 @@
 pub mod ast;
+mod build_analysis;
 mod capabilities;
 pub mod check;
 pub mod checked;
