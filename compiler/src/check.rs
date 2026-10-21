@@ -73,6 +73,8 @@ struct Checker {
     classes: HashMap<String, Class>,
     enums: HashMap<String, Enum>,
     functions: HashMap<String, Function>,
+    // Raw in-memory parser names can resemble encoded resolver symbols.
+    resolved_functions: bool,
     registered: HashSet<String>,
     vars: HashMap<String, Var>,
     ret: Type,
@@ -604,6 +606,7 @@ fn check_mode_with_query(
         classes: HashMap::new(),
         enums: HashMap::new(),
         functions: HashMap::new(),
+        resolved_functions: p.modules.root.is_some(),
         registered: p
             .modules
             .definitions
@@ -4625,7 +4628,21 @@ impl Checker {
                     }
                     let ret = signature.pop().unwrap();
                     if args.len() != signature.len() {
-                        return Err(error(line, "引数の数が一致しません"));
+                        let name = if self.resolved_functions
+                            && e.resolution == Some(NameResolution::Function)
+                        {
+                            crate::modules::display_symbol(n)
+                        } else {
+                            n.clone()
+                        };
+                        return Err(error(
+                            line,
+                            format!(
+                                "引数の数が一致しません: {name}（期待: {}個、実際: {}個）",
+                                signature.len(),
+                                args.len()
+                            ),
+                        ));
                     }
                     for (arg, t) in args.iter_mut().zip(&signature) {
                         let got = self.expr(arg, Some(t))?;
@@ -4669,11 +4686,24 @@ impl Checker {
         }
         let arity = builtin_arity(n).ok_or_else(|| error(line, format!("未定義の関数: {n}")))?;
         if arity != args.len() {
-            return Err(error(line, format!("{n} は{arity}引数です")));
+            return Err(error(
+                line,
+                format!(
+                    "{n} は{arity}引数です（期待: {arity}個、実際: {}個）",
+                    args.len()
+                ),
+            ));
         }
         let generic = matches!(n, "json_decode" | "size_of");
         if generic && ts.len() != 1 || !generic && !ts.is_empty() {
-            return Err(error(line, "型引数の数が一致しません"));
+            return Err(error(
+                line,
+                format!(
+                    "型引数の数が一致しません: {n}（期待: {}個、実際: {}個）",
+                    usize::from(generic),
+                    ts.len()
+                ),
+            ));
         }
         if n == "json_decode" && !json_type_supported(&ts[0], true, &self.classes, &self.enums) {
             return Err(error(line, format!("json_decodeの型引数 {} はJSONの読み取りに対応していません（Deserializeが必要です）", ts[0])));
