@@ -515,3 +515,7 @@ baseは公開0.2.0後のmain `2c703b89645b164f586a926e473d08395be65c90`。既存
 対象generation 73・diagnostic 33・project 13、receipt 36（LinuxでWindows固有1 skip）、release tools 154、fmt/Clippy、日英Docs 102ページの整合を確認した。mixed async/型/関数値/未知callee逆依存、primitive名のlegacy shadowとcanonical module、High/保存Low、子CAS注入、hardlink、孤児Cargo、公開各段階の失敗と旧exe保持を含む。実runtime HTTPの200/400とSIGINT終了、同梱compiler/runtime/toolsを使う実Linux archive（schema 1/2/3・新unit3build・全旧exe保持）も成功した。全workspaceと独立audit、最新HEADの4 OS/配布CIは作成時点で別gateとして追跡し、最終状態をPRへ集約する。merge・版更新・tag・公開は行わない。
 
 追記: core `39dc51d`の全workspace `cargo test --locked`はexit 0（831.467秒、配布等の検証並走あり）。fuzz、10 app/19 native、canonical shadow追加test、final fmt/Clippyも成功。全体suite時間をbefore/afterの性能差として扱わない。最新HEADのCIと独立auditは引き続き別gate。
+
+CI追記: PR #144初回HEAD `c9c923d`のproject toolingはLinux成功、macOS/Windowsでreceipt alias fixtureが失敗。fixtureのunit依存pathがcompilerのcanonical出力と異なっていたため、fixtureだけをcanonical化し、Linuxで同じ二重aliasを再現するtestを追加した。検証器・compiler・受入assert・期限は変更しない。修正前の同じValueErrorと、修正後37件（LinuxではWindows固有1 skip）の成功を保存し、独立再reviewと新HEADのCIを確認する。
+
+別のCI観測: 初回headのWindows prelogin issuerはPR/manualの2jobで同じowner bootstrap位置に失敗し、Linux manualはCSRF初期TokenReply504を3件観測した。runtime/lock差分はなく、分割flagもruntime testで使っていないが、原因を断定しない。High設計review後、既存FAILED envelopeと完全一致するPreLoginFailureの固定enum分類だけをCIの失敗時に追加する。秘密・一般panic/causeを表示せず、rc=1・期限・assertを維持する。新HEADの1回は分類probeとして実施し、分類不能/Unknown等で判断が残ればArchitectへ引き継ぐ。

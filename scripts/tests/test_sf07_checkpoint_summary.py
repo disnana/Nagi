@@ -493,7 +493,8 @@ class PreloginFailureLocationTests(unittest.TestCase):
         self.assertEqual(result.stderr, b"")
         self.assertEqual(normalize_cli_stdout(result.stdout),
                          b"sf07_checkpoint scope=prelogin-issuer state=test_failed\n"
-                         b"sf07_prelogin_owner_failure state=located source=owner line=7 column=14\n")
+                         b"sf07_prelogin_owner_failure state=located source=owner line=7 column=14\n"
+                         b"sf07_prelogin_classification state=unavailable\n")
         self.assertNotIn(b"PRIVATE", result.stdout)
         self.assertNotIn(b"SECRET", result.stdout)
 
@@ -503,8 +504,47 @@ class PreloginFailureLocationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(normalize_cli_stdout(result.stdout),
                          b"sf07_checkpoint scope=prelogin-issuer state=test_failed\n"
-                         b"sf07_prelogin_owner_failure state=unavailable\n")
+                         b"sf07_prelogin_owner_failure state=unavailable\n"
+                         b"sf07_prelogin_classification state=unavailable\n")
         self.assertEqual(result.stderr, b"")
+
+    def classified(self, kind="Unavailable", outcome="NotApplicable"):
+        return self.failed() + ("called `Result::unwrap()` on an `Err` value: "
+                                "PreLoginFailure { kind: " + kind + ", outcome: " + outcome + " }\n").encode()
+
+    def test_failure_classification_is_closed_and_supports_lf_crlf(self):
+        kinds = {"InvalidCredential": "invalid_credential", "Denied": "denied",
+                 "Expired": "expired", "InvalidRequest": "invalid_request",
+                 "Unavailable": "unavailable", "Internal": "internal"}
+        outcomes = {"NotApplicable": "not_applicable", "Active": "active",
+                    "Committed": "committed", "RolledBack": "rolled_back", "Unknown": "unknown"}
+        for kind, kind_label in kinds.items():
+            for outcome, outcome_label in outcomes.items():
+                raw = self.classified(kind, outcome)
+                for data in (raw, raw.replace(b"\n", b"\r\n")):
+                    self.assertEqual(summary.prelogin_failure_classification(data), (kind_label, outcome_label))
+
+    def test_failure_classification_refuses_unknown_duplicate_payload_and_invalid_envelopes(self):
+        raw = self.classified()
+        for bad in (self.failed(), raw + raw, raw + b"PreLoginFailure SECRET\n",
+                    self.classified("SECRET", "NotApplicable"), self.classified("Unavailable", "SECRET"),
+                    raw.replace(b"outcome: NotApplicable }", b"outcome: NotApplicable, secret: COOKIE }"),
+                    raw.replace(b"called `Result::unwrap()`", b"SECRET called `Result::unwrap()`"),
+                    raw.replace(b" ... FAILED", b" ... ok"), raw + b"\xff", raw + b"\r",
+                    raw.replace(b"fixed_wire_owner_tests.rs", b"PRIVATE.rs"), b"x" * 65537):
+            self.assertIsNone(summary.prelogin_failure_classification(bad))
+
+    def test_cli_classification_remains_failed_and_never_prints_private_payload(self):
+        for raw, expected in ((self.classified(), b"state=classified kind=unavailable outcome=not_applicable"),
+                              (self.classified("SECRET_COOKIE"), b"state=unavailable")):
+            result = subprocess.run([sys.executable, "-B", str(SCRIPT), "prelogin-issuer"],
+                                    input=raw, capture_output=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stderr, b"")
+            self.assertIn(b"sf07_prelogin_classification " + expected + b"\n", normalize_cli_stdout(result.stdout))
+            self.assertNotIn(b"PRIVATE", result.stdout)
+            self.assertNotIn(b"SECRET", result.stdout)
+            self.assertNotIn(b"COOKIE", result.stdout)
 
 
 if __name__ == "__main__":
