@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import copy
+import json
+import gate
+import publication_gate
 import re
 import unittest
 from pathlib import Path
@@ -10,10 +13,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MAIN_REF = "refs/heads/main"
 COMPONENTS = ("nagi", "vscode", "jetbrains")
-JOBS = ("changes", "linux", "rust-1-88", "sf08-browser", "release-plan",
+SHA = "a" * 40
+JOBS = ("ready", "ci-plan", "critical", "changes", "linux", "rust-1-88", "sf08-browser", "release-plan",
         "jetbrains", "vscode-package", "nagi-package", "nagi-regression")
 ALLOWED_NAMES = {
     "github.event_name", "github.ref", "needs.changes.result",
+    "needs.ready.result", "needs.ci-plan.result", "needs.ci-plan.outputs.level",
     "needs.linux.result", "needs.rust-1-88.result", "needs.release-plan.result",
     "needs.sf08-browser.result",
     "needs.release-plan.outputs.release_nagi",
@@ -21,34 +26,45 @@ ALLOWED_NAMES = {
     "needs.release-plan.outputs.release_jetbrains",
     "needs.jetbrains.result", "needs.vscode-package.result", "needs.nagi-package.result",
     "needs.nagi-regression.result", "needs.release-plan.outputs.package_nagi",
+    "needs.changes.outputs.full_checks", "needs.changes.outputs.jetbrains_checks",
+    "needs.release-plan.outputs.package_jetbrains",
+    "needs.ci-plan.outputs.comprehensive_checks", "needs.ci-plan.outputs.package_checks",
 }
 TOKEN = re.compile(
-    r"\s+|&&|\|\||==|!=|[()]|'[^']*'|"
+    r"\s+|&&|\|\||==|!=|[()!]|'[^']*'|"
     r"[A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*"
 )
 
 
-def publish_expression() -> str:
-    """Read only the publish-release YAML folded scalar; do not evaluate YAML or code."""
+def job_expression(name: str) -> str:
+    """Read only a job's if scalar; do not evaluate YAML or code."""
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     job = re.search(
-        r"(?ms)^  publish-release:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)", workflow
+        r"(?ms)^  " + re.escape(name) + r":\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)", workflow
     )
     if not job:
-        raise AssertionError("publish-release job is missing")
+        raise AssertionError(name + " job is missing")
     condition = re.search(
         r"(?m)^    if:\s*>-\s*\n(?P<lines>(?:^      .*\n?)+)", job.group("body")
     )
     if not condition:
-        raise AssertionError("publish-release must use a folded if expression")
-    expression = " ".join(line.strip() for line in condition.group("lines").splitlines() if line.strip())
+        condition = re.search(r"(?m)^    if: (?P<inline>[^\n]+)$", job.group("body"))
+        if not condition:
+            raise AssertionError(name + " condition is missing")
+        expression = condition.group("inline")
+    else:
+        expression = " ".join(line.strip() for line in condition.group("lines").splitlines() if line.strip())
     if not expression:
         raise AssertionError("publish-release condition is empty")
     return expression
 
 
+def publish_expression() -> str:
+    return job_expression('publish-release')
+
+
 class RestrictedExpression:
-    """Parser for literals, whitelisted dot names, comparisons, booleans, and always()."""
+    """Parser for literals, whitelisted names, booleans, and status functions."""
 
     def __init__(self, expression: str, context: dict):
         self.context = context
@@ -114,6 +130,9 @@ class RestrictedExpression:
 
     def _parse_primary(self):
         token = self._peek()
+        if token == "!":
+            self._take("!")
+            return not self._boolean(self._parse_primary())
         if token == "(":
             self._take("(")
             value = self._parse_or()
@@ -123,11 +142,13 @@ class RestrictedExpression:
             raise ValueError("Unexpected end of expression")
         if token.startswith("'") and token.endswith("'"):
             return self._take()[1:-1]
-        if token == "always":
-            self._take("always")
+        if token in ("always", "cancelled"):
+            self._take()
             self._take("(")
             self._take(")")
-            return True
+            if token == "always":
+                return True
+            return self._boolean(self.context.get('cancelled'))
         if token in ALLOWED_NAMES:
             self._take()
             value = self.context
@@ -149,36 +170,99 @@ def evaluate(expression: str, context: dict) -> bool:
     return RestrictedExpression(expression, context).evaluate()
 
 
-def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None):
+# Handwritten platform contract, independent of the selector implementation.
+RELEASE_MATRIX = {'include': [
+    {'os':'ubuntu-latest', 'platform':'linux-x86_64', 'executable':'nagic', 'rust_host':'x86_64-unknown-linux-gnu'},
+    {'os':'windows-latest', 'platform':'windows-x86_64', 'executable':'nagic.exe', 'rust_host':'x86_64-pc-windows-msvc'},
+    {'os':'macos-15', 'platform':'macos-arm64', 'executable':'nagic', 'rust_host':'aarch64-apple-darwin'},
+    {'os':'macos-15-intel', 'platform':'macos-x86_64', 'executable':'nagic', 'rust_host':'x86_64-apple-darwin'},
+]}
+
+
+def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None, cancelled=False):
     results = results or {}
-    release_set = set(releases)
+    releases = set(releases)
+    # Each legacy row explicitly chooses whether Nagi analysis was selected.
+    full = results.get('linux', 'success') != 'skipped'
+    package = results.get('nagi-package', 'success') != 'skipped'
+    comprehensive = full or package
+    selection = dict(level='3', critical_checks='false',
+        comprehensive_checks=str(comprehensive).lower(), package_checks=str(comprehensive).lower(),
+        matrix=json.dumps(RELEASE_MATRIX, separators=(',', ':')))
+    plan = {'sha': SHA}
+    for component, job in [('nagi','nagi-package'), ('vscode','vscode-package'), ('jetbrains','jetbrains')]:
+        plan['release_'+component] = str(component in releases).lower()
+        plan['package_'+component] = str(results.get(job, 'success') != 'skipped').lower()
     needs = {
-        "changes": {"result": results.get("changes", "success")},
-        "linux": {"result": results.get("linux", "success")},
-        "rust-1-88": {"result": results.get("rust-1-88", results.get("linux", "success"))},
-        "sf08-browser": {"result": results.get("sf08-browser", "success")},
-        "release-plan": {
-            "result": results.get("release-plan", "success"),
-            "outputs": {
-                f"release_{component}": str(component in release_set).lower()
-                for component in COMPONENTS
-            },
-        },
-        "jetbrains": {"result": results.get("jetbrains", "success")},
-        "vscode-package": {"result": results.get("vscode-package", "success")},
-        "nagi-package": {"result": results.get("nagi-package", "success")},
-        "nagi-regression": {"result": results.get("nagi-regression",
-            "skipped" if results.get("nagi-package") == "skipped" else "success")},
+        'ci-plan': {'result': results.get('ci-plan', 'success'), 'outputs':selection},
+        'ready': {'result': results.get('ready', 'success')},
+        'critical': {'result': results.get('critical', 'skipped')},
+        'changes': {'result': results.get('changes','success'),
+                    'outputs':{'full_checks':str(full).lower(), 'jetbrains_checks':'false'}},
+        'release-plan': {'result':results.get('release-plan','success'), 'outputs':plan},
     }
-    needs["release-plan"]["outputs"]["package_nagi"] = (
-        "false" if results.get("nagi-package") == "skipped" else "true")
-    return {"github": {"event_name": event, "ref": ref}, "needs": needs}
+    for job in ['linux','sf08-browser','jetbrains','vscode-package','nagi-package']:
+        needs[job] = {'result':results.get(job,'success')}
+    needs['rust-1-88'] = {'result':results.get('rust-1-88', results.get('linux','success'))}
+    needs['nagi-regression'] = {'result':results.get('nagi-regression',
+        'skipped' if results.get('nagi-package') == 'skipped' else 'success')}
+    return {'github': {'event_name':event, 'ref':ref}, 'needs':needs, 'cancelled':cancelled}
+
+
+def can_publish(expression, context):
+    # Simulate the actual always-running aggregate, then independently run the
+    # publication recheck against the original (possibly fictional Ready) needs.
+    actual = copy.deepcopy(context)
+    if gate.errors(actual['needs']) and actual['needs'].get('ready', {}).get('result') == 'success':
+        actual['needs']['ready']['result'] = 'failure'
+    try:
+        selected = evaluate(expression, actual)
+    except ValueError:
+        selected = False
+    errors = publication_gate.errors(context['needs'], context['github']['event_name'],
+                                     context['github']['ref'], SHA)
+    return selected and not errors
 
 
 class PublishConditionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.expression = publish_expression()
+
+    def test_cancelled_function_requires_explicit_boolean_context(self):
+        for cancelled in (False, True):
+            self.assertEqual(evaluate('cancelled()', {'cancelled': cancelled}), cancelled)
+            self.assertEqual(evaluate('!cancelled()', {'cancelled': cancelled}), not cancelled)
+        for context in ({}, {'cancelled': None}, {'cancelled': 'false'}, {'cancelled': 0}):
+            with self.subTest(context=context), self.assertRaises(ValueError):
+                evaluate('!cancelled()', context)
+
+    def test_failure_independent_jobs_stop_on_cancellation(self):
+        jobs = ('ci-plan', 'jetbrains', 'sf08-browser', 'nagi-package', 'ready', 'publish-release')
+        for event in ('push', 'pull_request'):
+            for cancelled in (False, True):
+                context = fixture(event=event, releases=COMPONENTS, cancelled=cancelled)
+                for job in jobs:
+                    with self.subTest(event=event, cancelled=cancelled, job=job):
+                        expected = not cancelled and (job != 'publish-release' or event == 'push')
+                        self.assertEqual(evaluate(job_expression(job), context), expected)
+
+    def test_ready_still_observes_failed_or_skipped_dependencies_unless_cancelled(self):
+        for result in ('failure', 'skipped'):
+            context = fixture(releases=COMPONENTS, results={'linux': result})
+            self.assertTrue(evaluate(job_expression('ready'), context))
+            self.assertTrue(gate.errors(context['needs']))
+            context['cancelled'] = True
+            self.assertFalse(evaluate(job_expression('ready'), context))
+
+    def test_manual_cancellation_blocks_main_publication_after_successful_ready(self):
+        for releases in (('nagi',), ('vscode',), ('jetbrains',), COMPONENTS):
+            context = fixture(releases=releases)
+            self.assertTrue(can_publish(self.expression, context))
+            context['cancelled'] = True
+            self.assertEqual(context['needs']['ready']['result'], 'success')
+            self.assertFalse(evaluate(self.expression, context))
+            self.assertFalse(can_publish(self.expression, context))
 
     def test_evaluator_rejects_unlisted_functions_and_expression_features(self):
         for expression in (
@@ -215,7 +299,7 @@ class PublishConditionTests(unittest.TestCase):
                 "JetBrains only also permits successful Linux",
                 fixture(releases=("jetbrains",), results={
                     "linux": "success", "jetbrains": "success",
-                    "vscode-package": "skipped", "nagi-package": "skipped",
+                    "vscode-package": "skipped", "nagi-package": "success",
                 }),
                 True,
             ),
@@ -287,7 +371,7 @@ class PublishConditionTests(unittest.TestCase):
                 "VS Code only requires Linux and its package",
                 fixture(releases=("vscode",), results={
                     "linux": "success", "jetbrains": "skipped",
-                    "vscode-package": "success", "nagi-package": "skipped",
+                    "vscode-package": "success", "nagi-package": "success",
                 }),
                 True,
             ),
@@ -402,7 +486,7 @@ class PublishConditionTests(unittest.TestCase):
         ]
         for name, context, expected in rows:
             with self.subTest(name=name):
-                self.assertEqual(evaluate(self.expression, context), expected)
+                self.assertEqual(can_publish(self.expression, context), expected)
 
     def test_failure_and_cancellation_of_any_required_or_unneeded_job_blocks_publish(self):
         valid = fixture(releases=COMPONENTS)
@@ -411,24 +495,24 @@ class PublishConditionTests(unittest.TestCase):
                 with self.subTest(job=job, status=status):
                     context = copy.deepcopy(valid)
                     context["needs"][job]["result"] = status
-                    self.assertFalse(evaluate(self.expression, context))
+                    self.assertFalse(can_publish(self.expression, context))
 
         unrelated_failure = fixture(releases=("jetbrains",), results={
             "linux": "skipped", "jetbrains": "success",
             "vscode-package": "failure", "nagi-package": "success",
         })
-        self.assertFalse(evaluate(self.expression, unrelated_failure))
+        self.assertFalse(can_publish(self.expression, unrelated_failure))
 
     def test_rust_profile_result_is_required_independently_of_linux(self):
         for component in COMPONENTS:
             for status in ("failure", "cancelled", "skipped", "", None):
                 with self.subTest(component=component, status=status):
                     context = fixture(releases=(component,), results={"rust-1-88": status})
-                    self.assertFalse(evaluate(self.expression, context))
+                    self.assertFalse(can_publish(self.expression, context))
         context = fixture(releases=COMPONENTS)
         del context["needs"]["rust-1-88"]
-        with self.assertRaisesRegex(ValueError, "Unknown fixture name"):
-            evaluate(self.expression, context)
+        self.assertTrue(publication_gate.errors(context["needs"], "push", MAIN_REF, SHA))
+        self.assertFalse(can_publish(self.expression, context))
 
     def test_jetbrains_skip_exception_requires_all_three_analysis_jobs_skipped(self):
         for linux_status in ("success", "skipped"):
@@ -438,13 +522,14 @@ class PublishConditionTests(unittest.TestCase):
                         context = fixture(releases=("jetbrains",), results={
                             "linux": linux_status, "rust-1-88": rust_status,
                             "sf08-browser": browser_status,
-                            "vscode-package": "skipped", "nagi-package": "skipped",
+                            "vscode-package": "skipped",
+                            "nagi-package": "success" if linux_status == "success" else "skipped",
                         })
                         expected = (
                             (linux_status, rust_status, browser_status) == ("success", "success", "success")
                             or (linux_status, rust_status, browser_status) == ("skipped", "skipped", "skipped")
                         )
-                        self.assertEqual(evaluate(self.expression, context), expected)
+                        self.assertEqual(can_publish(self.expression, context), expected)
 
     def test_nagi_regression_plan_and_result_must_match_exactly(self):
         for planned in ("true", "false", None, "", True, False):
@@ -454,20 +539,30 @@ class PublishConditionTests(unittest.TestCase):
                     context["needs"]["release-plan"]["outputs"]["package_nagi"] = planned
                     context["needs"]["nagi-regression"]["result"] = result
                     expected = (planned, result) == ("true", "success")
-                    self.assertEqual(evaluate(self.expression, context), expected)
+                    self.assertEqual(can_publish(self.expression, context), expected)
         # A release of another component may skip the unplanned Nagi shard.
-        context = fixture(releases=("vscode",))
-        context["needs"]["release-plan"]["outputs"]["package_nagi"] = "false"
-        context["needs"]["nagi-regression"]["result"] = "skipped"
-        self.assertTrue(evaluate(self.expression, context))
+        context = fixture(releases=("vscode",), results={"linux":"skipped", "sf08-browser":"skipped",
+            "nagi-package":"skipped", "jetbrains":"skipped"})
+        self.assertTrue(can_publish(self.expression, context))
         context = fixture(releases=("nagi",))
         del context["needs"]["nagi-regression"]
-        with self.assertRaisesRegex(ValueError, "Unknown fixture name"):
-            evaluate(self.expression, context)
+        self.assertTrue(publication_gate.errors(context["needs"], "push", MAIN_REF, SHA))
+        self.assertFalse(can_publish(self.expression, context))
         context = fixture(releases=("nagi",))
         del context["needs"]["release-plan"]["outputs"]["package_nagi"]
-        with self.assertRaisesRegex(ValueError, "Unknown fixture name"):
-            evaluate(self.expression, context)
+        self.assertTrue(publication_gate.errors(context["needs"], "push", MAIN_REF, SHA))
+        self.assertFalse(can_publish(self.expression, context))
+
+    def test_fictionally_successful_ready_cannot_hide_failed_cancelled_or_required_skipped_children(self):
+        valid = fixture(releases=COMPONENTS)
+        for job in JOBS:
+            if job == 'ready':continue
+            for status in ['failure', 'cancelled', 'skipped']:
+                if valid['needs'][job]['result'] == status:continue
+                context=copy.deepcopy(valid);context['needs'][job]['result']=status
+                self.assertEqual(context['needs']['ready']['result'], 'success')
+                self.assertTrue(publication_gate.errors(context['needs'], 'push', MAIN_REF, SHA), (job,status))
+                self.assertFalse(can_publish(self.expression, context), (job,status))
 
     def test_release_plan_must_succeed_even_if_required_packages_succeeded(self):
         for status in ("skipped", "failure", "cancelled"):
@@ -476,7 +571,7 @@ class PublishConditionTests(unittest.TestCase):
                     "linux": "skipped", "release-plan": status, "jetbrains": "success",
                     "vscode-package": "skipped", "nagi-package": "skipped",
                 })
-                self.assertFalse(evaluate(self.expression, context))
+                self.assertFalse(can_publish(self.expression, context))
 
 
 if __name__ == "__main__":

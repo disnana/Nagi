@@ -455,5 +455,57 @@ class BrowserCounterProfileTests(unittest.TestCase):
 
 
 
+class PreloginFailureLocationTests(unittest.TestCase):
+    def failed(self, source="runtime/src/auth/prelogin/fixed_wire_owner_tests.rs"):
+        raw = fixture("prelogin-issuer").replace(b" ... ok", b" ... FAILED")
+        raw = raw.replace(b"ok. 1 passed; 0 failed", b"FAILED. 0 passed; 1 failed")
+        return raw + ("thread 'PRIVATE' panicked at " + source + ":7:14:\nSECRET/cookie/sql\n").encode()
+
+    def test_lf_crlf_and_windows_locations_remain_failure(self):
+        for source in ("runtime/src/auth/prelogin/fixed_wire_owner_tests.rs",
+                       "runtime\\src\\auth\\prelogin\\fixed_wire_owner_tests.rs"):
+            for raw in (self.failed(source), self.failed(source).replace(b"\n", b"\r\n")):
+                self.assertEqual(summary.prelogin_failure_locations(raw), (("owner", 7, 14),))
+                self.assertEqual(summary.classify(raw, "prelogin-issuer"), "test_failed")
+
+    def test_foreign_unbounded_or_private_source_is_never_projected(self):
+        for source in ("PRIVATE/path.rs", "runtime/src/auth/prelogin/PRIVATE.rs",
+                       "::error::SECRET"):
+            self.assertEqual(summary.prelogin_failure_locations(self.failed(source)), ())
+        raw = self.failed().replace(b":7:14:", b":1234567:14:")
+        self.assertEqual(summary.prelogin_failure_locations(raw), ())
+        raw = self.failed().replace(b":7:14:", b":7:1234567:")
+        self.assertEqual(summary.prelogin_failure_locations(raw), ())
+
+    def test_incomplete_duplicate_green_ignored_or_bad_encoding_refuses_projection(self):
+        raw = self.failed()
+        for bad in (fixture("prelogin-issuer"), raw + raw,
+                    raw.replace(b"running 1 tests", b"running 0 tests"),
+                    raw.replace(b" ... FAILED", b" ... ignored"),
+                    raw.replace(b"0 passed", b"1 passed"), raw + b"\xff",
+                    raw + b"test malformed row\n", raw + b"\r", b"x" * 65537):
+            self.assertIsNone(summary.prelogin_failure_locations(bad))
+
+    def test_cli_prints_only_closed_location_and_never_accepts_failure(self):
+        result = subprocess.run([sys.executable, "-B", str(SCRIPT), "prelogin-issuer"],
+                                input=self.failed(), capture_output=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, b"")
+        self.assertEqual(normalize_cli_stdout(result.stdout),
+                         b"sf07_checkpoint scope=prelogin-issuer state=test_failed\n"
+                         b"sf07_prelogin_owner_failure state=located source=owner line=7 column=14\n")
+        self.assertNotIn(b"PRIVATE", result.stdout)
+        self.assertNotIn(b"SECRET", result.stdout)
+
+    def test_cli_missing_source_keeps_unavailable_and_failure(self):
+        result = subprocess.run([sys.executable, "-B", str(SCRIPT), "prelogin-issuer"],
+                                input=self.failed("PRIVATE/path.rs"), capture_output=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(normalize_cli_stdout(result.stdout),
+                         b"sf07_checkpoint scope=prelogin-issuer state=test_failed\n"
+                         b"sf07_prelogin_owner_failure state=unavailable\n")
+        self.assertEqual(result.stderr, b"")
+
+
 if __name__ == "__main__":
     unittest.main()

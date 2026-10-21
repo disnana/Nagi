@@ -15,6 +15,15 @@ from unittest.mock import patch
 
 import changes
 import gate
+import levels
+from levels_projection import inverse_workflow as inverse_ci_levels
+from optimization_projection import unpin
+
+def baseline_ci_workflow(text):
+    # Historical assertions retain their old controls and command-body contract;
+    # test_levels.py independently exercises the current policy wiring.
+    return inverse_ci_levels(text) if "\n  ci-plan:\n" in text else unpin(text)
+
 from sf07_projection_contract import BASE_WORKFLOW_SHA256
 import parallel_regression_projection
 
@@ -378,6 +387,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         settings = (self.repo / "editors/jetbrains-nagi/settings.gradle.kts").read_text(encoding="utf-8")
         wrapper = (self.repo / "editors/jetbrains-nagi/gradle/wrapper/gradle-wrapper.properties").read_text(encoding="utf-8")
         workflow = (self.repo / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
+        workflow = baseline_ci_workflow(workflow)
         plugin_repositories = re.search(
             r"(?ms)^pluginManagement\s*\{\s*repositories\s*\{(?P<body>.*?)^\s*}\s*}", settings)
 
@@ -499,6 +509,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
 class ResourceCharacterizationWorkflowTests(unittest.TestCase):
     def test_four_platform_job_runs_registry_and_native_resource_oracles(self):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow = baseline_ci_workflow(workflow)
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         self.assertIsNotNone(package, "four-platform package job missing")
         regression = re.search(r"(?ms)^  nagi-regression:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
@@ -521,6 +532,7 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
 
     def test_four_platform_job_uses_platform_exact_sqlite_count_guard(self):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow = baseline_ci_workflow(workflow)
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         self.assertIsNotNone(package, "four-platform package job missing")
         block = package.group()
@@ -537,6 +549,7 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
 
     def test_member_call_recovery_is_target_first_on_linux_and_four_platform_jobs(self):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow = baseline_ci_workflow(workflow)
         linux = re.search(r"(?ms)^  linux:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         self.assertIsNotNone(linux, "Linux full-check job missing")
@@ -562,6 +575,7 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
 
     def test_four_platform_job_registers_sf04_runtime_suites_with_exact_count_guards(self):
         workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow = baseline_ci_workflow(workflow)
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         self.assertIsNotNone(package, "four-platform package job missing")
         block = package.group()
@@ -603,7 +617,10 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
 class GateTests(unittest.TestCase):
     def needs(self, full="true", package_nagi="false", package_vscode="false",
               package_jetbrains="false", jetbrains="false"):
+        selected = levels.expected("2" if full == "true" else "1", full, package_nagi if package_nagi in ("true", "false") else "false")
         return {
+            "ci-plan": {"result": "success", "outputs": selected},
+            "critical": {"result": "success" if selected["critical_checks"] == "true" else "skipped"},
             "changes": {"result": "success", "outputs": {"full_checks": full, "jetbrains_checks": jetbrains}},
             "linux": {"result": "success" if full == "true" else "skipped"},
             "rust-1-88": {"result": "success" if full == "true" else "skipped"},
@@ -612,9 +629,10 @@ class GateTests(unittest.TestCase):
             "release-plan": {"result": "success", "outputs": {
                 "package_nagi": package_nagi, "package_vscode": package_vscode,
                 "package_jetbrains": package_jetbrains,
+                "release_nagi": "false", "release_vscode": "false", "release_jetbrains": "false",
             }},
-            "nagi-package": {"result": "success" if package_nagi == "true" else "skipped"},
-            "nagi-regression": {"result": "success" if package_nagi == "true" else "skipped"},
+            "nagi-package": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
+            "nagi-regression": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
             "vscode-package": {"result": "success" if package_vscode == "true" else "skipped"},
         }
 
@@ -804,6 +822,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
 
     def test_rust_1_88_job_is_linux_only_focused_and_rejects_zero_execution(self):
         text = self.workflow_path.read_text(encoding="utf-8")
+        text = baseline_ci_workflow(text)
         job = re.search(r"(?ms)^  rust-1-88:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
         self.assertIsNotNone(job, "focused Rust 1.88.0 job missing")
         block = job.group("body")
@@ -830,6 +849,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
 
     def test_ready_and_main_publish_require_the_focused_job_with_plugin_only_skip(self):
         text = self.workflow_path.read_text(encoding="utf-8")
+        text = baseline_ci_workflow(text)
         ready = re.search(r"(?ms)^  ready:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
         publish = re.search(r"(?ms)^  publish-release:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
         self.assertIsNotNone(ready)
@@ -854,6 +874,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
 
     def test_sf08_browser_job_selector_and_standalone_triggers_are_exact(self):
         workflow = self.workflow_path.read_text(encoding="utf-8")
+        workflow = baseline_ci_workflow(workflow)
         job = re.search(r"(?ms)^  sf08-browser:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", workflow)
         self.assertIsNotNone(job, "SF08 reusable job missing")
         block = job.group("body")
@@ -882,6 +903,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
         projection = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(projection)
         workflow = self.workflow_path.read_text(encoding="utf-8")
+        workflow = baseline_ci_workflow(workflow)
         inherited = projection.inverse_workflow(workflow)
         self.assertEqual(
             hashlib.sha256(inherited.encode()).hexdigest(),
@@ -910,6 +932,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
     def test_jetbrains_workflow_is_reusable_without_a_duplicate_main_push_run(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/jetbrains.yml"
         text = workflow.read_text(encoding="utf-8")
+        text = baseline_ci_workflow(text)
         plugin_paths = (
             "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiLexer.java",
             "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiEditorTest.java",
@@ -935,6 +958,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
     def test_one_candidate_archive_passes_all_four_matrix_checks_before_package_upload(self):
         root = Path(__file__).resolve().parents[2]
         workflow = (root / ".github/workflows/jetbrains.yml").read_text(encoding="utf-8")
+        workflow = baseline_ci_workflow(workflow)
         build = (root / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
         candidate = re.search(r"(?ms)^  candidate:\n(?P<body>.*?)(?=^  [a-z][a-z0-9_-]*:\n|\Z)", workflow)
         verify = re.search(r"(?ms)^  verify:\n(?P<body>.*?)(?=^  [a-z][a-z0-9_-]*:\n|\Z)", workflow)
@@ -991,6 +1015,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
     def test_nagi_package_waits_for_early_change_guards_and_keeps_release_selector(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
         text = workflow.read_text(encoding="utf-8")
+        text = baseline_ci_workflow(text)
         job = re.search(r"(?ms)^  nagi-package:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
         self.assertIsNotNone(job, "four-platform package job missing")
         block = job.group("body")
@@ -1005,6 +1030,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
     def test_existing_pr_merge_gate_waits_for_the_reusable_plugin_workflow(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
         text = workflow.read_text(encoding="utf-8")
+        text = baseline_ci_workflow(text)
         trigger = re.search(r"(?ms)^on:\n(?P<events>.*?)(?=^permissions:\n)", text)
         self.assertIsNotNone(trigger)
         self.assertEqual(
@@ -1036,6 +1062,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
     def test_main_publish_waits_for_verified_jetbrains_and_preserves_other_linux_gates(self):
         workflow = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
         text = workflow.read_text(encoding="utf-8")
+        text = baseline_ci_workflow(text)
         release_plan = re.search(r"^  release-plan:\n((?: {4}[^\n]*\n|\n)+)", text, re.MULTILINE)
         self.assertIsNotNone(release_plan)
         self.assertIn("python -m unittest discover -s scripts/releases -p 'test_*.py'", release_plan.group(1))

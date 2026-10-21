@@ -1,14 +1,5 @@
 name: BrowserLogin diagnostic observation
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/browser-login-observer.yml'
-      - 'scripts/ci/browser_login_phase_diagnostic.py'
-      - 'tests/test_browser_login_phase_diagnostic.py'
-      - 'runtime/src/auth/browser_login_observer.rs'
-      - 'runtime/src/auth/prelogin/browser.rs'
-      - 'runtime/src/http_server/browser_login.rs'
-      - 'runtime/tests/browser_login_public_api.rs'
   workflow_dispatch:
     inputs:
       browser_login_phase_diagnostic:
@@ -24,7 +15,7 @@ concurrency:
 jobs:
   browser-login-public-phase-diagnostic:
     name: BrowserLogin phase diagnostic (${{ matrix.platform }})
-    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.browser_login_phase_diagnostic)
+    if: github.event_name == 'workflow_dispatch' && inputs.browser_login_phase_diagnostic
     strategy:
       fail-fast: false
       matrix:
@@ -39,13 +30,15 @@ jobs:
             platform: macos-x86_64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
         with:
+          persist-credentials: false # ci-isolation
           ref: ${{ github.sha }}
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
         id: rust
       - name: Cache the target platform's Rust build
-        uses: actions/cache@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        id: nagi_rust_cache
         with:
           path: |
             ~/.cargo/registry
@@ -56,7 +49,7 @@ jobs:
           restore-keys: |
             nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
             nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
       - name: Check bounded BrowserLogin diagnostic collector controls
@@ -76,9 +69,20 @@ jobs:
           exit "$sanitize_rc"
       - name: Preserve sanitized BrowserLogin phase records
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
+          retention-days: 7 # ci-retention
           name: browser-login-phase-${{ matrix.platform }}
           path: ${{ runner.temp }}/browser-login-phase.json
           if-no-files-found: error
 
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}

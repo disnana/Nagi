@@ -1264,7 +1264,9 @@ test('bound request wait accepts exact requestfailed delivered after navigation 
   assert.equal(f.closed(), true);
 });
 
-test('bound request wait missing event expires at original deadline and ignores stale delivery', { timeout: 2000 }, async () => {
+test('bound request wait missing event expires at original deadline and ignores stale delivery', { timeout: 2000 }, async t => {
+  t.mock.method(performance, 'now', () => 1000);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   let emitRequest, page, endpoint, finished = 0;
   const budgets = [], rows = [];
   const f = hostBrowser({
@@ -1273,9 +1275,18 @@ test('bound request wait missing event expires at original deadline and ignores 
     duringJoin: () => { finished++; },
   });
   const until = performance.now() + 35;
-  assert.equal(await hostProof.probeWebkitWrongHost(f.browser, f.factory, until,
-    (kind, trace) => rows.push({ kind, trace })), false);
-  assert.ok(performance.now() >= until - 1, 'no earlier request-count refusal');
+  let settled = false;
+  const pending = hostProof.probeWebkitWrongHost(f.browser, f.factory, until,
+    (kind, trace) => rows.push({ kind, trace })).then(value => { settled = true; return value; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false, 'missing request remains pending before its timer');
+  t.mock.timers.tick(34);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false, 'no request-count refusal before the original 35ms timer');
+  assert.equal(finished, 0);
+  t.mock.timers.tick(1);
+  assert.equal(await pending, false);
+  assert.deepEqual(rows.map(row => row.kind), ['deadline']);
   assert.equal(budgets.length, 1);
   assert.ok(budgets[0] > 0 && budgets[0] <= 35, 'original navigation budget');
   assert.equal(finished, 0);
@@ -1764,7 +1775,7 @@ test('one-shot R13 reset and console remain jointly bound and veto poisoned evid
   }
 });
 
-test('one-shot R17 delayed console ordering waits only for exact proof within the original deadline', { timeout: 8000 }, async () => {
+test('one-shot R17 delayed console ordering waits only for exact proof within the original deadline', { timeout: 8000 }, async t => {
   const cases = [
     { label: 'joined host reset then exact console', role: 'host', event: 'exact', budget: 700, expected: true },
     { label: 'joined CA reset then exact console', role: 'ca', event: 'exact', budget: 700, expected: true },
@@ -1908,6 +1919,25 @@ test('one-shot R17 delayed console ordering waits only for exact proof within th
         assert.equal(codes.split('R').length - 1, 2, 'both requestfailed callbacks retained');
     } else assert.deepEqual(eventTraces, [], 'successful probe does not emit failure telemetry');
     if (item.event === 'after_deadline') assert.equal(settledBeforeEvent, true, 'deadline refuses before late event');
+  }
+
+  // Both roles above have already prepared their certificate files. Freeze
+  // only the observed clock; keep the real bounded console-wait timer live.
+  t.mock.method(performance, 'now', () => 1000);
+  for (const role of ['host', 'ca']) {
+    const probe = role === 'ca' ? hostProof.probeWebkitWrongCA : hostProof.probeWebkitWrongHost;
+    const peer = await hostPeerFixture({ role, budget: 35 });
+    const consoleRows = [], consoleTraces = [];
+    const consoleBrowser = hostBrowser({ role, endpoint: peer.endpoint, text: 'Unacceptable TLS certificate',
+      duringGoto: () => { peer.connect(); peer.sni(); peer.alert('ECONNRESET'); } });
+    assert.equal(await probe(consoleBrowser.browser, consoleBrowser.factory, peer.until,
+      (kind, trace) => { consoleRows.push(kind); consoleTraces.push(trace); }), false);
+    assert.deepEqual(consoleRows, ['deadline']);
+    assert.equal(consoleTraces.length, 1);
+    assert.match(consoleTraces[0], /FWD/, 'native finish succeeded before the original console wait expired');
+    assert.equal(consoleBrowser.closed(), true);
+    assert.equal(consoleBrowser.page.listenerCount('console'), 0);
+    assert.equal(peer.credentials.key, null, 'joined native reset releases credentials');
   }
 });
 
