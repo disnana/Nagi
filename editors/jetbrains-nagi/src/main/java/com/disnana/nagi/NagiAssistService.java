@@ -30,6 +30,8 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFileMoveEvent;
+import com.intellij.openapi.vfs.newvfs.events.VFilePropertyChangeEvent;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
@@ -59,6 +61,7 @@ import org.jetbrains.annotations.NotNull;
 /** Project-scoped, trust-gated snapshot runner for compiler-authoritative editor facts. */
 public final class NagiAssistService implements Disposable {
     private static final int MAX_TRACKED_FILES = 256;
+    private static final int MAX_DIRECTORY_ENTRIES = 8192;
     private static final long DIAGNOSTIC_DEBOUNCE_MS = 350;
     private static final long COMPLETION_DEBOUNCE_MS = 80;
     private static final String COMPILER_UNAVAILABLE_MESSAGE =
@@ -111,6 +114,9 @@ public final class NagiAssistService implements Disposable {
     private record DocumentStamp(Document document, long stamp) {}
     private record FileStamp(VirtualFile file, long stamp) {}
     private record DiskStamp(Path path, byte[] contents) {}
+    private record DirectoryEntry(String name, String kind) {}
+    private record DirectoryStamp(Path path, List<DirectoryEntry> entries, boolean incomplete,
+                                  java.nio.file.attribute.FileTime modified, String fileKey) {}
     private record ExecutableStamp(VirtualFile file, long virtualStamp, long size,
                                    long modifiedMillis, String fileKey) {}
     private record CompilerSelection(String configuredPath, String projectBase) {}
@@ -121,6 +127,7 @@ public final class NagiAssistService implements Disposable {
                            ExecutableStamp executableStamp, NagiAssistCommandPlan plan,
                            NagiAssistProtocol.Query query, byte[] input,
                            List<DocumentStamp> documents, List<FileStamp> files, List<DiskStamp> disks,
+                           List<DirectoryStamp> directories,
                            Map<String, String> canonicalPaths, List<VirtualFile> openSources,
                            Document focusDocument, long focusDocumentStamp, VirtualFile focusFile,
                            long focusFileStamp, Editor editor, long caretOffset) {
@@ -145,6 +152,12 @@ public final class NagiAssistService implements Disposable {
     private volatile CachedResponse cached;
     private volatile Set<String> knownSourcePaths = Set.of();
     private volatile Set<String> knownDependencies = Set.of();
+    // Discovery hints only: candidate meaning remains entirely compiler-owned.
+    private volatile Set<String> knownImportDirectories = Set.of();
+    private volatile String importQueryFile;
+    // Confined to the existing worker, including registration and removal.
+    private LocalFileSystem.WatchRequest importDirectoryWatch;
+    private String watchedImportDirectory;
     private volatile VirtualFile lastFocusFile;
     private ScheduledFuture<?> pending;
     private ScheduledFuture<?> activeFuture;
@@ -209,6 +222,17 @@ public final class NagiAssistService implements Disposable {
             }
         });
         projectConnection.subscribe(VirtualFileManager.VFS_CHANGES, new BulkFileListener() {
+            @Override public void before(@NotNull List<? extends VFileEvent> events) {
+                // Capture removal from an old parent before nested moves/renames
+                // update the VFS objects used to describe that parent.
+                if (events.stream().filter(event -> event instanceof VFileMoveEvent
+                        || event instanceof VFilePropertyChangeEvent change
+                        && VirtualFile.PROP_NAME.equals(change.getPropertyName()))
+                        .anyMatch(NagiAssistService.this::isRelevantVfsEvent)) {
+                    invalidate(State.STALE, "An Nagi source or import directory is moving or being renamed.");
+                    restartOpenSourcesLater();
+                }
+            }
             @Override public void after(@NotNull List<? extends VFileEvent> events) {
                 boolean compilerChanged = events.stream().anyMatch(NagiAssistService.this::isUnavailableCompilerVfsEvent);
                 if (compilerChanged) clearUnavailableCompiler();
@@ -253,7 +277,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     public boolean isCurrent(PsiFile file, CachedResponse response) {
-        return response != null && snapshotCurrent(response.snapshot) && appliesToFile(response, file);
+        return response != null && response == cached && snapshotCurrent(response.snapshot) && appliesToFile(response, file);
     }
 
     public void requestBaseline(PsiFile file) {
@@ -294,14 +318,14 @@ public final class NagiAssistService implements Disposable {
     }
 
     public boolean responseContainsFile(CachedResponse response, VirtualFile file) {
-        if (response == null || file == null || !snapshotCurrent(response.snapshot)) return false;
+        if (response == null || response != cached || file == null || !snapshotCurrent(response.snapshot)) return false;
         String canonical = canonicalPathFor(response.snapshot, file);
         if (samePath(response.snapshot.focusPath.toString(), canonical)) return true;
         return response.sourceFileKeys.contains(normalizePath(canonical));
     }
 
     public boolean diagnosticTargetsFile(CachedResponse response, VirtualFile file, String diagnosticPath) {
-        if (response == null || file == null || !snapshotCurrent(response.snapshot)) return false;
+        if (response == null || response != cached || file == null || !snapshotCurrent(response.snapshot)) return false;
         if (diagnosticPath == null || diagnosticPath.isBlank()) {
             return samePath(response.snapshot.focusPath.toString(), canonicalPathFor(response.snapshot, file));
         }
@@ -312,7 +336,8 @@ public final class NagiAssistService implements Disposable {
     }
 
     public boolean diagnosticOriginMatchesFile(CachedResponse response, VirtualFile file, String diagnosticPath) {
-        return response != null && file != null && diagnosticPath != null
+        return response != null && response == cached && file != null
+                && snapshotCurrent(response.snapshot) && diagnosticPath != null
                 && samePath(diagnosticPath, canonicalPathFor(response.snapshot, file));
     }
 
@@ -510,7 +535,7 @@ public final class NagiAssistService implements Disposable {
                 retrySnapshotLater(snapshot);
                 return;
             }
-            Snapshot responseSnapshot = withCompilerSources(snapshot, response);
+            Snapshot responseSnapshot = withCompilerSources(withCompilerDirectories(snapshot, response), response);
             if (!snapshotCurrent(responseSnapshot)) {
                 setStateForActive(key, State.STALE, "A Nagi source changed during compiler analysis; the response was discarded.");
                 restartOpenSourcesLater();
@@ -558,6 +583,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     private Snapshot buildSnapshot(Intent intent, String requestKey) throws SnapshotBlockedException {
+        assertWorkerIo();
         RawCapture raw = NagiPlatform.read(() -> captureRaw(intent));
         if (raw == null) throw new SnapshotBlockedException(State.STALE, "The Nagi source changed before its snapshot was captured.");
 
@@ -672,15 +698,47 @@ public final class NagiAssistService implements Disposable {
             if (Files.isRegularFile(dependencyPath)) diskPaths.add(dependencyPath);
         }
         List<DiskStamp> diskStamps = readDiskSnapshot(diskPaths);
+        List<DirectoryStamp> directoryStamps = new ArrayList<>();
+        if (query != null && samePath(query.file(), importQueryFile)) {
+            for (String directory : knownImportDirectories) directoryStamps.add(readDirectorySnapshot(Path.of(NagiAssistProtocol.physicalPath(directory))));
+        }
         NagiAssistCommandPlan plan = NagiAssistCommandPlan.create(executable.toString(), source, manifest, workspace, SystemInfo.isWindows);
         return new Snapshot(raw.epoch(), requestKey, raw.compilerSetting(), raw.timeout(), raw.projectBase(),
                 manifest == null ? source : manifest, focusPath, executable, executableStamp, plan, query, input,
-                distinctDocuments(documentStamps), distinctFiles(fileStamps), diskStamps, Map.copyOf(canonicalPaths),
+                distinctDocuments(documentStamps), distinctFiles(fileStamps), diskStamps, List.copyOf(directoryStamps), Map.copyOf(canonicalPaths),
                 List.copyOf(new LinkedHashSet<>(openSources)), raw.focusDocument(), raw.focusStamp(),
                 raw.focusFile(), raw.focusFileStamp(), raw.editor(), raw.position() == null ? -1 : raw.position().offset());
     }
 
+    private Snapshot withCompilerDirectories(Snapshot snapshot, NagiAssistProtocol.Response response) throws SnapshotBlockedException {
+        assertWorkerIo();
+        NagiAssistProtocol.ImportContext context = response.importContext();
+        if (context != null && (snapshot.query() == null || !samePath(context.replacement().file(), snapshot.query().file())))
+            throw new SnapshotBlockedException(State.FAILED, "Import completion does not belong to this query file.");
+        Set<String> directories = context == null ? Set.of() : Set.copyOf(context.directories());
+        knownImportDirectories = directories;
+        importQueryFile = context == null ? null : context.replacement().file();
+        updateImportDirectoryWatch(directories);
+        if (disposed || project.isDisposed()) {
+            knownImportDirectories = Set.of();
+            importQueryFile = null;
+            throw new SnapshotBlockedException(State.CLOSED, "Project is closed.");
+        }
+        if (directories.stream().anyMatch(path -> snapshot.directories().stream().noneMatch(stamp -> samePath(path, stamp.path().toString())))) {
+            retrySnapshotLater(snapshot);
+            throw new SnapshotBlockedException(State.STALE, "New import directories require a fresh snapshot; the response was discarded.");
+        }
+        // A later expression response must not retain the former import query's directory dependency.
+        if (!directories.isEmpty()) return snapshot;
+        return new Snapshot(snapshot.epoch(), snapshot.requestKey(), snapshot.compilerSetting(), snapshot.timeout(),
+                snapshot.projectBase(), snapshot.scopePath(), snapshot.focusPath(), snapshot.executable(), snapshot.executableStamp(),
+                snapshot.plan(), snapshot.query(), snapshot.input(), snapshot.documents(), snapshot.files(), snapshot.disks(), List.of(),
+                snapshot.canonicalPaths(), snapshot.openSources(), snapshot.focusDocument(), snapshot.focusDocumentStamp(),
+                snapshot.focusFile(), snapshot.focusFileStamp(), snapshot.editor(), snapshot.caretOffset());
+    }
+
     private Snapshot withCompilerSources(Snapshot snapshot, NagiAssistProtocol.Response response) throws SnapshotBlockedException {
+        assertWorkerIo();
         List<FileStamp> stamps = new ArrayList<>(snapshot.files());
         Map<String, String> canonicalPaths = new HashMap<>(snapshot.canonicalPaths());
         LinkedHashSet<String> seen = new LinkedHashSet<>();
@@ -710,7 +768,7 @@ public final class NagiAssistService implements Disposable {
         return new Snapshot(snapshot.epoch(), snapshot.requestKey(), snapshot.compilerSetting(), snapshot.timeout(),
                 snapshot.projectBase(), snapshot.scopePath(), snapshot.focusPath(), snapshot.executable(),
                 snapshot.executableStamp(), snapshot.plan(), snapshot.query(), snapshot.input(), snapshot.documents(),
-                distinctFiles(stamps), snapshot.disks(), Map.copyOf(canonicalPaths), snapshot.openSources(), snapshot.focusDocument(),
+                distinctFiles(stamps), snapshot.disks(), snapshot.directories(), Map.copyOf(canonicalPaths), snapshot.openSources(), snapshot.focusDocument(),
                 snapshot.focusDocumentStamp(), snapshot.focusFile(), snapshot.focusFileStamp(), snapshot.editor(), snapshot.caretOffset());
     }
 
@@ -755,6 +813,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     private static List<DiskStamp> readDiskSnapshot(Set<Path> paths) throws SnapshotBlockedException {
+        assertWorkerIo();
         if (paths.size() > NagiAssistProtocol.MAX_FILES + 1)
             throw new SnapshotBlockedException(State.LIMIT, "Too many dependency files for a bounded editor snapshot.");
         List<DiskStamp> stamps = new ArrayList<>();
@@ -773,8 +832,73 @@ public final class NagiAssistService implements Disposable {
         return List.copyOf(stamps);
     }
 
+    /** Worker-only, bounded filename/kind observation of the exact compiler-reported parent. */
+    private static DirectoryStamp readDirectorySnapshot(Path path) throws SnapshotBlockedException {
+        assertWorkerIo();
+        List<DirectoryEntry> entries = new ArrayList<>();
+        try {
+            BasicFileAttributes before = Files.readAttributes(path, BasicFileAttributes.class);
+            boolean incomplete = false;
+            try (var stream = Files.newDirectoryStream(path)) {
+                for (Path entry : stream) {
+                    if (Thread.currentThread().isInterrupted()) throw new SnapshotBlockedException(State.STALE, "Import directory capture was cancelled.");
+                    if (entries.size() == MAX_DIRECTORY_ENTRIES) { incomplete = true; entries.clear(); break; }
+                    BasicFileAttributes attributes = Files.readAttributes(entry, BasicFileAttributes.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                    String kind = attributes.isSymbolicLink() ? "link:" + Files.readSymbolicLink(entry)
+                            : attributes.isDirectory() ? "directory" : attributes.isRegularFile() ? "file" : "other";
+                    entries.add(new DirectoryEntry(entry.getFileName().toString(), kind));
+                }
+            }
+            BasicFileAttributes after = Files.readAttributes(path, BasicFileAttributes.class);
+            if (!before.lastModifiedTime().equals(after.lastModifiedTime()) || !Objects.equals(before.fileKey(), after.fileKey()))
+                throw new SnapshotBlockedException(State.STALE, "Import directory changed during capture.");
+            entries.sort(Comparator.comparing(DirectoryEntry::name).thenComparing(DirectoryEntry::kind));
+            return new DirectoryStamp(path, List.copyOf(entries), incomplete, after.lastModifiedTime(), String.valueOf(after.fileKey()));
+        } catch (IOException | java.nio.file.DirectoryIteratorException exception) {
+            throw new SnapshotBlockedException(State.STALE, "Import directory changed during capture.");
+        }
+    }
+
+    private static void assertWorkerIo() {
+        ApplicationManager.getApplication().assertIsNonDispatchThread();
+    }
+
+    private void updateImportDirectoryWatch(Set<String> directories) throws SnapshotBlockedException {
+        assertWorkerIo();
+        String next = directories.isEmpty() ? null : directories.iterator().next();
+        if (disposed || project.isDisposed()) next = null;
+        if (Objects.equals(next, watchedImportDirectory)) return;
+        clearImportDirectoryWatch();
+        if (next == null) return;
+        LocalFileSystem.WatchRequest watch = LocalFileSystem.getInstance()
+                .addRootToWatch(NagiAssistProtocol.physicalPath(next), false);
+        if (watch == null) throw new SnapshotBlockedException(State.FAILED,
+                "The import directory could not be watched; its candidates were discarded.");
+        importDirectoryWatch = watch;
+        watchedImportDirectory = next;
+        // Disposal can race platform watch registration. Cleanup remains on
+        // this worker; no UI callback waits for a filesystem operation.
+        if (disposed || project.isDisposed()) clearImportDirectoryWatch();
+    }
+
+    private void clearImportDirectoryWatch() {
+        assertWorkerIo();
+        LocalFileSystem.WatchRequest watch = importDirectoryWatch;
+        importDirectoryWatch = null;
+        watchedImportDirectory = null;
+        if (watch != null) LocalFileSystem.getInstance().removeWatchedRoot(watch);
+    }
+
     /** Worker-only content comparison, including closed imports and arbitrary native file extensions. */
     private static boolean diskSnapshotCurrent(Snapshot snapshot) {
+        assertWorkerIo();
+        for (DirectoryStamp stamp : snapshot.directories()) {
+            try {
+                DirectoryStamp current = readDirectorySnapshot(stamp.path());
+                if (current.incomplete() != stamp.incomplete() || !current.entries().equals(stamp.entries())
+                        || !current.modified().equals(stamp.modified()) || !current.fileKey().equals(stamp.fileKey())) return false;
+            } catch (SnapshotBlockedException exception) { return false; }
+        }
         for (DiskStamp stamp : snapshot.disks()) {
             try (var input = Files.newInputStream(stamp.path())) {
                 byte[] contents = input.readNBytes(stamp.contents().length + 1);
@@ -863,6 +987,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     private static boolean executableIdentityCurrent(Snapshot snapshot) {
+        assertWorkerIo();
         try {
             if (snapshot.executableStamp.file() != null && (!snapshot.executableStamp.file().isValid()
                     || snapshot.executableStamp.file().getModificationStamp() != snapshot.executableStamp.virtualStamp())) return false;
@@ -875,7 +1000,7 @@ public final class NagiAssistService implements Disposable {
 
     private void publish(CachedResponse response, List<PopupWaiter> waiters) {
         ApplicationManager.getApplication().invokeLater(() -> {
-            if (disposed || project.isDisposed() || !snapshotCurrent(response.snapshot)) return;
+            if (disposed || project.isDisposed() || response != cached || !snapshotCurrent(response.snapshot)) return;
             for (VirtualFile source : response.snapshot.openSources) {
                 if (!source.isValid()) continue;
                 PsiFile psi = NagiPlatform.read(() -> PsiManager.getInstance(project).findFile(source));
@@ -903,7 +1028,8 @@ public final class NagiAssistService implements Disposable {
     }
 
     private boolean isPopupFresh(CachedResponse response, PopupWaiter waiter) {
-        if (waiter.editor().isDisposed() || !waiter.file().isValid() || !snapshotCurrent(response.snapshot)) return false;
+        if (response != cached || waiter.editor().isDisposed() || !waiter.file().isValid()
+                || !snapshotCurrent(response.snapshot)) return false;
         if (waiter.document().getModificationStamp() != waiter.stamp()
                 || waiter.editor().getDocument() != waiter.document()
                 || waiter.editor().getCaretModel().getOffset() != waiter.offset()) return false;
@@ -994,12 +1120,38 @@ public final class NagiAssistService implements Disposable {
     }
 
     private boolean isRelevantVfsEvent(VFileEvent event) {
-        String path = normalizePath(event.getPath());
+        boolean directoryChanged = event.getFile() != null && event.getFile().isDirectory();
+        return eventPaths(event).stream().anyMatch(path -> isRelevantVfsPath(path, directoryChanged));
+    }
+
+    /** Event paths are VFS memory only. After a rename/move, getPath alone can
+     * miss removal from the previously watched parent or an ancestor rename. */
+    private static Set<String> eventPaths(VFileEvent event) {
+        LinkedHashSet<String> paths = new LinkedHashSet<>();
+        paths.add(normalizePath(event.getPath()));
+        if (event instanceof VFileMoveEvent move) {
+            String name = move.getFile().getName();
+            paths.add(normalizePath(move.getOldParent().getPath() + "/" + name));
+            paths.add(normalizePath(move.getNewParent().getPath() + "/" + name));
+        } else if (event instanceof VFilePropertyChangeEvent change
+                && VirtualFile.PROP_NAME.equals(change.getPropertyName())) {
+            VirtualFile parent = change.getFile().getParent();
+            if (parent != null) {
+                paths.add(normalizePath(parent.getPath() + "/" + change.getOldValue()));
+                paths.add(normalizePath(parent.getPath() + "/" + change.getNewValue()));
+            }
+        }
+        return Set.copyOf(paths);
+    }
+
+    private boolean isRelevantVfsPath(String path, boolean directoryChanged) {
         synchronized (lock) {
             if ((activeKey != null || pendingKey != null)
                     && (path.endsWith(".nagi") || path.endsWith(".low"))) return true;
         }
         if (knownSourcePaths.stream().anyMatch(known -> samePath(path, normalizePath(known)))) return true;
+        if (knownImportDirectories.stream().map(NagiAssistService::normalizePath)
+                .anyMatch(directory -> pathUnder(path, directory) || (directoryChanged && pathUnder(directory, path)))) return true;
         if (!(path.endsWith(".nagi") || path.endsWith(".low") || path.endsWith("/nagi.toml") || path.equals("nagi.toml"))) return false;
         String base = project.getBasePath();
         if (base != null && pathUnder(path, normalizePath(base))) return true;
@@ -1010,7 +1162,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     private boolean isUnavailableCompilerVfsEvent(VFileEvent event) {
-        return unavailableCompilerPaths.contains(normalizePath(event.getPath()));
+        return eventPaths(event).stream().anyMatch(unavailableCompilerPaths::contains);
     }
 
     private void clearUnavailableCompiler() {
@@ -1238,6 +1390,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     private static Path canonicalExisting(Path path, boolean directory) throws SnapshotBlockedException {
+        assertWorkerIo();
         try {
             Path real = path.toRealPath();
             if (directory ? !Files.isDirectory(real) : !Files.isRegularFile(real)) {
@@ -1250,6 +1403,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     static Path resolveCompiler(String configured, Path workspace) throws IOException {
+        assertWorkerIo();
         String name = SystemInfo.isWindows ? "nagic.exe" : "nagic";
         Path executable;
         if (configured != null && !configured.isBlank()) {
@@ -1293,6 +1447,9 @@ public final class NagiAssistService implements Disposable {
 
     @Override public void dispose() {
         disposed = true;
+        knownImportDirectories = Set.of();
+        importQueryFile = null;
+        cached = null;
         if (session != null) session.close();
         setState(State.CLOSED, "Project is closed.");
         synchronized (lock) { cancelPendingAndActiveLocked(); }
@@ -1302,7 +1459,11 @@ public final class NagiAssistService implements Disposable {
             }
             documentListeners.clear();
         }
-        worker.shutdownNow();
+        // Cancel analysis first, then retire the watch on its owning worker.
+        // shutdown preserves this queued cleanup; shutdownNow would discard it.
+        try { worker.execute(this::clearImportDirectoryWatch); }
+        catch (java.util.concurrent.RejectedExecutionException ignored) { }
+        worker.shutdown();
     }
 
     private record ListenerRecord(VirtualFile file, Disposable subscription) {}

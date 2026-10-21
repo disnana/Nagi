@@ -6,6 +6,10 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.d
 
 プラグインの版は`build.gradle.kts`で管理します。公開済み0.1.2には両IDE共通ZIPがあり、新しい利用可能な成果物はReleasesで確認してください。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
 
+## 開発中：名前によるimport
+
+0.2.1向けのcompiler／plugin候補では、隣のファイルの`import models`・`from models import Item`と、そのimport文の補完・元位置への移動を追加しています。公開0.2.0／plugin 0.1.3には含まれません。候補の範囲、バックグラウンド更新、外部変更通知の遅延、未確認のGUI検証は[編集ガイド](../../docs/editor.md#開発中のimport編集支援)を参照してください。
+
 ## 0.1.2でできること
 
 - `.nagi`（High）と`.low`（Low）の色分け。

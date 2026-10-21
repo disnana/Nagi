@@ -12,6 +12,18 @@ Plugin 0.1.3 also includes standard-setting-aware brace and quote pairing, bound
 
 Plugin 0.1.3 generation retention uses compiler 0.2.0 and applies only to IDE-managed runs. Published `nagic` 0.1.11 supports normal CLI Check/Run but does not automatically reclaim generations. CLI generations are retained, and the shared Cargo cache is separate. Plugin 0.1.3 cleanup protects a latest generation only after a recorded successful native run, active generations, generations referenced by all apps' input snapshots, and the last-good generation after failure. Compile success alone is not run success; managed generations with unknown input metadata are retained. There is no strict generation-count or disk-capacity limit, and a referenced generation can survive until an additional successful sweep after its owner is removed. The temporary compiler 0.1.12 proposal was cancelled. Check GitHub Releases or JetBrains Marketplace for available JetBrains plugin versions. See [project configuration](projects.md) for the distinction between generations and the Cargo cache.
 
+## Import assistance in development
+
+This change is in development for 0.2.1. It is not included in published compiler 0.2.0 or plugin 0.1.3. Test it with a compiler and plugin containing this change.
+
+Save `models.nagi` in the same folder: High completion after `import mo` offers `models`, and `from models import ` offers that file's own definitions. Low searches neighboring `.low` files. Standard-module candidates come from the compiler registry. Selecting a function in a `from` import inserts no call parentheses. Navigation on an import source, selected definition, or alias requires an exact original location from the compiler. See [syntax and a runnable example](modules-and-rust.md#in-development-import-a-neighboring-file-by-name).
+
+Opening and editing sources update the existing background analysis; completion uses a response for the current cursor. It shares the persistent compiler, debounce, and cancellation, without a separate IDE type checker. The compiler analyzes the relevant graph for each request; this is not incremental analysis. Displaying or selecting completion performs no filesystem scan: it checks a background-validated snapshot against in-memory editing generations. Superseded buffer results are rejected. External file creation, deletion, and moves invalidate results after IDE notifications arrive, so there can be notification latency. Actual check/build resolves and checks imports again.
+
+Only the immediate folder is searched. If enumeration exceeds 8192 entries, including unrelated entries, completion returns no partial candidate list. This assistance limit does not change whether a normal import is valid. Unchecked exports do not receive guessed types or signatures. Real GUI acceptance and the four IDE compatibility paths for this change require new verification; published 0.1.3 results do not establish them.
+
+## Try the example in VS Code
+
 Use Nagi extension 0.1.13 and `nagic` 0.1.11 after its availability is confirmed in the official 0.1.11 release record. This guide targets the 0.1.11 release. Open the repository in VS Code, or save the example below in your own folder.
 
 ## Indentation support

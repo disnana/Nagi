@@ -1,5 +1,40 @@
 use nagic::{ast::*, parser};
 
+#[test]
+fn named_sibling_imports_desugar_without_losing_original_spans() {
+    for high in [true, false] {
+        let p = parser::parse(
+            "import foo\nimport foo as bar\nfrom foo import Thing as Item, run\n",
+            high,
+        )
+        .unwrap();
+        assert!(
+            p.imports.is_empty(),
+            "named imports must never become flat imports"
+        );
+        assert_eq!(
+            p.module_imports[0].path,
+            if high { "foo.nagi" } else { "foo.low" }
+        );
+        assert_eq!(p.module_imports[0].source, ImportSource::File);
+        assert!(
+            matches!(&p.module_imports[0].kind, ImportKind::Module { alias, alias_span } if alias == "foo" && alias_span.start == 1 && alias_span.end == 2)
+        );
+        assert_eq!(p.module_imports[0].span.end, 2);
+        assert!(
+            matches!(&p.module_imports[1].kind, ImportKind::Module { alias, .. } if alias == "bar")
+        );
+        assert!(
+            matches!(&p.module_imports[2].kind, ImportKind::Names(names) if names.len() == 2 && names[0].alias == "Item" && names[1].name == "run")
+        );
+        assert!(parser::parse("import std\n", high).is_err());
+        for invalid in ["import foo.bar", "from foo.nagi import Thing"] {
+            let error = parser::parse(invalid, high).unwrap_err();
+            assert!(error.contains("引用符"), "{error}");
+        }
+    }
+}
+
 fn source(high: bool, body: &str) -> String {
     if high {
         format!("def main():\n{body}\n")
