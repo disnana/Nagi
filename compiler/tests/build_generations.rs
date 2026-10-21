@@ -2640,6 +2640,29 @@ async def main():
     )));
     assert_eq!(run(&ordinary), run(&low_bin));
     assert_eq!(run(&old), "20\n0");
+    // Resolved modules distinguish primitive-spelled user records from the
+    // intrinsic Copy types. Only the independent bool function is extracted.
+    f.write("main.nagi", "enum Marker:\n    Ready\nclass i64:\n    marker: Marker\ndef typed(record: i64) -> bool:\n    match record.marker:\n        case Marker.Ready:\n            return True\ndef independent(value: bool) -> bool:\n    return not value\ndef main():\n    print(independent(False))\n    print(typed(i64(marker=Marker.Ready)))\n");
+    let shadow = bounded_output(function_units(&f, "main.nagi", "shadow-out"));
+    let shadow_binary = native(&shadow);
+    assert_eq!(run(&shadow_binary), "true\ntrue");
+    let shadow_stats = stats(&shadow);
+    let shadow_units = shadow_stats["generated_body"]["units"].as_array().unwrap();
+    assert_eq!(shadow_units.len(), 1);
+    assert!(shadow_units[0]["functions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|n| n.as_str().unwrap().ends_with("independent")));
+    fs::copy(f.0.join("shadow-out/generated.low"), f.0.join("shadow.low")).unwrap();
+    let low_shadow = native(&bounded_output(function_units(
+        &f,
+        "shadow.low",
+        "shadow-low-out",
+    )));
+    assert_eq!(run(&low_shadow), "true\ntrue");
+    verify_receipt(&shadow_binary);
+    verify_receipt(&low_shadow);
 }
 
 #[test]
