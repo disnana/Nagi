@@ -95,6 +95,7 @@ pub(crate) struct BuildGeneration {
     temporary_run: bool,
     observed: bool,
     generated_body: Option<String>,
+    partitioned: bool,
 }
 impl BuildGeneration {
     /// Only explicitly temporary IDE runs opt in. Ordinary builds retain the
@@ -152,6 +153,7 @@ impl BuildGeneration {
                         temporary_run: false,
                         observed: false,
                         generated_body: None,
+                        partitioned: false,
                     };
                     if let Some(lock) = &result.inherited_lock {
                         result.write("Cargo.lock", lock)?;
@@ -179,7 +181,39 @@ impl BuildGeneration {
         self.write("src/entry.rs", b"fn main() { ::nagi_app_body::main(); }\n")?;
         self.write("body-Cargo.toml", body.manifest.as_bytes())?;
         self.generated_body = Some(body.digest.clone());
+        self.partitioned = !body.units.is_empty();
         Ok(())
+    }
+    pub(crate) fn record_unit_provenance(
+        &self,
+        units: &[crate::generated_body::GeneratedBody],
+        generated: &[Generated],
+    ) -> Result<(), String> {
+        if units.is_empty() {
+            return Ok(());
+        }
+        if units.len() != generated.len() {
+            return Err("Missing unit provenance".into());
+        }
+        let mut provenance: serde_json::Value = serde_json::from_slice(
+            &fs::read(self.staging.join("provenance.json")).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
+        let mut maps = serde_json::Map::new();
+        for (unit, rust) in units.iter().zip(generated) {
+            let lines: Vec<_> = (1..=rust.text.lines().count()).map(|line| {
+                let origin = rust.line_provenance(line);
+                serde_json::json!({"line":line,"path":origin.path.as_deref().map(|p|p.to_string_lossy()),
+                    "path_os":origin.path.as_deref().map(os_path),"source_line":origin.line,
+                    "kind":kind(origin.kind),"module":origin.module,"replacement_target":origin.replacement_target})
+            }).collect();
+            maps.insert(
+                unit.digest.clone(),
+                serde_json::json!({"id":unit.unit_id,"rust_lines":lines}),
+            );
+        }
+        provenance["unit_rust_lines"] = serde_json::Value::Object(maps);
+        self.json("provenance.json", &provenance)
     }
     pub(crate) fn snapshot(
         &self,
@@ -306,7 +340,7 @@ impl BuildGeneration {
             self.json(
                 "build-receipt.json",
                 &serde_json::json!({
-                    "schema_version":if self.generated_body.is_some() {2} else {1}, "app_id":self.package, "generation":self.id,
+                    "schema_version":if self.partitioned {3} else if self.generated_body.is_some() {2} else {1}, "app_id":self.package, "generation":self.id,
                     "generated_body_sha256":self.generated_body,
                     "scope":"published_bytes_not_a_complete_native_input_key",
                     "compiler":crate::build_analysis::file_digest(&compiler)?, "artifacts":artifacts

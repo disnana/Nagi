@@ -9,6 +9,7 @@ pub(crate) mod editor;
 #[cfg(nagi_editor_stage_diag)]
 mod editor_stage_diag;
 pub mod emit;
+mod function_units;
 mod generated_body;
 mod generation;
 pub mod graph;
