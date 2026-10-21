@@ -1220,7 +1220,33 @@ fn rust_with_entry_guard(
     entry_guard: Option<&str>,
     library_entry: bool,
 ) -> Result<Generated, String> {
-    checked.validate_for_emission()?;
+    RustEmission::new(checked)?.generate(entry_guard, library_entry, None)
+}
+
+// A shared borrow keeps the complete checked plan immutable for the entire
+// multi-unit emission. Validate it once, rather than once per output crate.
+struct RustEmission<'a>(&'a CheckedProgram);
+impl<'a> RustEmission<'a> {
+    fn new(checked: &'a CheckedProgram) -> Result<Self, String> {
+        checked.validate_for_emission()?;
+        Ok(Self(checked))
+    }
+    fn generate(
+        &self,
+        entry_guard: Option<&str>,
+        library_entry: bool,
+        selection: Option<&crate::function_units::Selection>,
+    ) -> Result<Generated, String> {
+        rust_validated_selection(self.0, entry_guard, library_entry, selection)
+    }
+}
+
+fn rust_validated_selection(
+    checked: &CheckedProgram,
+    entry_guard: Option<&str>,
+    library_entry: bool,
+    selection: Option<&crate::function_units::Selection>,
+) -> Result<Generated, String> {
     let plan = &checked.emission;
     let names = &plan.names;
     let p = &plan.program;
@@ -1239,7 +1265,19 @@ fn rust_with_entry_guard(
     let mut out =
         Generated::new("#![allow(unused_mut, unused_parens, unused_variables, dead_code)]\n");
     out.attach_provenance(checked.provenance().clone());
+    if let Some(selection) = selection {
+        for (alias, symbols) in &selection.imports {
+            out.push_str(&format!(
+                "#[allow(unused_imports)]\n{}use ::{alias}::{{{}}};\n",
+                if selection.facade { "pub " } else { "" },
+                symbols.join(", ")
+            ));
+        }
+    }
     for (index, c) in p.classes.iter().enumerate() {
+        if selection.is_some_and(|s| !s.facade) {
+            continue;
+        }
         out.origin(Some(c.line));
         let item = &plan.classes[index];
         let (copy, serde, readable_debug) = (item.copy, item.serde, item.readable_debug);
@@ -1318,6 +1356,9 @@ fn rust_with_entry_guard(
         }
     }
     for (index, enumeration) in p.enums.iter().enumerate() {
+        if selection.is_some_and(|s| !s.facade) {
+            continue;
+        }
         out.origin(Some(enumeration.line));
         let item = &plan.enums[index];
         let (copy, readable_debug) = (item.copy, item.readable_debug);
@@ -1427,7 +1468,14 @@ fn rust_with_entry_guard(
             out.push_str("        }\n    }\n}\n");
         }
     }
-    for (index, f) in p.functions.iter().enumerate() {
+    let mut function_indices: Vec<_> = (0..p.functions.len())
+        .filter(|i| selection.is_none_or(|s| s.functions.contains(i)))
+        .collect();
+    if selection.is_some() {
+        function_indices.sort_by_key(|&i| &p.functions[i].name);
+    }
+    for index in function_indices {
+        let f = &p.functions[index];
         let function = &plan.functions[index];
         out.function_lineage(Some(function.origin.clone()));
         out.origin(::std::option::Option::Some(f.line));
@@ -1508,10 +1556,17 @@ fn rust_with_entry_guard(
     }
     out.origin(::std::option::Option::None);
     out.function_lineage(None);
+    if selection.is_some_and(|s| !s.facade) {
+        return Ok(out);
+    }
     // Public adapter names are aliases of the unique generated item, not new
     // wrapper types. Only a module's own definitions are exposed through an
     // `as` import; its imported names are not implicitly reexported.
-    for binding in p.modules.root_bindings() {
+    let mut root_bindings: Vec<_> = p.modules.root_bindings().collect();
+    if selection.is_some() {
+        root_bindings.sort_by_key(|b| &b.name);
+    }
+    for binding in root_bindings {
         match &binding.target {
             BindingTarget::Definition(id) => {
                 let Some(definition) = p.modules.definition_id(id) else {
@@ -1539,7 +1594,11 @@ fn rust_with_entry_guard(
             BindingTarget::Module(module) => {
                 let alias = names.source_name(&binding.name);
                 out.push_str(&format!("#[allow(non_snake_case)]\npub mod {alias} {{\n"));
-                for definition in p.modules.exports(module) {
+                let mut exports: Vec<_> = p.modules.exports(module).collect();
+                if selection.is_some() {
+                    exports.sort_by_key(|d| &d.id.name);
+                }
+                for definition in exports {
                     if plan.native_paths.contains_key(&definition.symbol)
                         && !plan.native_reexports.contains(&definition.symbol)
                     {
@@ -1720,7 +1779,16 @@ fn with_generated_body(
         .ok_or("Generated workspace is not a table")?
         .insert(
             "exclude".into(),
-            toml::Value::Array(vec![toml::Value::String(path.clone())]),
+            toml::Value::Array(
+                std::iter::once(Ok(toml::Value::String(path.clone())))
+                    .chain(body.units.iter().map(|u| {
+                        relative_path(&u.directory, base)
+                            .to_str()
+                            .map(|p| toml::Value::String(p.replace(std::path::MAIN_SEPARATOR, "/")))
+                            .ok_or_else(|| "Generated unit paths require UTF-8".to_owned())
+                    }))
+                    .collect::<Result<Vec<_>, String>>()?,
+            ),
         );
     if shim {
         // This is a generated manifest field, never a source-code rewrite.
@@ -1741,6 +1809,14 @@ fn with_generated_body(
         "\n[dependencies.nagi-runtime]\npath = {}\n",
         runtime_path
     ));
+    for unit in &body.units {
+        let id = unit.unit_id.as_ref().ok_or("Missing unit identity")?;
+        manifest.push_str(&format!(
+            "\n[dependencies.nagi_unit_{id}]\npath = {}\npackage = {}\n",
+            crate::generated_body::path_string(&unit.directory)?,
+            crate::generated_body::toml_string(&unit.package)?
+        ));
+    }
     // Keep the strict generated table stable for the Python 3.10 receipt
     // verifier. Both root manifests have the same dependency graph/lockfile.
     manifest.push_str(&format!(
@@ -2114,10 +2190,40 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         else if rust_file.is_some() { Some("rust_adapter") }
         else if !rust_deps.is_empty() { Some("rust_dependencies") }
         else { None };
-    let library_rust = if fallback.is_none() { Some(rust_with_entry_guard(&checked, None, true)?) } else { None };
-    let body = library_rust.as_ref().map(|rust| crate::generated_body::GeneratedBody::prepare(
-        generated_directory, &package, &root.join("runtime"), &rust.text, &inputs,
-    )).transpose()?;
+    let mut partition_reason = None;
+    let partition = if options.incremental_units && fallback.is_none() {
+        match crate::function_units::Partition::new(&checked) {
+            Ok(plan) => Some(plan),
+            Err(reason) => { partition_reason = Some(reason); eprintln!("incremental units: body fallback ({reason})"); None }
+        }
+    } else { None };
+    let mut unit_rust = Vec::new();
+    let mut body = None;
+    let library_rust = if let Some(partition) = &partition {
+        let runtime = fs::canonicalize(root.join("runtime")).map_err(|e| e.to_string())?;
+        let mut units = Vec::new();
+        let emitter = RustEmission::new(&checked)?;
+        for (i, unit) in partition.units.iter().enumerate() {
+            let generated = emitter.generate(None, false, Some(&partition.selection(&checked, Some(i))))?;
+            let dependencies: Vec<_> = unit.dependencies.iter().map(|&d| &units[d]).collect();
+            let cached = crate::generated_body::GeneratedBody::prepare_unit(
+                generated_directory, &package, &runtime, &generated.text, &inputs, Some(&unit.id), &dependencies)?;
+            unit_rust.push(generated);
+            units.push(cached);
+        }
+        let generated = emitter.generate(None, true, Some(&partition.selection(&checked, None)))?;
+        let dependencies: Vec<_> = units.iter().collect();
+        let mut facade = crate::generated_body::GeneratedBody::prepare_unit(
+            generated_directory, &package, &runtime, &generated.text, &inputs, None, &dependencies)?;
+        facade.units = units;
+        body = Some(facade);
+        Some(generated)
+    } else if fallback.is_none() {
+        let generated = rust_with_entry_guard(&checked, None, true)?;
+        body = Some(crate::generated_body::GeneratedBody::prepare(
+            generated_directory, &package, &root.join("runtime"), &generated.text, &inputs)?);
+        Some(generated)
+    } else { None };
     if options.incremental {
         if let Some(reason) = fallback { eprintln!("incremental: monolithic fallback ({reason})"); }
     }
@@ -2144,6 +2250,15 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         build_report["generated_body"] = if let Some(body) = &body {
             serde_json::json!({"mode":"cargo_library", "source_cache":if body.hit {"hit"} else {"miss"}, "sha256":body.digest, "cargo_fresh":null})
         } else { serde_json::json!({"mode":"monolithic", "reason":fallback}) };
+        if let Some(body) = &body {
+            if !body.units.is_empty() {
+                build_report["generated_body"]["mode"] = serde_json::json!("cargo_units");
+                build_report["generated_body"]["units"] = serde_json::Value::Array(body.units.iter().enumerate().map(|(i, u)| serde_json::json!({
+                    "id":u.unit_id, "functions":partition.as_ref().expect("partition units").units[i].functions.iter().map(|&f| crate::modules::display_symbol(&checked.emission.program.functions[f].name)).collect::<Vec<_>>(), "sha256":u.digest, "source_cache":if u.hit {"hit"} else {"miss"}, "cargo_fresh":null
+                })).collect());
+            }
+        }
+        if let Some(reason) = partition_reason { build_report["generated_body"]["partition_reason"] = serde_json::json!(reason); }
         generation.record_analysis(&analysis)?;
     }
     fs::write(out.join("src/main.rs"), &generated_rust.text).map_err(|e| e.to_string())?;
@@ -2175,6 +2290,10 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         })
         .ok_or("Cannot find read source for generation snapshot")?;
     generation.snapshot(&sources, &generated_rust, low_snapshot)?;
+    if let Some(body) = &body { generation.record_unit_provenance(&body.units, &unit_rust)?; }
+    let unit_files: Vec<_> = body.as_ref().into_iter().flat_map(|b| &b.units)
+        .map(|u| fs::canonicalize(u.directory.join("src/lib.rs")).map_err(|e| e.to_string()))
+        .collect::<Result<_, _>>()?;
     let generated_file = fs::canonicalize(body.as_ref().map(|body| body.directory.join("src/lib.rs")).unwrap_or_else(|| generation.staging.join("src/main.rs"))).map_err(|e| e.to_string())?;
     let native_target = std::env::var_os("NAGI_NATIVE_TARGET_DIR");
     let target = native_target.map(|p| cwd.join(p)).unwrap_or_else(|| {
@@ -2227,10 +2346,22 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 }
             }
         }
+        let unit_index = serde_json::from_str::<serde_json::Value>(&line).ok()
+            .and_then(|m| m["target"]["src_path"].as_str().and_then(|p| fs::canonicalize(p).ok()))
+            .and_then(|p| unit_files.iter().position(|f| *f == p));
+        if let Some(i) = unit_index {
+            if build_stats.is_some() {
+                if let Ok(m) = serde_json::from_str::<serde_json::Value>(&line) {
+                    if m["reason"] == "compiler-artifact" { build_report["generated_body"]["units"][i]["cargo_fresh"] = m["fresh"].clone(); }
+                }
+            }
+        }
+        let (diagnostic_rust, diagnostic_file) = unit_index.map(|i| (&unit_rust[i], &unit_files[i]))
+            .unwrap_or((&generated_rust, &generated_file));
         if let Some(message) = crate::diagnostics::cargo_message_with_details(
             &line,
-            &generated_rust,
-            &generated_file,
+            diagnostic_rust,
+            diagnostic_file,
             &sources,
             options.rust_diagnostics,
         ) {

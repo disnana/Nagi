@@ -468,6 +468,28 @@ def prelogin_failure_locations(raw):
     return tuple(locations)
 
 
+def prelogin_failure_classification(raw):
+    # This is a failure-only diagnostic, never authorization to pass the gate.
+    # The existing bounded inventory/location parser validates the envelope.
+    if not prelogin_failure_locations(raw):
+        return None
+    text = raw.replace(b"\r\n", b"\n").decode("utf-8", errors="strict")
+    rows = [line for line in text.splitlines() if "PreLoginFailure" in line]
+    if len(rows) != 1:
+        return None
+    kinds = {"InvalidCredential": "invalid_credential", "Denied": "denied",
+             "Expired": "expired", "InvalidRequest": "invalid_request",
+             "Unavailable": "unavailable", "Internal": "internal"}
+    outcomes = {"NotApplicable": "not_applicable", "Active": "active",
+                "Committed": "committed", "RolledBack": "rolled_back", "Unknown": "unknown"}
+    prefix = "called `Result::unwrap()` on an `Err` value: PreLoginFailure { kind: "
+    match = re.fullmatch(re.escape(prefix) + "(" + "|".join(kinds) + ")"
+                         + r", outcome: (" + "|".join(outcomes) + r") \}", rows[0])
+    if match is None:
+        return None
+    return kinds[match[1]], outcomes[match[2]]
+
+
 def _browser_counter_sample_line(sample):
     parts = []
     for name, value in sample.items():
@@ -516,6 +538,12 @@ def main():
             for source, line, column in locations:
                 print("sf07_prelogin_owner_failure state=located source=" + source
                       + " line=" + str(line) + " column=" + str(column))
+        classification = prelogin_failure_classification(raw)
+        if classification is None:
+            print("sf07_prelogin_classification state=unavailable")
+        else:
+            print("sf07_prelogin_classification state=classified kind=" + classification[0]
+                  + " outcome=" + classification[1])
     if mode == "catalog-retained" and state == "test_failed":
         projection = catalog_failure_projection(raw)
         if projection is None:

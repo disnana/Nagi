@@ -1,0 +1,17 @@
+{
+  "command": [
+    "python3",
+    "scripts/releases/verify.py",
+    "--archive",
+    "local-only/function-delta-probe-20261021/distribution/nagi-0.2.0-linux-x86_64.tar.gz",
+    "--version",
+    "0.2.0",
+    "--platform",
+    "linux-x86_64",
+    "--target",
+    "/workspace/Nagi/local-only/function-delta-probe-20261021/nagi-incremental-szxaxdt2/current-units-dev/target"
+  ],
+  "elapsed_s": 166.74203669900453,
+  "exit_code": 0,
+  "conditions": "actual extracted Linux archive; shared native target; parallel full workspace checks; no timing comparison claimed"
+}

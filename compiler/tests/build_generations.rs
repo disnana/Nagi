@@ -2337,6 +2337,510 @@ fn incremental(f: &Fixture, verb: &str, source: &str, out: &str) -> Command {
     command
 }
 
+fn function_units(f: &Fixture, source: &str, out: &str) -> Command {
+    let mut c = f.cli("build", source, out);
+    c.args(["--profile", "dev", "--incremental=units", "--build-stats"]);
+    c
+}
+
+fn unit_named(report: &serde_json::Value, name: &str) -> serde_json::Value {
+    report["generated_body"]["units"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|u| {
+            u["functions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|n| n.as_str().unwrap().ends_with(name))
+        })
+        .unwrap_or_else(|| panic!("missing {name}: {report}"))
+        .clone()
+}
+
+#[test]
+fn function_units_rebuild_only_affected_crates_and_keep_checked_snapshots() {
+    let f = Fixture::new();
+    let source = "def hot() -> i64:\n    return 7\ndef cold() -> i64:\n    return 11\ndef caller() -> i64:\n    return hot() + 1\ndef main():\n    print(caller() + cold())\n";
+    f.write("main.nagi", source);
+    let first = bounded_output(function_units(&f, "main.nagi", "out"));
+    let old = native(&first);
+    let old_bytes = fs::read(&old).unwrap();
+    assert_eq!(run(&old), "19");
+    let initial = stats(&first);
+    assert_eq!(initial["generated_body"]["mode"], "cargo_units");
+    let cold = unit_named(&initial, "cold");
+    let hot = unit_named(&initial, "hot");
+    let caller = unit_named(&initial, "caller");
+    verify_receipt(&old);
+    let receipt: serde_json::Value = serde_json::from_slice(
+        &fs::read(old.parent().unwrap().join("build-receipt.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt["schema_version"], 3);
+    f.write(
+        "main.nagi",
+        &format!("# shifted source positions\n{source}"),
+    );
+    let repeated = bounded_output(function_units(&f, "main.nagi", "out"));
+    let second = native(&repeated);
+    let warm = stats(&repeated);
+    assert_eq!(warm["cargo_compiled_artifacts"], 1);
+    assert_eq!(warm["checks"], "full");
+    assert_eq!(warm["cargo_always_invoked"], true);
+    assert!(warm["generated_body"]["units"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|u| u["cargo_fresh"] == true));
+    assert_eq!(unit_named(&warm, "cold")["sha256"], cold["sha256"]);
+    let provenance: serde_json::Value = serde_json::from_slice(
+        &fs::read(second.parent().unwrap().join("provenance.json")).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        provenance["unit_rust_lines"][hot["sha256"].as_str().unwrap()]["rust_lines"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|l| l["source_line"] == 2)
+    );
+    verify_receipt(&second);
+    let reordered = source.replace(
+        "def hot() -> i64:\n    return 7\ndef cold() -> i64:\n    return 11",
+        "def cold() -> i64:\n    return 11\ndef hot() -> i64:\n    return 7",
+    );
+    f.write("main.nagi", &reordered);
+    let reorder = bounded_output(function_units(&f, "main.nagi", "out"));
+    let reorder_binary = native(&reorder);
+    assert_eq!(run(&reorder_binary), "19");
+    assert!(stats(&reorder)["generated_body"]["units"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|u| u["cargo_fresh"] == true));
+    verify_receipt(&reorder_binary);
+    f.write("main.nagi", &source.replace("return 7", "return 40"));
+    let changed = bounded_output(function_units(&f, "main.nagi", "out"));
+    let third = native(&changed);
+    assert_eq!(run(&third), "52");
+    let changed = stats(&changed);
+    assert_eq!(unit_named(&changed, "cold")["sha256"], cold["sha256"]);
+    assert_eq!(unit_named(&changed, "cold")["cargo_fresh"], true);
+    for name in ["hot", "caller"] {
+        assert_eq!(unit_named(&changed, name)["cargo_fresh"], false);
+    }
+    let before = f
+        .app("out")
+        .join("code")
+        .join(caller["sha256"].as_str().unwrap())
+        .join("src/lib.rs");
+    let after = f
+        .app("out")
+        .join("code")
+        .join(unit_named(&changed, "caller")["sha256"].as_str().unwrap())
+        .join("src/lib.rs");
+    assert_eq!(
+        fs::read(before).unwrap(),
+        fs::read(after).unwrap(),
+        "unchanged caller source still has a changed Cargo dependency"
+    );
+    verify_receipt(&third);
+    for manifest in [
+        f.0.join("out/Cargo.toml"),
+        third.parent().unwrap().join("Cargo.toml"),
+    ] {
+        let mut c = Command::new(env!("CARGO"));
+        c.current_dir(&f.0)
+            .args(["build", "--locked", "--profile", "dev", "--manifest-path"])
+            .arg(manifest)
+            .env("CARGO_NET_OFFLINE", "true")
+            .env("CARGO_TARGET_DIR", f.0.join("cache"));
+        success(&bounded_output(c));
+    }
+    let latest = f.latest("out").0;
+    // Changing a public signature without updating the caller is a Nagi
+    // checker error, rather than a cached success or backend type rejection.
+    f.write(
+        "main.nagi",
+        &source.replace("def hot()", "def hot(value: i64)"),
+    );
+    let rejected = bounded_output(function_units(&f, "main.nagi", "out"));
+    assert!(!rejected.status.success());
+    assert!(!String::from_utf8_lossy(&rejected.stderr).contains("Compiling"));
+    assert_eq!(f.latest("out").0, latest);
+    f.write(
+        "main.nagi",
+        &source
+            .replace("def hot()", "def hot(value: i64)")
+            .replace("return 7", "return value + 7")
+            .replace("return hot()", "return hot(2)"),
+    );
+    let api = native(&bounded_output(function_units(&f, "main.nagi", "out")));
+    assert_eq!(run(&api), "21");
+    verify_receipt(&api);
+    fs::copy(f.0.join("out/generated.low"), f.0.join("saved.low")).unwrap();
+    let low_result = bounded_output(function_units(&f, "saved.low", "low-out"));
+    let low = native(&low_result);
+    assert_eq!(run(&low), "21");
+    assert_eq!(stats(&low_result)["generated_body"]["mode"], "cargo_units");
+    verify_receipt(&low);
+    assert_eq!(fs::read(&old).unwrap(), old_bytes);
+    assert_eq!(run(&old), "19");
+    assert_eq!(run(&second), "19");
+    assert_eq!(run(&third), "52");
+}
+
+#[test]
+fn function_units_handle_recursion_bucket_boundaries_imports_and_runtime_changes() {
+    let f = Fixture::new();
+    f.write("a.nagi", "def value() -> i64:\n    return 7\n");
+    f.write("b.nagi", "def value() -> i64:\n    return 11\n");
+    let mut text = "import \"a.nagi\" as a\nimport \"b.nagi\" as b\ndef left(n: i64) -> i64:\n    if n == 0:\n        return 0\n    return right(n - 1) + 1\ndef right(n: i64) -> i64:\n    if n == 0:\n        return 0\n    return left(n - 1) + 1\n".to_owned();
+    for i in 0..20 {
+        text.push_str(&format!("def x{i}() -> i64:\n    return {i}\n"));
+    }
+    text.push_str("def bridge() -> i64:\n    return x0() + x19()\ndef main():\n    print(a.value() + b.value() + left(4) + bridge())\n");
+    f.write("main.nagi", &text);
+    let first = bounded_output(function_units(&f, "main.nagi", "out"));
+    let binary = native(&first);
+    assert_eq!(run(&binary), "41");
+    let report = stats(&first);
+    let units = report["generated_body"]["units"].as_array().unwrap();
+    assert!(units.len() <= 8);
+    assert_eq!(
+        unit_named(&report, "left")["id"],
+        unit_named(&report, "right")["id"]
+    );
+    verify_receipt(&binary);
+    f.write("runtime/src/lib.rs", "pub fn changed_runtime() {}\n");
+    let changed = bounded_output(function_units(&f, "main.nagi", "out"));
+    let current = native(&changed);
+    assert_eq!(run(&current), "41");
+    assert_eq!(
+        stats(&changed)["generated_body"]["sha256"],
+        report["generated_body"]["sha256"]
+    );
+    assert!(stats(&changed)["generated_body"]["units"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|u| u["cargo_fresh"] == false));
+}
+
+#[test]
+fn function_units_keep_async_types_callbacks_and_open_dependencies_in_facade() {
+    let f = Fixture::new();
+    f.write(
+        "runtime/src/lib.rs",
+        r#"use std::future::Future;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+struct Noop;
+impl Wake for Noop { fn wake(self: Arc<Self>) {} }
+pub fn block_on<F: Future>(future: F) -> F::Output {
+    let waker = Waker::from(Arc::new(Noop));
+    let mut cx = Context::from_waker(&waker);
+    match Box::pin(future).as_mut().poll(&mut cx) {
+        Poll::Ready(value) => value,
+        Poll::Pending => panic!("ready-only fixture"),
+    }
+}
+"#,
+    );
+    // Enum-bearing records are supported private data: they generate neither
+    // Serde nor FromRow, so this std-only runtime tests the compiler boundary.
+    let source = r#"enum Marker:
+    Ready
+class Record:
+    value: i64
+    marker: Marker
+def stable() -> i64:
+    return 11
+def hot() -> i64:
+    return 7
+def typed(record: Record) -> i64:
+    return record.value
+def open(n: i64) -> i64:
+    print(n)
+    if n == 0:
+        return 0
+    return back(n - 1)
+def back(n: i64) -> i64:
+    return open(n)
+def transitive(n: i64) -> i64:
+    return back(n)
+def apply(callback: fn[i64], record: Record) -> i64:
+    return callback() + typed(record)
+async def ready() -> i64:
+    return hot()
+async def main():
+    callback = stable
+    record = Record(value=2, marker=Marker.Ready)
+    print(apply(callback, record) + await ready())
+    transitive(0)
+"#;
+    f.write("main.nagi", source);
+    let first = bounded_output(function_units(&f, "main.nagi", "out"));
+    let old = native(&first);
+    assert_eq!(run(&old), "20\n0");
+    let report = stats(&first);
+    let units = report["generated_body"]["units"].as_array().unwrap();
+    assert_eq!(units.len(), 2);
+    assert!(units
+        .iter()
+        .all(|u| u["functions"].as_array().unwrap().iter().all(|n| n
+            .as_str()
+            .unwrap()
+            .ends_with("hot")
+            || n.as_str().unwrap().ends_with("stable"))));
+    for u in units {
+        let text = fs::read_to_string(
+            f.app("out")
+                .join("code")
+                .join(u["sha256"].as_str().unwrap())
+                .join("src/lib.rs"),
+        )
+        .unwrap();
+        assert!(!text.contains("pub struct") && !text.contains("pub enum"));
+    }
+    verify_receipt(&old);
+    // Unsupported facade-only bodies cannot affect a closed unit's source.
+    let facade_edit = source.replace(
+        "Record(value=2, marker=Marker.Ready)",
+        "Record(value=3, marker=Marker.Ready)",
+    );
+    f.write("main.nagi", &facade_edit);
+    let second = bounded_output(function_units(&f, "main.nagi", "out"));
+    assert_eq!(run(&native(&second)), "21\n0");
+    assert!(stats(&second)["generated_body"]["units"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|u| u["cargo_fresh"] == true));
+    assert_eq!(stats(&second)["generated_body"]["cargo_fresh"], false);
+    f.write("main.nagi", &facade_edit.replace("return 7", "return 40"));
+    let third = bounded_output(function_units(&f, "main.nagi", "out"));
+    assert_eq!(run(&native(&third)), "54\n0");
+    assert_eq!(unit_named(&stats(&third), "stable")["cargo_fresh"], true);
+    assert_eq!(unit_named(&stats(&third), "hot")["cargo_fresh"], false);
+    assert_eq!(stats(&third)["generated_body"]["cargo_fresh"], false);
+    fs::copy(f.0.join("out/generated.low"), f.0.join("saved.low")).unwrap();
+    let low = bounded_output(function_units(&f, "saved.low", "low-out"));
+    let low_bin = native(&low);
+    assert_eq!(run(&low_bin), "54\n0");
+    assert_eq!(stats(&low)["generated_body"]["mode"], "cargo_units");
+    verify_receipt(&low_bin);
+    let ordinary = native(&bounded_output(incremental(
+        &f,
+        "build",
+        "main.nagi",
+        "ordinary",
+    )));
+    assert_eq!(run(&ordinary), run(&low_bin));
+    assert_eq!(run(&old), "20\n0");
+    // Resolved modules distinguish primitive-spelled user records from the
+    // intrinsic Copy types. Only the independent bool function is extracted.
+    f.write("main.nagi", "enum Marker:\n    Ready\nclass i64:\n    marker: Marker\ndef typed(record: i64) -> bool:\n    match record.marker:\n        case Marker.Ready:\n            return True\ndef independent(value: bool) -> bool:\n    return not value\ndef main():\n    print(independent(False))\n    print(typed(i64(marker=Marker.Ready)))\n");
+    let shadow = bounded_output(function_units(&f, "main.nagi", "shadow-out"));
+    let shadow_binary = native(&shadow);
+    assert_eq!(run(&shadow_binary), "true\ntrue");
+    let shadow_stats = stats(&shadow);
+    let shadow_units = shadow_stats["generated_body"]["units"].as_array().unwrap();
+    assert_eq!(shadow_units.len(), 1);
+    assert!(shadow_units[0]["functions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|n| n.as_str().unwrap().ends_with("independent")));
+    fs::copy(f.0.join("shadow-out/generated.low"), f.0.join("shadow.low")).unwrap();
+    let low_shadow = native(&bounded_output(function_units(
+        &f,
+        "shadow.low",
+        "shadow-low-out",
+    )));
+    assert_eq!(run(&low_shadow), "true\ntrue");
+    verify_receipt(&shadow_binary);
+    verify_receipt(&low_shadow);
+}
+
+#[test]
+fn function_units_reject_injected_child_inputs_and_fall_back_for_unknown_boundaries() {
+    let f = Fixture::new();
+    f.write(
+        "main.nagi",
+        "def value() -> i64:\n    return 42\ndef main():\n    print(value())\n",
+    );
+    let first = bounded_output(function_units(&f, "main.nagi", "out"));
+    let old = native(&first);
+    let latest = f.latest("out").0;
+    let key = stats(&first)["generated_body"]["units"][0]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let child = f.app("out").join("code").join(key);
+    fs::write(
+        child.join("build.rs"),
+        "compile_error!(\"must not execute\");",
+    )
+    .unwrap();
+    let bad = bounded_output(function_units(&f, "main.nagi", "out"));
+    assert!(!bad.status.success());
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("unexpected or missing entries"));
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(run(&old), "42");
+    fs::remove_file(child.join("build.rs")).unwrap();
+    for text in [
+        "def value() -> i64:\n    print(42)\n    return 42\ndef main():\n    callback = value\n    callback()\n",
+        "def value(text: str) -> i64:\n    return 42\ndef main():\n    print(value(\"x\"))\n",
+        "def unused():\n    main()\ndef main():\n    print(42)\n",
+    ] {
+        f.write("main.nagi",text);
+        let output = bounded_output(function_units(&f,"main.nagi","out"));
+        let executable = native(&output);
+        assert_eq!(run(&executable),"42");
+        let report = stats(&output);
+        assert_eq!(report["generated_body"]["mode"],"cargo_library");
+        assert!(report["generated_body"]["partition_reason"].is_string());
+        assert_eq!(report["checks"],"full");
+        verify_receipt(&executable);
+    }
+}
+
+#[test]
+fn function_units_orphan_cargo_and_publication_failures_preserve_success() {
+    let f = Fixture::new();
+    f.write(
+        "main.nagi",
+        "def value() -> i64:\n    return 1\ndef main():\n    print(\"old\")\n",
+    );
+    let wrapper = f.wrapper();
+    let mut c = f.wrapped(
+        &wrapper,
+        "build",
+        "main.nagi",
+        "out",
+        "orphan-units",
+        "before",
+    );
+    c.args(["--profile", "dev", "--incremental=units", "--build-stats"]);
+    let mut first = Running::wrapper(c, f.0.join("orphan-units"));
+    first.wait_for("entered");
+    let manifest = PathBuf::from(fs::read_to_string(f.0.join("orphan-units/manifest")).unwrap());
+    let parsed: toml::Value = toml::from_str(&fs::read_to_string(&manifest).unwrap()).unwrap();
+    let bin = parsed["bin"][0]["name"].as_str().unwrap().to_owned();
+    let saved: Vec<_> = parsed["dependencies"]
+        .as_table()
+        .unwrap()
+        .iter()
+        .filter(|(k, _)| k.starts_with("nagi_unit_") || *k == "nagi-app-body")
+        .map(|(_, d)| {
+            let file = manifest
+                .parent()
+                .unwrap()
+                .join(d["path"].as_str().unwrap())
+                .join("src/lib.rs");
+            let bytes = fs::read(&file).unwrap();
+            (file, bytes)
+        })
+        .collect();
+    assert_eq!(saved.len(), 2);
+    first.kill_parent();
+    f.write(
+        "main.nagi",
+        "def value() -> i64:\n    return 2\ndef main():\n    print(\"new\")\n",
+    );
+    let next = native(&bounded_output(function_units(&f, "main.nagi", "out")));
+    let latest = f.latest("out").0;
+    let next_bytes = fs::read(&next).unwrap();
+    first.release();
+    let until = Instant::now() + DEADLINE;
+    while !f.0.join("orphan-units/done").exists() {
+        assert!(Instant::now() < until, "orphan unit Cargo did not finish");
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(
+        fs::read_to_string(f.0.join("orphan-units/done")).unwrap(),
+        "0",
+        "{}",
+        fs::read_to_string(f.0.join("orphan-units/cargo.stderr"))
+            .unwrap_or_else(|_| first.captured_error())
+    );
+    for (file, bytes) in saved {
+        assert_eq!(fs::read(file).unwrap(), bytes);
+    }
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(fs::read(&next).unwrap(), next_bytes);
+    assert_eq!(run(&next), "new");
+    assert_eq!(
+        run(&f
+            .0
+            .join("cache/debug")
+            .join(format!("{bin}{}", std::env::consts::EXE_SUFFIX))),
+        "old"
+    );
+    for mode in ["fail", "receipt-fault", "projection-fault", "latest-fault"] {
+        let f = Fixture::new();
+        f.write(
+            "main.nagi",
+            "def value() -> i64:\n    return 2\ndef main():\n    print(\"new\")\n",
+        );
+        let next = native(&bounded_output(function_units(&f, "main.nagi", "out")));
+        let latest = f.latest("out").0;
+        let next_bytes = fs::read(&next).unwrap();
+        let wrapper = f.wrapper();
+        let mut c = f.wrapped(&wrapper, "run", "main.nagi", "out", mode, mode);
+        c.args(["--profile", "dev", "--incremental=units", "--build-stats"]);
+        let failed = bounded_output(c);
+        assert!(
+            f.0.join(mode).join("entered").is_file(),
+            "fault stage was not reached: {mode}"
+        );
+        assert!(!failed.status.success(), "{mode}");
+        assert!(failed.stdout.is_empty(), "{mode}");
+        assert_eq!(f.latest("out").0, latest, "{mode}");
+        assert_eq!(fs::read(&next).unwrap(), next_bytes);
+        assert_eq!(run(&next), "new");
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn function_units_special_runtime_paths_and_child_projection_alias_are_safe() {
+    let f = Fixture::new();
+    let unusual = "runtime-root-newline\nquote\"DEL\u{7f}";
+    f.write(
+        &format!("{unusual}/runtime/Cargo.toml"),
+        "[package]\nname='nagi-runtime'\nversion='0.1.0'\nedition='2021'\n[workspace]\n",
+    );
+    f.write(&format!("{unusual}/runtime/src/lib.rs"), "");
+    f.write(
+        "main.nagi",
+        "def value() -> i64:\n    return 42\ndef main():\n    print(value())\n",
+    );
+    let mut c = function_units(&f, "main.nagi", "out");
+    c.env("NAGI_ROOT", f.0.join(unusual));
+    let first = bounded_output(c);
+    let old = native(&first);
+    assert_eq!(run(&old), "42");
+    let key = stats(&first)["generated_body"]["units"][0]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let source = f.app("out").join("code").join(key).join("src/lib.rs");
+    let bytes = fs::read(&source).unwrap();
+    let latest = f.latest("out").0;
+    fs::remove_file(f.0.join("out/src/main.rs")).unwrap();
+    fs::hard_link(&source, f.0.join("out/src/main.rs")).unwrap();
+    let rejected = bounded_output(function_units(&f, "main.nagi", "out"));
+    assert!(!rejected.status.success());
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("cannot overwrite input"));
+    assert_eq!(fs::read(source).unwrap(), bytes);
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(run(&old), "42");
+}
+
 #[test]
 fn incremental_reuses_checked_body_but_publishes_unique_bins_and_valid_locked_manifests() {
     let f = Fixture::new();
@@ -2957,7 +3461,7 @@ fn verify_receipt(binary: &Path) {
     let directory = binary.parent().unwrap();
     let receipt: serde_json::Value =
         serde_json::from_slice(&fs::read(directory.join("build-receipt.json")).unwrap()).unwrap();
-    assert!(matches!(receipt["schema_version"].as_u64(), Some(1 | 2)));
+    assert!(matches!(receipt["schema_version"].as_u64(), Some(1..=3)));
     assert_eq!(
         receipt["generation"].as_str().unwrap(),
         directory.file_name().unwrap()

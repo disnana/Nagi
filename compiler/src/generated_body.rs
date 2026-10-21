@@ -16,6 +16,8 @@ pub(crate) struct GeneratedBody {
     pub(crate) manifest: String,
     pub(crate) runtime: PathBuf,
     pub(crate) hit: bool,
+    pub(crate) unit_id: Option<String>,
+    pub(crate) units: Vec<GeneratedBody>,
 }
 
 fn plain(path: &Path, directory: bool) -> Result<(), String> {
@@ -203,6 +205,70 @@ impl GeneratedBody {
             },
         })
         .map_err(|e| format!("Cannot serialize generated body: {e}"))?;
+        Self::publish(out, app, runtime, rust, inputs, package, manifest, None)
+    }
+
+    /// Private, closed manifest grammar for schema 3. Dependencies have already
+    /// been checked and published from this invocation's sealed plan.
+    pub(crate) fn prepare_unit(
+        out: &Path,
+        app: &str,
+        runtime: &Path,
+        rust: &str,
+        inputs: &[PathBuf],
+        id: Option<&str>,
+        dependencies: &[&GeneratedBody],
+    ) -> Result<Self, String> {
+        if rust.len() > 64 * 1024 * 1024 {
+            return Err("Generated unit exceeds 64 MiB".into());
+        }
+        let suffix = app.rsplit('-').next().ok_or("missing app hash")?;
+        let (package, library) = match id {
+            Some(id) => (
+                format!("nagi-unit-{suffix}-{id}"),
+                format!("nagi_unit_{id}"),
+            ),
+            None => (format!("nagi-body-{suffix}"), "nagi_app_body".to_owned()),
+        };
+        let mut manifest = format!(
+            "[package]\nname = {}\nversion = \"0.1.0\"\nedition = \"2021\"\nbuild = false\nautobins = false\nautoexamples = false\nautotests = false\nautobenches = false\n[lib]\nname = {}\npath = \"src/lib.rs\"\n[workspace]\n[dependencies.nagi-runtime]\npath = {}\n",
+            toml_string(&package)?, toml_string(&library)?, path_string(runtime)?,
+        );
+        let mut aliases = BTreeSet::new();
+        for dep in dependencies {
+            let id = dep.unit_id.as_ref().ok_or("Expected unit dependency")?;
+            if !aliases.insert(id) {
+                return Err("Duplicate logical unit dependency".into());
+            }
+            manifest.push_str(&format!(
+                "[dependencies.nagi_unit_{id}]\npath = {}\npackage = {}\n",
+                path_string(&dep.directory)?,
+                toml_string(&dep.package)?,
+            ));
+        }
+        Self::publish(
+            out,
+            app,
+            runtime.to_path_buf(),
+            rust,
+            inputs,
+            package,
+            manifest,
+            id.map(str::to_owned),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn publish(
+        out: &Path,
+        app: &str,
+        runtime: PathBuf,
+        rust: &str,
+        inputs: &[PathBuf],
+        package: String,
+        manifest: String,
+        unit_id: Option<String>,
+    ) -> Result<Self, String> {
         let mut hash = Sha256::new();
         hash.update(b"nagi-generated-body-v1\0");
         for bytes in [manifest.as_bytes(), rust.as_bytes()] {
@@ -266,6 +332,17 @@ impl GeneratedBody {
             manifest,
             runtime,
             hit,
+            unit_id,
+            units: Vec::new(),
         })
     }
+}
+
+pub(crate) fn toml_string(value: &str) -> Result<String, String> {
+    serde_json::to_string(value)
+        .map(|s| s.replace('\u{7f}', "\\u007f"))
+        .map_err(|e| e.to_string())
+}
+pub(crate) fn path_string(value: &Path) -> Result<String, String> {
+    toml_string(value.to_str().ok_or("Generated paths require UTF-8")?)
 }

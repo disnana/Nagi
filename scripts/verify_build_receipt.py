@@ -26,6 +26,11 @@ MANIFEST_TABLE_KEYS = {
     "[dependencies.nagi-app-body]": {"path": "string", "package": "string"},
 }
 BODY_TABLE = "[dependencies.nagi-app-body]"
+UNIT_TABLE = re.compile(r"\[dependencies\.nagi_unit_([0-9a-f]{16})\]")
+V3_MANIFEST_LIMIT = 1024 * 1024
+V3_SOURCE_LIMIT = 64 * 1024 * 1024
+V3_NODE_LIMIT = 9
+V3_DEPTH_LIMIT = 9
 
 
 def reject_link(path: Path) -> os.stat_result:
@@ -302,6 +307,274 @@ def _verify_generated_body(receipt_path: Path, receipt: dict, app_suffix: str) -
     _verify_manifest_table(generation_root / "Cargo.toml", artifacts["Cargo.toml"]["bytes"], digest, app_suffix)
 
 
+def _v3_string(value: str) -> str:
+    # This version deliberately accepts only the JSON-compatible basic strings
+    # emitted by prepare_unit(), not general TOML or the legacy v2 grammar.
+    if not _valid_basic_string(value) or any(ord(c) == 127 for c in value):
+        raise ValueError("invalid schema 3 manifest string")
+    index = 1
+    while index < len(value) - 1:
+        if value[index] == "\\":
+            index += 1
+            escape = value[index]
+            if escape not in '"\\bfnrtu':
+                raise ValueError("invalid schema 3 TOML escape")
+            if escape == "u":
+                digits = value[index + 1:index + 5]
+                if len(digits) != 4 or re.fullmatch(r"[0-9A-Fa-f]{4}", digits) is None:
+                    raise ValueError("invalid schema 3 TOML escape")
+                if 0xD800 <= int(digits, 16) <= 0xDFFF:
+                    raise ValueError("invalid schema 3 TOML unicode scalar")
+                index += 4
+        index += 1
+    decoded = json.loads(value)
+    if not isinstance(decoded, str) or any(0xD800 <= ord(c) <= 0xDFFF for c in decoded):
+        raise ValueError("invalid schema 3 manifest string")
+    return decoded
+
+
+def _v3_string_array(value: str) -> list[str]:
+    if not value.startswith("[") or not value.endswith("]"):
+        raise ValueError("invalid schema 3 manifest array")
+    content = value[1:-1].strip()
+    result = []
+    while content:
+        if len(result) >= V3_NODE_LIMIT:
+            raise ValueError("schema 3 manifest array exceeds entry limit")
+        _, end = json.JSONDecoder().raw_decode(content)
+        result.append(_v3_string(content[:end]))
+        content = content[end:].strip()
+        if content:
+            if not content.startswith(","):
+                raise ValueError("invalid schema 3 manifest array separator")
+            content = content[1:].strip()
+    if len(result) != len(set(result)):
+        raise ValueError("duplicate schema 3 manifest array entry")
+    return result
+
+
+def _v3_manifest(path: Path, *, root: bool = False) -> dict:
+    with regular_file(path) as source:
+        length = os.fstat(source.fileno()).st_size
+        if length > V3_MANIFEST_LIMIT:
+            raise ValueError("schema 3 manifest exceeds 1 MiB")
+        raw = source.read(V3_MANIFEST_LIMIT + 1)
+    if len(raw) != length:
+        raise ValueError("schema 3 manifest length mismatch")
+    text = raw.decode("utf-8").replace("\r\n", "\n")
+    if "\r" in text:
+        raise ValueError("invalid schema 3 manifest line endings")
+    allowed = MANIFEST_TABLE_KEYS if root else {
+        "[package]": {"name": "string", "version": "string", "edition": "string",
+                      "build": "boolean", "autobins": "boolean", "autoexamples": "boolean",
+                      "autotests": "boolean", "autobenches": "boolean"},
+        "[lib]": {"name": "string", "path": "string"},
+        "[workspace]": {},
+        "[dependencies.nagi-runtime]": {"path": "string"},
+    }
+    tables = {}
+    current = None
+    keys = None
+    array = None
+    for line in text.split("\n"):
+        if not line.strip():
+            continue
+        if array is not None:
+            item = line.strip()
+            if item == "]":
+                array = None
+                continue
+            if not item.endswith(","):
+                raise ValueError("invalid schema 3 multiline array entry")
+            decoded = _v3_string(item[:-1].strip())
+            if decoded in array:
+                raise ValueError("duplicate schema 3 manifest array entry")
+            array.append(decoded)
+            if len(array) > V3_NODE_LIMIT:
+                raise ValueError("schema 3 manifest array exceeds entry limit")
+            continue
+        if line.startswith("["):
+            unit = UNIT_TABLE.fullmatch(line)
+            if line not in allowed and unit is None:
+                raise ValueError(f"unexpected schema 3 manifest table: {line}")
+            if line in tables:
+                raise ValueError("duplicate schema 3 manifest table")
+            if current == BODY_TABLE:
+                raise ValueError("generated body dependency table must be final")
+            current = line
+            keys = {"path": "string", "package": "string"} if unit else allowed[line]
+            tables[current] = {}
+            continue
+        if current is None or "=" not in line:
+            raise ValueError("malformed schema 3 manifest assignment")
+        key, value = (part.strip() for part in line.split("=", 1))
+        if key not in keys or key in tables[current]:
+            raise ValueError("unexpected or duplicate schema 3 manifest key")
+        kind = keys[key]
+        if kind == "string":
+            decoded = _v3_string(value)
+        elif kind == "boolean" and value in ("true", "false"):
+            decoded = value == "true"
+        elif kind == "integer" and re.fullmatch(r"0|[1-9][0-9]*", value):
+            decoded = int(value)
+        elif kind == "string-array":
+            if value == "[":
+                decoded = []
+                array = decoded
+            else:
+                decoded = _v3_string_array(value)
+        else:
+            raise ValueError("invalid schema 3 manifest value")
+        tables[current][key] = decoded
+    if array is not None:
+        raise ValueError("unterminated schema 3 manifest array")
+    if not set(allowed).issubset(tables):
+        raise ValueError("missing schema 3 manifest table")
+    for table, values in tables.items():
+        expected = {"path", "package"} if UNIT_TABLE.fullmatch(table) else set(allowed[table])
+        if set(values) != expected:
+            raise ValueError("missing schema 3 manifest key")
+    return tables
+
+
+def _v3_units(tables: dict, app_suffix: str) -> dict:
+    units = {}
+    for table, values in tables.items():
+        match = UNIT_TABLE.fullmatch(table)
+        if match:
+            unit = match[1]
+            if values["package"] != f"nagi-unit-{app_suffix}-{unit}":
+                raise ValueError("schema 3 unit alias/package mismatch")
+            units[unit] = values
+            if len(units) >= V3_NODE_LIMIT:
+                raise ValueError("schema 3 dependency count exceeds limit")
+    return units
+
+
+def _v3_reference(reference: str, derived: Path) -> None:
+    # Never stat/resolve/open the path supplied by a manifest. Only paths derived
+    # from the known app namespace are resolved, after their link checks.
+    candidate = Path(reference)
+    if not candidate.is_absolute() or ".." in candidate.parts:
+        raise ValueError("escaping schema 3 unit dependency path")
+    def normalized(path: str) -> str:
+        if os.name == "nt":
+            if path.startswith("\\\\?\\UNC\\"):
+                path = "\\\\" + path[8:]
+            elif path.startswith("\\\\?\\"):
+                path = path[4:]
+            return os.path.normcase(os.path.normpath(path))
+        return path
+    expected = {normalized(str(derived.absolute())), normalized(str(derived.resolve(strict=True)))}
+    if normalized(reference) not in expected:
+        raise ValueError("schema 3 unit dependency path mismatch")
+
+
+def _v3_cas_files(code: Path, digest: str) -> tuple[Path, Path]:
+    directory = code / digest
+    source_directory = directory / "src"
+    _check_directory(directory)
+    _check_directory(source_directory)
+    for path, names in [(directory, {"Cargo.toml", "src"}), (source_directory, {"lib.rs"})]:
+        if {entry.name for entry in path.iterdir()} != names:
+            raise ValueError("schema 3 cache has unexpected or missing entries")
+    manifest, source = directory / "Cargo.toml", source_directory / "lib.rs"
+    for path, limit in [(manifest, V3_MANIFEST_LIMIT), (source, V3_SOURCE_LIMIT)]:
+        with regular_file(path) as stream:
+            if os.fstat(stream.fileno()).st_size > limit:
+                raise ValueError("schema 3 cache file exceeds size limit")
+    return manifest, source
+
+
+def _verify_generated_units(receipt_path: Path, receipt: dict, app_suffix: str) -> None:
+    digest = receipt.get("generated_body_sha256")
+    if not isinstance(digest, str) or HEX.fullmatch(digest) is None:
+        raise ValueError("invalid generated body digest")
+    generation = receipt_path.parent
+    artifacts = receipt["artifacts"]
+    snapshot_manifest, snapshot_source = generation / "body-Cargo.toml", generation / "src/main.rs"
+    if _framed_digest([(snapshot_manifest, artifacts["body-Cargo.toml"]["bytes"]),
+                       (snapshot_source, artifacts["src/main.rs"]["bytes"])]) != digest:
+        raise ValueError("generated body digest mismatch")
+    code = generation.parent.parent / "code"
+    _check_directory(code)
+    seen, active, logical = {}, set(), {}
+    runtime = None
+
+    def visit(key: str, unit: str | None, reference: str | None = None, depth: int = 1) -> dict:
+        nonlocal runtime
+        if depth > V3_DEPTH_LIMIT:
+            raise ValueError("schema 3 dependency depth exceeds limit")
+        if key in active:
+            raise ValueError("schema 3 dependency cycle")
+        if unit is not None:
+            if unit in logical and logical[unit] != key:
+                raise ValueError("schema 3 logical unit has multiple digests")
+            logical[unit] = key
+        manifest, source = _v3_cas_files(code, key)
+        if reference is not None:
+            _v3_reference(reference, manifest.parent)
+        if key in seen:
+            if seen[key][0] != unit:
+                raise ValueError("schema 3 digest has multiple unit identities")
+            return seen[key][1]
+        if len(seen) + len(active) >= V3_NODE_LIMIT:
+            raise ValueError("schema 3 dependency count exceeds limit")
+        tables = _v3_manifest(manifest)
+        package = f"nagi-body-{app_suffix}" if unit is None else f"nagi-unit-{app_suffix}-{unit}"
+        library = "nagi_app_body" if unit is None else f"nagi_unit_{unit}"
+        expected_package = {"name": package, "version": "0.1.0", "edition": "2021",
+                            "build": False, "autobins": False, "autoexamples": False,
+                            "autotests": False, "autobenches": False}
+        if tables["[package]"] != expected_package or tables["[lib]"] != {"name": library, "path": "src/lib.rs"}:
+            raise ValueError("schema 3 package/library identity mismatch")
+        current_runtime = tables["[dependencies.nagi-runtime]"]["path"]
+        if not Path(current_runtime).is_absolute() or "\0" in current_runtime:
+            raise ValueError("schema 3 runtime path must be absolute")
+        if runtime is None:
+            runtime = current_runtime
+        elif runtime != current_runtime:
+            raise ValueError("schema 3 runtime path mismatch")
+        if _framed_digest([(manifest, manifest.stat().st_size), (source, source.stat().st_size)]) != key:
+            raise ValueError("schema 3 cache digest mismatch")
+        active.add(key)
+        units = _v3_units(tables, app_suffix)
+        for child, dependency in units.items():
+            match = re.search(r"[/\\]([0-9a-f]{64})$", dependency["path"])
+            if match is None:
+                raise ValueError("invalid schema 3 unit dependency digest")
+            visit(match[1], child, dependency["path"], depth + 1)
+        active.remove(key)
+        seen[key] = (unit, tables)
+        return tables
+
+    body = visit(digest, None)
+    cas_manifest, cas_source = _v3_cas_files(code, digest)
+    if (not _files_equal(snapshot_manifest, cas_manifest, artifacts["body-Cargo.toml"]["bytes"])
+            or not _files_equal(snapshot_source, cas_source, artifacts["src/main.rs"]["bytes"])):
+        raise ValueError("schema 3 body snapshot/cache mismatch")
+    body_units = _v3_units(body, app_suffix)
+    if set(body_units) != set(logical):
+        raise ValueError("schema 3 facade must reference every unit")
+    root = _v3_manifest(generation / "Cargo.toml", root=True)
+    if _v3_units(root, app_suffix) != body_units:
+        raise ValueError("schema 3 root/body unit dependencies mismatch")
+    if root["[dependencies.nagi-runtime]"]["path"] != runtime:
+        raise ValueError("schema 3 root runtime path mismatch")
+    if root[BODY_TABLE] != {"path": f"../../code/{digest}", "package": f"nagi-body-{app_suffix}"}:
+        raise ValueError("schema 3 body dependency mismatch")
+    exclusions = [f"../../code/{digest}"] + [f"../../code/{logical[unit]}" for unit in body_units]
+    if root["[workspace]"] != {"exclude": exclusions}:
+        raise ValueError("schema 3 workspace exclusion mismatch")
+    if root["[package]"] != {"name": receipt["app_id"], "version": "0.1.0", "edition": "2021", "autobins": False}:
+        raise ValueError("schema 3 root package mismatch")
+    executable = f"nagi-{app_suffix}-{receipt['generation']}"
+    if root["[[bin]]"] != {"name": executable, "path": "src/entry.rs"}:
+        raise ValueError("schema 3 root bin mismatch")
+    if root["[profile.release]"] != {"opt-level": 3, "lto": False, "codegen-units": 1, "panic": "unwind"}:
+        raise ValueError("schema 3 root profile mismatch")
+
+
 def verify(receipt_path: Path, compiler: Path | None = None) -> dict:
     for directory in list(receipt_path.parents)[:3]:
         if not stat.S_ISDIR(reject_link(directory).st_mode):
@@ -312,7 +585,7 @@ def verify(receipt_path: Path, compiler: Path | None = None) -> dict:
         raise ValueError("receipt exceeds 1 MiB")
     receipt = json.loads(raw)
     if (not isinstance(receipt, dict) or type(receipt.get("schema_version")) is not int
-            or receipt["schema_version"] not in (1, 2)):
+            or receipt["schema_version"] not in (1, 2, 3)):
         raise ValueError("unsupported receipt schema")
     schema_version = receipt["schema_version"]
     generation = receipt.get("generation")
@@ -336,6 +609,10 @@ def verify(receipt_path: Path, compiler: Path | None = None) -> dict:
     for name, expected in artifacts.items():
         if not valid_identity(expected):
             raise ValueError(f"invalid identity: {name}")
+        if schema_version == 3:
+            limit = V3_MANIFEST_LIMIT if name in {"Cargo.toml", "body-Cargo.toml"} else V3_SOURCE_LIMIT
+            if name in {"Cargo.toml", "body-Cargo.toml", "src/main.rs"} and expected["bytes"] > limit:
+                raise ValueError("schema 3 artifact exceeds size limit")
         path = receipt_path.parent
         for component in name.split("/"):
             path = path / component
@@ -344,6 +621,8 @@ def verify(receipt_path: Path, compiler: Path | None = None) -> dict:
             raise ValueError(f"artifact integrity mismatch: {name}")
     if schema_version == 2:
         _verify_generated_body(receipt_path, receipt, app.rsplit("-", 1)[-1])
+    elif schema_version == 3:
+        _verify_generated_units(receipt_path, receipt, app.rsplit("-", 1)[-1])
     # Installer command paths may themselves be links to the installed exe.
     if compiler is not None and identity(compiler, follow_symlinks=True) != receipt["compiler"]:
         raise ValueError("compiler integrity mismatch")

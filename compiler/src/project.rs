@@ -32,7 +32,7 @@ Options:
   --rust-diagnostics      Include generated Rust diagnostic details (build/run)
   --profile dev|release   Native build profile (default: release; build/run)
   --build-stats           Print build timings and Cargo reuse as JSON on stderr
-  --incremental           Reuse generated body library (build/run; --profile dev)
+  --incremental[=units]   Reuse body or bounded function units (build/run; --profile dev)
   --editor-input          Read editor buffers from stdin (check/symbols/assist)
   --serve                 Reuse assist process (one JSON request/response per line)
   --sql-schema FILE       Check literal SQL against an offline DDL snapshot (check)
@@ -131,6 +131,7 @@ pub struct Options {
     pub profile: BuildProfile,
     pub build_stats: bool,
     pub incremental: bool,
+    pub(crate) incremental_units: bool,
     /// Read editor buffers from stdin for symbols/assist or an in-memory check.
     pub editor_input: bool,
     /// Internal assist transport only; does not execute user/native code.
@@ -481,6 +482,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut profile = None;
     let mut build_stats = false;
     let mut incremental = false;
+    let mut incremental_units = false;
     let mut editor_input = false;
     let mut editor_serve = false;
     let mut sql_schema = None;
@@ -550,6 +552,10 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             "--rust-diagnostics" => rust_diagnostics = true,
             "--build-stats" if !build_stats => build_stats = true,
             "--incremental" if !incremental => incremental = true,
+            "--incremental=units" if !incremental => {
+                incremental = true;
+                incremental_units = true;
+            }
             "--editor-input" => {
                 if !matches!(command.as_str(), "symbols" | "check" | "assist") || editor_input {
                     return Err("--editor-inputはcheck/symbols/assistに1回だけ指定できます".into());
@@ -665,6 +671,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         profile: profile.unwrap_or_default(),
         build_stats,
         incremental,
+        incremental_units,
         editor_input,
         editor_serve,
         sql_schema,

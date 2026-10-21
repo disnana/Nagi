@@ -505,3 +505,17 @@ baseは公開0.2.0後のmain `2c703b89645b164f586a926e473d08395be65c90`。既存
 この記録時点で、対象generation/dependency/shared-target/output-safety/diagnosticの回帰、cache破損・link・hardlink projection aliasとCargo後の再検査、孤児Cargo、失敗時latest保持、High/Low診断、sync/async/Result entry、fmt/Clippy、receipt 18件、release 154件、CI policy 149件を確認した。実Linux archiveをcheckout外へ展開し、schema 1/2と4 exe、生成本体miss/hitを同梱toolで検証済み。全workspaceと最終HEADの4 OS CI・独立auditは別gateであり、[PR #140](https://github.com/disnana/Nagi/pull/140)の本文・Checksに最終結果を集約する。作成時はDraftで、merge・版更新・tag・正式公開は行っていない。
 
 追記: Rust実装`5a90083`の全workspaceはexit0（1004.912秒、並走検証あり）を取得した。Sol Highの独立auditで発見したroot runtime pathの改行・DELを修正し、実build・Python receipt検証・native実行を再reviewして未解決のsource指摘なし。Windowsのseparator/literal stringも修正した。CIの初回L3は既存release testの`.git`後片付けで失敗したため、fixtureだけで自動maintenance/GCとdetachを禁止し、強い継承設定下でも元のlicense拒否を確認した。背景writerの発生源は原ログだけでは確定していない。最終HEADの必須CIはPRで別途読み戻し、古い成功・失敗を代用しない。
+
+## 2026-10-21: 関数依存単位で生成Rustを再利用する第3差分
+
+ユーザーの「改善してほしい」に従い、main `0e9a575`（#139/#140反映）から[関数依存単位の再利用](function-unit-reuse.md)を実装した。core commitは`39dc51d`。単なる手書きRustのCargo試作で終えず、実Nagi CLI `--profile dev --incremental=units`、sealed plan由来の候補/閉包/SCC、最大8 Cargo unitsと混在facade、source CAS、schema 3検証、診断と保存provenance、実配布gateへ接続した。未知call/型/asyncのcallerをfacadeへ保守的に残し、完全High/Low/Policy/ownership検査・Cargo・旧exe・世代公開契約を維持する。既定・裸のincremental・公開0.2.0・release生成は変更しない。
+
+[実測](../../benchmarks/results/function-unit-reuse-2026-10-21/README.md)では、同compiler/body対unitsの1,000関数aggregateで内部編集0.713→0.662秒、署名編集0.722→0.675秒（各5回中央値）。print-eachは内部編集0.883→0.843秒だが、署名編集0.880→0.905秒、変更なし0.404→0.421秒へ増加した。独立unitのCargo Freshは6/8または7/8。cold依存コンパイルはほぼ同じで、source/output容量は増える。dev native loopは0.198→0.196秒で有意な性能向上を主張しない。CI全体の時間・課金はこの結果から推測しない。
+
+対象generation 73・diagnostic 33・project 13、receipt 36（LinuxでWindows固有1 skip）、release tools 154、fmt/Clippy、日英Docs 102ページの整合を確認した。mixed async/型/関数値/未知callee逆依存、primitive名のlegacy shadowとcanonical module、High/保存Low、子CAS注入、hardlink、孤児Cargo、公開各段階の失敗と旧exe保持を含む。実runtime HTTPの200/400とSIGINT終了、同梱compiler/runtime/toolsを使う実Linux archive（schema 1/2/3・新unit3build・全旧exe保持）も成功した。全workspaceと独立audit、最新HEADの4 OS/配布CIは作成時点で別gateとして追跡し、最終状態をPRへ集約する。merge・版更新・tag・公開は行わない。
+
+追記: core `39dc51d`の全workspace `cargo test --locked`はexit 0（831.467秒、配布等の検証並走あり）。fuzz、10 app/19 native、canonical shadow追加test、final fmt/Clippyも成功。全体suite時間をbefore/afterの性能差として扱わない。最新HEADのCIと独立auditは引き続き別gate。
+
+CI追記: PR #144初回HEAD `c9c923d`のproject toolingはLinux成功、macOS/Windowsでreceipt alias fixtureが失敗。fixtureのunit依存pathがcompilerのcanonical出力と異なっていたため、fixtureだけをcanonical化し、Linuxで同じ二重aliasを再現するtestを追加した。検証器・compiler・受入assert・期限は変更しない。修正前の同じValueErrorと、修正後37件（LinuxではWindows固有1 skip）の成功を保存し、独立再reviewと新HEADのCIを確認する。
+
+別のCI観測: 初回headのWindows prelogin issuerはPR/manualの2jobで同じowner bootstrap位置に失敗し、Linux manualはCSRF初期TokenReply504を3件観測した。runtime/lock差分はなく、分割flagもruntime testで使っていないが、原因を断定しない。High設計review後、既存FAILED envelopeと完全一致するPreLoginFailureの固定enum分類だけをCIの失敗時に追加する。秘密・一般panic/causeを表示せず、rc=1・期限・assertを維持する。新HEADの1回は分類probeとして実施し、分類不能/Unknown等で判断が残ればArchitectへ引き継ぐ。
