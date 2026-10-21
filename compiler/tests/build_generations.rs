@@ -2490,6 +2490,65 @@ fn incremental_runtime_paths_with_newlines_and_quotes_use_one_line_root_manifest
 }
 
 #[test]
+fn incremental_cache_rejects_extra_cargo_inputs_before_execution() {
+    let f = Fixture::new();
+    let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let old = native(&first);
+    let old_bytes = fs::read(&old).unwrap();
+    let key = stats(&first)["generated_body"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let body = f.app("out").join("code").join(key);
+    let manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(body.join("Cargo.toml")).unwrap()).unwrap();
+    for option in [
+        "build",
+        "autobins",
+        "autoexamples",
+        "autotests",
+        "autobenches",
+    ] {
+        assert_eq!(manifest["package"][option].as_bool(), Some(false));
+    }
+    let latest = f.latest("out").0;
+    let marker = f.0.join("unexpected-build-script-ran");
+    for (name, directory) in [
+        ("build.rs", false),
+        ("examples", true),
+        ("src/extra.rs", false),
+        ("src/bin", true),
+    ] {
+        let extra = body.join(name);
+        if directory {
+            fs::create_dir(&extra).unwrap();
+        } else {
+            fs::write(&extra, r#"fn main() { std::fs::write(std::env::var_os("NAGI_EXTRA_FILE_MARKER").unwrap(), b"executed").unwrap(); }"#).unwrap();
+        }
+        let mut command = incremental(&f, "run", "main.nagi", "out");
+        command.env("NAGI_EXTRA_FILE_MARKER", &marker);
+        let output = bounded_output(command);
+        assert!(!output.status.success(), "{name}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("unexpected or missing entries"));
+        assert!(output.stdout.is_empty());
+        assert!(!marker.exists());
+        assert!(extra.exists(), "a bad cache must not be repaired");
+        assert_eq!(f.latest("out").0, latest);
+        assert_eq!(fs::read(&old).unwrap(), old_bytes);
+        assert_eq!(run(&old), "old");
+        if directory {
+            fs::remove_dir(extra).unwrap();
+        } else {
+            fs::remove_file(extra).unwrap();
+        }
+    }
+    let repeated = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    assert_eq!(stats(&repeated)["generated_body"]["source_cache"], "hit");
+    assert_eq!(stats(&repeated)["generated_body"]["cargo_fresh"], true);
+    assert_eq!(run(&native(&repeated)), "old");
+}
+
+#[test]
 fn incremental_cache_corruption_is_not_repaired_or_published() {
     let f = Fixture::new();
     let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));

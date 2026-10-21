@@ -178,6 +178,26 @@ class ReceiptTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "dependency table mismatch"):
             MODULE.verify(self.path)
 
+    def test_schema2_rejects_extra_cargo_inputs(self):
+        digest = self.configure_schema2()
+        cas = self.root.parent.parent / "code" / digest
+        for name, directory in [("build.rs", False), ("examples", True),
+                                ("src/extra.rs", False), ("src/bin", True)]:
+            with self.subTest(name=name):
+                extra = cas / name
+                if directory:
+                    extra.mkdir()
+                else:
+                    extra.write_bytes(b"unexpected")
+                with self.assertRaisesRegex(ValueError, "unexpected or missing entries"):
+                    MODULE.verify(self.path)
+                self.assertTrue(extra.exists())
+                if directory:
+                    extra.rmdir()
+                else:
+                    extra.unlink()
+        MODULE.verify(self.path)
+
     def test_schema2_dependency_table_rejects_duplicates_and_extra_keys(self):
         self.configure_schema2()
         cargo_path = self.root / "Cargo.toml"

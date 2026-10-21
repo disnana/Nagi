@@ -26,7 +26,7 @@ nagic run --project my-app --profile dev --incremental --build-stats
 
 初版は`--profile dev`での明示指定です。Rust adapter、追加Rust依存、IDE管理runの保持設定がある場合は既存の単一bin構成へ戻り、標準エラーとstatsの`generated_body.reason`に理由を出します。既定のbuildとreleaseは変わりません。
 
-statsの`generated_body`は`mode`、生成ソースの`source_cache`（`hit` / `miss`）、`sha256`、本体成果物の`cargo_fresh`を示します。ソースcacheのhitだけではnativeの再利用成功を意味しません。保存内容を今回の生成内容とbyte単位で照合し、不一致・link・不正なファイル種類は失敗にします。勝手に修復せず、旧latestと旧実行ファイルを保持します。
+statsの`generated_body`は`mode`、生成ソースの`source_cache`（`hit` / `miss`）、`sha256`、本体成果物の`cargo_fresh`を示します。ソースcacheのhitだけではnativeの再利用成功を意味しません。保存内容を今回の生成内容とbyte単位で照合し、不一致・link・不正なファイル種類・想定外の追加ファイルやディレクトリは失敗にします。勝手に修復せず、旧latestと旧実行ファイルを保持します。
 
 本体は出力内の`.nagi/apps/<app>/code/<sha256>/`に保持し、自動削除しません。内容キーのcheckout間の移植可能性や共有cacheの認証は保証しません。協調しない別processによるディレクトリの同時差し替えやCargo cacheの改変は保証範囲外です。
 

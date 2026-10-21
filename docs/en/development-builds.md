@@ -26,7 +26,7 @@ Full checking, emission and Cargo invocation always run. Body changes create a n
 
 The initial mode is opt-in and requires `--profile dev`. Rust adapters, additional Rust dependencies and IDE-managed run retention fall back to the existing monolithic bin, with a reason on stderr and in `generated_body.reason`. Default builds and release remain unchanged.
 
-Stats expose `generated_body.mode`, generated-source `source_cache` (`hit` / `miss`), `sha256`, and body artifact `cargo_fresh`. A source-cache hit alone does not imply native reuse. Cached files are compared byte-for-byte against the current generated content. Mismatches, links and invalid file types fail without repair, preserving the previous latest and executable.
+Stats expose `generated_body.mode`, generated-source `source_cache` (`hit` / `miss`), `sha256`, and body artifact `cargo_fresh`. A source-cache hit alone does not imply native reuse. Cached files are compared byte-for-byte against the current generated content. Mismatches, links, invalid file types and unexpected extra files or directories fail without repair, preserving the previous latest and executable.
 
 Bodies remain in `.nagi/apps/<app>/code/<sha256>/` under the output and are not automatically pruned. Their identities are not guaranteed portable across checkouts and do not authenticate shared caches. Noncooperating processes concurrently replacing directories or modifying Cargo caches are outside this guarantee.
 

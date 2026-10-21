@@ -290,6 +290,9 @@ def _verify_generated_body(receipt_path: Path, receipt: dict, app_suffix: str) -
     _check_directory(cas_root)
     cas_src = cas_root / "src"
     _check_directory(cas_src)
+    for directory, expected in [(cas_root, {"Cargo.toml", "src"}), (cas_src, {"lib.rs"})]:
+        if {entry.name for entry in directory.iterdir()} != expected:
+            raise ValueError(f"generated body cache has unexpected or missing entries: {directory}")
     cas_manifest = cas_root / "Cargo.toml"
     cas_main = cas_src / "lib.rs"
     if not _files_equal(body_manifest, cas_manifest, artifacts["body-Cargo.toml"]["bytes"]):

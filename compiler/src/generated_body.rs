@@ -1,6 +1,8 @@
 //! Immutable generated-source reuse. Cargo alone decides native freshness.
 use sha2::{Digest, Sha256};
 use std::{
+    collections::BTreeSet,
+    ffi::OsString,
     fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
@@ -64,6 +66,28 @@ fn same_bytes(path: &Path, expected: &[u8]) -> Result<(), String> {
 }
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
+
+fn exact_entries(directory: &Path, expected: &[&str]) -> Result<(), String> {
+    let actual: BTreeSet<OsString> = fs::read_dir(directory)
+        .map_err(|e| e.to_string())?
+        .map(|entry| entry.map(|entry| entry.file_name()))
+        .collect::<Result<_, _>>()
+        .map_err(|e| e.to_string())?;
+    if actual != expected.iter().map(OsString::from).collect() {
+        return Err(format!(
+            "Generated body cache has unexpected or missing entries: {}; prior latest unchanged",
+            directory.display()
+        ));
+    }
+    Ok(())
+}
+
+fn exact_layout(directory: &Path) -> Result<(), String> {
+    plain(directory, true)?;
+    plain(&directory.join("src"), true)?;
+    exact_entries(directory, &["Cargo.toml", "src"])?;
+    exact_entries(&directory.join("src"), &["lib.rs"])
+}
 
 /// Compatibility writers (including check/lower and nonincremental builds)
 /// must not mutate retained bodies through a user-created hardlink or symlink.
@@ -134,6 +158,11 @@ impl GeneratedBody {
             name: &'a str,
             version: &'static str,
             edition: &'static str,
+            build: bool,
+            autobins: bool,
+            autoexamples: bool,
+            autotests: bool,
+            autobenches: bool,
         }
         #[derive(serde::Serialize)]
         struct Lib {
@@ -157,6 +186,11 @@ impl GeneratedBody {
                 name: &package,
                 version: "0.1.0",
                 edition: "2021",
+                build: false,
+                autobins: false,
+                autoexamples: false,
+                autotests: false,
+                autobenches: false,
             },
             lib: Lib {
                 name: "nagi_app_body",
@@ -191,8 +225,7 @@ impl GeneratedBody {
         // Inspect kinds before protect(), whose identity lookup opens files.
         let hit = match fs::symlink_metadata(&directory) {
             Ok(_) => {
-                plain(&directory, true)?;
-                plain(&directory.join("src"), true)?;
+                exact_layout(&directory)?;
                 same_bytes(&files[0], manifest.as_bytes())?;
                 same_bytes(&files[1], rust.as_bytes())?;
                 true
@@ -219,6 +252,7 @@ impl GeneratedBody {
             fs::create_dir(staging.join("src")).map_err(|e| e.to_string())?;
             fs::write(staging.join("Cargo.toml"), &manifest).map_err(|e| e.to_string())?;
             fs::write(staging.join("src/lib.rs"), rust).map_err(|e| e.to_string())?;
+            exact_layout(&staging)?;
             // Same-output cooperative writers are serialized. No existing
             // content-addressed entry is ever modified or removed.
             fs::rename(&staging, &directory)

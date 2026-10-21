@@ -16,6 +16,7 @@
 - Rust adapter、追加Rust依存、managed retentionは既存monolithic構成へfallbackし、理由を表示する。任意Rustの`crate::`、Cargo環境macro、生成entry guardのlifecycleを勝手に変更しない。
 - generationとcompatibility manifestはdirect runtimeと同じbody依存を持つ。両方で継承lockの`cargo build --locked`を検査する。CAS libraryを自動workspace memberにしないよう、root workspaceでbody pathをexcludeする。
 - outの既存OS lockの下で専有stagingを作り、完成したsource cacheをrenameで公開する。hitは今回の生成manifest/Rustとbyte単位で照合し、破損は修復せず失敗。親directoryとfileのlink/reparse・種類を検査し、入力identityも保護する。
+- 本体packageはbuild scriptとbin/example/test/benchの自動探索を無効にする。CASのrootは`Cargo.toml`と`src`、`src`は`lib.rs`だけに限定し、未知の名前・追加file/directory・読み取り失敗を拒否する。Python receipt検証も同じ形を照合する。既存entryへ追加した`build.rs`が以前は実行される再現を確認し、追加入力の実行前拒否・旧latest/実行file保持を回帰検査する。このmanifest変更は内容キーにも入る。
 - 通常check/lower/buildを含むprojection writerは、既知の全appの保持本体へのaliasも入力identityとして保護する。lock待機後とCargo完了後のprojection時にも再検査する。CASへhardlinkしたprojectionから旧本体を書き換えない。
 - 新しいbin名、immutable exe copy、旧latest保持、publish→projection→latest、run前unlock、孤児Cargoの世代分離はADR007を維持する。CASは自動回収しない。
 
