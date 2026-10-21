@@ -48,6 +48,8 @@
 
 ## 検証と残作業
 
+2026-10-21の第2差分では、[生成本体の再利用](generated-body-reuse.md)を未リリースのdev opt-inとして実装した。上記の初回調査・優先順位は当時の記録として保持する。生成ソースの同一性で安定したCargo libraryを選び、native成果物の有効性は毎回Cargoへ委ねる。完全検査・コード生成・テスト選択は省略せず、frontend query cacheと関数単位native再利用は未実装である。
+
 [計測・検証記録](../../benchmarks/results/smart-build-2026-10-20/README.md)に実測と未測定を分ける。既存generationのlock/barrier、孤児Cargo、alias保護、旧exe、公開manifest、projection/latest失敗の回帰を維持する。新規のprofile/receipt失敗、import本体変更、High/保存Low、native変更、managed dev、整合性不正を追加した。
 
 **残る優先度**: P1・将来の誤cache reuse防止には完全な入力境界と独立監査が必要（現在はNagi独自reuseを有効にしない）。P2・Rust library分離とfrontend query化、アプリtest契約、CIの実ジョブ計測。P2・WebSocketの長寿命権限／終了契約。QUIC/WebTransport/WebRTCとPostgreSQLは未実装で、差分に混ぜない。4 OS実行と生成利用者workflowのGitHub実行はローカルLinux成功と別のacceptanceである。

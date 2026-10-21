@@ -495,3 +495,13 @@ baseは公開0.2.0後のmain `2c703b89645b164f586a926e473d08395be65c90`。既存
 ユーザーの続行指示により、次の候補archiveへ固定2個のPython toolをtested commitから同梱し、欠落・symlink・非通常fileをpackage作成前に拒否した。receipt検証器はFIFO/device/directoryとWindows reparseを拒否し、installerのcompiler linkは維持する。checkout外でnative不要check、dev/release、両profileの旧exe、stats、同梱tool、receipt破損・compiler不一致・workflow上書き拒否を配布gateへ追加した。通常checkは既存契約どおりLowを書き込むため、Rust/manifestを生成しないこととPATHを空にした成功を検査する。
 
 作業中にmainが`7406f63`へ進んだため統合し、既存CI levels/nextest・JetBrains正式項目を維持した。新workflowもmainのaction pin policyへ合わせた。通常PRのL2は3platformになったので、4platformのRC条件には手動L3検証が別途必要。PR #138をDraftで作成し、最終HEADのCIと独立auditを確認するまでReadyにしない。版更新・正式release・mergeを行う指示とは解釈せず、変更はUnreleasedへ記録する。最終CIの動的結果はPR Checksを参照。
+
+## 2026-10-21: PR #138後の生成本体差分再利用
+
+ユーザーがPR #138をmainへmergeしたことを`1386411`で読み戻し、その後の高速化指示に従い[第2差分](generated-body-reuse.md)を実装した。Rust入力の変更commitは`5a90083`。未リリースのdev opt-inで生成Rustを本物のCargo libraryへ分離し、同一内容なら本体成果物をCargoに再利用させる。完全検査・コード生成・Cargo・世代固有bin・旧exe保持を維持する。adapter・追加Rust依存・managed runは理由付きfallback。既定releaseと公開0.2.0は変更しない。
+
+[条件とraw結果](../../benchmarks/results/generated-body-reuse-2026-10-21/README.md)では、実runtime／1,000関数fixtureのwarm中央値はstatsなし0.713→0.398秒、statsあり0.819→0.490秒。coldは38.453→38.522秒で同程度。本体変更時はcrate全体を再コンパイルする。キャッシュ容量・RSS・測っていないCI時間等も同記録へ残す。
+
+この記録時点で、対象generation/dependency/shared-target/output-safety/diagnosticの回帰、cache破損・link・hardlink projection aliasとCargo後の再検査、孤児Cargo、失敗時latest保持、High/Low診断、sync/async/Result entry、fmt/Clippy、receipt 18件、release 154件、CI policy 149件を確認した。実Linux archiveをcheckout外へ展開し、schema 1/2と4 exe、生成本体miss/hitを同梱toolで検証済み。全workspaceと最終HEADの4 OS CI・独立auditは別gateであり、[PR #140](https://github.com/disnana/Nagi/pull/140)の本文・Checksに最終結果を集約する。作成時はDraftで、merge・版更新・tag・正式公開は行っていない。
+
+追記: Rust実装`5a90083`の全workspaceはexit0（1004.912秒、並走検証あり）を取得した。Sol Highの独立auditで発見したroot runtime pathの改行・DELを修正し、実build・Python receipt検証・native実行を再reviewして未解決のsource指摘なし。Windowsのseparator/literal stringも修正した。CIの初回L3は既存release testの`.git`後片付けで失敗したため、fixtureだけで自動maintenance/GCとdetachを禁止し、強い継承設定下でも元のlicense拒否を確認した。背景writerの発生源は原ログだけでは確定していない。最終HEADの必須CIはPRで別途読み戻し、古い成功・失敗を代用しない。

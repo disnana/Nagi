@@ -14,6 +14,22 @@ nagic build --project my-app --profile release --build-stats
 
 `dev` はCargoの開発profile、`release` は既存の最適化profileを使います。依存runtimeの開発用コンパイルを再利用でき、最適化待ちを減らせます。整数の加減乗算などのoverflowは通常devでpanic、releaseでwrapします。既存の言語契約です。Cargo設定や環境でprofileを上書きした場合はその設定にも従います。本番性能の測定と配布はreleaseで行ってください。
 
+## 生成本体の差分再利用（未リリース）
+
+```sh
+nagic run --project my-app --profile dev --incremental --build-stats
+```
+
+生成Rust本体と依存manifestのSHA-256を使い、アプリごとの変更しないCargoライブラリを作ります。生成Rustが同一なら本体のコンパイル済み成果物をCargoが再利用し、世代固有の小さな起動コードだけを再コンパイルします。公開済みの実行ファイルは引き続き世代ごとにコピーし、上書きしません。
+
+完全検査、コード生成、Cargo起動は毎回行います。本体の変更で新しい内容キーを作り、ランタイムの変更、Rust設定、toolchain等のnative成果物の有効性はCargoが判定します。意味hashや前回の解析JSONだけで実行ファイルを再利用しません。関数・型・module単位のnative差分コンパイルではなく、生成本体を一つのRust crateとして再利用する段階です。
+
+初版は`--profile dev`での明示指定です。Rust adapter、追加Rust依存、IDE管理runの保持設定がある場合は既存の単一bin構成へ戻り、標準エラーとstatsの`generated_body.reason`に理由を出します。既定のbuildとreleaseは変わりません。
+
+statsの`generated_body`は`mode`、生成ソースの`source_cache`（`hit` / `miss`）、`sha256`、本体成果物の`cargo_fresh`を示します。ソースcacheのhitだけではnativeの再利用成功を意味しません。保存内容を今回の生成内容とbyte単位で照合し、不一致・link・不正なファイル種類・想定外の追加ファイルやディレクトリは失敗にします。勝手に修復せず、旧latestと旧実行ファイルを保持します。
+
+本体は出力内の`.nagi/apps/<app>/code/<sha256>/`に保持し、自動削除しません。内容キーのcheckout間の移植可能性や共有cacheの認証は保証しません。協調しない別processによるディレクトリの同時差し替えやCargo cacheの改変は保証範囲外です。
+
 ## 時間と再ビルド理由を読む
 
 `--build-stats` は成功時に `nagi-build-stats: {JSON}` を標準エラーへ1行出します。`run` のアプリ標準出力は変えません。時間の単位はmsです。
@@ -33,7 +49,9 @@ python3 scripts/verify_build_receipt.py path/to/generations/g-.../build-receipt.
 
 配布候補には同じ検証器を`tools/verify_build_receipt.py`として同梱します。Python 3.10以上で実行でき、ソースcheckoutは不要です。検証対象は通常ファイルに限定し、成果物のsymlink・Windows reparse point・FIFO等を拒否します。compiler引数にはinstallerが作る実行ファイルへのlinkも使えます。同時に悪意ある別processがdirectoryを差し替える環境の安全性は保証しません。
 
-これは内容アドレス方式の再利用を設計するための整合性基盤です。今回、Nagiの差分による型検査・コード生成・テスト・実行ファイルの再利用は行いません。全検査とCargoを毎回実行し、新しい成功世代へ公開します。記録が壊れても検査は省略しません。receipt作成に失敗したbuildは旧latestを保持し、新しいアプリを実行しません。
+全検査・コード生成・Cargoを毎回実行し、新しい成功世代へ公開します。記録が壊れても検査は省略しません。receipt作成に失敗したbuildは旧latestを保持し、新しいアプリを実行しません。
+
+本体再利用時のreceipt schema 2は、起動コードと本体manifestも記録します。検証器はsnapshotから内容キーを再計算し、所定のcache内の本体と照合し、生成manifestの依存先も確認します。通常buildのschema 1も引き続き検証できます。schema 2の検証には対応する本体cacheも必要です。
 
 SHA-256の照合は破損を検出しますが、記録ごと改変できる攻撃者に対する署名・認証ではありません。Rust module/include、外部path crate、build script、環境、toolchain等の完全な入力閉包はNagiでは記録しません。receiptやNagiソースのhashだけで、CIから取得した実行ファイルの実行を許可しないでください。ソースsnapshotにはソース内の秘密も含まれ得るため、生成ディレクトリ全体を共有cacheへ保存しないでください。
 

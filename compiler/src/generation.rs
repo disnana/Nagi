@@ -94,6 +94,7 @@ pub(crate) struct BuildGeneration {
     inherited_lock: Option<Vec<u8>>,
     temporary_run: bool,
     observed: bool,
+    generated_body: Option<String>,
 }
 impl BuildGeneration {
     /// Only explicitly temporary IDE runs opt in. Ordinary builds retain the
@@ -150,6 +151,7 @@ impl BuildGeneration {
                         inherited_lock,
                         temporary_run: false,
                         observed: false,
+                        generated_body: None,
                     };
                     if let Some(lock) = &result.inherited_lock {
                         result.write("Cargo.lock", lock)?;
@@ -168,6 +170,15 @@ impl BuildGeneration {
     pub(crate) fn record_analysis(&mut self, analysis: &serde_json::Value) -> Result<(), String> {
         self.json("build-analysis.json", analysis)?;
         self.observed = true;
+        Ok(())
+    }
+    pub(crate) fn record_body(
+        &mut self,
+        body: &crate::generated_body::GeneratedBody,
+    ) -> Result<(), String> {
+        self.write("src/entry.rs", b"fn main() { ::nagi_app_body::main(); }\n")?;
+        self.write("body-Cargo.toml", body.manifest.as_bytes())?;
+        self.generated_body = Some(body.digest.clone());
         Ok(())
     }
     pub(crate) fn snapshot(
@@ -283,11 +294,20 @@ impl BuildGeneration {
                     crate::build_analysis::file_digest(&self.staging.join(name))?,
                 );
             }
+            if self.generated_body.is_some() {
+                for name in ["src/entry.rs", "body-Cargo.toml"] {
+                    artifacts.insert(
+                        name,
+                        crate::build_analysis::file_digest(&self.staging.join(name))?,
+                    );
+                }
+            }
             let compiler = std::env::current_exe().map_err(|e| e.to_string())?;
             self.json(
                 "build-receipt.json",
                 &serde_json::json!({
-                    "schema_version":1, "app_id":self.package, "generation":self.id,
+                    "schema_version":if self.generated_body.is_some() {2} else {1}, "app_id":self.package, "generation":self.id,
+                    "generated_body_sha256":self.generated_body,
                     "scope":"published_bytes_not_a_complete_native_input_key",
                     "compiler":crate::build_analysis::file_digest(&compiler)?, "artifacts":artifacts
                 }),
@@ -317,6 +337,9 @@ impl BuildGeneration {
         let mut paths: Vec<_> = names.iter().map(|name| out.join(name)).collect();
         paths.push(self.app.join("latest.json"));
         crate::output::protect(&paths, inputs, "Generated").map_err(|e| {
+            format!("Compatibility projection may be partial; latest unchanged: {e}")
+        })?;
+        crate::generated_body::protect_outputs(out, &paths).map_err(|e| {
             format!("Compatibility projection may be partial; latest unchanged: {e}")
         })?;
         for name in names {
