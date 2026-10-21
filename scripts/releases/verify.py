@@ -187,7 +187,9 @@ def verify_development_builds(exe: Path, folder: Path, environment: dict) -> Non
         binary = native_paths[0]
         receipt = Path(stats["receipt"])
         assert receipt.parent == binary.parent and receipt.name == "build-receipt.json", stats
-        receipt.relative_to(output)
+        # Rust canonical Windows paths may carry a verbatim prefix while the
+        # caller's Path does not. Compare directory identity, not path spelling.
+        assert receipt.parents[5].samefile(output), "Receipt outside the selected output"
         analysis = json.loads((receipt.parent / "build-analysis.json").read_text(encoding="utf-8"))
         assert analysis["profile"] == profile and analysis["native_reuse"] == "cargo_only", analysis
         command = [sys.executable, str(verifier), str(receipt), "--compiler", str(exe)]
