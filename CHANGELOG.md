@@ -9,12 +9,13 @@
 - Bundle standard-library-only Python CI-generation and receipt-verification tools in future distributions. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.
 - Document the existing security API guarantees, unsupported transports and staged build roadmap, with measured application build results and their limits. These features are unreleased; published 0.2.0 remains unchanged.
 
-### JetBrains 0.1.3候補 / JetBrains 0.1.3 candidate
+## JetBrains 0.1.3
 
-- IntelliJ IDEA / PyCharm共通の補完・定義ジャンプ・編集中診断は同じPR source commitの開発版compilerに接続。プラグインのsyntax highlightingはcompilerに依存せず、公開済み0.1.11は手動Check/Runと通常のRun Configuration実行に対応するが、assist protocolは含まない。
-- IDE標準のNagi Run Configurationは通常のRun/Stopから実行でき、未信頼プロジェクトでは起動しない。0.1.3は未公開候補。matching compilerとplugin ZIPはPR CI検証artifactであり、正式公開版ではない。
-- Compiler-backed completion, navigation and live diagnostics require the matching development compiler built from the same PR source commit. Plugin syntax highlighting is independent of the compiler; published 0.1.11 supports ordinary Check/Run but lacks the assist protocol. The 0.1.3 plugin and matching compiler are PR validation artifacts, not releases.
-
+- Prepare the common IntelliJ IDEA/PyCharm plugin for the public Nagi 0.2.0 compiler, preserving plugin ID `com.disnana.nagi`, display name **Nagi**, and version 0.1.3. Compiler-backed High/Low completion, structured diagnostics, exact-source definition navigation, semantic coloring and Parameter Info use 0.2.0. Compiler 0.1.11 supports ordinary Check/Run but has no assist protocol.
+- Add the standard Nagi Run Configuration with Run/Stop, save-before-run and untrusted-project rejection. Include IDE-setting-aware bracket/quote pairing, bounded indentation and smart Backspace, explicit function live templates, and bounded top-level lexical `def`/`fn` completion. Previously saved local files may supply unsaved analysis buffers; new unsaved files and unresolved definition targets remain unsupported. Editor assistance does not prove full build success.
+- Enable `NAGI_RUN_RETENTION=latest` only for IDE-managed runs with compiler 0.2.0. Reclaim eligible generations while protecting recorded successful latest, active and input-referenced generations, last-good runs, and unknown metadata. Leave ordinary CLI generations and the shared Cargo cache alone. No strict disk-capacity limit, arbitrary Rust dependency discovery, or power-loss durability guarantee is added.
+- 公開Nagi 0.2.0に対応するJetBrains 0.1.3の正式公開を準備。High/Low補完・診断・正確な定義位置への移動、semantic色分け・引数情報、標準Run/Stop、基本編集補助とIDE管理runの世代回収を含む。0.1.11は通常Check/Runのみでassist未対応。制約とcompiler対応表は[日英の導入案内](editors/jetbrains-nagi/README.md)を参照。
+- This entry prepares publication; it does not claim that 0.1.3 assets already exist. After merge to main and successful required IDE tests/Plugin Verifier checks, the existing workflow can create the GitHub Release. Marketplace submission and approval remain separate owner actions. The implementation passed all four IDEA/PyCharm stable/EAP paths in [main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923); EAP Verifier reports existing deprecated/experimental API warnings. Final GUI acceptance for the release HEAD remains unconfirmed.
 
 ## Nagi 0.2.0
 

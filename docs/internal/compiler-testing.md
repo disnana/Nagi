@@ -90,6 +90,8 @@ self-checkはraw/byte raw/normal string・nested comment・identifierを守っ�
 
 ## CIでの実行
 
+次期CIのL1/L2/L3選択は[coverage定義](ci-levels.md)、計測・cache・Python/nextestの採否は[CI改善の記録](ci-optimization.md)を参照。必須検査の支持範囲と未測定の高速化効果を区別する。
+
 PRとpushでは既存`Nagi checks`の変更検出を使う。compiler/runtime/test/configを変えた場合、Linuxの`cargo test --locked`にcorpus・property・診断・実統合が含まれ、fuzz smokeも実行する。4配布target（Linux・Windows・macOS Intel／Apple Silicon）の検査にはconformance・view storage・Drop・scopeの実テストを含める。Docs/サイト/AGENTSだけの変更はRust全検査を起動しない。
 
 `Compiler contract exploration`は毎週月曜03:17 UTCと手動起動。2つの固定seedで256生成case、10,000 mutation、128 native case、重要なview/Drop回帰を実行する。各jobは30分まで。これは通常PRの必須gateを増やすworkflowではない。失敗時はPR/定期jobとも`build/compiler-failures/`をartifactへ保存する。

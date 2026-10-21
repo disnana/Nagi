@@ -88,7 +88,16 @@ class R2Tests(unittest.TestCase):
 
     def test_f1_checkout_credential_persistence_disabled(self):
         workflow=c.HERE.parents[1]/'.github/workflows/sf08-browser.yml'
-        self.assertIn('      - uses: actions/checkout@v4\n        with:\n          persist-credentials: false\n',workflow.read_text())
+        import importlib.util
+        path=c.HERE.parents[1]/'scripts/ci/optimization_projection.py'
+        spec=importlib.util.spec_from_file_location('ci_action_pins',path)
+        pins=importlib.util.module_from_spec(spec);spec.loader.exec_module(pins)
+        source=workflow.read_text()
+        expected='      - uses: actions/checkout@v4\n        with:\n          persist-credentials: false\n'
+        self.assertIn(expected,pins.unpin(source))
+        self.assertNotIn(expected,pins.unpin(source.replace('persist-credentials: false','persist-credentials: true')))
+        with self.assertRaises(ValueError):
+            pins.unpin(source.replace(pins.PINS['actions/checkout','v4'],'0'*40))
 
     def test_f3_owned_filesystem_budget_no_declared_host_dependency(self):
         owner=NS(cancelled=False)

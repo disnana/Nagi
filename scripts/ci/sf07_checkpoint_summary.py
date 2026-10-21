@@ -430,6 +430,44 @@ def catalog_failure_projection(raw):
     return tuple("failed" if states[name] == "FAILED" else "passed" for name in expected)
 
 
+def prelogin_failure_locations(raw):
+    """Project only fixed source identifiers and bounded numeric coordinates.
+
+    A failed diagnostic is never an acceptance receipt. Preserve privacy even
+    when a panic contains credentials, SQL, machine paths or terminal commands.
+    """
+    if len(raw) > MAX_BYTES:
+        return None
+    raw = raw.replace(b"\r\n", b"\n")
+    if b"\r" in raw:
+        return None
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeError:
+        return None
+    expected = EXPECTED["prelogin-issuer"][0]
+    rows = re.findall(r"(?m)^test ([^ \n]+) \.\.\. ([^\n]+)$", text)
+    test_lines = [line for line in text.splitlines()
+                  if line.startswith("test ") and not line.startswith("test result:")]
+    if rows != [(expected, "FAILED")] or len(test_lines) != 1:
+        return None
+    if re.findall(r"(?m)^running ([0-9]+) tests?$", text) != ["1"]:
+        return None
+    summaries = re.findall(r"(?m)^test result: ([^\n]+)$", text)
+    if len(summaries) != 1 or not re.fullmatch(
+            r"FAILED\. 0 passed; 1 failed; 0 ignored; 0 measured; [0-9]+ filtered out; finished in [0-9.]+s",
+            summaries[0]):
+        return None
+    locations = []
+    for source, label in (("runtime/src/auth/prelogin/fixed_wire_owner_tests.rs", "owner"),
+                          ("runtime/src/auth/prelogin/tests.rs", "fixture"),
+                          ("runtime/src/auth/prelogin.rs", "prelogin")):
+        pattern = re.escape(source).replace("/", r"[/\\]") + r":([0-9]{1,6}):([0-9]{1,6}):"
+        locations.extend((label, int(line), int(column))
+                         for line, column in sorted(set(re.findall(pattern, text)))[:8])
+    return tuple(locations)
+
+
 def _browser_counter_sample_line(sample):
     parts = []
     for name, value in sample.items():
@@ -470,6 +508,14 @@ def main():
     state = classify(raw, mode)
     # Both rendered fields are fixed enums, never values taken from the log.
     print("sf07_checkpoint scope=" + label + " state=" + state)
+    if mode == "prelogin-issuer" and state == "test_failed":
+        locations = prelogin_failure_locations(raw)
+        if not locations:
+            print("sf07_prelogin_owner_failure state=unavailable")
+        else:
+            for source, line, column in locations:
+                print("sf07_prelogin_owner_failure state=located source=" + source
+                      + " line=" + str(line) + " column=" + str(column))
     if mode == "catalog-retained" and state == "test_failed":
         projection = catalog_failure_projection(raw)
         if projection is None:

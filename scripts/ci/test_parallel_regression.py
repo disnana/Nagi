@@ -6,6 +6,8 @@ import re
 import unittest
 
 import gate
+import json
+import levels_projection
 import parallel_regression_projection as parallel
 import sf07_request_projection as historical
 from sf07_projection_contract import BASE_WORKFLOW_SHA256
@@ -26,7 +28,8 @@ def historical_digest(workflow):
 class ParallelWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        cls.actual_workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        cls.workflow = levels_projection.inverse_workflow(cls.actual_workflow)
 
     def test_exact_job_and_ordered_reassembly_keep_historical_identity(self):
         historical_digest(self.workflow)
@@ -100,18 +103,33 @@ class ParallelWorkflowTests(unittest.TestCase):
 
 
 class RegressionGateTests(unittest.TestCase):
-    def test_shard_is_required_by_package_plan_independently_of_full_checks(self):
-        for full in ("true", "false"):
-            for planned in ("true", "false"):
-                for result in ("success", "skipped", "failure", "cancelled", "", None):
-                    with self.subTest(full=full, planned=planned, result=result):
-                        needs = test_checks.GateTests().needs(full=full, package_nagi=planned)
-                        needs["nagi-regression"]["result"] = result
-                        expected = "success" if planned == "true" else "skipped"
-                        self.assertEqual(gate.errors(needs) == [], result == expected)
-                needs = test_checks.GateTests().needs(full=full, package_nagi=planned)
-                del needs["nagi-regression"]
-                self.assertTrue(gate.errors(needs))
+    def test_shard_result_tracks_handwritten_l1_l2_l3_profiles(self):
+        # Handwritten matrix rows and selected outcomes, not values produced by levels.expected().
+        rows = [
+            {'os':'ubuntu-latest','platform':'linux-x86_64','executable':'nagic','rust_host':'x86_64-unknown-linux-gnu'},
+            {'os':'windows-latest','platform':'windows-x86_64','executable':'nagic.exe','rust_host':'x86_64-pc-windows-msvc'},
+            {'os':'macos-15','platform':'macos-arm64','executable':'nagic','rust_host':'aarch64-apple-darwin'},
+            {'os':'macos-15-intel','platform':'macos-x86_64','executable':'nagic','rust_host':'x86_64-apple-darwin'},
+        ]
+        for level, critical, comprehensive, count, expected in [
+            ('1','true','false',3,'skipped'), ('2','false','true',3,'success'), ('3','false','true',4,'success')]:
+            needs = test_checks.GateTests().needs(full='true', package_nagi='true')
+            needs['ci-plan']['outputs'] = dict(level=level, critical_checks=critical,
+                comprehensive_checks=comprehensive, package_checks=comprehensive,
+                matrix=json.dumps({'include':rows[:count]}, separators=(',', ':')))
+            for job in ['linux','rust-1-88','nagi-package','nagi-regression']:
+                needs[job]['result'] = expected
+            needs['critical']['result'] = 'success' if critical == 'true' else 'skipped'
+            self.assertEqual(gate.errors(needs), [], level)
+            for result in ['success','skipped','failure','cancelled','',None]:
+                changed=copy.deepcopy(needs);changed['nagi-regression']['result']=result
+                self.assertEqual(gate.errors(changed) == [], result == expected, (level,result))
+            for bad in [[], rows[:2], rows[:3] if level == '3' else rows]:
+                changed=copy.deepcopy(needs)
+                changed['ci-plan']['outputs']['matrix']=json.dumps({'include':bad}, separators=(',', ':'))
+                self.assertTrue(gate.errors(changed), (level,bad))
+            del needs['nagi-regression']
+            self.assertTrue(gate.errors(needs))
 
     def test_source_guard_failure_and_invalid_plan_never_allow_shard_success(self):
         valid = test_checks.GateTests().needs(package_nagi="true")
