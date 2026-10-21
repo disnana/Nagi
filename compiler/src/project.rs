@@ -30,6 +30,8 @@ Options:
   --out DIR               Select the generated-source directory
   --cost-report           Write an allocation/copy cost report
   --rust-diagnostics      Include generated Rust diagnostic details (build/run)
+  --profile dev|release   Native build profile (default: release; build/run)
+  --build-stats           Print build timings and Cargo reuse as JSON on stderr
   --editor-input          Read editor buffers from stdin (check/symbols/assist)
   --serve                 Reuse assist process (one JSON request/response per line)
   --sql-schema FILE       Check literal SQL against an offline DDL snapshot (check)
@@ -125,6 +127,8 @@ pub struct Options {
     pub cost: bool,
     /// Include raw generated Rust details after a mapped Nagi diagnostic.
     pub rust_diagnostics: bool,
+    pub profile: BuildProfile,
+    pub build_stats: bool,
     /// Read editor buffers from stdin for symbols/assist or an in-memory check.
     pub editor_input: bool,
     /// Internal assist transport only; does not execute user/native code.
@@ -133,6 +137,27 @@ pub struct Options {
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
     pub(crate) manifest_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BuildProfile {
+    Dev,
+    #[default]
+    Release,
+}
+impl BuildProfile {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Dev => "dev",
+            Self::Release => "release",
+        }
+    }
+    pub(crate) fn directory(self) -> &'static str {
+        match self {
+            Self::Dev => "debug",
+            Self::Release => "release",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -451,6 +476,8 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut out = None;
     let mut cost = false;
     let mut rust_diagnostics = false;
+    let mut profile = None;
+    let mut build_stats = false;
     let mut editor_input = false;
     let mut editor_serve = false;
     let mut sql_schema = None;
@@ -460,13 +487,23 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         let option = &args[i];
         match option.as_str() {
             "--project" | "--native" | "--rust" | "--rust-dep" | "--out" | "--sql-schema"
-            | "--sql-dialect" => {
+            | "--sql-dialect" | "--profile" => {
                 i += 1;
                 let value = args
                     .get(i)
                     .filter(|v| !v.starts_with("--") && !v.is_empty())
                     .ok_or_else(|| format!("{option} requires a value"))?;
                 match option.as_str() {
+                    "--profile" => {
+                        let selected = match value.as_str() {
+                            "dev" => BuildProfile::Dev,
+                            "release" => BuildProfile::Release,
+                            _ => return Err("--profile requires dev or release".into()),
+                        };
+                        if profile.replace(selected).is_some() {
+                            return Err("--profile must be specified once".into());
+                        }
+                    }
                     "--project" => {
                         if project.replace(cwd.join(value)).is_some() {
                             return Err("--projectは1つ指定してください".into());
@@ -508,6 +545,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             "--no-project" => no_project = true,
             "--cost-report" => cost = true,
             "--rust-diagnostics" => rust_diagnostics = true,
+            "--build-stats" if !build_stats => build_stats = true,
             "--editor-input" => {
                 if !matches!(command.as_str(), "symbols" | "check" | "assist") || editor_input {
                     return Err("--editor-inputはcheck/symbols/assistに1回だけ指定できます".into());
@@ -525,6 +563,9 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         i += 1;
     }
     validate_dependencies(&dependencies)?;
+    if (profile.is_some() || build_stats) && !matches!(command.as_str(), "build" | "run") {
+        return Err("--profile and --build-stats are supported only by build/run".into());
+    }
     if editor_serve && !editor_input {
         return Err("assist --serve requires --editor-input".into());
     }
@@ -612,6 +653,8 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         out,
         cost,
         rust_diagnostics,
+        profile: profile.unwrap_or_default(),
+        build_stats,
         editor_input,
         editor_serve,
         sql_schema,

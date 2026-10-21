@@ -1682,6 +1682,7 @@ fn cargo_manifest(
 }
 
 pub fn cli(args: Vec<String>) -> Result<(), String> {
+    let started = std::time::Instant::now();
     #[cfg(nagi_editor_stage_diag)]
     let _editor_stage = crate::editor_stage_diag::begin(&args);
     if crate::sql_check::worker(&args)? {
@@ -1722,6 +1723,9 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     #[cfg(nagi_editor_stage_diag)]
     crate::editor_stage_diag::mark(1);
     let project_manifest = options.manifest_path;
+    let profile = options.profile;
+    let mut build_stats = options.build_stats.then(crate::build_analysis::Stats::new);
+    let mut build_report = serde_json::Value::Null;
     let cmd = options.command.as_str();
     let path = options.source;
     let high = path.extension().is_none_or(|x| x != "low");
@@ -2043,6 +2047,17 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             quote(&file.display().to_string())
         ));
     }
+    if build_stats.is_some() {
+        let analysis = crate::build_analysis::analyze(p, &sources, &generated_rust.text, profile.as_str());
+        let previous = crate::build_analysis::previous(&generated_directory.join(".nagi/apps").join(&package));
+        build_report = serde_json::json!({
+            "schema_version":1, "profile":profile.as_str(),
+            "observed_change":crate::build_analysis::change(previous.as_ref(), &analysis),
+            "semantic_sha256":analysis["semantic_sha256"], "rust_sha256":analysis["rust_sha256"],
+            "native_reuse":"cargo_only", "checks":"full", "cargo_always_invoked":true
+        });
+        generation.record_analysis(&analysis)?;
+    }
     fs::write(out.join("src/main.rs"), &generated_rust.text).map_err(|e| e.to_string())?;
     let compatibility_manifest = cargo_manifest(
         &package,
@@ -2080,10 +2095,14 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             .map(|p| p.join("build/native-target"))
             .unwrap_or_else(|| cwd.join("native-target"))
     });
+    if build_stats.is_some() {
+        build_report["before_cargo_ms"] = serde_json::json!(started.elapsed().as_secs_f64() * 1000.0);
+    }
+    let cargo_started = std::time::Instant::now();
     let mut child = Command::new("cargo")
         .args([
             "build",
-            "--release",
+            "--profile", profile.as_str(),
             "--message-format=json",
             "--manifest-path",
         ])
@@ -2111,6 +2130,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 return Err(format!("Cargoの診断を読み取れません: {e}"));
             }
         };
+        if let Some(stats) = &mut build_stats { stats.cargo_message(&line); }
         if let Some(message) = crate::diagnostics::cargo_message_with_details(
             &line,
             &generated_rust,
@@ -2125,12 +2145,20 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     if !status.success() {
         return Err("Build failed. Check the diagnostics above for code, dependency, or build environment errors.".into());
     }
-    let cached_binary = target.join("release").join(format!(
+    if build_stats.is_some() {
+        build_report["cargo_ms"] = serde_json::json!(cargo_started.elapsed().as_secs_f64() * 1000.0);
+    }
+    let cached_binary = target.join(profile.directory()).join(format!(
         "{}{}",
         generation.bin,
         std::env::consts::EXE_SUFFIX
     ));
-    generation.finish(&cached_binary, generated_directory, high, &inputs, &compatibility_manifest)
+    let publish_started = std::time::Instant::now();
+    let executable = generation.finish(&cached_binary, generated_directory, high, &inputs, &compatibility_manifest)?;
+    if build_stats.is_some() {
+        build_report["publish_ms"] = serde_json::json!(publish_started.elapsed().as_secs_f64() * 1000.0);
+    }
+    Ok(executable)
     })().map_err(partial_projection)?;
     // Pin before unlocking. The native entry obtains its independent shared
     // lease before user code; OS process exit releases even an orphan's lease.
@@ -2147,6 +2175,15 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     };
     // Retain this chosen success path; never re-read latest after unlocking.
     drop(output_lock);
+    if let Some(stats) = &build_stats {
+        build_report["total_ms"] = serde_json::json!(started.elapsed().as_secs_f64() * 1000.0);
+        build_report["cargo_fresh_artifacts"] = serde_json::json!(stats.cargo_fresh);
+        build_report["cargo_compiled_artifacts"] = serde_json::json!(stats.cargo_compiled);
+        let receipt = binary.parent().unwrap().join("build-receipt.json");
+        build_report["receipt"] = serde_json::json!(receipt.to_string_lossy());
+        build_report["receipt_os"] = crate::generation::os_path(&receipt);
+        eprintln!("nagi-build-stats: {build_report}");
+    }
     eprintln!("native: {}", binary.display());
     if cmd == "run" {
         let mut process = Command::new(binary);

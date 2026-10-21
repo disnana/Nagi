@@ -1,0 +1,18 @@
+{
+  "exit_code": 0,
+  "wall_s": 346.3165283203125,
+  "command": [
+    "python3",
+    "scripts/benchmark_project_builds.py",
+    "--compiler",
+    "target/release/nagic",
+    "--baseline",
+    "/tmp/nagic-baseline",
+    "--work-dir",
+    "/workspace/Nagi/local-only/bench",
+    "--output",
+    "benchmarks/results/smart-build-2026-10-20/raw.json",
+    "--repeat",
+    "3"
+  ]
+}

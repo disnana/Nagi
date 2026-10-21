@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Verify observed published bytes, never authorize executing a restored cache."""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import stat
+from contextlib import contextmanager
+from pathlib import Path
+
+FIXED = {"generated.low", "src/main.rs", "Cargo.toml", "Cargo.lock", "sources.json", "provenance.json", "build-analysis.json"}
+HEX = re.compile(r"[0-9a-f]{64}")
+GENERATION = re.compile(r"g-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+")
+
+
+def reject_link(path: Path) -> os.stat_result:
+    metadata = path.lstat()
+    if (stat.S_ISLNK(metadata.st_mode)
+            or getattr(metadata, "st_file_attributes", 0)
+            & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+        raise ValueError(f"symbolic link or reparse point: {path}")
+    return metadata
+
+
+@contextmanager
+def regular_file(path: Path, *, follow_symlinks: bool = False):
+    # Nonblocking prevents a substituted Unix FIFO from hanging at open. The
+    # descriptor check also rejects devices/directories before reading bytes.
+    # Concurrent hostile directory replacement is outside this local verifier.
+    metadata = path.stat() if follow_symlinks else reject_link(path)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError(f"not a regular file: {path}")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NONBLOCK", 0)
+    if not follow_symlinks:
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError(f"not a regular file: {path}")
+        with os.fdopen(descriptor, "rb", closefd=False) as source:
+            yield source
+    finally:
+        os.close(descriptor)
+
+
+def identity(path: Path, *, follow_symlinks: bool = False) -> dict:
+    digest = hashlib.sha256()
+    size = 0
+    with regular_file(path, follow_symlinks=follow_symlinks) as source:
+        while block := source.read(65536):
+            size += len(block)
+            digest.update(block)
+    return {"sha256": digest.hexdigest(), "bytes": size}
+
+
+def valid_identity(value: object) -> bool:
+    return (isinstance(value, dict) and set(value) == {"sha256", "bytes"}
+            and isinstance(value["sha256"], str) and HEX.fullmatch(value["sha256"]) is not None
+            and type(value["bytes"]) is int and value["bytes"] >= 0)
+
+
+def verify(receipt_path: Path, compiler: Path | None = None) -> dict:
+    for directory in list(receipt_path.parents)[:3]:
+        if not stat.S_ISDIR(reject_link(directory).st_mode):
+            raise ValueError(f"not a directory: {directory}")
+    with regular_file(receipt_path) as source:
+        raw = source.read(1024 * 1024 + 1)
+    if len(raw) > 1024 * 1024:
+        raise ValueError("receipt exceeds 1 MiB")
+    receipt = json.loads(raw)
+    if (not isinstance(receipt, dict) or type(receipt.get("schema_version")) is not int
+            or receipt["schema_version"] != 1):
+        raise ValueError("unsupported receipt schema")
+    generation = receipt.get("generation")
+    app = receipt.get("app_id")
+    if (not isinstance(generation, str) or GENERATION.fullmatch(generation) is None
+            or generation != receipt_path.parent.name):
+        raise ValueError("generation identity mismatch")
+    if (not isinstance(app, str) or not app.startswith("nagi-")
+            or "/" in app or "\\" in app or re.fullmatch(r"[0-9a-f]{16}", app.rsplit("-", 1)[-1]) is None
+            or receipt_path.parent.parent.name != "generations"
+            or receipt_path.parent.parent.parent.name != app):
+        raise ValueError("application identity mismatch")
+    executable = f"nagi-{app.rsplit('-', 1)[-1]}-{generation}"
+    artifacts = receipt.get("artifacts")
+    if (not isinstance(artifacts, dict)
+            or set(artifacts) not in (FIXED | {executable}, FIXED | {executable + ".exe"})):
+        raise ValueError("unexpected, missing, or escaping artifact path")
+    if not valid_identity(receipt.get("compiler")):
+        raise ValueError("invalid compiler identity")
+    for name, expected in artifacts.items():
+        if not valid_identity(expected):
+            raise ValueError(f"invalid identity: {name}")
+        path = receipt_path.parent
+        for component in name.split("/"):
+            path = path / component
+            reject_link(path)
+        if identity(path) != expected:
+            raise ValueError(f"artifact integrity mismatch: {name}")
+    # Installer command paths may themselves be links to the installed exe.
+    if compiler is not None and identity(compiler, follow_symlinks=True) != receipt["compiler"]:
+        raise ValueError("compiler integrity mismatch")
+    return receipt
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("receipt", type=Path)
+    parser.add_argument("--compiler", type=Path)
+    args = parser.parse_args()
+    try:
+        verify(args.receipt, args.compiler)
+    except (OSError, ValueError, TypeError) as error:
+        parser.exit(1, f"receipt verification failed: {error}\n")
+    print("Published bytes verified; external dependencies and cache authenticity are not verified.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

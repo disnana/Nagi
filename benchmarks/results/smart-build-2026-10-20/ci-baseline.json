@@ -1,0 +1,88 @@
+{
+  "base_commit": "2c703b89645b164f586a926e473d08395be65c90",
+  "run_url": "https://github.com/disnana/Nagi/actions/runs/39444177134",
+  "observed_workflow_wall_seconds": 2005,
+  "wall_basis": "run_started_at 2026-10-20T14:58:49Z to last completed job 2026-10-20T15:32:14Z; includes scheduling; skipped job timestamps excluded",
+  "jobs": [
+    {
+      "name": "changes",
+      "conclusion": "success",
+      "started_at": "2026-10-20T14:58:52Z",
+      "completed_at": "2026-10-20T14:59:07Z",
+      "seconds": 15
+    },
+    {
+      "name": "release-plan",
+      "conclusion": "success",
+      "started_at": "2026-10-20T14:58:52Z",
+      "completed_at": "2026-10-20T14:59:07Z",
+      "seconds": 15
+    },
+    {
+      "name": "linux",
+      "conclusion": "success",
+      "started_at": "2026-10-20T14:59:09Z",
+      "completed_at": "2026-10-20T15:32:14Z",
+      "seconds": 1985
+    },
+    {
+      "name": "SF02 runtime Ed25519 profile on Rust 1.88.0 (Linux x86_64)",
+      "conclusion": "success",
+      "started_at": "2026-10-20T14:59:09Z",
+      "completed_at": "2026-10-20T15:01:20Z",
+      "seconds": 131
+    },
+    {
+      "name": "sf08-browser / browser-tls",
+      "conclusion": "success",
+      "started_at": "2026-10-20T14:59:10Z",
+      "completed_at": "2026-10-20T15:01:46Z",
+      "seconds": 156
+    },
+    {
+      "name": "nagi-package",
+      "conclusion": "skipped",
+      "started_at": "2026-10-20T14:59:08Z",
+      "completed_at": "2026-10-20T14:59:07Z",
+      "seconds": null
+    },
+    {
+      "name": "jetbrains",
+      "conclusion": "skipped",
+      "started_at": "2026-10-20T14:59:08Z",
+      "completed_at": "2026-10-20T14:59:07Z",
+      "seconds": null
+    },
+    {
+      "name": "vscode-package",
+      "conclusion": "skipped",
+      "started_at": "2026-10-20T14:59:08Z",
+      "completed_at": "2026-10-20T14:59:07Z",
+      "seconds": null
+    },
+    {
+      "name": "nagi-regression",
+      "conclusion": "skipped",
+      "started_at": "2026-10-20T14:59:08Z",
+      "completed_at": "2026-10-20T14:59:07Z",
+      "seconds": null
+    },
+    {
+      "name": "publish-release",
+      "conclusion": "skipped",
+      "started_at": "2026-10-20T15:32:14Z",
+      "completed_at": "2026-10-20T15:32:14Z",
+      "seconds": null
+    },
+    {
+      "name": "Ready to merge",
+      "conclusion": "skipped",
+      "started_at": "2026-10-20T15:32:14Z",
+      "completed_at": "2026-10-20T15:32:14Z",
+      "seconds": null
+    }
+  ],
+  "after_change_ci": null,
+  "user_project_ci": null,
+  "cost": null
+}

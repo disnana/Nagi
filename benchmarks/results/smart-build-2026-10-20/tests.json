@@ -1,0 +1,31 @@
+{
+  "full_workspace": {
+    "command": "cargo test --locked",
+    "completed_successful_output": true,
+    "observed_process_exit_code": null,
+    "exit_code_note": "Execution-controller reconnect lost the PTY session; persisted log covers every launched top-level suite and ends with successful doctests. No failure summaries or Cargo errors.",
+    "top_level_suites": 119,
+    "log_sha256": "95360caf4b0352bd6b1a8c22f9b37cead0e3aed35f8cd8ae97ecada3dc00ba46",
+    "wall_seconds_from_log_birth_to_last_write": 1215.486423004,
+    "log_started_utc": "2026-10-20T23:24:58.072620Z",
+    "log_last_write_utc": "2026-10-20T23:45:13.559043Z",
+    "final_summary": "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+  },
+  "final_changed_paths_regression": {
+    "command": "cargo test --locked -p nagic --test build_generations",
+    "passed": 54,
+    "failed": 0,
+    "elapsed_s": 27.51,
+    "log_sha256": "f45b6d297250cd41afc3375296dbd237076b078174912b3cf6537af52fdcf72a"
+  },
+  "project_regression": {
+    "passed": 13,
+    "failed": 0,
+    "elapsed_s": 100.56,
+    "log_sha256": "8f3951f91b8e6118f2e5c927629fae0a3afda156c6d2162e7ce8bbf8b1233bb1"
+  },
+  "limits": [
+    "Workspace run began before final observation-only receipt OS-unit addition; the final generation harness was rerun after that change.",
+    "No remote GitHub or non-Linux execution for this patch."
+  ]
+}

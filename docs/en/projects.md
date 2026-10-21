@@ -156,3 +156,7 @@ Declaration/local type hovers, function/class/type/field completion, and argumen
 The JSON includes function parameters, return types, async status, and class fields. Confirmed variable types are in `locals`; expression types, ranges, and matching fields are in `expressions`. Positions use one-based lines and UTF-16 columns in the original files. Uncertain types are omitted. This is editor information and does not establish a successful check.
 
 `symbols --editor-input` accepts `{"files":[{"file":"main.nagi","text":"..."}]}` on stdin to supply edits to existing Nagi/Low files. Relative paths use the terminal's working directory. Sources are replaced in memory without writing to disk. The option is available for `symbols` and `check`; configuration files use saved contents. `check --editor-input` does not write generated files.
+
+## Shortening development and CI feedback
+
+See [CI configuration generation](user-ci.md) for released 0.2.0 and [development profiles and build observations](development-builds.md) for unreleased compiler source.

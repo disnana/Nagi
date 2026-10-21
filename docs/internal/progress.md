@@ -481,3 +481,17 @@ PR #99のe3e0ea3 initial checksは実行中で、latest-head 4 OS/websiteのread
 main base `3b8da22`で元quote-apiのrequest/413 assertと既存native5件を維持し、失敗段階・停止前child状態・bounded stdout/stderrをCI artifactへ保存する。NODELAY=true・別writeの4097 bytes nativeは413受信を別に記録し、handler非呼出し・bounded close・次GET/capacity回復を要求する。公開制限から新たな413必達保証を導かず、runtime実装・依存・版を変更しない。
 
 Linuxはnative6件、runtime library232 passed/既存ignored1、Clippy/fmt、Python診断9件、CI policy59件、再利用High/保存Lowの元51 cases/形式が成功。Windows/macOS・remote CI・独立reviewは未確認で、元Windows resetのnative REDはない。[観測方針と次の判断](http413-ci-observation.md)、[有限な検査artifact](../../benchmarks/results/http413-ci-observation-2026-10-10/README.md)を参照。
+
+## 2026-10-20: アプリ開発向けprofileと差分観測の第1差分
+
+baseは公開0.2.0後のmain `2c703b89645b164f586a926e473d08395be65c90`。既存SF01〜HTTP client/session/CSRF/HTML/SQLite・世代隔離・検査/IDE/CIを調査し、[実装計画](smart-build-plan.md)へ実装済み／部分的／未対応を分けた。標準APIの破壊や予算値の変更は行わず、既定releaseの維持、opt-in dev、Cargo fresh/time、typed Programの差分hash/graph、公開前receipt、利用者CI生成を実装した。生成物のhashでfull check/Cargo/testを省略しない。
+
+公開0.2.0に新しいflagがあるとは記載せず、CI generatorは配布済みCLIで動くplain buildを使う。通常世代・旧exe・孤児Cargo・lock/projection/latest失敗の契約を維持。小さいprofile/receipt/実行失敗、import本体／署名／コメント、保存Low、native変更、managed dev、raw OS pathの観測を追加した。新しいscript検査は既存whole-workflowの固定契約を変えず別workflowへ置いた。結果、測定条件と未確認targetは[計測記録](../../benchmarks/results/smart-build-2026-10-20/README.md)に集約する。remote PR/CI、main反映、版更新、公開は行っていない。
+
+2026-10-21最終確認: 条件をそろえた小アプリのcleanは既存release 73.295秒、current release 70.477秒、dev 37.440秒。warmは0.1492／0.1511／0.1678秒で、大幅な短縮は実証せず。最終16 receiptの照合、generation 54件、project 13件、fmt/Clippy、Python検査、102ページのDocs生成を確認した。全workspaceは119 suiteの成功最終logを保持するが、controller再接続で終了コード取得は失われた。独立auditで重大な未解決指摘なし。non-Linuxと変更後remote CIは未検証のまま残す。
+
+## 2026-10-21: リリース品質への追加検証
+
+ユーザーの続行指示により、次の候補archiveへ固定2個のPython toolをtested commitから同梱し、欠落・symlink・非通常fileをpackage作成前に拒否した。receipt検証器はFIFO/device/directoryとWindows reparseを拒否し、installerのcompiler linkは維持する。checkout外でnative不要check、dev/release、両profileの旧exe、stats、同梱tool、receipt破損・compiler不一致・workflow上書き拒否を配布gateへ追加した。通常checkは既存契約どおりLowを書き込むため、Rust/manifestを生成しないこととPATHを空にした成功を検査する。
+
+作業中にmainが`7406f63`へ進んだため統合し、既存CI levels/nextest・JetBrains正式項目を維持した。新workflowもmainのaction pin policyへ合わせた。通常PRのL2は3platformになったので、4platformのRC条件には手動L3検証が別途必要。PR #138をDraftで作成し、最終HEADのCIと独立auditを確認するまでReadyにしない。版更新・正式release・mergeを行う指示とは解釈せず、変更はUnreleasedへ記録する。最終CIの動的結果はPR Checksを参照。

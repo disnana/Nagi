@@ -61,6 +61,7 @@ Each detail page describes current behavior and release scope, then provides or 
 | Split code into files or call Rust | [Imports and Rust](modules-and-rust.md) |
 | Share your own libraries or use Rust crates | [Libraries and Rust assets](libraries.md) |
 | Save an entry file and build settings | [nagi.toml](projects.md) |
+| Generate app CI and measure development builds | [CI generation](user-ci.md) · [Development builds (unreleased)](development-builds.md) |
 | Use your own Rust crate from an application | [Local library example](../../test-nagi-code/rust-library/README.en.md) |
 | Wait for async work or start child operations | [Async and scopes](async.md), [concurrency](concurrency.md) |
 | Send messages to stateful tasks and manage restart and shutdown | [Actors](actor.md), [Supervisors](supervisor.md), [API reference](actor-reference.md) |

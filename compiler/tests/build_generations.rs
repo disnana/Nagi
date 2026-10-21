@@ -2306,6 +2306,9 @@ fn main() {
             let out = PathBuf::from(env::var_os("NAGI_TEST_OUT").unwrap());
             let path = out.join("src/main.rs"); fs::remove_file(&path).unwrap(); fs::create_dir(path).unwrap();
         }
+        if mode == "receipt-fault" {
+            fs::create_dir(manifest.parent().unwrap().join("build-receipt.json")).unwrap();
+        }
         if mode == "latest-fault" {
             // ADR007: staging and published generation share the generations parent.
             // This keeps relative runtime paths valid after publication.
@@ -2318,3 +2321,241 @@ fn main() {
     fs::write(signals.join("done"), status.code().unwrap_or(1).to_string()).unwrap();
     exit(status.code().unwrap_or(1));
 }"#;
+
+fn stats(output: &Output) -> serde_json::Value {
+    let text = String::from_utf8_lossy(&output.stderr);
+    let line = text
+        .lines()
+        .find_map(|l| l.strip_prefix("nagi-build-stats: "))
+        .expect("build statistics");
+    serde_json::from_str(line).unwrap()
+}
+fn analysis(binary: &Path) -> serde_json::Value {
+    serde_json::from_slice(&fs::read(binary.parent().unwrap().join("build-analysis.json")).unwrap())
+        .unwrap()
+}
+fn verify_receipt(binary: &Path) {
+    use sha2::{Digest, Sha256};
+    let directory = binary.parent().unwrap();
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&fs::read(directory.join("build-receipt.json")).unwrap()).unwrap();
+    assert_eq!(receipt["schema_version"], 1);
+    assert_eq!(
+        receipt["generation"].as_str().unwrap(),
+        directory.file_name().unwrap()
+    );
+    for (name, identity) in receipt["artifacts"].as_object().unwrap() {
+        let bytes = fs::read(directory.join(name)).unwrap();
+        assert_eq!(identity["bytes"].as_u64().unwrap(), bytes.len() as u64);
+        assert_eq!(identity["sha256"], format!("{:x}", Sha256::digest(&bytes)));
+    }
+}
+
+#[test]
+fn dev_and_release_publish_distinct_immutable_artifacts_and_verified_observations() {
+    let f = Fixture::new();
+    f.write("helper.nagi", "def value() -> i64:\n    return 41\n");
+    f.write(
+        "main.nagi",
+        "from \"helper.nagi\" import value\ndef main():\n    print(value() + 1)\n",
+    );
+    let build = |profile: &str| {
+        let mut command = f.cli("build", "main.nagi", "out");
+        command.args(["--profile", profile, "--build-stats"]);
+        bounded_output(command)
+    };
+    let release = build("release");
+    let old = native(&release);
+    assert_eq!(run(&old), "42");
+    let old_bytes = fs::read(&old).unwrap();
+    let initial = analysis(&old);
+    assert_eq!(stats(&release)["observed_change"], "no_previous_analysis");
+    verify_receipt(&old);
+    let dev = build("dev");
+    let dev_binary = native(&dev);
+    assert_ne!(old, dev_binary);
+    assert_eq!(run(&dev_binary), "42");
+    assert_eq!(stats(&dev)["profile"], "dev");
+    assert_eq!(stats(&dev)["observed_change"], "profile_changed");
+    assert!(stats(&dev)["cargo_compiled_artifacts"].as_u64().unwrap() > 0);
+    assert_eq!(
+        analysis(&dev_binary)["semantic_sha256"],
+        initial["semantic_sha256"]
+    );
+    verify_receipt(&dev_binary);
+    let repeat = build("dev");
+    let repeat_binary = native(&repeat);
+    assert_ne!(dev_binary, repeat_binary);
+    assert_eq!(stats(&repeat)["observed_change"], "observed_nagi_unchanged");
+    assert!(stats(&repeat)["cargo_fresh_artifacts"].as_u64().unwrap() > 0);
+    assert_eq!(stats(&repeat)["checks"], "full");
+    assert_eq!(stats(&repeat)["cargo_always_invoked"], true);
+    f.write(
+        "helper.nagi",
+        "# A line-only change\ndef value() -> i64:\n    return 41\n",
+    );
+    let comment = build("dev");
+    assert_eq!(
+        stats(&comment)["observed_change"],
+        "observed_nagi_unchanged"
+    );
+    // Same-size imported function change: timestamps cannot justify reuse.
+    f.write("helper.nagi", "def value() -> i64:\n    return 42\n");
+    let changed = build("dev");
+    let changed_binary = native(&changed);
+    assert_eq!(run(&changed_binary), "43");
+    assert_eq!(stats(&changed)["observed_change"], "implementation_changed");
+    assert_eq!(
+        analysis(&changed_binary)["interface_sha256"],
+        initial["interface_sha256"]
+    );
+    assert_ne!(
+        analysis(&changed_binary)["semantic_sha256"],
+        initial["semantic_sha256"]
+    );
+    assert_eq!(fs::read(&old).unwrap(), old_bytes);
+    assert_eq!(run(&old), "42");
+    f.write("helper.nagi", "def value() -> i32:\n    return 42\n");
+    let api = build("dev");
+    assert_eq!(stats(&api)["observed_change"], "interface_changed");
+    assert_eq!(run(&native(&api)), "43");
+    let final_release = native(&build("release"));
+    assert_eq!(run(&final_release), "43");
+    assert_ne!(old, final_release);
+    // Saved Low still takes the independent Low check path in dev.
+    fs::copy(f.0.join("out/generated.low"), f.0.join("saved.low")).unwrap();
+    let mut low = f.cli("build", "saved.low", "low-out");
+    low.args(["--profile", "dev", "--build-stats"]);
+    let low_binary = native(&bounded_output(low));
+    assert_eq!(run(&low_binary), "43");
+    verify_receipt(&low_binary);
+}
+
+#[test]
+fn dev_profile_preserves_dynamic_overflow_and_trusted_native_boundary() {
+    let f = Fixture::new();
+    f.write("main.nagi", "@rust(\"native::maximum\")\nextern def maximum() -> i64\ndef main():\n    print(maximum() + 1)\n");
+    f.write(
+        "native.rs",
+        "pub fn maximum() -> i64 { std::hint::black_box(i64::MAX) }\n",
+    );
+    let build = |profile: &str| {
+        let mut command = f.cli("build", "main.nagi", "out");
+        command.args(["--profile", profile, "--rust", "native.rs"]);
+        native(&bounded_output(command))
+    };
+    let dev = build("dev");
+    let output = Command::new(&dev).output().unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("overflow"));
+    let release = build("release");
+    assert_eq!(run(&release), i64::MIN.to_string());
+    // Changing native code must still reach Cargo on an unchanged Nagi program.
+    f.write("native.rs", "pub fn maximum() -> i64 { 10 }\n");
+    let dev2 = build("dev");
+    assert_eq!(run(&dev2), "11");
+    assert_eq!(run(&release), i64::MIN.to_string());
+}
+
+#[test]
+fn corrupted_observation_does_not_skip_cargo_or_change_application_output() {
+    let f = Fixture::new();
+    let mut command = f.cli("build", "main.nagi", "out");
+    command.args(["--profile", "dev", "--build-stats"]);
+    let first = native(&bounded_output(command));
+    fs::write(
+        first.parent().unwrap().join("build-analysis.json"),
+        "{broken",
+    )
+    .unwrap();
+    let mut command = f.cli("run", "main.nagi", "out");
+    command.args(["--profile", "dev", "--build-stats"]);
+    let result = bounded_output(command);
+    success(&result);
+    assert_eq!(String::from_utf8_lossy(&result.stdout).trim(), "old");
+    assert_eq!(stats(&result)["observed_change"], "no_previous_analysis");
+    assert_eq!(stats(&result)["cargo_always_invoked"], true);
+}
+
+#[test]
+fn dev_cargo_and_receipt_failures_preserve_latest_and_do_not_run() {
+    let f = Fixture::new();
+    let old = f.build();
+    let (latest, _) = f.latest("out");
+    let old_bytes = fs::read(&old).unwrap();
+    f.source("main.nagi", "new");
+    let wrapper = f.wrapper();
+    for mode in ["fail", "receipt-fault"] {
+        let mut command = f.wrapped(&wrapper, "run", "main.nagi", "out", mode, mode);
+        command.args(["--profile", "dev", "--build-stats"]);
+        let output = bounded_output(command);
+        assert!(!output.status.success(), "{mode}");
+        assert!(
+            output.stdout.is_empty(),
+            "failed build must not run: {mode}"
+        );
+        assert_eq!(f.latest("out").0, latest);
+        assert_eq!(fs::read(&old).unwrap(), old_bytes);
+        assert_eq!(run(&old), "old");
+    }
+}
+
+#[test]
+fn managed_dev_run_uses_default_native_cache_and_keeps_entry_guard() {
+    let f = Fixture::new();
+    let mut command = f.cli("run", "main.nagi", "out");
+    command
+        .args(["--profile", "dev", "--build-stats"])
+        .env_remove("NAGI_NATIVE_TARGET_DIR")
+        .env("NAGI_RUN_RETENTION", "latest");
+    let output = bounded_output(command);
+    success(&output);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "old");
+    let binary = native(&output);
+    assert!(f
+        .0
+        .join("native-target/debug")
+        .join(binary.file_name().unwrap())
+        .is_file());
+    verify_receipt(&binary);
+    assert!(
+        fs::read_to_string(binary.parent().unwrap().join("src/main.rs"))
+            .unwrap()
+            .contains("NAGI-RUN-2")
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn build_stats_keep_raw_source_paths_and_receipt_location_from_non_utf8_cwd() {
+    use std::os::unix::ffi::OsStringExt;
+    let f = Fixture::new();
+    let entry =
+        f.0.join(std::ffi::OsString::from_vec(b"stats-\xff".to_vec()));
+    fs::create_dir(&entry).unwrap();
+    fs::write(entry.join("main.nagi"), "def main():\n    print(42)\n").unwrap();
+    let out = f.0.join("out");
+    let mut command = f.cli("run", "main.nagi", out.to_str().unwrap());
+    command
+        .current_dir(&entry)
+        .args(["--profile", "dev", "--build-stats"]);
+    let output = bounded_output(command);
+    success(&output);
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "42");
+    let app = out.join(".nagi/apps").join(package(&out));
+    let latest: serde_json::Value =
+        serde_json::from_slice(&fs::read(app.join("latest.json")).unwrap()).unwrap();
+    let binary = app.join(latest["executable"].as_str().unwrap());
+    verify_receipt(&binary);
+    let snapshot: serde_json::Value =
+        serde_json::from_slice(&fs::read(binary.parent().unwrap().join("sources.json")).unwrap())
+            .unwrap();
+    assert_os_path(
+        &snapshot["files"][0]["path_os"],
+        &fs::canonicalize(entry.join("main.nagi")).unwrap(),
+    );
+    assert_os_path(
+        &stats(&output)["receipt_os"],
+        &binary.parent().unwrap().join("build-receipt.json"),
+    );
+}

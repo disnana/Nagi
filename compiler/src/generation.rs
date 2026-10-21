@@ -93,6 +93,7 @@ pub(crate) struct BuildGeneration {
     package: String,
     inherited_lock: Option<Vec<u8>>,
     temporary_run: bool,
+    observed: bool,
 }
 impl BuildGeneration {
     /// Only explicitly temporary IDE runs opt in. Ordinary builds retain the
@@ -148,6 +149,7 @@ impl BuildGeneration {
                         package: package.to_owned(),
                         inherited_lock,
                         temporary_run: false,
+                        observed: false,
                     };
                     if let Some(lock) = &result.inherited_lock {
                         result.write("Cargo.lock", lock)?;
@@ -162,6 +164,11 @@ impl BuildGeneration {
     pub(crate) fn write(&self, name: &str, bytes: &[u8]) -> Result<(), String> {
         fs::write(self.staging.join(name), bytes)
             .map_err(|e| format!("Cannot write generation {name}: {e}"))
+    }
+    pub(crate) fn record_analysis(&mut self, analysis: &serde_json::Value) -> Result<(), String> {
+        self.json("build-analysis.json", analysis)?;
+        self.observed = true;
+        Ok(())
     }
     pub(crate) fn snapshot(
         &self,
@@ -259,6 +266,33 @@ impl BuildGeneration {
         let executable = format!("{}{}", self.bin, std::env::consts::EXE_SUFFIX);
         fs::copy(cache, self.staging.join(&executable))
             .map_err(|e| format!("Cannot copy generation executable: {e}"))?;
+        if self.observed {
+            let mut artifacts = std::collections::BTreeMap::new();
+            for name in [
+                "generated.low",
+                "src/main.rs",
+                "Cargo.toml",
+                "Cargo.lock",
+                "sources.json",
+                "provenance.json",
+                "build-analysis.json",
+                executable.as_str(),
+            ] {
+                artifacts.insert(
+                    name,
+                    crate::build_analysis::file_digest(&self.staging.join(name))?,
+                );
+            }
+            let compiler = std::env::current_exe().map_err(|e| e.to_string())?;
+            self.json(
+                "build-receipt.json",
+                &serde_json::json!({
+                    "schema_version":1, "app_id":self.package, "generation":self.id,
+                    "scope":"published_bytes_not_a_complete_native_input_key",
+                    "compiler":crate::build_analysis::file_digest(&compiler)?, "artifacts":artifacts
+                }),
+            )?;
+        }
         let published = self.app.join("generations").join(&self.id);
         if published.exists() {
             return Err("Build generation already exists".into());
@@ -866,18 +900,18 @@ fn plain_tree(path: &Path, depth: usize, remaining: &mut usize) -> bool {
 // even when it has no Unicode representation. Module IDs retain their existing
 // compiler representation and are not reconstructed from a lossy display path.
 #[cfg(unix)]
-fn os_path(path: &Path) -> serde_json::Value {
+pub(crate) fn os_path(path: &Path) -> serde_json::Value {
     use std::os::unix::ffi::OsStrExt;
     serde_json::json!({"encoding":"unix_bytes","units":path.as_os_str().as_bytes()})
 }
 #[cfg(windows)]
-fn os_path(path: &Path) -> serde_json::Value {
+pub(crate) fn os_path(path: &Path) -> serde_json::Value {
     use std::os::windows::ffi::OsStrExt;
     let units: Vec<_> = path.as_os_str().encode_wide().collect();
     serde_json::json!({"encoding":"windows_utf16","units":units})
 }
 #[cfg(not(any(unix, windows)))]
-fn os_path(path: &Path) -> serde_json::Value {
+pub(crate) fn os_path(path: &Path) -> serde_json::Value {
     serde_json::json!({"encoding":"encoded_bytes","units":path.as_os_str().as_encoded_bytes()})
 }
 fn kind(kind: LoweringKind) -> &'static str {
