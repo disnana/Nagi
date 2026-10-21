@@ -44,6 +44,9 @@ class DevelopmentDistributionVerificationTests(unittest.TestCase):
             if command[1] == "check":
                 self.assertEqual(kwargs["env"]["PATH"], "")
                 self.assertFalse(Path(kwargs["env"]["NAGI_ROOT"]).exists())
+                output = Path(command[command.index("--out") + 1])
+                output.mkdir()
+                (output / "generated.low").write_text("fn main() -> unit {}\n", encoding="utf-8")
                 return subprocess.CompletedProcess(command, 0, "", "checked source\n")
             self.assertEqual(command[1], "run")
             profile = command[command.index("--profile") + 1]

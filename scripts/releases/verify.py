@@ -157,11 +157,14 @@ def verify_development_builds(exe: Path, folder: Path, environment: dict) -> Non
     (project / "nagi.toml").write_text("entry='main.nagi'\n", encoding="utf-8")
     (project / "main.nagi").write_text('def main():\n    print(42)\n', encoding="utf-8")
     isolated = {**environment, "PATH": "", "NAGI_ROOT": str(folder / "missing runtime")}
-    checked = subprocess.run([str(exe), "check", "--project", str(project)],
+    check_output = folder / "check output 凪"
+    checked = subprocess.run([str(exe), "check", "--project", str(project), "--out", str(check_output)],
                              cwd=folder, env=isolated, capture_output=True, text=True,
                              encoding="utf-8", timeout=15)
     assert checked.returncode == 0, checked.stderr
-    assert not (project / "build").exists(), "Native-free check created build output"
+    assert (check_output / "generated.low").is_file(), "Check did not produce checked Low"
+    for unexpected in ("src/main.rs", "Cargo.toml", "Cargo.lock", "target"):
+        assert not (check_output / unexpected).exists(), f"Native-free check created {unexpected}"
     output = folder / "development output 凪"
     snapshots = []
     for profile in ("dev", "release"):

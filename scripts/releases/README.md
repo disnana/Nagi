@@ -50,7 +50,7 @@ PRやmain以外のブランチでは、新しい実行が始まると同じPR・
 
 Nagiのアーカイブには、**検証したコミットのGit管理下にあるランタイムのソース**を使います。`.git`、未追跡のメモ、ローカルのビルド・DB・ログは入りません。コミット情報は`release.json`で確認できます。
 
-配布物は直下の`nagic`または`nagic.exe`、ビルドに必要な`runtime/`、`LICENSE`、短い日英の`README.txt`、`release.json`に加え、`tools/generate_project_ci.py`と`tools/verify_build_receipt.py`を含みます。補助スクリプトの実行は任意で、Python 3.10以降が必要です。ランタイムのCargo manifestは開発用workspaceから独立させ、配布と同じ版を明記します。コンパイラのソース、開発用テスト、測定ログ、サイト・Docsのソースは含めません。
+次の未リリース候補の配布物は直下の`nagic`または`nagic.exe`、ビルドに必要な`runtime/`、`LICENSE`、短い日英の`README.txt`、`release.json`に加え、`tools/generate_project_ci.py`と`tools/verify_build_receipt.py`を含みます。補助スクリプトの実行は任意で、Python 3.10以降が必要です。ランタイムのCargo manifestは開発用workspaceから独立させ、配布と同じ版を明記します。コンパイラのソース、開発用テスト、測定ログ、サイト・Docsのソースは含めません。
 
 展開後の検査では、リポジトリ外のプロジェクトからPATH経由で実行します。Helloのほか、Futureという名前のclassを返す同期関数の差し替えと、sharedフィールドを持つclassのJSON変換・読み戻しを確認します。
 
