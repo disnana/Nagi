@@ -4,6 +4,8 @@
 
 ### Nagi application development tools
 
+- Add opt-in `--profile dev --incremental=units` to group closed primitive synchronous functions into at most eight dependency-ordered Cargo libraries. Keep unsupported functions, async and user types in a facade; rebuild affected units and reverse dependents while Cargo can reuse independent units. Full checks and immutable generations remain mandatory. Receipt schema 3 verifies the complete source-unit closure; existing modes and schemas remain supported.
+
 - Add opt-in `--profile dev --incremental` to reuse the generated Rust body as an immutable content-addressed Cargo library. Identical bodies reuse Cargo artifacts while each generation compiles its own entry shim. Keep full checks, Cargo validation and old executables; reject corrupt source caches. Adapters, additional Rust dependencies and managed runs retain monolithic builds. Receipt schema 2 verifies the body reference; schema 1 remains supported. Released 0.2.0 and default release builds are unchanged.
 
 - Add opt-in `build/run --profile dev|release`, preserving release as the default and the existing debug/release overflow behavior. Keep complete Nagi checks, Cargo dependency validation, generation isolation and immutable successful executables.

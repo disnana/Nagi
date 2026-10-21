@@ -53,3 +53,8 @@
 [計測・検証記録](../../benchmarks/results/smart-build-2026-10-20/README.md)に実測と未測定を分ける。既存generationのlock/barrier、孤児Cargo、alias保護、旧exe、公開manifest、projection/latest失敗の回帰を維持する。新規のprofile/receipt失敗、import本体変更、High/保存Low、native変更、managed dev、整合性不正を追加した。
 
 **残る優先度**: P1・将来の誤cache reuse防止には完全な入力境界と独立監査が必要（現在はNagi独自reuseを有効にしない）。P2・Rust library分離とfrontend query化、アプリtest契約、CIの実ジョブ計測。P2・WebSocketの長寿命権限／終了契約。QUIC/WebTransport/WebRTCとPostgreSQLは未実装で、差分に混ぜない。4 OS実行と生成利用者workflowのGitHub実行はローカルLinux成功と別のacceptanceである。
+
+
+## 2026-10-21 第3差分: 関数依存単位
+
+PR #140反映後の`0e9a575`から、[関数依存単位](function-unit-reuse.md)を実装する。前節の「関数単位未実装」は第2差分時点の記録であり、今回のopt-in `--incremental=units`は閉じたprimitive同期関数群を最大8個の本物のCargo libraryへ分離する。async・型・unknown callはfacadeへ残し、非候補へ依存する候補を逆依存ごと除外する。nativeの再利用粒度は関数そのものではなくCargo crateと逆依存である。完全検査・全生成・Cargo・immutable世代を維持し、frontend差分検査やtest cacheを追加しない。実測・最終CI・独立監査をそれぞれ別gateで確認する。

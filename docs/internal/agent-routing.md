@@ -94,3 +94,9 @@ CLIの公開0.2.0と開発flagの差、生成workflowのtoolchain指定、path�
 main base `1386411`、Rust実装`5a90083`、PR #140。Sol 6.1 Highを実装前の整合性・世代境界のread-only確認に使い、親がcompiler/generation/testsと実計測を担当した。独立したPython receipt v2と配布gateはLuna Maxが担当し、親reviewで汎用TOML風parserを固定された生成manifestのtable/key検査へ縮小した。親が実Cargoで見つけたworkspace自動membership、Windows表記の診断、projectionからCASへのhardlink aliasは契約を維持して修正し、元assertを緩めていない。
 
 子の追加spawn、同じfileの並行編集、同model/effortの並行子はなし。実行検証後の最終auditは別のSol 6.1 Highへ分離する。service-tier指定interface、model別使用量・料金は不明。今回の[build計測](../../benchmarks/results/generated-body-reuse-2026-10-21/README.md)はmodel速度やCIコストの測定ではない。最終audit/CI状態はPR本文・Checksで読み戻す。
+
+## 2026-10-21: 関数依存単位への拡張
+
+base `0e9a575`、core `39dc51d`。Sol 6.1 Highで実装前の整合性・Cargo単位境界とmixed facade案を確認し、親がcompiler/CAS/generation/native回帰を実装した。schema 3の閉じたmanifest grammar/依存閉包/Windows pathは契約判断を伴うため、同じHigh担当へ独立fileの実装を分離した。Luna Maxは仕様が固まったbenchmark harnessのmode/fixture/repeated editsだけを担当し、実計測は親が他のローカルbuildを止めて行った。Highによるmixed fixtureの修正は、最小runtimeのSerde不足と禁止fn fieldというfixture不備を言語契約へ戻す作業であり、成功までassertや期限を緩めていない。canonical shadow例のenum比較も非対応のため既存matchへ修正した。
+
+親を含め最大3体、子spawnと同じfileの同時編集なし。同model/effortの子は順番に動かし、実装担当とは別のSol 6.1 Highに必要検証後の最終auditを渡す。native/workspace/配布/CIとauditは別証拠である。役割ごとの実model時間・使用量・費用・service-tier設定interfaceは不明。報告した7%前後のbuild差はmodel速度やCI費用の差ではない。

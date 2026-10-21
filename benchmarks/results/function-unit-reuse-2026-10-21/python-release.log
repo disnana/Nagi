@@ -1,0 +1,27 @@
+..........................................................................................................................................................
+----------------------------------------------------------------------
+Ran 154 tests in 8.454s
+
+OK
+Already published and verified; keeping existing assets: jetbrains-v0.1.8 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: jetbrains-v0.1.8 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: jetbrains-v0.1.8 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: nagi-v0.1.1 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: nagi-v0.2.1 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Already published and verified; keeping existing assets: vscode-v0.1.6 (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)
+Verified formal release: nagi-v0.1.8 (8f46d8857175bfab9be21f99e9260bf8c309488e)
+Verified formal release: vscode-v0.1.10 (c7eef02c022b32a567a06d5329083cd81b1f8c01)
+Verified formal release: nagi-v0.1.8 (c7eef02c022b32a567a06d5329083cd81b1f8c01)
+Verified formal release: vscode-v0.1.10 (c7eef02c022b32a567a06d5329083cd81b1f8c01)
+Verified formal release: nagi-v0.1.8 (c7eef02c022b32a567a06d5329083cd81b1f8c01)
+Already published and verified; keeping existing assets: vscode-v0.1.10 (c7eef02c022b32a567a06d5329083cd81b1f8c01)
+Verified formal release: vscode-v0.1.10 (c7eef02c022b32a567a06d5329083cd81b1f8c01)
+Verified development builds: native-free check, dev/release, incremental source miss/hit, full-check stats, schema 2 receipts, immutable executables, bundled tools, receipt corruption rejection
+Verified development builds: native-free check, dev/release, incremental source miss/hit, full-check stats, schema 2 receipts, immutable executables, bundled tools, receipt corruption rejection
+Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime
+Verified SQLite Pool/Tx: extracted runtime, High and independent saved Low, typed parameters, commit/rollback/close
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics

@@ -1,0 +1,9 @@
+ICU4X_DATA_DIR host_present=false child_present=false
+Verified SQL engine: extracted compiler, offline schema, bad columns/binds, Nagi locations, no Cargo/runtime
+Verified 0.2.0 linux-x86_64: PATH, external projects, version, help, function aliases, shared/borrowed JSON, early Nagi diagnostics
+Verified local Rust dependency: manifest-relative path, package alias, features, default-features, separate cwd/output
+Verified standard actor library: extracted runtime, typed context, task, tracked cleanup
+Verified Task handles: extracted compiler/runtime, High/saved Low/handwritten Low, receive/discard, nested business Err, early ownership diagnostics
+Verified SQLite Pool/Tx: extracted runtime, High and independent saved Low, typed parameters, commit/rollback/close
+Verified development builds: native-free check, dev/release, incremental source miss/hit, full-check stats, schema 2 receipts, immutable executables, bundled tools, receipt corruption rejection
+Verified function units: full checks, source miss/hit, body edit with independent unit fresh, schema 3 receipts, immutable executables
