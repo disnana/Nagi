@@ -197,7 +197,44 @@ def verify_development_builds(exe: Path, folder: Path, environment: dict) -> Non
                                   text=True, encoding="utf-8", timeout=15)
         assert verified.returncode == 0, verified.stderr
         snapshots.append((binary, binary.read_bytes()))
-    assert snapshots[0][0] != snapshots[1][0], "Profiles reused a successful executable path"
+
+    # The fixture has no Rust adapter or additional Rust dependencies, so the
+    # opt-in development profile is eligible for generated-body reuse.
+    for source_cache, cargo_fresh in (("miss", False), ("hit", True)):
+        completed = subprocess.run(
+            [str(exe), "run", "--project", str(project), "--out", str(output),
+             "--profile", "dev", "--incremental", "--build-stats"],
+            cwd=folder, env=environment, capture_output=True, text=True,
+            encoding="utf-8", timeout=600)
+        assert completed.returncode == 0, completed.stderr
+        assert completed.stdout.splitlines() == ["42"], completed.stdout
+        reports = [line.removeprefix("nagi-build-stats: ")
+                   for line in completed.stderr.splitlines() if line.startswith("nagi-build-stats: ")]
+        assert len(reports) == 1, completed.stderr
+        stats = json.loads(reports[0])
+        assert stats["profile"] == "dev" and stats["checks"] == "full", stats
+        assert stats["cargo_always_invoked"] is True and stats["native_reuse"] == "cargo_only", stats
+        body = stats["generated_body"]
+        assert body["mode"] == "cargo_library" and body["source_cache"] == source_cache, stats
+        assert body["cargo_fresh"] is cargo_fresh, stats
+        assert re.fullmatch(r"[0-9a-f]{64}", body["sha256"]), stats
+        native_paths = [Path(line.removeprefix("native: "))
+                        for line in completed.stderr.splitlines() if line.startswith("native: ")]
+        assert len(native_paths) == 1, completed.stderr
+        binary = native_paths[0]
+        receipt = Path(stats["receipt"])
+        assert receipt.parent == binary.parent and receipt.name == "build-receipt.json", stats
+        assert receipt.parents[5].samefile(output), "Incremental receipt outside the selected output"
+        assert json.loads(receipt.read_text(encoding="utf-8"))["schema_version"] == 2, receipt
+        analysis = json.loads((receipt.parent / "build-analysis.json").read_text(encoding="utf-8"))
+        assert analysis["profile"] == "dev" and analysis["native_reuse"] == "cargo_only", analysis
+        command = [sys.executable, str(verifier), str(receipt), "--compiler", str(exe)]
+        verified = subprocess.run(command, cwd=project, env=isolated, capture_output=True,
+                                  text=True, encoding="utf-8", timeout=15)
+        assert verified.returncode == 0, verified.stderr
+        snapshots.append((binary, binary.read_bytes()))
+
+    assert len({binary for binary, _ in snapshots}) == 4, "Builds reused a successful executable path"
     for binary, expected in snapshots:
         assert binary.read_bytes() == expected, "A later build overwrote a published executable"
         ran = subprocess.run([str(binary)], cwd=project, env=isolated, capture_output=True,
@@ -241,7 +278,7 @@ def verify_development_builds(exe: Path, folder: Path, environment: dict) -> Non
     repeated = subprocess.run(generate, cwd=project, env=isolated, capture_output=True,
                               text=True, encoding="utf-8", timeout=15)
     assert repeated.returncode != 0 and workflow.read_bytes() == content, "Workflow was overwritten"
-    print("Verified development builds: native-free check, dev/release, full-check stats, immutable exe, bundled tools, receipt corruption rejection")
+    print("Verified development builds: native-free check, dev/release, incremental source miss/hit, full-check stats, schema 2 receipts, immutable executables, bundled tools, receipt corruption rejection")
 
 
 def verify_sqlite_pool(exe: Path, folder: Path, environment: dict) -> None:

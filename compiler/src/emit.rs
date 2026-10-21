@@ -1210,7 +1210,7 @@ fn charge_fields(out: &mut Generated, fields: impl Iterator<Item = String>, inde
 }
 
 pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
-    rust_with_entry_guard(checked, None)
+    rust_with_entry_guard(checked, None, false)
 }
 
 /// Artifact lifecycle is separate from the sealed language emission plan.
@@ -1218,6 +1218,7 @@ pub fn rust_with_lines(checked: &CheckedProgram) -> Result<Generated, String> {
 fn rust_with_entry_guard(
     checked: &CheckedProgram,
     entry_guard: Option<&str>,
+    library_entry: bool,
 ) -> Result<Generated, String> {
     checked.validate_for_emission()?;
     let plan = &checked.emission;
@@ -1561,6 +1562,11 @@ fn rust_with_entry_guard(
     }
     out.origin(::std::option::Option::None);
     out.function_lineage(None);
+    if library_entry {
+        // The very same crate-root source remains a valid compatibility bin.
+        // Do not rewrite user code or wrap it in a nested module.
+        out.push_str("pub ");
+    }
     if let ::std::option::Option::Some(f) = p.functions.iter().find(|f| f.name == "main") {
         if !f.params.is_empty() {
             return ::std::result::Result::Err("mainは引数を取りません".into());
@@ -1679,6 +1685,39 @@ fn cargo_manifest(
     .map_err(|error| {
         format!("Cargo.tomlの生成に失敗しました。パスにはUTF-8文字列が必要です: {error}")
     })
+}
+
+fn with_generated_body(
+    mut manifest: String,
+    body: &crate::generated_body::GeneratedBody,
+    base: &Path,
+    shim: bool,
+) -> Result<String, String> {
+    let path = relative_path(&body.directory, base);
+    let path = path.to_str().ok_or("Generated body paths require UTF-8")?;
+    let mut value: toml::Value = toml::from_str(&manifest).map_err(|e| e.to_string())?;
+    // Path dependencies inside the compatibility root would otherwise become
+    // automatic workspace members, conflicting with the body's own workspace.
+    value["workspace"]
+        .as_table_mut()
+        .ok_or("Generated workspace is not a table")?
+        .insert(
+            "exclude".into(),
+            toml::Value::Array(vec![toml::Value::String(path.into())]),
+        );
+    if shim {
+        // This is a generated manifest field, never a source-code rewrite.
+        value["bin"][0]["path"] = toml::Value::String("src/entry.rs".into());
+    }
+    manifest = toml::to_string(&value).map_err(|e| e.to_string())?;
+    // Keep the strict generated table stable for the Python 3.10 receipt
+    // verifier. Both root manifests have the same dependency graph/lockfile.
+    manifest.push_str(&format!(
+        "\n[dependencies.nagi-app-body]\npath = {}\npackage = {}\n",
+        toml::Value::String(path.into()),
+        toml::Value::String(body.package.clone())
+    ));
+    Ok(manifest)
 }
 
 pub fn cli(args: Vec<String>) -> Result<(), String> {
@@ -1894,6 +1933,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             }
         }
         crate::output::protect(&outputs, &inputs, "Generated")?;
+        crate::generated_body::protect_outputs(&out, &outputs)?;
         if outputs.is_empty() {
             fs::create_dir_all(&out).map_err(|e| e.to_string())?;
             None
@@ -1906,6 +1946,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 }
             }
             crate::output::protect(&outputs, &inputs, "Generated")?;
+            crate::generated_body::protect_outputs(&lock.directory, &outputs)?;
             Some(lock)
         }
     } else {
@@ -2037,9 +2078,22 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let generated_directory = &output_lock.as_ref().expect("build owns output lock").directory;
     let _export_pins = crate::generation::preserve_exported_inputs(generated_directory, &inputs)?;
     let package = crate::generation::application_name(&path, generated_directory)?;
+    let fallback = if !options.incremental { Some("not_requested") }
+        else if temporary_run { Some("managed_run") }
+        else if rust_file.is_some() { Some("rust_adapter") }
+        else if !rust_deps.is_empty() { Some("rust_dependencies") }
+        else { None };
+    let library_rust = if fallback.is_none() { Some(rust_with_entry_guard(&checked, None, true)?) } else { None };
+    let body = library_rust.as_ref().map(|rust| crate::generated_body::GeneratedBody::prepare(
+        generated_directory, &package, &root.join("runtime"), &rust.text, &inputs,
+    )).transpose()?;
+    if options.incremental {
+        if let Some(reason) = fallback { eprintln!("incremental: monolithic fallback ({reason})"); }
+    }
     let mut generation = crate::generation::BuildGeneration::create(generated_directory, &package)?;
     let entry_guard = if temporary_run { Some(generation.temporary_run_guard()?) } else { None };
-    let mut generated_rust = rust_with_entry_guard(&checked, entry_guard.as_deref())?;
+    let mut generated_rust = match library_rust { Some(rust) => rust, None => rust_with_entry_guard(&checked, entry_guard.as_deref(), false)? };
+    if let Some(body) = &body { generation.record_body(body)?; }
     if let Some(file) = &rust_file {
         generated_rust.origin(None);
         generated_rust.push_str(&format!(
@@ -2056,23 +2110,28 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             "semantic_sha256":analysis["semantic_sha256"], "rust_sha256":analysis["rust_sha256"],
             "native_reuse":"cargo_only", "checks":"full", "cargo_always_invoked":true
         });
+        build_report["generated_body"] = if let Some(body) = &body {
+            serde_json::json!({"mode":"cargo_library", "source_cache":if body.hit {"hit"} else {"miss"}, "sha256":body.digest, "cargo_fresh":null})
+        } else { serde_json::json!({"mode":"monolithic", "reason":fallback}) };
         generation.record_analysis(&analysis)?;
     }
     fs::write(out.join("src/main.rs"), &generated_rust.text).map_err(|e| e.to_string())?;
-    let compatibility_manifest = cargo_manifest(
+    let mut compatibility_manifest = cargo_manifest(
         &package,
         &generation.bin,
         relative_path(&root.join("runtime"), generated_directory),
         rust_deps.clone(),
     )?;
+    if let Some(body) = &body { compatibility_manifest = with_generated_body(compatibility_manifest, body, generated_directory, false)?; }
     fs::write(out.join("Cargo.toml"), &compatibility_manifest).map_err(|e| e.to_string())?;
     generation.write("src/main.rs", generated_rust.text.as_bytes())?;
-    let manifest = cargo_manifest(
+    let mut manifest = cargo_manifest(
         &package,
         &generation.bin,
         relative_path(&root.join("runtime"), &generation.staging),
         rust_deps,
     )?;
+    if let Some(body) = &body { manifest = with_generated_body(manifest, body, &generation.staging, true)?; }
     generation.write("Cargo.toml", manifest.as_bytes())?;
     let canonical_source = fs::canonicalize(&path).map_err(|e| e.to_string())?;
     let low_snapshot = low_snapshot
@@ -2085,8 +2144,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         })
         .ok_or("Cannot find read source for generation snapshot")?;
     generation.snapshot(&sources, &generated_rust, low_snapshot)?;
-    let generated_file =
-        fs::canonicalize(generation.staging.join("src/main.rs")).map_err(|e| e.to_string())?;
+    let generated_file = fs::canonicalize(body.as_ref().map(|body| body.directory.join("src/lib.rs")).unwrap_or_else(|| generation.staging.join("src/main.rs"))).map_err(|e| e.to_string())?;
     let native_target = std::env::var_os("NAGI_NATIVE_TARGET_DIR");
     let target = native_target.map(|p| cwd.join(p)).unwrap_or_else(|| {
         options
@@ -2131,6 +2189,13 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             }
         };
         if let Some(stats) = &mut build_stats { stats.cargo_message(&line); }
+        if body.is_some() && build_stats.is_some() {
+            if let Ok(message) = serde_json::from_str::<serde_json::Value>(&line) {
+                if message["reason"] == "compiler-artifact" && message["target"]["src_path"].as_str().is_some_and(|p| fs::canonicalize(p).ok().as_ref() == Some(&generated_file)) {
+                    build_report["generated_body"]["cargo_fresh"] = message["fresh"].clone();
+                }
+            }
+        }
         if let Some(message) = crate::diagnostics::cargo_message_with_details(
             &line,
             &generated_rust,

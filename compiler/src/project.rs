@@ -32,6 +32,7 @@ Options:
   --rust-diagnostics      Include generated Rust diagnostic details (build/run)
   --profile dev|release   Native build profile (default: release; build/run)
   --build-stats           Print build timings and Cargo reuse as JSON on stderr
+  --incremental           Reuse generated body library (build/run; --profile dev)
   --editor-input          Read editor buffers from stdin (check/symbols/assist)
   --serve                 Reuse assist process (one JSON request/response per line)
   --sql-schema FILE       Check literal SQL against an offline DDL snapshot (check)
@@ -129,6 +130,7 @@ pub struct Options {
     pub rust_diagnostics: bool,
     pub profile: BuildProfile,
     pub build_stats: bool,
+    pub incremental: bool,
     /// Read editor buffers from stdin for symbols/assist or an in-memory check.
     pub editor_input: bool,
     /// Internal assist transport only; does not execute user/native code.
@@ -478,6 +480,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut rust_diagnostics = false;
     let mut profile = None;
     let mut build_stats = false;
+    let mut incremental = false;
     let mut editor_input = false;
     let mut editor_serve = false;
     let mut sql_schema = None;
@@ -546,6 +549,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             "--cost-report" => cost = true,
             "--rust-diagnostics" => rust_diagnostics = true,
             "--build-stats" if !build_stats => build_stats = true,
+            "--incremental" if !incremental => incremental = true,
             "--editor-input" => {
                 if !matches!(command.as_str(), "symbols" | "check" | "assist") || editor_input {
                     return Err("--editor-inputはcheck/symbols/assistに1回だけ指定できます".into());
@@ -563,6 +567,11 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         i += 1;
     }
     validate_dependencies(&dependencies)?;
+    if incremental
+        && (!matches!(command.as_str(), "build" | "run") || profile != Some(BuildProfile::Dev))
+    {
+        return Err("--incremental requires build/run with --profile dev".into());
+    }
     if (profile.is_some() || build_stats) && !matches!(command.as_str(), "build" | "run") {
         return Err("--profile and --build-stats are supported only by build/run".into());
     }
@@ -655,6 +664,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         rust_diagnostics,
         profile: profile.unwrap_or_default(),
         build_stats,
+        incremental,
         editor_input,
         editor_serve,
         sql_schema,

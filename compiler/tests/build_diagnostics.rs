@@ -786,6 +786,70 @@ fn existing_path_aliases_match_only_the_generated_file() {
 }
 
 #[test]
+fn library_mapping_never_attributes_shim_or_dependency_spans_to_nagi() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(1)\n");
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    let rust = emit::rust_with_lines(&checked_emission::seal(&loaded.program)).unwrap();
+    let line = rust
+        .text
+        .lines()
+        .position(|s| s.contains("println!"))
+        .unwrap()
+        + 1;
+    f.write("body/src/lib.rs", &rust.text);
+    let file = fs::canonicalize(f.0.join("body/src/lib.rs")).unwrap();
+    for name in ["src/lib.rs", "./src/lib.rs", file.to_str().unwrap()] {
+        let value = message(&file, name, line, "library details\n");
+        let text = diagnostics::cargo_message(&value.to_string(), &rust, &file, &loaded).unwrap();
+        assert!(mapped_prefix(&text).contains("main.nagi:2"), "{text}");
+    }
+    for (target, span) in [
+        (file.clone(), "src/main.rs"),
+        (file.clone(), "src/entry.rs"),
+        (f.0.join("shim/src/entry.rs"), "src/lib.rs"),
+        (f.0.join("dep/src/lib.rs"), "src/lib.rs"),
+    ] {
+        let value = message(&target, span, line, "unmapped details\n");
+        assert_eq!(
+            diagnostics::cargo_message(&value.to_string(), &rust, &file, &loaded).unwrap(),
+            "unmapped details\n"
+        );
+    }
+}
+
+#[test]
+fn incremental_backend_errors_map_body_to_high_and_saved_low_sources() {
+    let f = Fixture::new();
+    // Deliberately inconsistent trusted runtime. This is a backend diagnostic
+    // fixture, not a relaxation of the Nagi accepted-program contract.
+    f.write(
+        "runtime/src/lib.rs",
+        "pub fn clock_ns() -> String { String::new() }\n",
+    );
+    f.write(
+        "helper.nagi",
+        "def value() -> i64:\n    return clock_ns() + 1\n",
+    );
+    f.write(
+        "main.nagi",
+        "from \"helper.nagi\" import value\ndef main():\n    print(value())\n",
+    );
+    let high = f.cli(&["build", "main.nagi", "--profile", "dev", "--incremental"]);
+    assert!(!high.status.success());
+    let text = stderr(&high);
+    assert!(text.contains("helper.nagi:2"), "{text}");
+    assert!(text.contains("--rust-diagnostics"), "{text}");
+    fs::copy(f.0.join("build/main/generated.low"), f.0.join("saved.low")).unwrap();
+    let low = f.cli(&["build", "saved.low", "--profile", "dev", "--incremental"]);
+    assert!(!low.status.success());
+    let text = stderr(&low);
+    assert!(text.contains("saved.low:"), "{text}");
+    assert!(!text.contains("helper.nagi:"), "{text}");
+}
+
+#[test]
 fn windows_paths_and_canonical_prefixes_match_only_the_generated_target() {
     let f = Fixture::new();
     f.write("main.nagi", "def main():\n    print(1)\n");

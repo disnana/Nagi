@@ -440,6 +440,23 @@ fn native_profiles_and_stats_are_additive_and_validated_before_writing() {
         vec!["check", "main.nagi", "--profile", "dev"],
         vec!["lower", "main.nagi", "--build-stats"],
         vec!["map", "main.nagi", "--profile", "dev"],
+        vec!["build", "main.nagi", "--incremental"],
+        vec![
+            "build",
+            "main.nagi",
+            "--profile",
+            "release",
+            "--incremental",
+        ],
+        vec!["check", "main.nagi", "--profile", "dev", "--incremental"],
+        vec![
+            "build",
+            "main.nagi",
+            "--profile",
+            "dev",
+            "--incremental",
+            "--incremental",
+        ],
     ] {
         let output = f.run(&f.0, &args);
         assert!(!output.status.success(), "{args:?}");
