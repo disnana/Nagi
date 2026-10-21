@@ -1,0 +1,534 @@
+{
+  "schema_version": 1,
+  "complete": true,
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "machine": "x86_64",
+  "cpu_count": 5,
+  "functions": 1000,
+  "work_directory": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9",
+  "runtime_root": "/workspace/Nagi",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+  "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+  "lock_sha256": "5755a5c2d9707b3e25240b3d518bf126585c7253a5b2b94a7d9a28dc88b0f6b1",
+  "conditions": "sequential; same source paths; fresh target and seeded lock per configuration; warm registry/OS caches; unmodified Cargo dev profile; real runtime; RSS is largest child high-water mark, not concurrent sum",
+  "configurations": {
+    "ordinary-dev": {
+      "compiler_sha256": "d401c795096424abc729a833f56130c70eff87e7f16e74e5eb660c326c5eedd8",
+      "samples": {
+        "clean": {
+          "elapsed_s": 38.452939983999386,
+          "max_child_rss_kib": 799508,
+          "stats": {
+            "before_cargo_ms": 327.10828,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 198,
+            "cargo_fresh_artifacts": 0,
+            "cargo_ms": 38088.098067,
+            "checks": "full",
+            "native_reuse": "cargo_only",
+            "observed_change": "no_previous_analysis",
+            "profile": "dev",
+            "publish_ms": 27.504306999999997,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3da0f-18e07ac24fa4e2cb-0/build-receipt.json",
+            "rust_sha256": "d6aaa4c202df7ccb6dc3547e2c1bdc130fc9bcb12fdfc3a647cd1a412132a2ba",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 38443.169046
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3da0f-18e07ac24fa4e2cb-0/nagi-02b875ebb55e77ce-g-3da0f-18e07ac24fa4e2cb-0"
+        },
+        "warm-0": {
+          "elapsed_s": 0.8186005679999653,
+          "max_child_rss_kib": 219664,
+          "stats": {
+            "before_cargo_ms": 314.044159,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 473.51937,
+            "checks": "full",
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 21.568578000000002,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e858-18e07acb4390e821-0/build-receipt.json",
+            "rust_sha256": "d6aaa4c202df7ccb6dc3547e2c1bdc130fc9bcb12fdfc3a647cd1a412132a2ba",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 809.5548759999999
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e858-18e07acb4390e821-0/nagi-02b875ebb55e77ce-g-3e858-18e07acb4390e821-0"
+        },
+        "warm-1": {
+          "elapsed_s": 0.8192630640005518,
+          "max_child_rss_kib": 221976,
+          "stats": {
+            "before_cargo_ms": 316.542614,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 471.722335,
+            "checks": "full",
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 20.759766,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e877-18e07acb744b970b-0/build-receipt.json",
+            "rust_sha256": "d6aaa4c202df7ccb6dc3547e2c1bdc130fc9bcb12fdfc3a647cd1a412132a2ba",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 809.439492
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e877-18e07acb744b970b-0/nagi-02b875ebb55e77ce-g-3e877-18e07acb744b970b-0"
+        },
+        "warm-2": {
+          "elapsed_s": 0.8205997129989555,
+          "max_child_rss_kib": 219724,
+          "stats": {
+            "before_cargo_ms": 325.694211,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 464.158226,
+            "checks": "full",
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 20.863372000000002,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e896-18e07acba53232a4-0/build-receipt.json",
+            "rust_sha256": "d6aaa4c202df7ccb6dc3547e2c1bdc130fc9bcb12fdfc3a647cd1a412132a2ba",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 811.1238069999999
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e896-18e07acba53232a4-0/nagi-02b875ebb55e77ce-g-3e896-18e07acba53232a4-0"
+        },
+        "warm-3": {
+          "elapsed_s": 0.8075647599980584,
+          "max_child_rss_kib": 218804,
+          "stats": {
+            "before_cargo_ms": 322.814749,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 455.38458799999995,
+            "checks": "full",
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 20.434634,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e8d3-18e07acbd672748e-0/build-receipt.json",
+            "rust_sha256": "d6aaa4c202df7ccb6dc3547e2c1bdc130fc9bcb12fdfc3a647cd1a412132a2ba",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 799.087937
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e8d3-18e07acbd672748e-0/nagi-02b875ebb55e77ce-g-3e8d3-18e07acbd672748e-0"
+        },
+        "warm-4": {
+          "elapsed_s": 0.8411495440013823,
+          "max_child_rss_kib": 219360,
+          "stats": {
+            "before_cargo_ms": 339.29815,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 470.79817,
+            "checks": "full",
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 21.330869,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e8f2-18e07acc06a7b714-0/build-receipt.json",
+            "rust_sha256": "d6aaa4c202df7ccb6dc3547e2c1bdc130fc9bcb12fdfc3a647cd1a412132a2ba",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 831.97709
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e8f2-18e07acc06a7b714-0/nagi-02b875ebb55e77ce-g-3e8f2-18e07acc06a7b714-0"
+        },
+        "warm-plain-0": {
+          "elapsed_s": 0.6983930189999228,
+          "max_child_rss_kib": 219320,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e911-18e07acc38a8ed42-0/nagi-02b875ebb55e77ce-g-3e911-18e07acc38a8ed42-0"
+        },
+        "warm-plain-1": {
+          "elapsed_s": 0.7056731690026936,
+          "max_child_rss_kib": 221124,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e930-18e07acc62ac3195-0/nagi-02b875ebb55e77ce-g-3e930-18e07acc62ac3195-0"
+        },
+        "warm-plain-2": {
+          "elapsed_s": 0.7384558109988575,
+          "max_child_rss_kib": 221904,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e94f-18e07acc8ce8a764-0/nagi-02b875ebb55e77ce-g-3e94f-18e07acc8ce8a764-0"
+        },
+        "warm-plain-3": {
+          "elapsed_s": 0.7497374099984881,
+          "max_child_rss_kib": 221892,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e96e-18e07accb92c1ea1-0/nagi-02b875ebb55e77ce-g-3e96e-18e07accb92c1ea1-0"
+        },
+        "warm-plain-4": {
+          "elapsed_s": 0.7129911060001177,
+          "max_child_rss_kib": 221864,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e98d-18e07acce5970c19-0/nagi-02b875ebb55e77ce-g-3e98d-18e07acce5970c19-0"
+        },
+        "comment": {
+          "elapsed_s": 0.8068196839994926,
+          "max_child_rss_kib": 221860,
+          "stats": {
+            "before_cargo_ms": 308.113766,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 462.949689,
+            "checks": "full",
+            "native_reuse": "cargo_only",
+            "observed_change": "no_previous_analysis",
+            "profile": "dev",
+            "publish_ms": 25.809486,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e9ac-18e07acd10476459-0/build-receipt.json",
+            "rust_sha256": "d6aaa4c202df7ccb6dc3547e2c1bdc130fc9bcb12fdfc3a647cd1a412132a2ba",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 797.333757
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e9ac-18e07acd10476459-0/nagi-02b875ebb55e77ce-g-3e9ac-18e07acd10476459-0"
+        },
+        "function-body": {
+          "elapsed_s": 0.8296025920026295,
+          "max_child_rss_kib": 222068,
+          "stats": {
+            "before_cargo_ms": 314.698751,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 479.187793,
+            "checks": "full",
+            "native_reuse": "cargo_only",
+            "observed_change": "implementation_changed",
+            "profile": "dev",
+            "publish_ms": 26.677717,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e9cb-18e07acd40a66450-0/build-receipt.json",
+            "rust_sha256": "6cda1126d0e5ed84a3c0aa36f118f4805f1d3f2c32a0aeb0b4537a1f8ad7e680",
+            "schema_version": 1,
+            "semantic_sha256": "aad8a9ffc8595b3b5954c2efecf5fab55b4fdcd17838edce397af74ddc79e68e",
+            "total_ms": 820.963585
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e9cb-18e07acd40a66450-0/nagi-02b875ebb55e77ce-g-3e9cb-18e07acd40a66450-0"
+        },
+        "public-api": {
+          "elapsed_s": 0.8696538839976711,
+          "max_child_rss_kib": 221376,
+          "stats": {
+            "before_cargo_ms": 316.641756,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 517.403492,
+            "checks": "full",
+            "native_reuse": "cargo_only",
+            "observed_change": "interface_changed",
+            "profile": "dev",
+            "publish_ms": 25.582742,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e9ea-18e07acd72418445-0/build-receipt.json",
+            "rust_sha256": "21a7586a6c2dc8d178887ec3073d525db5f2884242090f1996eb4781c676c35b",
+            "schema_version": 1,
+            "semantic_sha256": "c3a4c811be19095d9a0aff1a97eeec00874ad9d81cf8124550a59ce543508369",
+            "total_ms": 860.068125
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/ordinary-dev/out/.nagi/apps/nagi-main-02b875ebb55e77ce/generations/g-3e9ea-18e07acd72418445-0/nagi-02b875ebb55e77ce-g-3e9ea-18e07acd72418445-0"
+        }
+      },
+      "warm_median_s": 0.8192630640005518,
+      "warm_plain_median_s": 0.7129911060001177,
+      "target_bytes": 1412647435,
+      "output_bytes": 264900685
+    },
+    "incremental-dev": {
+      "compiler_sha256": "05c904aee72dbb7cf020d641badead96697ba35d2d55f0e2dae182253ac192e7",
+      "samples": {
+        "clean": {
+          "elapsed_s": 38.52217431700046,
+          "max_child_rss_kib": 779772,
+          "stats": {
+            "before_cargo_ms": 316.51577,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 199,
+            "cargo_fresh_artifacts": 0,
+            "cargo_ms": 38172.247438,
+            "checks": "full",
+            "generated_body": {
+              "cargo_fresh": false,
+              "mode": "cargo_library",
+              "sha256": "a3db43622a498cb728fd4840ffa21ff36c84c021fae1ca146baef76181a7a3f0",
+              "source_cache": "miss"
+            },
+            "native_reuse": "cargo_only",
+            "observed_change": "no_previous_analysis",
+            "profile": "dev",
+            "publish_ms": 20.962671,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3ea09-18e07acda889344e-0/build-receipt.json",
+            "rust_sha256": "2f99388622e822134c74c2be1d82c7c95cbbe03568003331497b282df4d0d499",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 38510.296542
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3ea09-18e07acda889344e-0/nagi-37b1c7dfde7b840c-g-3ea09-18e07acda889344e-0"
+        },
+        "warm-0": {
+          "elapsed_s": 0.5023547509990749,
+          "max_child_rss_kib": 133640,
+          "stats": {
+            "before_cargo_ms": 326.083452,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 198,
+            "cargo_ms": 142.716533,
+            "checks": "full",
+            "generated_body": {
+              "cargo_fresh": true,
+              "mode": "cargo_library",
+              "sha256": "a3db43622a498cb728fd4840ffa21ff36c84c021fae1ca146baef76181a7a3f0",
+              "source_cache": "hit"
+            },
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 23.24495,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f85d-18e07ad6a13fdbc1-0/build-receipt.json",
+            "rust_sha256": "2f99388622e822134c74c2be1d82c7c95cbbe03568003331497b282df4d0d499",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 492.59788
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f85d-18e07ad6a13fdbc1-0/nagi-37b1c7dfde7b840c-g-3f85d-18e07ad6a13fdbc1-0"
+        },
+        "warm-1": {
+          "elapsed_s": 0.489154494000104,
+          "max_child_rss_kib": 133464,
+          "stats": {
+            "before_cargo_ms": 309.381789,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 198,
+            "cargo_ms": 147.053672,
+            "checks": "full",
+            "generated_body": {
+              "cargo_fresh": true,
+              "mode": "cargo_library",
+              "sha256": "a3db43622a498cb728fd4840ffa21ff36c84c021fae1ca146baef76181a7a3f0",
+              "source_cache": "hit"
+            },
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 23.205360000000002,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f87a-18e07ad6becc9901-0/build-receipt.json",
+            "rust_sha256": "2f99388622e822134c74c2be1d82c7c95cbbe03568003331497b282df4d0d499",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 480.11416499999996
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f87a-18e07ad6becc9901-0/nagi-37b1c7dfde7b840c-g-3f87a-18e07ad6becc9901-0"
+        },
+        "warm-2": {
+          "elapsed_s": 0.5054818009994051,
+          "max_child_rss_kib": 133648,
+          "stats": {
+            "before_cargo_ms": 320.88380700000005,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 198,
+            "cargo_ms": 151.72454199999999,
+            "checks": "full",
+            "generated_body": {
+              "cargo_fresh": true,
+              "mode": "cargo_library",
+              "sha256": "a3db43622a498cb728fd4840ffa21ff36c84c021fae1ca146baef76181a7a3f0",
+              "source_cache": "hit"
+            },
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 21.889201,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f897-18e07ad6dc76032b-0/build-receipt.json",
+            "rust_sha256": "2f99388622e822134c74c2be1d82c7c95cbbe03568003331497b282df4d0d499",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 495.01529300000004
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f897-18e07ad6dc76032b-0/nagi-37b1c7dfde7b840c-g-3f897-18e07ad6dc76032b-0"
+        },
+        "warm-3": {
+          "elapsed_s": 0.4896519399990211,
+          "max_child_rss_kib": 133280,
+          "stats": {
+            "before_cargo_ms": 311.03029,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 198,
+            "cargo_ms": 148.738862,
+            "checks": "full",
+            "generated_body": {
+              "cargo_fresh": true,
+              "mode": "cargo_library",
+              "sha256": "a3db43622a498cb728fd4840ffa21ff36c84c021fae1ca146baef76181a7a3f0",
+              "source_cache": "hit"
+            },
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 20.738493000000002,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f8b4-18e07ad6fa9e1318-0/build-receipt.json",
+            "rust_sha256": "2f99388622e822134c74c2be1d82c7c95cbbe03568003331497b282df4d0d499",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 481.02324400000003
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f8b4-18e07ad6fa9e1318-0/nagi-37b1c7dfde7b840c-g-3f8b4-18e07ad6fa9e1318-0"
+        },
+        "warm-4": {
+          "elapsed_s": 0.4823061229981249,
+          "max_child_rss_kib": 133488,
+          "stats": {
+            "before_cargo_ms": 308.79134600000003,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 198,
+            "cargo_ms": 143.211291,
+            "checks": "full",
+            "generated_body": {
+              "cargo_fresh": true,
+              "mode": "cargo_library",
+              "sha256": "a3db43622a498cb728fd4840ffa21ff36c84c021fae1ca146baef76181a7a3f0",
+              "source_cache": "hit"
+            },
+            "native_reuse": "cargo_only",
+            "observed_change": "observed_nagi_unchanged",
+            "profile": "dev",
+            "publish_ms": 20.891826,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f8d1-18e07ad717c68f39-0/build-receipt.json",
+            "rust_sha256": "2f99388622e822134c74c2be1d82c7c95cbbe03568003331497b282df4d0d499",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 473.301799
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f8d1-18e07ad717c68f39-0/nagi-37b1c7dfde7b840c-g-3f8d1-18e07ad717c68f39-0"
+        },
+        "warm-plain-0": {
+          "elapsed_s": 0.3952881429977424,
+          "max_child_rss_kib": 133580,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f8ee-18e07ad734d0e49b-0/nagi-37b1c7dfde7b840c-g-3f8ee-18e07ad734d0e49b-0"
+        },
+        "warm-plain-1": {
+          "elapsed_s": 0.39785671400022693,
+          "max_child_rss_kib": 132208,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f90b-18e07ad74c6ec428-0/nagi-37b1c7dfde7b840c-g-3f90b-18e07ad74c6ec428-0"
+        },
+        "warm-plain-2": {
+          "elapsed_s": 0.4017665499995928,
+          "max_child_rss_kib": 133492,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f928-18e07ad764caa120-0/nagi-37b1c7dfde7b840c-g-3f928-18e07ad764caa120-0"
+        },
+        "warm-plain-3": {
+          "elapsed_s": 0.4031678480023402,
+          "max_child_rss_kib": 133768,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f945-18e07ad77ce531d1-0/nagi-37b1c7dfde7b840c-g-3f945-18e07ad77ce531d1-0"
+        },
+        "warm-plain-4": {
+          "elapsed_s": 0.39112100599959376,
+          "max_child_rss_kib": 133544,
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f962-18e07ad7948b8502-0/nagi-37b1c7dfde7b840c-g-3f962-18e07ad7948b8502-0"
+        },
+        "comment": {
+          "elapsed_s": 0.5073904439996113,
+          "max_child_rss_kib": 133544,
+          "stats": {
+            "before_cargo_ms": 324.495722,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 1,
+            "cargo_fresh_artifacts": 198,
+            "cargo_ms": 152.59920799999998,
+            "checks": "full",
+            "generated_body": {
+              "cargo_fresh": true,
+              "mode": "cargo_library",
+              "sha256": "a3db43622a498cb728fd4840ffa21ff36c84c021fae1ca146baef76181a7a3f0",
+              "source_cache": "hit"
+            },
+            "native_reuse": "cargo_only",
+            "observed_change": "no_previous_analysis",
+            "profile": "dev",
+            "publish_ms": 21.322361,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f97f-18e07ad7ac73ab35-0/build-receipt.json",
+            "rust_sha256": "2f99388622e822134c74c2be1d82c7c95cbbe03568003331497b282df4d0d499",
+            "schema_version": 1,
+            "semantic_sha256": "a36b1fac5d5288a0c52a1262dbf04afaa938e589f1996d36dc6679388841a733",
+            "total_ms": 498.812529
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f97f-18e07ad7ac73ab35-0/nagi-37b1c7dfde7b840c-g-3f97f-18e07ad7ac73ab35-0"
+        },
+        "function-body": {
+          "elapsed_s": 0.8620911430007254,
+          "max_child_rss_kib": 194536,
+          "stats": {
+            "before_cargo_ms": 323.00174999999996,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 2,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 506.14029800000003,
+            "checks": "full",
+            "generated_body": {
+              "cargo_fresh": false,
+              "mode": "cargo_library",
+              "sha256": "1e4e6260220bc89649e268489b1ab8c08b1abbd3206821253d6a4e48b34b9605",
+              "source_cache": "miss"
+            },
+            "native_reuse": "cargo_only",
+            "observed_change": "implementation_changed",
+            "profile": "dev",
+            "publish_ms": 23.125619,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f99c-18e07ad7cac9854a-0/build-receipt.json",
+            "rust_sha256": "0cc915c27faf7b80f1485bec2b097113b3bcd89bdffbf60cac83368e9393acad",
+            "schema_version": 1,
+            "semantic_sha256": "aad8a9ffc8595b3b5954c2efecf5fab55b4fdcd17838edce397af74ddc79e68e",
+            "total_ms": 852.725128
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f99c-18e07ad7cac9854a-0/nagi-37b1c7dfde7b840c-g-3f99c-18e07ad7cac9854a-0"
+        },
+        "public-api": {
+          "elapsed_s": 0.8302026650017069,
+          "max_child_rss_kib": 203068,
+          "stats": {
+            "before_cargo_ms": 314.52556500000003,
+            "cargo_always_invoked": true,
+            "cargo_compiled_artifacts": 2,
+            "cargo_fresh_artifacts": 197,
+            "cargo_ms": 484.051715,
+            "checks": "full",
+            "generated_body": {
+              "cargo_fresh": false,
+              "mode": "cargo_library",
+              "sha256": "892e4054b6491ad7310100b90de339e6220c58ba18da1a2d5ca2a65da4558e10",
+              "source_cache": "miss"
+            },
+            "native_reuse": "cargo_only",
+            "observed_change": "interface_changed",
+            "profile": "dev",
+            "publish_ms": 22.295925,
+            "receipt": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f9c2-18e07ad7fe3dc487-0/build-receipt.json",
+            "rust_sha256": "fe7051698aec2869c4efbfce6a4bf5e41bd28f03827ddb6e0d8b6e7cc5bc2f7d",
+            "schema_version": 1,
+            "semantic_sha256": "c3a4c811be19095d9a0aff1a97eeec00874ad9d81cf8124550a59ce543508369",
+            "total_ms": 821.3440370000001
+          },
+          "native": "/workspace/Nagi/local-only/dev-profile-probe/nagi-incremental-8xb_6_t9/incremental-dev/out/.nagi/apps/nagi-main-37b1c7dfde7b840c/generations/g-3f9c2-18e07ad7fe3dc487-0/nagi-37b1c7dfde7b840c-g-3f9c2-18e07ad7fe3dc487-0"
+        }
+      },
+      "warm_median_s": 0.4896519399990211,
+      "warm_plain_median_s": 0.39785671400022693,
+      "target_bytes": 1325938789,
+      "output_bytes": 266916599
+    }
+  }
+}

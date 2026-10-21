@@ -121,9 +121,19 @@ fn windows_path(path: &str) -> bool {
 
 fn span_origin(span: &Value, generated: &Generated, file: &Path) -> Option<usize> {
     let name = span.get("file_name")?.as_str()?;
-    let relative = matches!(name, "src/main.rs" | "./src/main.rs")
-        || windows_path(&file.to_string_lossy())
-            && matches!(name, r"src\main.rs" | r".\src\main.rs");
+    // The caller already matches Cargo target.src_path below. In library mode
+    // src/main.rs belongs to the shim/another target, never the generated body.
+    let windows = windows_path(&file.to_string_lossy());
+    let portable;
+    let leaf = if windows {
+        portable = normalized(&file.to_string_lossy());
+        portable.rsplit('/').next()?
+    } else {
+        file.file_name()?.to_str()?
+    };
+    let relative = name == format!("src/{leaf}")
+        || name == format!("./src/{leaf}")
+        || windows && (name == format!(r"src\{leaf}") || name == format!(r".\src\{leaf}"));
     if !relative && !same_file(name, file) {
         return None;
     }

@@ -2330,6 +2330,624 @@ fn stats(output: &Output) -> serde_json::Value {
         .expect("build statistics");
     serde_json::from_str(line).unwrap()
 }
+
+fn incremental(f: &Fixture, verb: &str, source: &str, out: &str) -> Command {
+    let mut command = f.cli(verb, source, out);
+    command.args(["--profile", "dev", "--incremental", "--build-stats"]);
+    command
+}
+
+#[test]
+fn incremental_reuses_checked_body_but_publishes_unique_bins_and_valid_locked_manifests() {
+    let f = Fixture::new();
+    f.write("helper.nagi", "def value() -> i64:\n    return 41\n");
+    f.write(
+        "main.nagi",
+        "from \"helper.nagi\" import value\ndef main():\n    print(value() + 1)\n",
+    );
+    let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let old = native(&first);
+    let old_bytes = fs::read(&old).unwrap();
+    let key = stats(&first)["generated_body"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(stats(&first)["generated_body"]["source_cache"], "miss");
+    assert_eq!(stats(&first)["generated_body"]["cargo_fresh"], false);
+    let manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(old.parent().unwrap().join("Cargo.toml")).unwrap())
+            .unwrap();
+    assert_eq!(
+        manifest["dependencies"]["nagi-app-body"]["path"]
+            .as_str()
+            .unwrap(),
+        format!("../../code/{key}"),
+        "the receipt reference must use portable separators on every OS"
+    );
+    assert_eq!(run(&old), "42");
+    verify_receipt(&old);
+    f.write(
+        "helper.nagi",
+        "# comment shifts origin, not generated code\ndef value() -> i64:\n    return 41\n",
+    );
+    let repeated = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let second = native(&repeated);
+    assert_ne!(second, old);
+    let report = stats(&repeated);
+    assert_eq!(report["generated_body"]["sha256"], key);
+    assert_eq!(report["generated_body"]["source_cache"], "hit");
+    assert_eq!(report["generated_body"]["cargo_fresh"], true);
+    assert_eq!(report["checks"], "full");
+    assert_eq!(report["cargo_always_invoked"], true);
+    assert_eq!(report["cargo_compiled_artifacts"], 1);
+    assert_eq!(run(&second), "42");
+    verify_receipt(&second);
+    // Publication keeps both source forms and the same Cargo dependency graph.
+    for manifest in [
+        f.0.join("out/Cargo.toml"),
+        second.parent().unwrap().join("Cargo.toml"),
+    ] {
+        let mut c = Command::new(env!("CARGO"));
+        c.current_dir(&f.0)
+            .args(["build", "--locked", "--profile", "dev", "--manifest-path"])
+            .arg(manifest)
+            .env("CARGO_NET_OFFLINE", "true")
+            .env("CARGO_TARGET_DIR", f.0.join("cache"));
+        success(&bounded_output(c));
+    }
+    f.write("helper.nagi", "def value() -> i64:\n    return 42\n");
+    let changed = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let changed_bin = native(&changed);
+    assert_ne!(stats(&changed)["generated_body"]["sha256"], key);
+    assert_eq!(stats(&changed)["generated_body"]["cargo_fresh"], false);
+    assert_eq!(run(&changed_bin), "43");
+    f.write("helper.nagi", "def value() -> i32:\n    return 42\n");
+    let api = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let api_bin = native(&api);
+    assert_ne!(
+        stats(&changed)["generated_body"]["sha256"],
+        stats(&api)["generated_body"]["sha256"]
+    );
+    assert_eq!(run(&api_bin), "43");
+    fs::copy(f.0.join("out/generated.low"), f.0.join("saved.low")).unwrap();
+    let low = native(&bounded_output(incremental(
+        &f,
+        "build",
+        "saved.low",
+        "low-out",
+    )));
+    assert_eq!(run(&low), "43");
+    let latest = f.latest("out").0;
+    f.write(
+        "helper.nagi",
+        "def value() -> i64:\n    return \"wrong type\"\n",
+    );
+    let rejected = bounded_output(incremental(&f, "run", "main.nagi", "out"));
+    assert!(!rejected.status.success());
+    assert!(rejected.stdout.is_empty());
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(fs::read(&old).unwrap(), old_bytes);
+    assert_eq!(run(&old), "42");
+}
+
+#[test]
+fn incremental_runtime_change_invalidates_native_code_without_changing_generated_body() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(clock_ns())\n");
+    f.write("runtime/src/lib.rs", "pub fn clock_ns() -> i64 { 41 }\n");
+    let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let old = native(&first);
+    assert_eq!(run(&old), "41");
+    f.write("runtime/src/lib.rs", "pub fn clock_ns() -> i64 { 42 }\n");
+    let second = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    assert_eq!(
+        stats(&first)["generated_body"]["sha256"],
+        stats(&second)["generated_body"]["sha256"]
+    );
+    assert_eq!(stats(&second)["generated_body"]["source_cache"], "hit");
+    assert_eq!(stats(&second)["generated_body"]["cargo_fresh"], false);
+    assert_eq!(run(&native(&second)), "42");
+    assert_eq!(run(&old), "41");
+}
+
+#[cfg(unix)]
+#[test]
+fn incremental_runtime_aliases_share_one_cargo_identity_in_both_root_manifests() {
+    use std::os::unix::fs::symlink;
+    let f = Fixture::new();
+    fs::rename(f.0.join("runtime"), f.0.join("real-runtime")).unwrap();
+    symlink(f.0.join("real-runtime"), f.0.join("runtime")).unwrap();
+    symlink(&f.0, f.0.join("root-alias")).unwrap();
+    fs::create_dir(f.0.join("out")).unwrap();
+    symlink(f.0.join("out"), f.0.join("out-alias")).unwrap();
+    let mut first = incremental(&f, "build", "main.nagi", "out-alias");
+    first.env("NAGI_ROOT", f.0.join("root-alias"));
+    let first = bounded_output(first);
+    let old = native(&first);
+    assert_eq!(stats(&first)["generated_body"]["source_cache"], "miss");
+    assert_eq!(stats(&first)["generated_body"]["cargo_fresh"], false);
+    let old_bytes = fs::read(&old).unwrap();
+    let key = stats(&first)["generated_body"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let body = f.app("out").join("code").join(key);
+    let canonical_runtime = fs::canonicalize(f.0.join("runtime")).unwrap();
+    for root in [
+        f.0.join("out-alias"),
+        old.parent().unwrap().to_owned(),
+        body,
+    ] {
+        let manifest: toml::Value =
+            toml::from_str(&fs::read_to_string(root.join("Cargo.toml")).unwrap()).unwrap();
+        assert_eq!(
+            manifest["dependencies"]["nagi-runtime"]["path"]
+                .as_str()
+                .unwrap(),
+            canonical_runtime.to_str().unwrap()
+        );
+    }
+    for manifest in [
+        f.0.join("out-alias/Cargo.toml"),
+        old.parent().unwrap().join("Cargo.toml"),
+    ] {
+        let mut command = Command::new(env!("CARGO"));
+        command
+            .current_dir(f.0.join("root-alias"))
+            .args(["build", "--locked", "--profile", "dev", "--manifest-path"])
+            .arg(manifest)
+            .env("CARGO_NET_OFFLINE", "true")
+            .env("CARGO_TARGET_DIR", f.0.join("cache"));
+        success(&bounded_output(command));
+    }
+    let repeated = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    assert_eq!(stats(&repeated)["generated_body"]["source_cache"], "hit");
+    assert_eq!(stats(&repeated)["generated_body"]["cargo_fresh"], true);
+    let new = native(&repeated);
+    assert_ne!(old, new);
+    verify_receipt(&new);
+    assert_eq!(run(&new), "old");
+    assert_eq!(fs::read(&old).unwrap(), old_bytes);
+    assert_eq!(run(&old), "old");
+    let latest = f.latest("out").0;
+    fs::rename(f.0.join("real-runtime"), f.0.join("missing-runtime")).unwrap();
+    let failed = bounded_output(incremental(&f, "run", "main.nagi", "out"));
+    assert!(!failed.status.success());
+    assert!(failed.stdout.is_empty());
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(fs::read(&old).unwrap(), old_bytes);
+    assert_eq!(run(&old), "old");
+}
+
+#[cfg(unix)]
+#[test]
+fn incremental_runtime_paths_with_newlines_and_quotes_use_one_line_root_manifests() {
+    let f = Fixture::new();
+    for name in ["runtime\nroot", "runtime\\\"'root", "runtime\u{7f}root"] {
+        f.write(
+            &format!("{name}/runtime/Cargo.toml"),
+            "[package]\nname='nagi-runtime'\nversion='0.1.0'\nedition='2021'\n[workspace]\n",
+        );
+        f.write(&format!("{name}/runtime/src/lib.rs"), "");
+        for repeat in [false, true] {
+            let mut c = incremental(&f, "build", "main.nagi", "out");
+            c.env("NAGI_ROOT", f.0.join(name));
+            let output = bounded_output(c);
+            let binary = native(&output);
+            assert_eq!(run(&binary), "old");
+            assert_eq!(stats(&output)["generated_body"]["cargo_fresh"], repeat);
+            verify_receipt(&binary);
+            for root in [f.0.join("out"), binary.parent().unwrap().to_owned()] {
+                let text = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+                assert!(
+                    !text.contains("\"\"\"") && !text.contains("'''"),
+                    "root manifest must use only one-line values: {text}"
+                );
+                let parsed: toml::Value = toml::from_str(&text).unwrap();
+                let runtime = root.join(
+                    parsed["dependencies"]["nagi-runtime"]["path"]
+                        .as_str()
+                        .unwrap(),
+                );
+                assert_eq!(
+                    fs::canonicalize(runtime).unwrap(),
+                    fs::canonicalize(f.0.join(name).join("runtime")).unwrap()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn incremental_cache_rejects_extra_cargo_inputs_before_execution() {
+    let f = Fixture::new();
+    let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let old = native(&first);
+    let old_bytes = fs::read(&old).unwrap();
+    let key = stats(&first)["generated_body"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let body = f.app("out").join("code").join(key);
+    let manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(body.join("Cargo.toml")).unwrap()).unwrap();
+    for option in [
+        "build",
+        "autobins",
+        "autoexamples",
+        "autotests",
+        "autobenches",
+    ] {
+        assert_eq!(manifest["package"][option].as_bool(), Some(false));
+    }
+    let latest = f.latest("out").0;
+    let marker = f.0.join("unexpected-build-script-ran");
+    for (name, directory) in [
+        ("build.rs", false),
+        ("examples", true),
+        ("src/extra.rs", false),
+        ("src/bin", true),
+    ] {
+        let extra = body.join(name);
+        if directory {
+            fs::create_dir(&extra).unwrap();
+        } else {
+            fs::write(&extra, r#"fn main() { std::fs::write(std::env::var_os("NAGI_EXTRA_FILE_MARKER").unwrap(), b"executed").unwrap(); }"#).unwrap();
+        }
+        let mut command = incremental(&f, "run", "main.nagi", "out");
+        command.env("NAGI_EXTRA_FILE_MARKER", &marker);
+        let output = bounded_output(command);
+        assert!(!output.status.success(), "{name}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("unexpected or missing entries"));
+        assert!(output.stdout.is_empty());
+        assert!(!marker.exists());
+        assert!(extra.exists(), "a bad cache must not be repaired");
+        assert_eq!(f.latest("out").0, latest);
+        assert_eq!(fs::read(&old).unwrap(), old_bytes);
+        assert_eq!(run(&old), "old");
+        if directory {
+            fs::remove_dir(extra).unwrap();
+        } else {
+            fs::remove_file(extra).unwrap();
+        }
+    }
+    let repeated = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    assert_eq!(stats(&repeated)["generated_body"]["source_cache"], "hit");
+    assert_eq!(stats(&repeated)["generated_body"]["cargo_fresh"], true);
+    assert_eq!(run(&native(&repeated)), "old");
+}
+
+#[test]
+fn incremental_cache_corruption_is_not_repaired_or_published() {
+    let f = Fixture::new();
+    let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let old = native(&first);
+    let old_bytes = fs::read(&old).unwrap();
+    let key = stats(&first)["generated_body"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let body = f.app("out").join("code").join(key);
+    let latest = f.latest("out").0;
+    for name in ["src/lib.rs", "Cargo.toml"] {
+        let path = body.join(name);
+        let bytes = fs::read(&path).unwrap();
+        fs::write(&path, b"CORRUPT").unwrap();
+        let output = bounded_output(incremental(&f, "run", "main.nagi", "out"));
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("integrity mismatch"));
+        assert!(output.stdout.is_empty());
+        assert_eq!(fs::read(&path).unwrap(), b"CORRUPT");
+        assert_eq!(f.latest("out").0, latest);
+        fs::write(path, bytes).unwrap();
+    }
+    assert_eq!(fs::read(&old).unwrap(), old_bytes);
+    assert_eq!(run(&old), "old");
+    let mut invalid_config = incremental(&f, "run", "main.nagi", "out");
+    invalid_config.env("CARGO_PROFILE_DEV_OPT_LEVEL", "invalid");
+    let failed = bounded_output(invalid_config);
+    assert!(!failed.status.success());
+    assert!(failed.stdout.is_empty());
+    assert_eq!(f.latest("out").0, latest);
+}
+
+#[test]
+fn compatibility_writers_cannot_overwrite_any_retained_body_through_a_hardlink() {
+    for verb in ["build", "check", "lower"] {
+        let f = Fixture::new();
+        let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+        let old = native(&first);
+        let key = stats(&first)["generated_body"]["sha256"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let source = f.app("out").join("code").join(key).join("src/lib.rs");
+        let original = fs::read(&source).unwrap();
+        let projection = if verb == "build" {
+            "out/src/main.rs"
+        } else {
+            "out/generated.low"
+        };
+        fs::remove_file(f.0.join(projection)).unwrap();
+        fs::hard_link(&source, f.0.join(projection)).unwrap();
+        let latest = f.latest("out").0;
+        f.source("main.nagi", "changed");
+        // Even an ordinary writer must preserve a previously cached body.
+        let output = bounded_output(f.cli(verb, "main.nagi", "out"));
+        assert!(!output.status.success(), "{verb}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("cannot overwrite input"));
+        assert_eq!(fs::read(&source).unwrap(), original);
+        assert_eq!(f.latest("out").0, latest);
+        assert_eq!(run(&old), "old");
+    }
+}
+
+#[test]
+fn incremental_publication_rechecks_retained_body_aliases_after_cargo() {
+    let f = Fixture::new();
+    let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let old = native(&first);
+    let key = stats(&first)["generated_body"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let body_source = f.app("out").join("code").join(key).join("src/lib.rs");
+    let original = fs::read(&body_source).unwrap();
+    let latest = f.latest("out").0;
+    f.source("main.nagi", "new");
+    let wrapper = f.wrapper();
+    let mut command = f.wrapped(&wrapper, "run", "main.nagi", "out", "after", "after");
+    command.args(["--profile", "dev", "--incremental", "--build-stats"]);
+    let mut pending = Running::wrapper(command, f.0.join("after"));
+    pending.wait_for("compiled");
+    fs::remove_file(f.0.join("out/src/main.rs")).unwrap();
+    fs::hard_link(&body_source, f.0.join("out/src/main.rs")).unwrap();
+    pending.release();
+    let failed = pending.output();
+    assert!(!failed.status.success());
+    assert!(failed.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("cannot overwrite input"));
+    assert_eq!(fs::read(body_source).unwrap(), original);
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(run(&old), "old");
+}
+
+#[test]
+fn incremental_cargo_receipt_projection_and_latest_failures_preserve_last_success() {
+    for mode in ["fail", "receipt-fault", "projection-fault", "latest-fault"] {
+        let f = Fixture::new();
+        let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+        let old = native(&first);
+        let latest = f.latest("out").0;
+        let bytes = fs::read(&old).unwrap();
+        f.source("main.nagi", "new");
+        let wrapper = f.wrapper();
+        let mut c = f.wrapped(&wrapper, "run", "main.nagi", "out", mode, mode);
+        c.args(["--profile", "dev", "--incremental", "--build-stats"]);
+        let output = bounded_output(c);
+        assert!(!output.status.success(), "{mode}");
+        assert!(output.stdout.is_empty(), "{mode}");
+        assert_eq!(f.latest("out").0, latest, "{mode}");
+        assert_eq!(fs::read(&old).unwrap(), bytes);
+        assert_eq!(run(&old), "old");
+    }
+}
+
+#[test]
+fn incremental_async_result_and_empty_entries_preserve_exit_behavior() {
+    let f = Fixture::new();
+    f.write(
+        "runtime/src/lib.rs",
+        r#"use std::future::Future;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+struct Noop;
+impl Wake for Noop { fn wake(self: Arc<Self>) {} }
+pub fn block_on<F: Future>(future: F) -> F::Output {
+    let waker = Waker::from(Arc::new(Noop));
+    let mut context = Context::from_waker(&waker);
+    match Box::pin(future).as_mut().poll(&mut context) {
+        Poll::Ready(value) => value,
+        Poll::Pending => panic!("fixture only supports ready futures"),
+    }
+}
+#[derive(Debug)]
+pub struct Error(String);
+impl Error { pub fn invalid(value: impl Into<String>) -> Self { Self(value.into()) } }
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { f.write_str(&self.0) }
+}
+"#,
+    );
+    for (text, expected, succeeds) in [
+        ("async def main():\n    print(42)\n", "42", true),
+        ("def helper():\n    print(99)\n", "", true),
+        (
+            "def main() -> Result[unit, Error]:\n    return error(\"entry failure\")\n",
+            "",
+            false,
+        ),
+    ] {
+        f.write("main.nagi", text);
+        let built = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+        let binary = native(&built);
+        let output = Command::new(&binary).output().unwrap();
+        assert_eq!(output.status.success(), succeeds);
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), expected);
+        if !succeeds {
+            assert!(String::from_utf8_lossy(&output.stderr).contains("entry failure"));
+        }
+        verify_receipt(&binary);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn incremental_rejects_linked_cache_and_preserves_latest() {
+    let f = Fixture::new();
+    let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let old = native(&first);
+    let latest = f.latest("out").0;
+    let key = stats(&first)["generated_body"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let body = f.app("out").join("code").join(key);
+    let source = body.join("src/lib.rs");
+    fs::remove_file(&source).unwrap();
+    std::os::unix::fs::symlink(f.0.join("main.nagi"), &source).unwrap();
+    let failed = bounded_output(incremental(&f, "run", "main.nagi", "out"));
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("plain file"));
+    assert!(failed.stdout.is_empty());
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(run(&old), "old");
+    // Reject an entire linked code directory before writing through it.
+    fs::rename(f.app("out").join("code"), f.0.join("original-code")).unwrap();
+    std::os::unix::fs::symlink(f.0.join("original-code"), f.app("out").join("code")).unwrap();
+    let failed = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("plain directory"));
+    assert_eq!(f.latest("out").0, latest);
+}
+
+#[cfg(windows)]
+#[test]
+fn incremental_rejects_cache_directory_junction_and_preserves_latest() {
+    use std::os::windows::fs::MetadataExt;
+    let f = Fixture::new();
+    let first = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    let old = native(&first);
+    let latest = f.latest("out").0;
+    let code = f.app("out").join("code");
+    let target = f.0.join("original-code");
+    fs::rename(&code, &target).unwrap();
+    let made = Command::new("cmd.exe")
+        .args(["/d", "/c", "mklink", "/J"])
+        .arg(&code)
+        .arg(&target)
+        .output()
+        .unwrap();
+    assert!(
+        made.status.success(),
+        "{}",
+        String::from_utf8_lossy(&made.stderr)
+    );
+    assert_ne!(
+        fs::symlink_metadata(&code).unwrap().file_attributes() & 0x400,
+        0
+    );
+    let failed = bounded_output(incremental(&f, "run", "main.nagi", "out"));
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("plain directory"));
+    assert!(failed.stdout.is_empty());
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(run(&old), "old");
+}
+
+#[test]
+fn incremental_orphan_cargo_cannot_overwrite_newer_body_or_executable() {
+    let f = Fixture::new();
+    let wrapper = f.wrapper();
+    let mut command = f.wrapped(&wrapper, "build", "main.nagi", "out", "orphan", "before");
+    command.args(["--profile", "dev", "--incremental", "--build-stats"]);
+    let mut first = Running::wrapper(command, f.0.join("orphan"));
+    first.wait_for("entered");
+    let manifest = PathBuf::from(fs::read_to_string(f.0.join("orphan/manifest")).unwrap());
+    let original: toml::Value = toml::from_str(&fs::read_to_string(&manifest).unwrap()).unwrap();
+    let bin = original["bin"][0]["name"].as_str().unwrap();
+    let body = manifest.parent().unwrap().join(
+        original["dependencies"]["nagi-app-body"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let body_bytes = fs::read(body.join("src/lib.rs")).unwrap();
+    first.kill_parent();
+    f.source("main.nagi", "new");
+    let next = native(&bounded_output(incremental(
+        &f,
+        "build",
+        "main.nagi",
+        "out",
+    )));
+    let latest = f.latest("out").0;
+    let next_bytes = fs::read(&next).unwrap();
+    first.release();
+    let until = Instant::now() + DEADLINE;
+    while !f.0.join("orphan/done").exists() {
+        assert!(Instant::now() < until, "orphan Cargo did not finish");
+        thread::sleep(Duration::from_millis(10));
+    }
+    assert_eq!(fs::read_to_string(f.0.join("orphan/done")).unwrap(), "0");
+    assert_eq!(fs::read(body.join("src/lib.rs")).unwrap(), body_bytes);
+    assert_eq!(fs::read(&next).unwrap(), next_bytes);
+    assert_eq!(f.latest("out").0, latest);
+    let old_cache =
+        f.0.join("cache/debug")
+            .join(format!("{bin}{}", std::env::consts::EXE_SUFFIX));
+    assert_eq!(run(&old_cache), "old");
+    assert_eq!(run(&next), "new");
+}
+
+#[test]
+fn incremental_falls_back_for_native_adapters_extra_dependencies_and_managed_runs() {
+    let f = Fixture::new();
+    f.write("native.rs", "pub fn value() -> i64 { 41 }\n");
+    f.write(
+        "main.nagi",
+        "@rust(\"native::value\")\nextern def value() -> i64\ndef main():\n    print(value())\n",
+    );
+    let mut c = incremental(&f, "build", "main.nagi", "out");
+    c.args(["--rust", "native.rs"]);
+    let first = bounded_output(c);
+    let old = native(&first);
+    assert_eq!(stats(&first)["generated_body"]["reason"], "rust_adapter");
+    assert_eq!(run(&old), "41");
+    f.write("native.rs", "pub fn value() -> i64 { 42 }\n");
+    let mut c = incremental(&f, "run", "main.nagi", "out");
+    c.args(["--rust", "native.rs"]);
+    assert_eq!(
+        String::from_utf8_lossy(&bounded_output(c).stdout).trim(),
+        "42"
+    );
+    f.source("main.nagi", "managed");
+    let mut c = incremental(&f, "run", "main.nagi", "out");
+    c.env("NAGI_RUN_RETENTION", "latest");
+    let output = bounded_output(c);
+    success(&output);
+    assert_eq!(stats(&output)["generated_body"]["reason"], "managed_run");
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "managed");
+    f.write(
+        "nagi.toml",
+        "entry='main.nagi'\n[rust.dependencies]\nsupport={path='support'}\n",
+    );
+    f.write(
+        "support/Cargo.toml",
+        "[package]\nname='support'\nversion='0.1.0'\nedition='2021'\n[workspace]\n",
+    );
+    f.write("support/src/lib.rs", "");
+    let mut c = incremental(&f, "build", "main.nagi", "deps-out");
+    c.args(["--project", "."]);
+    // Use an explicitly selected project, rather than --no-project fixture mode.
+    let args: Vec<_> = c
+        .get_args()
+        .filter(|arg| *arg != "--no-project")
+        .map(|arg| arg.to_os_string())
+        .collect();
+    let mut project_command = Command::new(env!("CARGO_BIN_EXE_nagic"));
+    project_command
+        .current_dir(&f.0)
+        .args(args)
+        .env("NAGI_ROOT", &f.0)
+        .env("CARGO_NET_OFFLINE", "true")
+        .env("NAGI_NATIVE_TARGET_DIR", f.0.join("cache"));
+    let deps = bounded_output(project_command);
+    native(&deps);
+    assert_eq!(
+        stats(&deps)["generated_body"]["reason"],
+        "rust_dependencies"
+    );
+}
 fn analysis(binary: &Path) -> serde_json::Value {
     serde_json::from_slice(&fs::read(binary.parent().unwrap().join("build-analysis.json")).unwrap())
         .unwrap()
@@ -2339,7 +2957,7 @@ fn verify_receipt(binary: &Path) {
     let directory = binary.parent().unwrap();
     let receipt: serde_json::Value =
         serde_json::from_slice(&fs::read(directory.join("build-receipt.json")).unwrap()).unwrap();
-    assert_eq!(receipt["schema_version"], 1);
+    assert!(matches!(receipt["schema_version"].as_u64(), Some(1 | 2)));
     assert_eq!(
         receipt["generation"].as_str().unwrap(),
         directory.file_name().unwrap()
