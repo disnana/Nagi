@@ -16,7 +16,7 @@ import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
 import com.intellij.testFramework.fixtures.BasePlatformTestCase;
 import com.intellij.testFramework.ServiceContainerUtil;
-import com.intellij.util.ui.UIUtil;
+import com.intellij.testFramework.PlatformTestUtil;
 import com.intellij.util.messages.MessageBus;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -89,7 +89,8 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
     private void waitUntil(BooleanSupplier done) throws Exception {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
         while (!done.getAsBoolean() && System.nanoTime() < deadline) {
-            UIUtil.dispatchAllInvocationEvents();
+            // Let the IDE dispatcher release implicit write intent for background VFS events.
+            PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue();
             Thread.sleep(5);
         }
         assertTrue("service state: " + service.state() + ": " + service.statusMessage(), done.getAsBoolean());
@@ -97,7 +98,7 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
     private void waitUntil(BooleanSupplier done, Supplier<String> failureMessage) throws Exception {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
         while (!done.getAsBoolean() && System.nanoTime() < deadline) {
-            UIUtil.dispatchAllInvocationEvents();
+            PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue();
             Thread.sleep(5);
         }
         boolean complete = done.getAsBoolean();

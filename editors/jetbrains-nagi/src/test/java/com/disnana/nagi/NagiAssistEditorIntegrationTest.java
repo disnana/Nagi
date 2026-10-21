@@ -6,7 +6,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.testFramework.fixtures.BasePlatformTestCase;
-import com.intellij.util.ui.UIUtil;
+import com.intellij.testFramework.PlatformTestUtil;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
@@ -53,7 +53,8 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
     private void waitFor(BooleanSupplier done) throws Exception {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
         while (!done.getAsBoolean() && System.nanoTime() < deadline) {
-            UIUtil.dispatchAllInvocationEvents();
+            // Let the IDE dispatcher release implicit write intent for background VFS events.
+            PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue();
             Thread.sleep(5);
         }
         var service = getProject().getService(NagiAssistService.class);

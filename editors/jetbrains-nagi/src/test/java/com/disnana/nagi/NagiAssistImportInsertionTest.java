@@ -9,7 +9,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.testFramework.ServiceContainerUtil;
 import com.intellij.testFramework.fixtures.BasePlatformTestCase;
-import com.intellij.util.ui.UIUtil;
+import com.intellij.testFramework.PlatformTestUtil;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -86,7 +86,8 @@ public final class NagiAssistImportInsertionTest extends BasePlatformTestCase {
         service.requestCompletion(myFixture.getFile(), myFixture.getEditor());
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         while (service.fresh(myFixture.getFile(), myFixture.getEditor()) == null && System.nanoTime() < deadline) {
-            UIUtil.dispatchAllInvocationEvents();
+            // Let the IDE dispatcher release implicit write intent for background VFS events.
+            PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue();
             Thread.sleep(5);
         }
         assertNotNull(service.state() + ": " + service.statusMessage(),
@@ -193,7 +194,7 @@ public final class NagiAssistImportInsertionTest extends BasePlatformTestCase {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         while ((refreshed.getCount() != 0 || service.isCurrent(myFixture.getFile(), published))
                 && System.nanoTime() < deadline) {
-            UIUtil.dispatchAllInvocationEvents();
+            PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue();
             Thread.sleep(5);
         }
         assertEquals("targeted parent refresh must finish before selection", 0L, refreshed.getCount());
