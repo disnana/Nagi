@@ -1,0 +1,37 @@
+name: Nagi project tooling
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/generate_project_ci.py'
+      - 'scripts/verify_build_receipt.py'
+      - 'scripts/tests/test_generate_project_ci.py'
+      - 'scripts/tests/test_build_receipt.py'
+      - '.github/workflows/project-tooling.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/generate_project_ci.py'
+      - 'scripts/verify_build_receipt.py'
+      - 'scripts/tests/test_generate_project_ci.py'
+      - 'scripts/tests/test_build_receipt.py'
+      - '.github/workflows/project-tooling.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check user-project CI generation and build receipt validation
+        run: |
+          python -m unittest discover -s scripts/tests -p 'test_generate_project_ci.py'
+          python -m unittest discover -s scripts/tests -p 'test_build_receipt.py'
