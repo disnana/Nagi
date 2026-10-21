@@ -22,10 +22,10 @@
 2026-10-21T13:14:37.2632980Z   File "/Users/runner/work/Nagi/Nagi/scripts/verify_build_receipt.py", line 470, in _v3_reference
 2026-10-21T13:14:37.2633480Z     raise ValueError("schema 3 unit dependency path mismatch")
 2026-10-21T13:14:37.2633860Z ValueError: schema 3 unit dependency path mismatch
-2026-10-21T13:14:37.2634100Z 
+2026-10-21T13:14:37.2634100Z
 2026-10-21T13:14:37.2634240Z ----------------------------------------------------------------------
 2026-10-21T13:14:37.2634570Z Ran 36 tests in 0.838s
-2026-10-21T13:14:37.2634710Z 
+2026-10-21T13:14:37.2634710Z
 2026-10-21T13:14:37.2634800Z FAILED (errors=1, skipped=1)
 2026-10-21T13:14:37.2745330Z ##[error]Process completed with exit code 1.
 2026-10-21T13:14:37.2907570Z Post job cleanup.
@@ -52,10 +52,10 @@
 2026-10-21T13:14:34.2732474Z   File "D:\a\Nagi\Nagi\scripts\verify_build_receipt.py", line 470, in _v3_reference
 2026-10-21T13:14:34.2732745Z     raise ValueError("schema 3 unit dependency path mismatch")
 2026-10-21T13:14:34.2732950Z ValueError: schema 3 unit dependency path mismatch
-2026-10-21T13:14:34.2733074Z 
+2026-10-21T13:14:34.2733074Z
 2026-10-21T13:14:34.2733157Z ----------------------------------------------------------------------
 2026-10-21T13:14:34.2733343Z Ran 36 tests in 1.294s
-2026-10-21T13:14:34.2733415Z 
+2026-10-21T13:14:34.2733415Z
 2026-10-21T13:14:34.2733479Z FAILED (errors=1, skipped=3)
 2026-10-21T13:14:34.3839921Z ##[error]Process completed with exit code 1.
 2026-10-21T13:14:34.4049211Z Post job cleanup.
