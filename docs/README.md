@@ -61,6 +61,7 @@
 | 複数ファイルに分ける、Rustを呼ぶ | [importとRust連携](modules-and-rust.md) |
 | 自作の共通コードやRustのcrateを使う | [ライブラリとRustの資産](libraries.md) |
 | 入口やビルド設定を保存する | [nagi.toml](projects.md) |
+| アプリのCIを生成する・開発ビルドを測る | [CI生成](user-ci.md)・[開発ビルド（未リリース）](development-builds.md) |
 | 自分のRust crateをアプリから使う | [ローカルライブラリのサンプル](../test-nagi-code/rust-library/README.md) |
 | 非同期処理を待つ、複数の処理を始める | [asyncとscope](async.md)、[並行処理](concurrency.md) |
 | 状態を持つ処理へメッセージを送り、再起動・停止を管理する | [actor](actor.md)、[Supervisor](supervisor.md)、[APIリファレンス](actor-reference.md) |

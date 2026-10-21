@@ -156,3 +156,7 @@ IDE向けの`nagic symbols --project my-app`は、読み込んだソースの関
 JSONには関数の引数・戻り値・async、classのフィールドも含みます。型検査で確認できた変数の型は`locals`、式の型・範囲・その型のフィールドは`expressions`に入ります。位置は元ファイルの1始まりの行・UTF-16列です。確定しない型は出力しません。これは編集補助の情報で、`check`の成功を示すものではありません。
 
 `symbols --editor-input`では標準入力の`{"files":[{"file":"main.nagi","text":"..."}]}`で既存のNagi/Lowファイルの編集中の内容を指定できます。相対パスはターミナルの作業フォルダー基準です。ディスクへ書き込まずに読み込み時のソースを置き換えます。このオプションは`symbols`と`check`で使えます。設定ファイルは保存済みのものを使います。`check --editor-input`は生成ファイルを書き込みません。
+
+## 開発とCIの時間を短くする
+
+公開0.2.0向けの[CI設定生成](user-ci.md)と、未リリースの[開発profile・ビルド観測](development-builds.md)を参照してください。

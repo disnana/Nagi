@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "normal_lockfiles": {
+    "baseline-release": {
+      "sha256": "7200479545382fbcffc2d4d8ac188e12d97fb1e92055cc911d75fefd16910889",
+      "external_packages": 214,
+      "package_identities_sha256": "96aa3d80f53a8ce457ff06261f3f02f11126481497e93f976ab3314f80cc1ddc"
+    },
+    "current-release": {
+      "sha256": "9e1e13c69658239d58dbae7d06e7f33a3c55ef0c55a6d4dbddeeff1f9f68fd99",
+      "external_packages": 214,
+      "package_identities_sha256": "96aa3d80f53a8ce457ff06261f3f02f11126481497e93f976ab3314f80cc1ddc"
+    },
+    "current-dev": {
+      "sha256": "a40942909a2f517d89f84f615d3ccecb00d372e1ad1e89d51d2731fa3fb89e6f",
+      "external_packages": 214,
+      "package_identities_sha256": "96aa3d80f53a8ce457ff06261f3f02f11126481497e93f976ab3314f80cc1ddc"
+    }
+  },
+  "cpu_lockfiles": {
+    "baseline-release": {
+      "sha256": "bf615d373b8c465ad896b0ab607c25be6c0c5f5004eaed01f20f541dd720edb1",
+      "external_packages": 214,
+      "package_identities_sha256": "a983c8444f5e0fb9767f64f117e66acd94637a28af401f3b7d9e1997bd90a507"
+    },
+    "current-release": {
+      "sha256": "39aa276cc0db0924c1fd4bb89355f49c7101883ac2ce224e6337b95e8c26ee4d",
+      "external_packages": 214,
+      "package_identities_sha256": "a983c8444f5e0fb9767f64f117e66acd94637a28af401f3b7d9e1997bd90a507"
+    },
+    "current-dev": {
+      "sha256": "ac6b0232e7762fe60b9569ef49cc11bb78c58ed11edec7fb528fcdfc4d8c06f6",
+      "external_packages": 214,
+      "package_identities_sha256": "a983c8444f5e0fb9767f64f117e66acd94637a28af401f3b7d9e1997bd90a507"
+    }
+  },
+  "normal_outputs": {
+    "baseline-release": [
+      "43\n0",
+      "43\n0",
+      "43\n0"
+    ],
+    "current-release": [
+      "43\n0",
+      "43\n0",
+      "43\n0"
+    ],
+    "current-dev": [
+      "43\n0",
+      "43\n0",
+      "43\n0"
+    ]
+  },
+  "receipts_verified": {
+    "baseline-release": 0,
+    "current-release": 8,
+    "current-dev": 8
+  },
+  "notes": [
+    "Normal workload uses the seeded reviewed lockfile. CPU probe has an independently resolved offline lockfile; compare configurations within each workload, not between workloads.",
+    "Cargo may trim workspace-only package entries from the seed. Compare resolved package identities."
+  ],
+  "cpu_vs_normal_packages_removed": [
+    [
+      "cc",
+      "1.5.1"
+    ],
+    [
+      "combine",
+      "4.6.8"
+    ],
+    [
+      "deranged",
+      "0.5.8"
+    ],
+    [
+      "equivalent",
+      "1.0.2"
+    ],
+    [
+      "find-msvc-tools",
+      "0.1.14"
+    ],
+    [
+      "libc",
+      "0.2.189"
+    ],
+    [
+      "mio",
+      "1.2.3"
+    ],
+    [
+      "rustls-webpki",
+      "0.103.15"
+    ],
+    [
+      "serde_json",
+      "1.0.151"
+    ],
+    [
+      "smallvec",
+      "1.16.2"
+    ],
+    [
+      "syn",
+      "3.0.6"
+    ],
+    [
+      "tokio",
+      "1.53.1"
+    ],
+    [
+      "unicode-ident",
+      "1.0.26"
+    ],
+    [
+      "uuid",
+      "1.26.1"
+    ],
+    [
+      "zerocopy",
+      "0.8.59"
+    ],
+    [
+      "zerocopy-derive",
+      "0.8.59"
+    ]
+  ],
+  "cpu_vs_normal_packages_added": [
+    [
+      "cc",
+      "1.9.0"
+    ],
+    [
+      "combine",
+      "4.6.9"
+    ],
+    [
+      "deranged",
+      "0.5.9"
+    ],
+    [
+      "equivalent",
+      "1.0.3"
+    ],
+    [
+      "find-msvc-tools",
+      "0.1.15"
+    ],
+    [
+      "libc",
+      "0.2.191"
+    ],
+    [
+      "mio",
+      "1.2.4"
+    ],
+    [
+      "rustls-webpki",
+      "0.103.16"
+    ],
+    [
+      "serde_json",
+      "1.0.154"
+    ],
+    [
+      "smallvec",
+      "1.16.3"
+    ],
+    [
+      "syn",
+      "3.0.9"
+    ],
+    [
+      "tokio",
+      "1.54.0"
+    ],
+    [
+      "unicode-ident",
+      "1.0.27"
+    ],
+    [
+      "uuid",
+      "1.28.0"
+    ],
+    [
+      "zerocopy",
+      "0.8.63"
+    ],
+    [
+      "zerocopy-derive",
+      "0.8.63"
+    ]
+  ],
+  "normal_generated_rust_equal": true
+}

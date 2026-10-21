@@ -1,0 +1,15 @@
+{
+  "baseline_commit": "2c703b89645b164f586a926e473d08395be65c90",
+  "initial_compiler_build": {
+    "command": "cargo build --locked -p nagic --release",
+    "elapsed_s": 83.36482540100002,
+    "max_child_rss_kib": 758336,
+    "exit_code": 0
+  },
+  "initial_hello_release_build": {
+    "elapsed_s": 82.162837879,
+    "max_child_rss_kib": 723600,
+    "exit_code": 0
+  },
+  "limits": "Initial measurements used fresh targets, warm OS/image caches, and downloading dependencies; not comparable to later warm compiler rebuilds."
+}

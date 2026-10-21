@@ -1,0 +1,108 @@
+{
+  "fmt": {
+    "command": [
+      "cargo",
+      "fmt",
+      "--all",
+      "--",
+      "--check"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 1.4236890529996344,
+    "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "clippy": {
+    "command": [
+      "cargo",
+      "clippy",
+      "--locked",
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 5.034712279999894,
+    "log_sha256": "d737c7371d2f1b9177398aa52084f9fb9dd1f685d4857a0fff981813eeba6370"
+  },
+  "release-build": {
+    "command": [
+      "cargo",
+      "build",
+      "--locked",
+      "-p",
+      "nagic",
+      "--release"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 38.04240273400001,
+    "log_sha256": "e813274109aa44889d6bb6eb1067128083a7e16f31bf9185f8bb8a02f27301fd"
+  },
+  "no-sql-check": {
+    "command": [
+      "cargo",
+      "check",
+      "--locked",
+      "-p",
+      "nagic",
+      "--no-default-features"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 2.389962839999953,
+    "log_sha256": "22ab0f38c62b09f1d9b34003273e8f70cf6028735d7ee0f136eca1135dea4cb7"
+  },
+  "generator": {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "scripts/tests",
+      "-p",
+      "test_generate_project_ci.py"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.5846841599995969,
+    "log_sha256": "a579520a3cc065b8a90a91898c98b986f933c414fff3205efba16c27d07490f7"
+  },
+  "receipt": {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "scripts/tests",
+      "-p",
+      "test_build_receipt.py"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 0.0688753520003047,
+    "log_sha256": "9f169aa04896ef0203477ff61d8d57406ec0dab00b71ec15cf38cdae22509147"
+  },
+  "ci-policy": {
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "scripts/ci",
+      "-p",
+      "test_*.py"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 2.6587967039999967,
+    "log_sha256": "0f5aff65540b34770e5f8d5567d1ab12eace9a3fbe124da1c2a7958143ce62cd"
+  },
+  "website": {
+    "command": [
+      "local-only/docs-venv/bin/python",
+      "website/build.py"
+    ],
+    "exit_code": 0,
+    "elapsed_s": 1.0449244930000532,
+    "log_sha256": "a16435512f717857a4a1ab634585c1e3707a23a940daa295f52bbdb6321e8bf9"
+  }
+}
