@@ -26,6 +26,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.SystemInfo;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
@@ -158,6 +159,8 @@ public final class NagiAssistService implements Disposable {
     // Confined to the existing worker, including registration and removal.
     private LocalFileSystem.WatchRequest importDirectoryWatch;
     private String watchedImportDirectory;
+    private VirtualFile watchedImportVirtualDirectory;
+    private boolean importDirectoryPrimed;
     private volatile VirtualFile lastFocusFile;
     private ScheduledFuture<?> pending;
     private ScheduledFuture<?> activeFuture;
@@ -718,7 +721,10 @@ public final class NagiAssistService implements Disposable {
         Set<String> directories = context == null ? Set.of() : Set.copyOf(context.directories());
         knownImportDirectories = directories;
         importQueryFile = context == null ? null : context.replacement().file();
-        updateImportDirectoryWatch(directories);
+        if (!updateImportDirectoryWatch(directories, snapshot)) {
+            throw new SnapshotBlockedException(State.STALE,
+                    "The import directory is being observed asynchronously; its candidates were discarded.");
+        }
         if (disposed || project.isDisposed()) {
             knownImportDirectories = Set.of();
             importQueryFile = null;
@@ -863,22 +869,55 @@ public final class NagiAssistService implements Disposable {
         ApplicationManager.getApplication().assertIsNonDispatchThread();
     }
 
-    private void updateImportDirectoryWatch(Set<String> directories) throws SnapshotBlockedException {
+    private boolean updateImportDirectoryWatch(Set<String> directories, Snapshot snapshot) throws SnapshotBlockedException {
         assertWorkerIo();
         String next = directories.isEmpty() ? null : directories.iterator().next();
         if (disposed || project.isDisposed()) next = null;
-        if (Objects.equals(next, watchedImportDirectory)) return;
+        if (Objects.equals(next, watchedImportDirectory)
+                && (next == null || watchedImportVirtualDirectory != null && watchedImportVirtualDirectory.isValid()))
+            return next == null || importDirectoryPrimed;
         clearImportDirectoryWatch();
-        if (next == null) return;
+        if (next == null) return true;
         LocalFileSystem.WatchRequest watch = LocalFileSystem.getInstance()
                 .addRootToWatch(NagiAssistProtocol.physicalPath(next), false);
         if (watch == null) throw new SnapshotBlockedException(State.FAILED,
                 "The import directory could not be watched; its candidates were discarded.");
         importDirectoryWatch = watch;
         watchedImportDirectory = next;
+        try {
+            // Watching a partially loaded VFS directory only dirties its cached
+            // children: arbitrary future sibling names would remain invisible.
+            // Prime this exact parent once, on the worker, after our bounded scan.
+            DirectoryStamp before = readDirectorySnapshot(Path.of(NagiAssistProtocol.physicalPath(next)));
+            if (before.incomplete()) throw new SnapshotBlockedException(State.LIMIT,
+                    "The import directory exceeds the bounded editor catalog.");
+            VirtualFile directory = LocalFileSystem.getInstance().findFileByPath(NagiAssistProtocol.physicalPath(next));
+            if (directory == null || !directory.isValid() || !directory.isDirectory())
+                throw new SnapshotBlockedException(State.STALE, "The import directory changed before it could be observed.");
+            watchedImportVirtualDirectory = directory;
+            // The platform's child loading has no bounded variant. It is neither
+            // recursive nor run under a caller-held read action or on the EDT.
+            VfsUtil.markDirty(false, true, directory);
+            DirectoryStamp after = readDirectorySnapshot(before.path());
+            if (after.incomplete()) throw new SnapshotBlockedException(State.LIMIT,
+                    "The import directory exceeds the bounded editor catalog.");
+            String observed = next;
+            directory.refresh(true, false, () -> enqueue(() -> {
+                if (disposed || project.isDisposed() || !Objects.equals(observed, watchedImportDirectory)
+                        || directory != watchedImportVirtualDirectory || !directory.isValid()) return;
+                importDirectoryPrimed = true;
+                retrySnapshotLater(snapshot);
+            }));
+        } catch (SnapshotBlockedException | RuntimeException exception) {
+            // A cancelled priming scan must not leave a watch permanently
+            // waiting for a refresh callback that was never scheduled.
+            clearImportDirectoryWatch();
+            throw exception;
+        }
         // Disposal can race platform watch registration. Cleanup remains on
         // this worker; no UI callback waits for a filesystem operation.
         if (disposed || project.isDisposed()) clearImportDirectoryWatch();
+        return false;
     }
 
     private void clearImportDirectoryWatch() {
@@ -886,6 +925,8 @@ public final class NagiAssistService implements Disposable {
         LocalFileSystem.WatchRequest watch = importDirectoryWatch;
         importDirectoryWatch = null;
         watchedImportDirectory = null;
+        watchedImportVirtualDirectory = null;
+        importDirectoryPrimed = false;
         if (watch != null) LocalFileSystem.getInstance().removeWatchedRoot(watch);
     }
 

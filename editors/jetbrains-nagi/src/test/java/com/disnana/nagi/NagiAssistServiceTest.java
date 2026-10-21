@@ -7,6 +7,7 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent;
@@ -103,8 +104,11 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         assertTrue(complete ? "" : failureMessage.get(), complete);
     }
     private void refreshNioDirectory(Path directory) throws Exception {
+        var virtualDirectory = LocalFileSystem.getInstance().findFileByPath(directory.toString());
+        assertNotNull("the targeted parent was registered with VFS before the mutation", virtualDirectory);
+        VfsUtil.markDirty(false, false, virtualDirectory);
         CountDownLatch refreshed = new CountDownLatch(1);
-        LocalFileSystem.getInstance().refreshNioFiles(List.of(directory), true, false, refreshed::countDown);
+        virtualDirectory.refresh(true, false, refreshed::countDown);
         waitUntil(() -> refreshed.getCount() == 0, () -> "targeted VFS refresh did not finish for " + directory);
     }
     private static NagiAssistProtocol.Response importSourceResponse(String file, Path directory, String candidateName) {
@@ -744,6 +748,7 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess.allowRootAccess(getTestRootDisposable(), externalRoot.toString());
         Path oldParent = Files.createDirectories(externalRoot.resolve("old-parent"));
         Path newParent = Files.createDirectories(externalRoot.resolve("new-parent"));
+        assertNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(newParent));
         Path mainPath = Files.writeString(oldParent.resolve("main.nagi"), "import he\n");
         var mainVirtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(mainPath);
         assertNotNull(mainVirtualFile);
@@ -792,9 +797,8 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
                 service.fresh(file, editor));
 
         Path newMainPath = Files.writeString(newParent.resolve("main-new.nagi"), "import he\n");
-        refreshNioDirectory(newParent);
-        var newMainVirtualFile = LocalFileSystem.getInstance().findFileByPath(newMainPath.toString());
-        assertNotNull("targeted refresh discovers the new external query file", newMainVirtualFile);
+        var newMainVirtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(newMainPath);
+        assertNotNull("opening the exact external query path discovers its VFS file", newMainVirtualFile);
         myFixture.configureFromExistingVirtualFile(newMainVirtualFile);
         PsiFile newFile = myFixture.getFile();
         var newEditor = myFixture.getEditor();

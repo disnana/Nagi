@@ -31,6 +31,12 @@ public final class NagiAssistImportInsertionTest extends BasePlatformTestCase {
 
     @Override protected void setUp() throws Exception {
         super.setUp();
+        // The fixture's default policy rewrites input bytes with normalized LF.
+        // Preserve the physical CRLF input and let FileDocumentManager save it.
+        ((com.intellij.testFramework.fixtures.impl.CodeInsightTestFixtureImpl) myFixture)
+                .setSelectionAndCaretMarkupApplyPolicy(
+                        com.intellij.testFramework.fixtures.impl.CodeInsightTestFixtureImpl
+                                .SelectionAndCaretMarkupApplyPolicy.UPDATE_DOCUMENT_AND_LEAVE_IT_DIRTY);
         Path base = Path.of(getProject().getBasePath());
         Files.createDirectories(base);
         root = Files.createTempDirectory(base, "nagi import completion ");
@@ -140,9 +146,9 @@ public final class NagiAssistImportInsertionTest extends BasePlatformTestCase {
         accept("value", Lookup.NORMAL_SELECT_CHAR);
         assertEquals("from helper import old, value, last\n", myFixture.getEditor().getDocument().getText());
 
-        text = "from helper import old  # keep this comment\n";
-        start = text.indexOf("old");
-        open("comment.nagi", text, start + 1, start, start + "old".length(),
+        text = "from helper import va  # keep this comment\n";
+        start = text.indexOf("va");
+        open("comment.nagi", text, start + 1, start, start + "va".length(),
                 "import-names", "value", "class", false);
         accept("value", Lookup.NORMAL_SELECT_CHAR);
         assertEquals("from helper import value  # keep this comment\n", myFixture.getEditor().getDocument().getText());
@@ -180,7 +186,10 @@ public final class NagiAssistImportInsertionTest extends BasePlatformTestCase {
 
         Files.writeString(root.resolve("late_module.nagi"), "def late() -> i64:\n    return 1\n");
         CountDownLatch refreshed = new CountDownLatch(1);
-        LocalFileSystem.getInstance().refreshNioFiles(List.of(root), true, false, refreshed::countDown);
+        var parent = LocalFileSystem.getInstance().findFileByPath(root.toString());
+        assertNotNull(parent);
+        com.intellij.openapi.vfs.VfsUtil.markDirty(false, false, parent);
+        parent.refresh(true, false, refreshed::countDown);
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
         while ((refreshed.getCount() != 0 || service.isCurrent(myFixture.getFile(), published))
                 && System.nanoTime() < deadline) {

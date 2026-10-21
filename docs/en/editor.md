@@ -22,6 +22,8 @@ Opening and editing sources update the existing background analysis; completion 
 
 Only the immediate folder is searched. If enumeration exceeds 8192 entries, including unrelated entries, completion returns no partial candidate list. This assistance limit does not change whether a normal import is valid. Unchecked exports do not receive guessed types or signatures. Real GUI acceptance and the four IDE compatibility paths for this change require new verification; published 0.1.3 results do not establish them.
 
+To initialize watching, the existing worker loads only the target parent folder into the IDE virtual filesystem (VFS), then refreshes it asynchronously. The 8192-entry limit applies to compiler enumeration and worker checks before and after that initialization. The IDE offers no equivalent bound on its internal loading, so concurrent directory expansion can exceed the prechecked platform work and memory; this is not an IDE-wide resource cap.
+
 ## Try the example in VS Code
 
 Use Nagi extension 0.1.13 and `nagic` 0.1.11 after its availability is confirmed in the official 0.1.11 release record. This guide targets the 0.1.11 release. Open the repository in VS Code, or save the example below in your own folder.

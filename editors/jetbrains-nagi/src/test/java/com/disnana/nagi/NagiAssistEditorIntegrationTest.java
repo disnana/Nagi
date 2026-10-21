@@ -210,6 +210,14 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
         var imported = com.intellij.psi.PsiManager.getInstance(getProject()).findFile(helperVirtualFile);
         assertNotNull(imported);
         myFixture.configureFromExistingVirtualFile(helperVirtualFile);
+        // Opening the imported editor invalidates the previous open-document
+        // snapshot. Highlight only after its replacement baseline is current.
+        waitFor(() -> {
+            service.requestBaseline(imported);
+            return service.fresh(imported) != null;
+        });
+        assertTrue(service.fresh(imported).response().diagnostics().stream()
+                .anyMatch(diagnostic -> importedDiagnostic.message().equals(diagnostic.message())));
         assertTrue("imported-source diagnostic is visible on its own file", myFixture.doHighlighting().stream()
                 .anyMatch(info -> info.getDescription() != null && info.getDescription().contains(importedDiagnostic.message())));
     }

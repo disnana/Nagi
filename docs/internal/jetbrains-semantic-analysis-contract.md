@@ -215,4 +215,6 @@ navigationはcompiler targetをcanonical map経由で解決する。これはWin
 
 UI cacheのfreshnessは最後にworkerで検証した観測と、同じresponse identity／epoch／document・overlay・VFS stamp／settings・trust／query・caretの一致。表示・選択のpredicateは物理I/Oなし。workerだけでbounded directory／file／compiler identityをpre/post比較し、未知directory／dependencyの初回応答は破棄して再試行する。query parentはservice-owned非再帰LocalFileSystem watchで監視し、既存VFS通知をproject root外にも適用する。move／renameの旧・新pathを考慮し、disposeでwatchを解除する。
 
+初回のwatch登録だけではVFSの未列挙parentが未知の新規名を通知しないため、workerがboundedな物理前検査後に対象parentだけを`VfsUtil.markDirty(false, true, directory)`で初期化する。物理後検査を通した後、非再帰async refreshのcallbackから既存retryへ戻す。初回応答はpublishしない。取消時とdispose時のwatch解放を維持する。SDKの`getChildren`には同等のbounded APIがなく、前後検査間の外部大量追加に対してSDK内部処理・確保が8192件以内という保証はしない。EDTでは実行しない。
+
 通知前の外部変更を即時に知る、atomic filesystem snapshot、incremental compiler解析、完全なbuild成功は保証しない。入力世代が古い応答の適用拒否は維持する。事前解析と更新は既存file-open／document-change／daemon経路とdebounce付き常駐processを使い、EDTでcompiler起動・directory走査・同期refreshをしない。新しいimport GUI・4 IDE／4 OS結果は既存公開版の証拠と分ける。
