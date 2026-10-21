@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tarfile
 import tempfile
 import tomllib
@@ -142,6 +143,100 @@ def main():
         verify_actor(exe, folder, environment)
         verify_task_handles(exe, folder, environment)
         verify_sqlite_pool(exe, folder, environment)
+        verify_development_builds(exe, folder, environment)
+
+
+def verify_development_builds(exe: Path, folder: Path, environment: dict) -> None:
+    """Exercise candidate-only features using only extracted distribution tools."""
+    tools = exe.parent / "tools"
+    generator = tools / "generate_project_ci.py"
+    verifier = tools / "verify_build_receipt.py"
+    assert generator.is_file() and verifier.is_file(), "Candidate distribution tools missing"
+    project = folder / "development project 凪"
+    project.mkdir()
+    (project / "nagi.toml").write_text("entry='main.nagi'\n", encoding="utf-8")
+    (project / "main.nagi").write_text('def main():\n    print(42)\n', encoding="utf-8")
+    isolated = {**environment, "PATH": "", "NAGI_ROOT": str(folder / "missing runtime")}
+    checked = subprocess.run([str(exe), "check", "--project", str(project)],
+                             cwd=folder, env=isolated, capture_output=True, text=True,
+                             encoding="utf-8", timeout=15)
+    assert checked.returncode == 0, checked.stderr
+    assert not (project / "build").exists(), "Native-free check created build output"
+    output = folder / "development output 凪"
+    snapshots = []
+    for profile in ("dev", "release"):
+        completed = subprocess.run(
+            [str(exe), "run", "--project", str(project), "--out", str(output),
+             "--profile", profile, "--build-stats"],
+            cwd=folder, env=environment, capture_output=True, text=True,
+            encoding="utf-8", timeout=600)
+        assert completed.returncode == 0, completed.stderr
+        assert completed.stdout.splitlines() == ["42"], completed.stdout
+        reports = [line.removeprefix("nagi-build-stats: ")
+                   for line in completed.stderr.splitlines() if line.startswith("nagi-build-stats: ")]
+        assert len(reports) == 1, completed.stderr
+        stats = json.loads(reports[0])
+        assert stats["profile"] == profile and stats["checks"] == "full", stats
+        assert stats["cargo_always_invoked"] is True and stats["native_reuse"] == "cargo_only", stats
+        native_paths = [Path(line.removeprefix("native: "))
+                        for line in completed.stderr.splitlines() if line.startswith("native: ")]
+        assert len(native_paths) == 1, completed.stderr
+        binary = native_paths[0]
+        receipt = Path(stats["receipt"])
+        assert receipt.parent == binary.parent and receipt.name == "build-receipt.json", stats
+        receipt.relative_to(output)
+        analysis = json.loads((receipt.parent / "build-analysis.json").read_text(encoding="utf-8"))
+        assert analysis["profile"] == profile and analysis["native_reuse"] == "cargo_only", analysis
+        command = [sys.executable, str(verifier), str(receipt), "--compiler", str(exe)]
+        verified = subprocess.run(command, cwd=project, env=isolated, capture_output=True,
+                                  text=True, encoding="utf-8", timeout=15)
+        assert verified.returncode == 0, verified.stderr
+        snapshots.append((binary, binary.read_bytes()))
+    assert snapshots[0][0] != snapshots[1][0], "Profiles reused a successful executable path"
+    for binary, expected in snapshots:
+        assert binary.read_bytes() == expected, "A later build overwrote a published executable"
+        ran = subprocess.run([str(binary)], cwd=project, env=isolated, capture_output=True,
+                             text=True, encoding="utf-8", timeout=15)
+        assert ran.returncode == 0 and ran.stdout.splitlines() == ["42"], ran
+
+    # The shipped tool must reject corruption, rather than merely parse a receipt.
+    rust = receipt.parent / "src/main.rs"
+    original_rust = rust.read_bytes()
+    original_receipt = receipt.read_bytes()
+    wrong_compiler = project / "wrong-compiler"
+    wrong_compiler.write_bytes(b"not the compiler")
+    mutations = (
+        (rust, original_rust + b"\n// altered\n"),
+        (receipt, b"{"),
+        (receipt, b'{"schema_version":2}'),
+        (receipt, None),
+    )
+    for path, data in mutations:
+        if data is None:
+            path.unlink()
+        else:
+            path.write_bytes(data)
+        rejected = subprocess.run(command, cwd=project, env=isolated, capture_output=True,
+                                  text=True, encoding="utf-8", timeout=15)
+        assert rejected.returncode != 0, f"Corrupt {path.name} was accepted"
+        rust.write_bytes(original_rust)
+        receipt.write_bytes(original_receipt)
+    rejected = subprocess.run([*command[:-1], str(wrong_compiler)], cwd=project, env=isolated,
+                              capture_output=True, text=True, encoding="utf-8", timeout=15)
+    assert rejected.returncode != 0, "Wrong compiler was accepted"
+
+    workflow = project / ".github/workflows/nagi.yml"
+    generate = [sys.executable, str(generator), "--output", str(workflow)]
+    generated = subprocess.run(generate, cwd=project, env=isolated, capture_output=True,
+                               text=True, encoding="utf-8", timeout=15)
+    assert generated.returncode == 0, generated.stderr
+    content = workflow.read_bytes()
+    assert b"nagic check" in content and b"nagic build" in content, content
+    assert b"--build-stats" not in content and b"--profile" not in content, content
+    repeated = subprocess.run(generate, cwd=project, env=isolated, capture_output=True,
+                              text=True, encoding="utf-8", timeout=15)
+    assert repeated.returncode != 0 and workflow.read_bytes() == content, "Workflow was overwritten"
+    print("Verified development builds: native-free check, dev/release, full-check stats, immutable exe, bundled tools, receipt corruption rejection")
 
 
 def verify_sqlite_pool(exe: Path, folder: Path, environment: dict) -> None:

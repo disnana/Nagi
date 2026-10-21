@@ -4,7 +4,9 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,6 +14,98 @@ from unittest.mock import patch
 from zipfile import ZipFile
 
 import verify
+
+
+class DevelopmentDistributionVerificationTests(unittest.TestCase):
+    """The distribution gate must observe behavior, including negative controls."""
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="nagi dev distribution 凪 ")
+        self.addCleanup(self.temporary.cleanup)
+        self.folder = Path(self.temporary.name)
+        self.compiler = self.folder / "extracted" / "nagic"
+        self.compiler.parent.mkdir()
+        self.compiler.write_bytes(b"candidate compiler")
+        self.tools = self.compiler.parent / "tools"
+        self.tools.mkdir()
+        scripts = Path(__file__).resolve().parents[1]
+        for filename in ("generate_project_ci.py", "verify_build_receipt.py"):
+            shutil.copyfile(scripts / filename, self.tools / filename)
+        self.real_run = subprocess.run
+        self.stats_mutation = lambda stats: stats
+        self.omit_stats = False
+
+    def answer(self, command, **kwargs):
+        self.assertIsNotNone(kwargs.get("timeout"))
+        if command[0] == sys.executable:
+            self.assertEqual(Path(command[1]).parent, self.tools)
+            return self.real_run(command, **kwargs)
+        if command[0] == str(self.compiler):
+            if command[1] == "check":
+                self.assertEqual(kwargs["env"]["PATH"], "")
+                self.assertFalse(Path(kwargs["env"]["NAGI_ROOT"]).exists())
+                return subprocess.CompletedProcess(command, 0, "", "checked source\n")
+            self.assertEqual(command[1], "run")
+            profile = command[command.index("--profile") + 1]
+            output = Path(command[command.index("--out") + 1])
+            app = "nagi-main-0123456789abcdef"
+            generation = "g-1-2-1" if profile == "dev" else "g-1-2-2"
+            root = output / ".nagi/apps" / app / "generations" / generation
+            root.mkdir(parents=True)
+            binary = root / f"nagi-0123456789abcdef-{generation}"
+            binary.write_bytes(b"compiled executable")
+            artifacts = {}
+            for filename in ("generated.low", "src/main.rs", "Cargo.toml", "Cargo.lock",
+                             "sources.json", "provenance.json", "build-analysis.json", binary.name):
+                path = root / filename
+                path.parent.mkdir(exist_ok=True)
+                if filename == "build-analysis.json":
+                    path.write_text(json.dumps({"profile": profile, "native_reuse": "cargo_only"}), encoding="utf-8")
+                elif path != binary:
+                    path.write_bytes(filename.encode())
+                data = path.read_bytes()
+                artifacts[filename] = {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+            data = self.compiler.read_bytes()
+            receipt = root / "build-receipt.json"
+            receipt.write_text(json.dumps({
+                "schema_version": 1, "app_id": app, "generation": generation,
+                "artifacts": artifacts, "compiler": {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)},
+            }), encoding="utf-8")
+            stats = self.stats_mutation({"profile": profile, "checks": "full", "cargo_always_invoked": True,
+                                         "native_reuse": "cargo_only", "receipt": str(receipt)})
+            stderr = f"native: {binary}\n"
+            if not self.omit_stats:
+                stderr += f"nagi-build-stats: {json.dumps(stats)}\n"
+            return subprocess.CompletedProcess(command, 0, "42\n", stderr)
+        self.assertTrue(Path(command[0]).name.startswith("nagi-"), command)
+        return subprocess.CompletedProcess(command, 0, "42\n", "")
+
+    def check(self):
+        with patch.object(verify.subprocess, "run", side_effect=self.answer):
+            verify.verify_development_builds(self.compiler, self.folder, dict(os.environ))
+
+    def test_candidate_gate_checks_real_bundled_tools_and_corruption_rejection(self):
+        self.check()
+
+    def test_missing_stats_cannot_pass(self):
+        self.omit_stats = True
+        with self.assertRaises(AssertionError):
+            self.check()
+
+    def test_ignored_profile_cannot_pass(self):
+        self.stats_mutation = lambda stats: {**stats, "profile": "ignored"}
+        with self.assertRaises(AssertionError):
+            self.check()
+
+    def test_skipped_checks_cannot_pass(self):
+        self.stats_mutation = lambda stats: {**stats, "checks": "partial"}
+        with self.assertRaises(AssertionError):
+            self.check()
+
+    def test_verifier_that_accepts_all_receipts_cannot_pass(self):
+        (self.tools / "verify_build_receipt.py").write_text('print("accepted")\n', encoding="utf-8")
+        with self.assertRaisesRegex(AssertionError, "Corrupt main.rs was accepted"):
+            self.check()
 
 
 class SqlDistributionVerificationTests(unittest.TestCase):

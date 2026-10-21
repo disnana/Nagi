@@ -5,7 +5,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import stat
+from contextlib import contextmanager
 from pathlib import Path
 
 FIXED = {"generated.low", "src/main.rs", "Cargo.toml", "Cargo.lock", "sources.json", "provenance.json", "build-analysis.json"}
@@ -13,10 +16,40 @@ HEX = re.compile(r"[0-9a-f]{64}")
 GENERATION = re.compile(r"g-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+")
 
 
-def identity(path: Path) -> dict:
+def reject_link(path: Path) -> os.stat_result:
+    metadata = path.lstat()
+    if (stat.S_ISLNK(metadata.st_mode)
+            or getattr(metadata, "st_file_attributes", 0)
+            & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)):
+        raise ValueError(f"symbolic link or reparse point: {path}")
+    return metadata
+
+
+@contextmanager
+def regular_file(path: Path, *, follow_symlinks: bool = False):
+    # Nonblocking prevents a substituted Unix FIFO from hanging at open. The
+    # descriptor check also rejects devices/directories before reading bytes.
+    # Concurrent hostile directory replacement is outside this local verifier.
+    metadata = path.stat() if follow_symlinks else reject_link(path)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError(f"not a regular file: {path}")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NONBLOCK", 0)
+    if not follow_symlinks:
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise ValueError(f"not a regular file: {path}")
+        with os.fdopen(descriptor, "rb", closefd=False) as source:
+            yield source
+    finally:
+        os.close(descriptor)
+
+
+def identity(path: Path, *, follow_symlinks: bool = False) -> dict:
     digest = hashlib.sha256()
     size = 0
-    with path.open("rb") as source:
+    with regular_file(path, follow_symlinks=follow_symlinks) as source:
         while block := source.read(65536):
             size += len(block)
             digest.update(block)
@@ -30,9 +63,10 @@ def valid_identity(value: object) -> bool:
 
 
 def verify(receipt_path: Path, compiler: Path | None = None) -> dict:
-    if receipt_path.is_symlink() or receipt_path.parent.is_symlink():
-        raise ValueError("receipt and generation must not be symbolic links")
-    with receipt_path.open("rb") as source:
+    for directory in list(receipt_path.parents)[:3]:
+        if not stat.S_ISDIR(reject_link(directory).st_mode):
+            raise ValueError(f"not a directory: {directory}")
+    with regular_file(receipt_path) as source:
         raw = source.read(1024 * 1024 + 1)
     if len(raw) > 1024 * 1024:
         raise ValueError("receipt exceeds 1 MiB")
@@ -63,11 +97,11 @@ def verify(receipt_path: Path, compiler: Path | None = None) -> dict:
         path = receipt_path.parent
         for component in name.split("/"):
             path = path / component
-            if path.is_symlink():
-                raise ValueError(f"symbolic link artifact: {name}")
+            reject_link(path)
         if identity(path) != expected:
             raise ValueError(f"artifact integrity mismatch: {name}")
-    if compiler is not None and identity(compiler) != receipt["compiler"]:
+    # Installer command paths may themselves be links to the installed exe.
+    if compiler is not None and identity(compiler, follow_symlinks=True) != receipt["compiler"]:
         raise ValueError("compiler integrity mismatch")
     return receipt
 

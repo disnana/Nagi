@@ -136,6 +136,33 @@ class ReleasePlanTests(unittest.TestCase):
         }
         return metadata, trees
 
+    def add_project_tool_fixtures(self, *, missing=None, symlink=None, nonregular=None):
+        for source_name, destination_name in package.PROJECT_TOOLS:
+            path = self.root / source_name
+            if source_name == missing:
+                continue
+            if source_name == nonregular:
+                path.mkdir(parents=True)
+                (path / "fixture.txt").write_text("directory instead of a script\n", encoding="utf-8")
+            else:
+                self.change(source_name, f"# committed fixture for {destination_name}\n")
+        if symlink is not None:
+            path = self.root / symlink
+            path.unlink()
+            target = next(source for source, _ in package.PROJECT_TOOLS if source != symlink)
+            path.symlink_to(Path(target).name)
+
+    def package_test_fixture(self, *, missing_tool=None, symlink_tool=None, nonregular_tool=None):
+        self.change("runtime/src/lib.rs", "// committed runtime\n")
+        self.change("LICENSE", "MIT license fixture\n")
+        metadata, trees = self.add_notice_graph_fixture()
+        self.add_project_tool_fixtures(missing=missing_tool, symlink=symlink_tool,
+                                       nonregular=nonregular_tool)
+        commit = self.commit()
+        binary = self.root / "compiler-test"
+        binary.write_bytes(b"prebuilt compiler fixture")
+        return commit, binary, metadata, trees
+
     @staticmethod
     def make_registry_crate_archive(name, version, members):
         output = io.BytesIO()
@@ -412,10 +439,14 @@ class ReleasePlanTests(unittest.TestCase):
         self.change("compiler/Cargo.toml", '[package]\nname="nagic"\n')
         metadata_fixture, graph_fixture = self.add_notice_graph_fixture()
         self.change("README.md", "Committed documentation")
+        self.add_project_tool_fixtures()
         commit = self.commit()
         self.change("README.md", "Uncommitted private notes")
         self.change("runtime/src/lib.rs", "// uncommitted runtime\n")
         self.change("private-note.txt", "Must never be in a release")
+        self.change("scripts/generate_project_ci.py", "# uncommitted private generator\n")
+        self.change("scripts/verify_build_receipt.py", "# uncommitted private verifier\n")
+        self.change("scripts/untracked-project-tool.py", "Must never be in a release\n")
         binary = self.root / "compiler-test"
         binary.write_bytes(b"prebuilt compiler fixture")
         output = self.root / "build/distribution"
@@ -444,6 +475,7 @@ class ReleasePlanTests(unittest.TestCase):
         self.change("runtime/src/lib.rs", "// committed runtime\n")
         self.change("LICENSE", "MIT license fixture\n")
         metadata_fixture, graph_fixture = self.add_notice_graph_fixture()
+        self.add_project_tool_fixtures()
         commit = self.commit()
         binary = self.root / "compiler-test"
         binary.write_bytes(b"prebuilt compiler fixture")
@@ -465,6 +497,15 @@ class ReleasePlanTests(unittest.TestCase):
                                                 for entry in archive.infolist()))
                             compiler = archive.getinfo("nagi-0.1.0-windows-x86_64/nagic.exe")
                             self.assertEqual((compiler.external_attr >> 16) & 0o777, 0o755)
+                            for _, destination in package.PROJECT_TOOLS:
+                                tool = archive.getinfo(f"nagi-0.1.0-windows-x86_64/{destination}")
+                                self.assertEqual((tool.external_attr >> 16) & 0o777, 0o644)
+                    else:
+                        with tarfile.open(second) as archive:
+                            for _, destination in package.PROJECT_TOOLS:
+                                tool = archive.getmember(f"nagi-0.1.0-{platform}/{destination}")
+                                self.assertEqual(tool.mode, 0o644)
+                                self.assertEqual(tool.mtime, 0)
 
     def check_source(self, names, read, commit, platform):
         self.assertFalse(any(name.endswith("private-note.txt") or "/.git/" in name for name in names))
@@ -476,10 +517,16 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual(set(names), {prefix + name for name in (
             "nagic.exe" if platform == "windows-x86_64" else "nagic",
             "runtime/Cargo.toml", "runtime/src/lib.rs", "runtime/src/sqlite/mod.rs", "runtime/src/sqlite/adapter.rs",
-            "runtime/src/sqlite/session.rs", "LICENSE", "release.json", "README.txt")} | notice_paths)
+            "runtime/src/sqlite/session.rs", "LICENSE", "release.json", "README.txt",
+            *(destination for _, destination in package.PROJECT_TOOLS))} | notice_paths)
         self.assertNotIn(prefix + "Cargo.lock", names)
         self.assertNotIn(prefix + "Cargo.toml", names)
+        for source_name, destination_name in package.PROJECT_TOOLS:
+            self.assertEqual(read(prefix + destination_name), subprocess.check_output(
+                ["git", "show", f"{commit}:{source_name}"], cwd=self.root))
+        self.assertFalse(any(name.endswith("untracked-project-tool.py") for name in names))
         self.assertIn(b"runtime/THIRD-PARTY-NOTICES/README.md", read(prefix + "README.txt"))
+        self.assertIn(b"Python 3.10", read(prefix + "README.txt"))
         self.assertEqual(read(prefix + "runtime/src/lib.rs"), b"// committed runtime\n")
         manifest = tomllib.loads(read(prefix + "runtime/Cargo.toml").decode())
         self.assertEqual(manifest["package"], {"name": "nagi-runtime", "version": "0.1.0", "edition": "2021", "license": "MIT"})
@@ -496,6 +543,7 @@ class ReleasePlanTests(unittest.TestCase):
         self.change("runtime/src/lib.rs", "// committed runtime\n")
         self.change("LICENSE", "MIT license fixture\n")
         metadata_fixture, graph_fixture = self.add_notice_graph_fixture(missing_runtime_license=True)
+        self.add_project_tool_fixtures()
         commit = self.commit()
         binary = self.root / "compiler-test"
         binary.write_bytes(b"prebuilt compiler fixture")
@@ -510,6 +558,7 @@ class ReleasePlanTests(unittest.TestCase):
         self.change("runtime/src/lib.rs", "// committed runtime\n")
         self.change("LICENSE", "MIT license fixture\n")
         metadata_fixture, graph_fixture = self.add_notice_graph_fixture()
+        self.add_project_tool_fixtures()
         commit = self.commit()
         self.change("Cargo.lock", "version = 3\n")
         binary = self.root / "compiler-test"
@@ -518,6 +567,36 @@ class ReleasePlanTests(unittest.TestCase):
         metadata_patch, graph_patch = self.patch_notice_graph(metadata_fixture, graph_fixture)
         with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
             with self.assertRaisesRegex(ValueError, "Current Cargo.lock differs"):
+                package.package(binary, "0.1.0", "linux-x86_64", output, commit)
+        self.assertFalse(output.exists())
+
+    def test_package_refuses_missing_tool_before_creating_output(self):
+        source_name = package.PROJECT_TOOLS[1][0]
+        commit, binary, metadata, trees = self.package_test_fixture(missing_tool=source_name)
+        output = self.root / "missing-tool-distribution"
+        metadata_patch, graph_patch = self.patch_notice_graph(metadata, trees)
+        with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
+            with self.assertRaisesRegex(ValueError, "missing required tool"):
+                package.package(binary, "0.1.0", "linux-x86_64", output, commit)
+        self.assertFalse(output.exists())
+
+    def test_package_refuses_symlink_tool_before_creating_output(self):
+        source_name = package.PROJECT_TOOLS[0][0]
+        commit, binary, metadata, trees = self.package_test_fixture(symlink_tool=source_name)
+        output = self.root / "symlink-tool-distribution"
+        metadata_patch, graph_patch = self.patch_notice_graph(metadata, trees)
+        with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
+            with self.assertRaisesRegex(ValueError, "not a regular file"):
+                package.package(binary, "0.1.0", "linux-x86_64", output, commit)
+        self.assertFalse(output.exists())
+
+    def test_package_refuses_nonregular_tool_before_creating_output(self):
+        source_name = package.PROJECT_TOOLS[0][0]
+        commit, binary, metadata, trees = self.package_test_fixture(nonregular_tool=source_name)
+        output = self.root / "nonregular-tool-distribution"
+        metadata_patch, graph_patch = self.patch_notice_graph(metadata, trees)
+        with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
+            with self.assertRaisesRegex(ValueError, "not a regular file"):
                 package.package(binary, "0.1.0", "linux-x86_64", output, commit)
         self.assertFalse(output.exists())
 

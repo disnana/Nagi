@@ -2,6 +2,13 @@
 
 ## 未リリース / Unreleased
 
+### Nagi application development tools
+
+- Add opt-in `build/run --profile dev|release`, preserving release as the default and the existing debug/release overflow behavior. Keep complete Nagi checks, Cargo dependency validation, generation isolation and immutable successful executables.
+- Add opt-in `--build-stats` with typed declaration/function change observations, dependency graphs, Cargo artifact counts and phase timings. Record and verify published artifact hashes; semantic observations do not authorize native reuse or skipped checks/tests.
+- Bundle standard-library-only Python CI-generation and receipt-verification tools in future distributions. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.
+- Document the existing security API guarantees, unsupported transports and staged build roadmap, with measured application build results and their limits. These features are unreleased; published 0.2.0 remains unchanged.
+
 ### JetBrains 0.1.3候補 / JetBrains 0.1.3 candidate
 
 - IntelliJ IDEA / PyCharm共通の補完・定義ジャンプ・編集中診断は同じPR source commitの開発版compilerに接続。プラグインのsyntax highlightingはcompilerに依存せず、公開済み0.1.11は手動Check/Runと通常のRun Configuration実行に対応するが、assist protocolは含まない。

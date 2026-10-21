@@ -1,8 +1,18 @@
 # GitHub Actions for a Nagi application
 
-Use the project CI generator from a Nagi source checkout to create a workflow
-for an application repository. Run it from the application repository root,
-where `nagi.toml` is located:
+Use the project CI generator to create an application workflow. Python 3.10 or
+later is required. Future distribution candidates include
+`tools/generate_project_ci.py`; released 0.2.0 does not include this tool.
+Use the candidate archive or this source checkout for now. Run it from the
+application repository root, where `nagi.toml` is located:
+
+```bash
+# Point to the extracted distribution candidate
+python /path/to/nagi/tools/generate_project_ci.py \
+  --output .github/workflows/nagi.yml
+```
+
+With a source checkout:
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \

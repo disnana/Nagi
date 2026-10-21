@@ -18,6 +18,10 @@ import third_party_notices
 
 
 PLATFORMS = ("linux-x86_64", "windows-x86_64", "macos-arm64", "macos-x86_64")
+PROJECT_TOOLS = (
+    ("scripts/generate_project_ci.py", "tools/generate_project_ci.py"),
+    ("scripts/verify_build_receipt.py", "tools/verify_build_receipt.py"),
+)
 
 
 def zip_entry(name: str, data: bytes, mode: int = 0o644) -> tuple[ZipInfo, bytes]:
@@ -47,6 +51,43 @@ def included(name: str) -> bool:
     )
 
 
+def project_tool_payload(source: bytes) -> dict[str, bytes]:
+    """Read only the explicitly mapped regular tool files from the tested commit."""
+    with tarfile.open(fileobj=io.BytesIO(source), mode="r:") as archive:
+        members = {member.name: member for member in archive.getmembers()}
+        payload = {}
+        for source_name, destination_name in PROJECT_TOOLS:
+            member = members.get(source_name)
+            if member is None:
+                if source_name + "/" in members:
+                    raise ValueError(f"Release tool is not a regular file: {source_name}")
+                raise ValueError(f"Release source is missing required tool {source_name}")
+            if not member.isfile() or member.type not in (tarfile.REGTYPE, tarfile.AREGTYPE):
+                raise ValueError(f"Release tool is not a regular file: {source_name}")
+            contents = archive.extractfile(member)
+            if contents is None:
+                raise ValueError(f"Could not read release tool {source_name}")
+            payload[destination_name] = contents.read()
+        return payload
+
+
+def validate_project_tool_sources(root: Path, commit: str) -> None:
+    """Require each mapped source path to be a regular Git blob in the commit."""
+    for source_name, _ in PROJECT_TOOLS:
+        listing = subprocess.check_output(
+            ["git", "ls-tree", "-z", commit, "--", source_name], cwd=root)
+        entry = next((row for row in listing.split(b"\0") if row), None)
+        if entry is None:
+            raise ValueError(f"Release source is missing required tool {source_name}")
+        metadata, encoded_path = entry.split(b"\t", 1)
+        mode, kind, _ = metadata.split(b" ", 2)
+        path = encoded_path.decode("utf-8").rstrip("/")
+        if path != source_name:
+            raise ValueError(f"Release source is missing required tool {source_name}")
+        if kind != b"blob" or mode not in (b"100644", b"100755"):
+            raise ValueError(f"Release tool is not a regular file: {source_name}")
+
+
 def readme(version: str, executable: str) -> bytes:
     return f"""Nagi {version}
 
@@ -56,6 +97,9 @@ runtime/を含むフォルダー構成を保って使います。NAGI_ROOTは通
 使い方: {executable} run --project /path/to/nagi.toml
 Third-party notices: runtime/THIRD-PARTY-NOTICES/README.md
 Docs: https://nagi.disnana.com/
+任意のtoolsスクリプトにはPython 3.10以降が必要です。
+CI workflow生成: python tools/generate_project_ci.py > nagi-ci.yml
+build receipt照合: python tools/verify_build_receipt.py path/to/build-receipt.json --compiler path/to/nagic
 
 Add this folder to PATH and run {executable} --version.
 Keep runtime/ beside the compiler. NAGI_ROOT is normally unnecessary.
@@ -64,6 +108,9 @@ Usage: {executable} run --project /path/to/nagi.toml
 Third-party notices: runtime/THIRD-PARTY-NOTICES/README.md
 Docs: https://nagi.disnana.com/en/
 Source: https://github.com/disnana/Nagi
+Optional tools scripts require Python 3.10 or newer.
+Generate a CI workflow: python tools/generate_project_ci.py > nagi-ci.yml
+Verify a build receipt: python tools/verify_build_receipt.py path/to/build-receipt.json --compiler path/to/nagic
 """.encode()
 
 
@@ -86,9 +133,12 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
     if workspace["version"] != version:
         raise ValueError("Archive version must match the tested commit's Cargo.toml")
     target = third_party_notices.PLATFORM_TARGETS[platform]
+    validate_project_tool_sources(ROOT, sha)
     source = subprocess.check_output(
         ["git", "archive", "--format=tar", sha, "--", "Cargo.toml", "Cargo.lock",
-         "runtime/Cargo.toml", "runtime/src", "LICENSE"], cwd=ROOT)
+         "runtime/Cargo.toml", "runtime/src", "LICENSE",
+         *(source_name for source_name, _ in PROJECT_TOOLS)], cwd=ROOT)
+    tool_payload = project_tool_payload(source)
     binary_data = binary.read_bytes()
     metadata = third_party_notices.cargo_metadata(ROOT, target)
     third_party_notices.validate_workspace_inputs(ROOT, sha, metadata,
@@ -120,6 +170,8 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
                         archive.writestr(*zip_entry(f"{stem}/{member.name}", data, member.mode))
                     elif not member.isdir():
                         raise ValueError(f"Unsupported tracked source entry: {member.name}")
+                for name, data in tool_payload.items():
+                    archive.writestr(*zip_entry(f"{stem}/{name}", data))
                 for name, data in notice_files.items():
                     archive.writestr(*zip_entry(f"{stem}/{name}", data))
                 archive.writestr(*zip_entry(binary_path, binary_data, 0o755))
@@ -143,6 +195,12 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
                         data = runtime_manifest(data.decode(), workspace)
                     member.size = len(data)
                     member.name = f"{stem}/{member.name}"
+                    archive.addfile(member, io.BytesIO(data))
+                for name, data in tool_payload.items():
+                    member = tarfile.TarInfo(f"{stem}/{name}")
+                    member.size = len(data)
+                    member.mode = 0o644
+                    member.mtime = 0
                     archive.addfile(member, io.BytesIO(data))
                 for name, data in notice_files.items():
                     member = tarfile.TarInfo(f"{stem}/{name}")

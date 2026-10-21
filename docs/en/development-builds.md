@@ -31,6 +31,8 @@ The receipt hashes the published Low, Rust, manifest, lock, source/provenance sn
 python3 scripts/verify_build_receipt.py path/to/generations/g-.../build-receipt.json --compiler path/to/nagic
 ```
 
+Distribution candidates bundle the same verifier as `tools/verify_build_receipt.py`. It needs Python 3.10 or later, without a source checkout. Artifacts must be regular files; symlinks, Windows reparse points and FIFOs are rejected. The compiler argument may use the installer's executable link. This local verifier does not protect against another process maliciously replacing directories concurrently.
+
 These records are an integrity foundation for future content-addressed reuse. This implementation does not skip Nagi checks, emission, tests or native builds based on semantic hashes. Full checking and Cargo always run; every successful build publishes a fresh immutable generation. Corrupt observations cannot authorize reuse. Receipt-writing failure preserves the previous latest generation and does not execute the new app.
 
 Digest comparison detects corruption, not an attacker who can replace both files and receipt. The complete native input closure—including Rust module/include, path crates, build scripts, environment and toolchain—is not captured. Neither a receipt nor Nagi source hashes authorize execution of CI-restored binaries. Source snapshots can contain source-embedded secrets; do not share the whole generated directory as a cache.

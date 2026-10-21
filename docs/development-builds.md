@@ -31,6 +31,8 @@ nagic build --project my-app --profile release --build-stats
 python3 scripts/verify_build_receipt.py path/to/generations/g-.../build-receipt.json --compiler path/to/nagic
 ```
 
+配布候補には同じ検証器を`tools/verify_build_receipt.py`として同梱します。Python 3.10以上で実行でき、ソースcheckoutは不要です。検証対象は通常ファイルに限定し、成果物のsymlink・Windows reparse point・FIFO等を拒否します。compiler引数にはinstallerが作る実行ファイルへのlinkも使えます。同時に悪意ある別processがdirectoryを差し替える環境の安全性は保証しません。
+
 これは内容アドレス方式の再利用を設計するための整合性基盤です。今回、Nagiの差分による型検査・コード生成・テスト・実行ファイルの再利用は行いません。全検査とCargoを毎回実行し、新しい成功世代へ公開します。記録が壊れても検査は省略しません。receipt作成に失敗したbuildは旧latestを保持し、新しいアプリを実行しません。
 
 SHA-256の照合は破損を検出しますが、記録ごと改変できる攻撃者に対する署名・認証ではありません。Rust module/include、外部path crate、build script、環境、toolchain等の完全な入力閉包はNagiでは記録しません。receiptやNagiソースのhashだけで、CIから取得した実行ファイルの実行を許可しないでください。ソースsnapshotにはソース内の秘密も含まれ得るため、生成ディレクトリ全体を共有cacheへ保存しないでください。

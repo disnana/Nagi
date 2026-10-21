@@ -1,6 +1,14 @@
 # NagiアプリのGitHub Actions
 
-NagiのソースcheckoutにあるプロジェクトCI generatorを使い、アプリのworkflowを作成できます。`nagi.toml`があるアプリのルートで実行します。
+プロジェクトCI generatorを使い、アプリのworkflowを作成できます。Python 3.10以上が必要です。次の配布候補には`tools/generate_project_ci.py`を同梱しています。公開済み0.2.0には同梱されていないため、現時点では候補アーカイブまたはこのソースcheckoutを使ってください。`nagi.toml`があるアプリのルートで実行します。
+
+```bash
+# 配布候補を展開したdirectoryを指定
+python /path/to/nagi/tools/generate_project_ci.py \
+  --output .github/workflows/nagi.yml
+```
+
+ソースcheckoutを使う場合:
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \

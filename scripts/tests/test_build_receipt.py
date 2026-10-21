@@ -1,6 +1,9 @@
 import copy
 import importlib.util
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -87,6 +90,54 @@ class ReceiptTests(unittest.TestCase):
             self.skipTest(f"OS does not permit test symlinks: {error}")
         with self.assertRaisesRegex(ValueError, "symbolic link"):
             MODULE.verify(self.path)
+
+    def test_directory_artifact_is_rejected(self):
+        path = self.root / self.executable
+        path.unlink()
+        path.mkdir()
+        with self.assertRaisesRegex(ValueError, "not a regular file"):
+            MODULE.verify(self.path)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "Unix named pipes")
+    def test_named_pipe_receipt_or_artifact_cannot_block_cli(self):
+        for path in (self.path, self.root / self.executable):
+            original = path.read_bytes()
+            path.unlink()
+            os.mkfifo(path)
+            result = subprocess.run([sys.executable, str(SPEC.origin), str(self.path)],
+                                    capture_output=True, text=True, timeout=5)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("not a regular file", result.stderr)
+            path.unlink()
+            path.write_bytes(original)
+
+    def test_compiler_command_link_is_supported_but_source_directory_link_is_rejected(self):
+        compiler_link = self.compiler.with_name("compiler-command")
+        try:
+            compiler_link.symlink_to(self.compiler)
+        except OSError as error:
+            self.skipTest(f"OS does not permit test symlinks: {error}")
+        MODULE.verify(self.path, compiler_link)
+        source = self.root / "src"
+        moved = self.root / "original-src"
+        source.rename(moved)
+        source.symlink_to(moved, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "symbolic link"):
+            MODULE.verify(self.path)
+
+    @unittest.skipUnless(os.name == "nt", "Windows directory junctions")
+    def test_windows_junction_is_rejected_without_reading_target(self):
+        source = self.root / "src"
+        moved = self.root / "original-src"
+        source.rename(moved)
+        result = subprocess.run(["cmd", "/c", "mklink", "/J", str(source), str(moved)],
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        try:
+            with self.assertRaisesRegex(ValueError, "reparse point"):
+                MODULE.verify(self.path)
+        finally:
+            source.rmdir()
 
 
 if __name__ == "__main__":
