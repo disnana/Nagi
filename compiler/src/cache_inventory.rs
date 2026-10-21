@@ -535,6 +535,8 @@ mod tests {
 
     impl TestDir {
         fn new() -> Self {
+            let temp_base = fs::canonicalize(std::env::temp_dir())
+                .expect("cannot canonicalize test temp directory");
             for _ in 0..100 {
                 let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -545,7 +547,7 @@ mod tests {
                     std::process::id(),
                     NEXT.fetch_add(1, Ordering::Relaxed)
                 );
-                let path = std::env::temp_dir().join(name);
+                let path = temp_base.join(name);
                 match fs::create_dir(&path) {
                     Ok(()) => return Self(path),
                     Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}

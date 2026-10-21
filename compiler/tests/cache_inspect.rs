@@ -19,12 +19,14 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
+        let temp_base = fs::canonicalize(std::env::temp_dir())
+            .expect("cannot canonicalize test temp directory");
         for _ in 0..100 {
             let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
-            let root = std::env::temp_dir().join(format!(
+            let root = temp_base.join(format!(
                 "nagi-cache-inspect-{}-{now}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
