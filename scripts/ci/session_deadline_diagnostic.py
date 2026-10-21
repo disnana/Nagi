@@ -1261,7 +1261,7 @@ def closed_verdict_line(record: object, delivery: bool = False) -> str:
 
 
 CSRF_REUSABLE_CASE = "one_reusable_token_admits_two_distinct_actual_requests"
-CSRF_REUSABLE_SOURCE = "e6214e0267d6d8a713578c0c173c9ca18bfc11c910f34f51d4ce3a8875457467"
+CSRF_REUSABLE_SOURCE = "44ad43555df8ded5e82bf4009c6ac016266ac8c50bcb997353db67ca2538877d"
 BROWSER_NATIVE_CALL_SOURCE = "4999e44ad29bf7777a9f92d349eee025c9d3c1112162b7cc7d0524c74e745050"
 NATIVE_CALL_PREFIX = "session_native_call_diag"
 NATIVE_CALL_LINE_LIMIT = 4096
