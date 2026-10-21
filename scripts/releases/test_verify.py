@@ -34,6 +34,8 @@ class DevelopmentDistributionVerificationTests(unittest.TestCase):
         self.real_run = subprocess.run
         self.stats_mutation = lambda stats: stats
         self.omit_stats = False
+        self.working_folder = self.folder
+        self.canonical_output = False
 
     def answer(self, command, **kwargs):
         self.assertIsNotNone(kwargs.get("timeout"))
@@ -51,6 +53,8 @@ class DevelopmentDistributionVerificationTests(unittest.TestCase):
             self.assertEqual(command[1], "run")
             profile = command[command.index("--profile") + 1]
             output = Path(command[command.index("--out") + 1])
+            if self.canonical_output:
+                output = output.resolve()
             app = "nagi-main-0123456789abcdef"
             generation = "g-1-2-1" if profile == "dev" else "g-1-2-2"
             root = output / ".nagi/apps" / app / "generations" / generation
@@ -85,9 +89,19 @@ class DevelopmentDistributionVerificationTests(unittest.TestCase):
 
     def check(self):
         with patch.object(verify.subprocess, "run", side_effect=self.answer):
-            verify.verify_development_builds(self.compiler, self.folder, dict(os.environ))
+            verify.verify_development_builds(self.compiler, self.working_folder, dict(os.environ))
 
     def test_candidate_gate_checks_real_bundled_tools_and_corruption_rejection(self):
+        self.check()
+
+    def test_canonical_native_paths_match_an_aliased_output_directory(self):
+        alias = self.folder / "directory alias"
+        try:
+            alias.symlink_to(self.folder, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"OS does not permit test symlinks: {error}")
+        self.working_folder = alias
+        self.canonical_output = True
         self.check()
 
     def test_missing_stats_cannot_pass(self):
