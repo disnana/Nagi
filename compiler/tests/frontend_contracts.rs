@@ -1,3 +1,6 @@
+#[path = "support/call_diagnostics.rs"]
+mod call_diagnostics;
+
 use nagic::{check, emit, parser};
 use std::{fs, path::PathBuf, process::Command};
 
