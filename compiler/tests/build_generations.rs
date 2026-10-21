@@ -2452,6 +2452,75 @@ fn incremental_runtime_change_invalidates_native_code_without_changing_generated
 
 #[cfg(unix)]
 #[test]
+fn incremental_runtime_aliases_share_one_cargo_identity_in_both_root_manifests() {
+    use std::os::unix::fs::symlink;
+    let f = Fixture::new();
+    fs::rename(f.0.join("runtime"), f.0.join("real-runtime")).unwrap();
+    symlink(f.0.join("real-runtime"), f.0.join("runtime")).unwrap();
+    symlink(&f.0, f.0.join("root-alias")).unwrap();
+    fs::create_dir(f.0.join("out")).unwrap();
+    symlink(f.0.join("out"), f.0.join("out-alias")).unwrap();
+    let mut first = incremental(&f, "build", "main.nagi", "out-alias");
+    first.env("NAGI_ROOT", f.0.join("root-alias"));
+    let first = bounded_output(first);
+    let old = native(&first);
+    assert_eq!(stats(&first)["generated_body"]["source_cache"], "miss");
+    assert_eq!(stats(&first)["generated_body"]["cargo_fresh"], false);
+    let old_bytes = fs::read(&old).unwrap();
+    let key = stats(&first)["generated_body"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let body = f.app("out").join("code").join(key);
+    let canonical_runtime = fs::canonicalize(f.0.join("runtime")).unwrap();
+    for root in [
+        f.0.join("out-alias"),
+        old.parent().unwrap().to_owned(),
+        body,
+    ] {
+        let manifest: toml::Value =
+            toml::from_str(&fs::read_to_string(root.join("Cargo.toml")).unwrap()).unwrap();
+        assert_eq!(
+            manifest["dependencies"]["nagi-runtime"]["path"]
+                .as_str()
+                .unwrap(),
+            canonical_runtime.to_str().unwrap()
+        );
+    }
+    for manifest in [
+        f.0.join("out-alias/Cargo.toml"),
+        old.parent().unwrap().join("Cargo.toml"),
+    ] {
+        let mut command = Command::new(env!("CARGO"));
+        command
+            .current_dir(f.0.join("root-alias"))
+            .args(["build", "--locked", "--profile", "dev", "--manifest-path"])
+            .arg(manifest)
+            .env("CARGO_NET_OFFLINE", "true")
+            .env("CARGO_TARGET_DIR", f.0.join("cache"));
+        success(&bounded_output(command));
+    }
+    let repeated = bounded_output(incremental(&f, "build", "main.nagi", "out"));
+    assert_eq!(stats(&repeated)["generated_body"]["source_cache"], "hit");
+    assert_eq!(stats(&repeated)["generated_body"]["cargo_fresh"], true);
+    let new = native(&repeated);
+    assert_ne!(old, new);
+    verify_receipt(&new);
+    assert_eq!(run(&new), "old");
+    assert_eq!(fs::read(&old).unwrap(), old_bytes);
+    assert_eq!(run(&old), "old");
+    let latest = f.latest("out").0;
+    fs::rename(f.0.join("real-runtime"), f.0.join("missing-runtime")).unwrap();
+    let failed = bounded_output(incremental(&f, "run", "main.nagi", "out"));
+    assert!(!failed.status.success());
+    assert!(failed.stdout.is_empty());
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(fs::read(&old).unwrap(), old_bytes);
+    assert_eq!(run(&old), "old");
+}
+
+#[cfg(unix)]
+#[test]
 fn incremental_runtime_paths_with_newlines_and_quotes_use_one_line_root_manifests() {
     let f = Fixture::new();
     for name in ["runtime\nroot", "runtime\\\"'root", "runtime\u{7f}root"] {

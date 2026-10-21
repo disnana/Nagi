@@ -1704,7 +1704,7 @@ fn with_generated_body(
         .ok_or("Generated manifest is not a table")?
         .remove("dependencies")
         .ok_or("Generated runtime dependency missing")?;
-    let runtime_path = dependencies
+    let _ = dependencies
         .as_table()
         .filter(|t| t.len() == 1)
         .and_then(|t| t.get("nagi-runtime"))
@@ -1730,6 +1730,10 @@ fn with_generated_body(
     // JSON's escapes are TOML basic-string escapes, but JSON may leave DEL
     // raw while TOML prohibits it. Escape that extra character explicitly.
     // Do not let the pretty-printer choose a multiline filesystem path.
+    // Cargo keeps lexical path-source identities. A root reached through an
+    // alias (e.g. macOS /var vs /private/var) must name the runtime exactly as
+    // the body does, including when either published root is built manually.
+    let runtime_path = body.runtime.to_str().ok_or("Runtime paths require UTF-8")?;
     let runtime_path = serde_json::to_string(runtime_path)
         .map_err(|e| e.to_string())?
         .replace('\u{7f}', "\\u007f");

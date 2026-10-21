@@ -14,6 +14,7 @@ pub(crate) struct GeneratedBody {
     pub(crate) digest: String,
     pub(crate) package: String,
     pub(crate) manifest: String,
+    pub(crate) runtime: PathBuf,
     pub(crate) hit: bool,
 }
 
@@ -263,6 +264,7 @@ impl GeneratedBody {
             digest,
             package,
             manifest,
+            runtime,
             hit,
         })
     }
