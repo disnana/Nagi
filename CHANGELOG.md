@@ -4,6 +4,8 @@
 
 ### Nagi application development tools
 
+- Add opt-in `--profile dev --incremental` to reuse the generated Rust body as an immutable content-addressed Cargo library. Identical bodies reuse Cargo artifacts while each generation compiles its own entry shim. Keep full checks, Cargo validation and old executables; reject corrupt source caches. Adapters, additional Rust dependencies and managed runs retain monolithic builds. Receipt schema 2 verifies the body reference; schema 1 remains supported. Released 0.2.0 and default release builds are unchanged.
+
 - Add opt-in `build/run --profile dev|release`, preserving release as the default and the existing debug/release overflow behavior. Keep complete Nagi checks, Cargo dependency validation, generation isolation and immutable successful executables.
 - Add opt-in `--build-stats` with typed declaration/function change observations, dependency graphs, Cargo artifact counts and phase timings. Record and verify published artifact hashes; semantic observations do not authorize native reuse or skipped checks/tests.
 - Bundle standard-library-only Python CI-generation and receipt-verification tools in future distributions. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.

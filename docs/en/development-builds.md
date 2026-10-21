@@ -14,6 +14,22 @@ nagic build --project my-app --profile release --build-stats
 
 `dev` selects Cargo's development profile; `release` retains the existing optimized profile. Development compilation avoids optimization work and reuses development runtime dependencies. Ordinary integer arithmetic overflow normally panics in dev and wraps in release, as the existing language contract specifies. Cargo profile overrides and environment settings still apply. Measure production performance and distribute applications using release.
 
+## Reusing the generated body (unreleased)
+
+```sh
+nagic run --project my-app --profile dev --incremental --build-stats
+```
+
+The generated Rust body and dependency manifest are hashed with SHA-256 to create an immutable Cargo library for the application. When generated Rust is identical, Cargo can reuse the compiled body and compile only the small generation-specific entry shim. Published executables are still copied into separate immutable generations.
+
+Full checking, emission and Cargo invocation always run. Body changes create a new content identity; Cargo determines native freshness for runtime edits, Rust settings, toolchains and other inputs. Semantic hashes and previous analysis JSON never authorize executable reuse. This stage reuses one Rust crate for the body, rather than individual functions, types or modules as native units.
+
+The initial mode is opt-in and requires `--profile dev`. Rust adapters, additional Rust dependencies and IDE-managed run retention fall back to the existing monolithic bin, with a reason on stderr and in `generated_body.reason`. Default builds and release remain unchanged.
+
+Stats expose `generated_body.mode`, generated-source `source_cache` (`hit` / `miss`), `sha256`, and body artifact `cargo_fresh`. A source-cache hit alone does not imply native reuse. Cached files are compared byte-for-byte against the current generated content. Mismatches, links and invalid file types fail without repair, preserving the previous latest and executable.
+
+Bodies remain in `.nagi/apps/<app>/code/<sha256>/` under the output and are not automatically pruned. Their identities are not guaranteed portable across checkouts and do not authenticate shared caches. Noncooperating processes concurrently replacing directories or modifying Cargo caches are outside this guarantee.
+
 ## Reading observations
 
 On success, `--build-stats` writes one `nagi-build-stats: {JSON}` line to stderr. Application stdout stays pipeable. Times are milliseconds.
@@ -33,7 +49,9 @@ python3 scripts/verify_build_receipt.py path/to/generations/g-.../build-receipt.
 
 Distribution candidates bundle the same verifier as `tools/verify_build_receipt.py`. It needs Python 3.10 or later, without a source checkout. Artifacts must be regular files; symlinks, Windows reparse points and FIFOs are rejected. The compiler argument may use the installer's executable link. This local verifier does not protect against another process maliciously replacing directories concurrently.
 
-These records are an integrity foundation for future content-addressed reuse. This implementation does not skip Nagi checks, emission, tests or native builds based on semantic hashes. Full checking and Cargo always run; every successful build publishes a fresh immutable generation. Corrupt observations cannot authorize reuse. Receipt-writing failure preserves the previous latest generation and does not execute the new app.
+Full checking, emission and Cargo always run; every successful build publishes a fresh immutable generation. Corrupt observations cannot authorize reuse. Receipt-writing failure preserves the previous latest generation and does not execute the new app.
+
+Receipt schema 2 adds the entry shim and body manifest for body reuse. The verifier recomputes the body identity from the snapshot, compares the body in the prescribed cache location and checks the generated dependency reference. Schema 1 remains supported for ordinary builds. Verifying schema 2 also requires the corresponding body cache.
 
 Digest comparison detects corruption, not an attacker who can replace both files and receipt. The complete native input closure—including Rust module/include, path crates, build scripts, environment and toolchain—is not captured. Neither a receipt nor Nagi source hashes authorize execution of CI-restored binaries. Source snapshots can contain source-embedded secrets; do not share the whole generated directory as a cache.
 
