@@ -112,9 +112,10 @@ public final class NagiAssistProcessTest {
             while (eof.getCause() != null) eof = eof.getCause();
             assertTrue("expected an EOF transport failure, got " + eof,
                     eof instanceof IOException && eof.getMessage().contains("ended before responding"));
+            assertTrue(eof.getMessage(), eof.getMessage().length() <= 240);
             assertTrue(eof.getMessage(), eof.getMessage().contains("startup failure or unsupported protocol"));
-            assertTrue(eof.getMessage(), eof.getMessage().contains("Published nagic 0.1.11 supports normal Check/Run"));
-            assertTrue(eof.getMessage(), eof.getMessage().contains("matching compiler artifact built from this PR source"));
+            assertTrue(eof.getMessage(), eof.getMessage().contains("Nagi 0.1.11 supports normal Check/Run only"));
+            assertTrue(eof.getMessage(), eof.getMessage().contains("Use published Nagi 0.2.0 from GitHub Releases"));
         } finally {
             session.close();
             java.nio.file.Files.deleteIfExists(directory);

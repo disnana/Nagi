@@ -434,13 +434,14 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         AtomicInteger calls = new AtomicInteger();
         service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
             calls.incrementAndGet();
-            throw new java.io.IOException("Nagi assistance ended before responding (startup failure or unsupported protocol). Published nagic 0.1.11 supports normal Check/Run; completion, diagnostics, and navigation require the matching compiler artifact built from this PR source.");
+            throw new java.io.IOException("Nagi assistance ended before responding (startup failure or unsupported protocol). Use published Nagi 0.2.0 from GitHub Releases for assistance. Nagi 0.1.11 supports normal Check/Run only.");
         });
         service.requestBaseline(file);
         waitUntil(() -> service.state() == NagiAssistService.State.FAILED);
         assertNull("failed analysis must not expose cached compiler facts", service.fresh(file));
         assertTrue(service.statusMessage(), service.statusMessage().contains("no cached or saved facts were used."));
-        assertTrue(service.statusMessage(), service.statusMessage().contains("matching compiler artifact built from this PR source"));
+        assertTrue(service.statusMessage(), service.statusMessage().contains("Use published Nagi 0.2.0 from GitHub Releases"));
+        assertTrue(service.statusMessage(), service.statusMessage().contains("Nagi 0.1.11 supports normal Check/Run only"));
         for (int i = 0; i < 20; i++) service.requestBaseline(file);
         assertEquals(1, calls.get());
         assertEquals(NagiAssistService.State.FAILED, service.state());

@@ -2,9 +2,9 @@
 
 [English](README.en.md)
 
-IntelliJ IDEA・PyCharm向けのNagiプラグインです。次回更新候補では表示名を**Nagi**に統一します。Marketplaceの現行表示名は、その更新が公開されるまで変わりません。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
+IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.disnana.nagi`を維持し、表示名を**Nagi**とします。利用可能な版はGitHub ReleasesとMarketplaceの一覧で確認してください。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
 
-プラグインの版は`build.gradle.kts`で管理します。GitHub Releasesの共通ZIPは0.1.2です。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
+プラグインの版は`build.gradle.kts`で管理します。公開済み0.1.2には両IDE共通ZIPがあり、新しい利用可能な成果物はReleasesで確認してください。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
 
 ## 0.1.2でできること
 
@@ -17,23 +17,36 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。次回更新候補�
 
 ここに記した機能は公開済み0.1.2のものです。0.1.2では全体の自動整形、型に基づく補完、定義への移動、自動型検査は未対応です。型検査は手動でNagiコンパイラを呼び出します。
 
-#120の元候補に限り、編集操作・semantic色分け・引数表示はIDEA 2026.3 EAP（263.6259.32、JDK 25）のheadless fixtureで117テストが成功し、同SDKのPlugin VerifierでCompatibleを確認しました。今回のBackspace・字句keyword候補の差分はまだ実行検証していません。PyCharmやIDEのGUI操作、IME、IDEA 2025.1（build 251）の新差分の動作、EditorConfig modifierと設定変更後の再読み込みは未確認です。headless fixtureの結果はGUI受け入れ確認を意味しません。
+0.1.3の実装は[main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923)でIDEA/PyCharmのstable/EAP計4経路のtestとPlugin Verifierに成功しました。EAPのVerifierには各IDEで既存のdeprecated API 3件・experimental API 1件の警告があり、警告なしの結果ではありません。headless検証はGUI受入を意味せず、利用者による既存GUI確認は受入済みです。今回の掲載情報・compiler案内の更新ではIDE機能の制御ロジックを変更していません。IME、EditorConfig modifierと設定変更後の再読み込みは未確認です。
 
-## 0.1.3候補（未リリース）
+## 0.1.3
+
+この節は0.1.3の機能と制約です。0.1.2とは区別してください。GitHub Releasesに掲載されたplugin ZIPか、Marketplaceで提供される対応版をインストールしてください。GitHubとMarketplaceの公開は別で、CI検証artifactは正式配布物ではありません。
+
+### コンパイラとの対応
+
+| plugin | compiler | 対応範囲 |
+|---|---|---|
+| 公開済み0.1.2 | 公開Nagi 0.2.0 / 0.1.11 | 手動Check/Runと基本編集。semantic assistance・標準Run Configuration・世代回収は0.1.2に含まれません |
+| 0.1.3 | 公開Nagi 0.2.0 | High/Lowのsemantic assistance、標準Run/Stop、IDE管理runの世代回収 |
+| 0.1.3 | 公開Nagi 0.1.11 | 通常Check/Runと標準Run Configurationによる通常実行。assist protocolと世代回収modeは未対応 |
+| 0.1.2 / 0.1.3 | compilerなし | syntax highlightingとcompiler不要の基本編集。Check/Run・semantic assistanceにはcompilerが必要 |
+
+公開compiler 0.2.0を[導入](https://nagi.disnana.com/docs/getting-started/)し、`nagic --version`で確認してください。0.1.3のsemantic assistanceのために同じPRからcompilerをbuildする必要はありません。
 
 関数の引数情報はIDE標準のParameter Info操作（通常Ctrl+P）で表示します。現在のsource snapshotについてコンパイラが関数を解決できた場合に、signatureと現在の引数位置を示します。初回解析は既存のdebounce付きバックグラウンド処理へまとめ、EDTでコンパイラを起動しません。古いsnapshotや移動後のカーソルには表示しません。自動表示はIDE設定に従い、明示操作は自動表示OFFでも利用できます。解決できない関数やmemberのsignatureをIDE側で推測しません。
 
-未リリースの0.1.3候補では、High/Lowの編集補助も更新しています。IDE標準の設定に従う括弧・引用符の補完、上限付きの改行インデント補助（有効な字下げ幅を使い、空白文字を挿入）、関数定義用の明示的なlive template（`def`・`async def`・Lowの`fn`と編集欄）を含みます。今回の差分では、IDEのsmart Backspace設定が有効な場合にHigh/Lowの字下げ幅を使う標準の段階削除へ接続し、OFF設定は維持します。行頭で`d`・`de`（High）または`f`（Low）を入力し、最上位の文脈だと確認できる場合に、それぞれ`def`・`fn`の字句候補を通常の補完に加えます。先頭から8 KiBを超える位置や、閉じていない括弧・文字列などで文脈が不明な場合は、この字句候補を抑制します。候補の確定はkeyword文字だけを挿入し、既存live templateは明示的な展開のままです。補完候補の通常確定では関数名だけを挿入し、`(`で確定した場合だけ呼び出しの括弧を補助します。コンパイラを使ったHigh/Low補完、構造化診断、コンパイラが正確な参照先を返す場合の定義への移動、IDE標準のNagi Run Configurationも候補です。一度保存したローカル`.nagi`・`.low`の開いている未保存bufferは解析用snapshotに含めます。新規未保存fileは対象外です。候補は現在のsource・open buffers・compiler設定が変わると古い応答を破棄します。
+0.1.3では、High/Lowの編集補助も更新しています。IDE標準の設定に従う括弧・引用符の補完、上限付きの改行インデント補助（有効な字下げ幅を使い、空白文字を挿入）、関数定義用の明示的なlive template（`def`・`async def`・Lowの`fn`と編集欄）を含みます。0.1.3では、IDEのsmart Backspace設定が有効な場合にHigh/Lowの字下げ幅を使う標準の段階削除へ接続し、OFF設定は維持します。行頭で`d`・`de`（High）または`f`（Low）を入力し、最上位の文脈だと確認できる場合に、それぞれ`def`・`fn`の字句候補を通常の補完に加えます。先頭から8 KiBを超える位置や、閉じていない括弧・文字列などで文脈が不明な場合は、この字句候補を抑制します。候補の確定はkeyword文字だけを挿入し、既存live templateは明示的な展開のままです。補完候補の通常確定では関数名だけを挿入し、`(`で確定した場合だけ呼び出しの括弧を補助します。コンパイラを使ったHigh/Low補完、構造化診断、コンパイラが正確な参照先を返す場合の定義への移動、IDE標準のNagi Run Configurationも含みます。一度保存したローカル`.nagi`・`.low`の開いている未保存bufferは解析用snapshotに含めます。新規未保存fileは対象外です。現在のsource・open buffers・compiler設定が変わると古い応答を破棄します。
 
-プラグインのHigh/Low syntax highlightingはcompilerに依存せず、公開済み`nagic` 0.1.11は手動のCheck/Runと通常のRun Configurationによる実行に引き続き使えます。変数名・member補完、diagnostics、definition navigationのsemantic assistanceには**同じ候補source commitから作った開発版`nagic`**が必要です。確認できた最上位文脈の字句`def`・`fn`候補にはcompilerは不要です。公開済み0.1.11にはassist protocolがないため、semantic補完を使う場合はmatching compiler CI artifactを設定してください。解析はエディター向けの部分解析で、完全なbuild成功を保証せず、診断もcompilerが最初に返すエラーに限られます。project内では、対象sourceがentryからのimportまたはnative graphに含まれている必要があります。構文やcheckerがその位置でread可能と認めない候補は表示されず、候補が表示されても編集後の代入・move・callの妥当性を保証しません。compilerが正確なsource spanを返さない参照には移動できません。`nagi.toml`に未保存の変更がある場合は、保存するまでsemantic assistanceを実行しません。
+High/Low syntax highlightingと、確認できた最上位文脈の字句`def`・`fn`候補にはcompilerは不要です。変数名・member補完、diagnostics、definition navigation、Parameter Info、semantic色分けには公開compiler 0.2.0を使います。解析はエディター向けの部分解析で、完全なbuild成功を保証せず、診断もcompilerが最初に返すエラーに限られます。project内では、対象sourceがentryからのimportまたはnative graphに含まれている必要があります。構文やcheckerがその位置でread可能と認めない候補は表示されず、候補が表示されても編集後の代入・move・callの妥当性を保証しません。compilerが正確なsource spanを返さない参照には移動できません。`nagi.toml`に未保存の変更がある場合は、保存するまでsemantic assistanceを実行しません。
 
-IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。起動準備ではエディターを止めずに保存の完了を待ち、IDEのbackground taskから中止できます。待機後に開いているfileの未保存変更が残っていた場合は、保存してから再実行してください。Nagi 0.1.11のcompilerで通常実行できます。これらは公開済み0.1.2に含まれない0.1.3候補の機能です。候補pluginとassist用compilerはPR CI検証artifactで、GitHub ReleaseやMarketplaceにはまだ公開していません。
+IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。起動準備ではエディターを止めずに保存の完了を待ち、IDEのbackground taskから中止できます。待機後に開いているfileの未保存変更が残っていた場合は、保存してから再実行してください。Nagi 0.1.11のcompilerで通常実行できます。これらは公開済み0.1.2には含まれない0.1.3の機能です。compiler 0.2.0は公開済みです。利用可能なplugin版はReleasesまたはMarketplaceで確認してください。
 
-この候補では、IDEが管理するNagi Runに限って`NAGI_RUN_RETENTION=latest`を設定する世代保持modeも、同じPR sourceから作った開発compilerと検証中です。公開compiler 0.1.11は通常のCheck/Runに使えますが、このmodeを実装しておらず、CLI実行の成功世代を自動削除しません。通常のCLI世代はimmutableで、世代cleanupはCargo共有cache（`build/native-target/`または`NAGI_NATIVE_TARGET_DIR`）にも適用されません。候補modeはnative run成功を記録したlatest、実行中・すべてのappの入力snapshotが必要とする世代、失敗後のlast-goodを保護します。compile成功だけではrun成功とみなさず、managed世代の入力metadataが不明なら回収しません。入力snapshotは成功した通常buildも含み、namespace参照とfile identityを記録するため、non-latest run・別appが必要とする世代を保護します。外部hardlink inputのidentityがrun leaseと一致する場合も、そのleaseとgenerationを保持します。依存元を回収しても参照先が次のsuccessful sweepまで残ることがあり、総世代数や容量に厳密な上限はありません。unknown file、link/reparse point、failed stagingも削除しません。generation tree外のrecovery journalは次のplugin管理runで検査します。unknownまたはoversized recordは保持し、正常recordの回収は続けます。これはまだ検証中で、通常CLI向けのcleanup commandやpower-loss durability保証ではありません。
+0.1.3では、IDEが管理するNagi Runに限って`NAGI_RUN_RETENTION=latest`を設定し、公開compiler 0.2.0の世代保持modeを使います。公開compiler 0.1.11は通常のCheck/Runに使えますが、このmodeを実装しておらず、CLI実行の成功世代を自動削除しません。通常のCLI世代はimmutableで、世代cleanupはCargo共有cache（`build/native-target/`または`NAGI_NATIVE_TARGET_DIR`）にも適用されません。このmodeはnative run成功を記録したlatest、実行中・すべてのappの入力snapshotが必要とする世代、失敗後のlast-goodを保護します。compile成功だけではrun成功とみなさず、managed世代の入力metadataが不明なら回収しません。入力snapshotは成功した通常buildも含み、namespace参照とfile identityを記録するため、non-latest run・別appが必要とする世代を保護します。外部hardlink inputのidentityがrun leaseと一致する場合も、そのleaseとgenerationを保持します。依存元を回収しても参照先が次のsuccessful sweepまで残ることがあり、総世代数や容量に厳密な上限はありません。unknown file、link/reparse point、failed stagingも削除しません。generation tree外のrecovery journalは次のplugin管理runで検査します。unknownまたはoversized recordは保持し、正常recordの回収は続けます。通常CLI向けのcleanup commandやpower-loss durability保証ではありません。
 
 明示path crateも入力として保護します。別のoutへ入力として渡した世代は通常CLIのimmutable成果物と同様に保持し、自動回収しません。leaseにhardlinkが残る場合も保持します。任意Rust includeやbuild scriptの依存をNagiが網羅する保証はありません。
 
-compiler 0.1.12の一時候補は中止され、公開artifactはありません。JetBrains plugin 0.1.3と同じPR sourceのmatching development compilerは、未リリース候補として検証中です。
+compiler 0.1.12の一時候補は中止され、公開artifactはありません。plugin 0.1.3に対応する公開compilerは0.2.0です。
 
 ## インストール
 
@@ -47,7 +60,7 @@ GitHub ReleasesのZIPを使う場合は、IDEの **Settings → Plugins → ⚙ 
 
 Nagiファイルを開き、右クリックまたはToolsメニューから **Nagi: Check** / **Nagi: Run** を選びます。実行前に開いているファイルを保存します。信頼していないプロジェクトではコンパイラを起動しません。
 
-0.1.2では`main`の左の▶が **Nagi: Run** を起動します。IDE上部で選ばれているPythonなどの実行設定は使いません。近くに`nagi.toml`がある場合は、そのプロジェクトのentryを実行します。次版候補では同じNagi実行をIDE標準のRun ConfigurationからRun/Stopできます。
+0.1.2では`main`の左の▶が **Nagi: Run** を起動します。IDE上部で選ばれているPythonなどの実行設定は使いません。近くに`nagi.toml`がある場合は、そのプロジェクトのentryを実行します。0.1.3では同じNagi実行をIDE標準のRun ConfigurationからRun/Stopできます。
 
 出力はRunウィンドウに表示します。型検査の制限時間は既定で30秒、設定で1〜300秒に変更できます。サーバーなどのRunには時間制限を設けず、RunウィンドウのStopで終了します。生成物はIDEのsystemディレクトリ内の`nagi`に置きます。
 
@@ -80,8 +93,8 @@ PyCharm用SDKでも同じコードを検証できます。
 
 公式資料: [Plugin SDK](https://plugins.jetbrains.com/docs/intellij/developing-plugins.html)、[Gradle Plugin](https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html)。ライセンスは[MIT](LICENSE)です。
 
-## 0.1.2の最低対応IDE
+## 最低対応IDE
 
-0.1.2の共通プラグインはIntelliJ IDEA 2025.1.1 build 251.25410.109以降、PyCharm 2025.1.1 build 251.25410.122以降を対象とします。2025.1 branchの初期buildでは未信頼プロジェクトを判定する公開trust APIが解決されないため対象外です。公開trust APIで未信頼プロジェクトからの実行を拒否するため、0.1.2から2024.3と2025.1初期buildは対象外です。対象外IDEでは既存の公開済み0.1.1を引き続き利用でき、新版へ更新するには対応build以降へ更新してください。ID `com.disnana.nagi`と既存Marketplaceページは維持します。この対応範囲はGitHubの0.1.2 Releaseに適用します。
+0.1.2の共通プラグインはIntelliJ IDEA 2025.1.1 build 251.25410.109以降、PyCharm 2025.1.1 build 251.25410.122以降を対象とします。2025.1 branchの初期buildでは未信頼プロジェクトを判定する公開trust APIが解決されないため対象外です。公開trust APIで未信頼プロジェクトからの実行を拒否するため、0.1.2から2024.3と2025.1初期buildは対象外です。対象外IDEでは既存の公開済み0.1.1を引き続き利用でき、新版へ更新するには対応build以降へ更新してください。ID `com.disnana.nagi`と既存Marketplaceページは維持します。この対応範囲はGitHubの0.1.2 Releaseに適用し、0.1.3も維持します。
 
-標準ライブラリの仮想sourceへのジャンプは未対応です。候補compilerが正確な宣言位置を返すrecord fieldは移動でき、位置を返さない参照は対象外です。
+標準ライブラリの仮想sourceへのジャンプは未対応です。compiler 0.2.0が正確な宣言位置を返すrecord fieldは0.1.3から移動でき、位置を返さない参照は対象外です。
