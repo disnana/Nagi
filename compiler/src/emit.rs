@@ -1694,7 +1694,10 @@ fn with_generated_body(
     shim: bool,
 ) -> Result<String, String> {
     let path = relative_path(&body.directory, base);
-    let path = path.to_str().ok_or("Generated body paths require UTF-8")?;
+    let path = path
+        .to_str()
+        .ok_or("Generated body paths require UTF-8")?
+        .replace(std::path::MAIN_SEPARATOR, "/");
     let mut value: toml::Value = toml::from_str(&manifest).map_err(|e| e.to_string())?;
     // Path dependencies inside the compatibility root would otherwise become
     // automatic workspace members, conflicting with the body's own workspace.
@@ -1703,7 +1706,7 @@ fn with_generated_body(
         .ok_or("Generated workspace is not a table")?
         .insert(
             "exclude".into(),
-            toml::Value::Array(vec![toml::Value::String(path.into())]),
+            toml::Value::Array(vec![toml::Value::String(path.clone())]),
         );
     if shim {
         // This is a generated manifest field, never a source-code rewrite.
@@ -1714,7 +1717,7 @@ fn with_generated_body(
     // verifier. Both root manifests have the same dependency graph/lockfile.
     manifest.push_str(&format!(
         "\n[dependencies.nagi-app-body]\npath = {}\npackage = {}\n",
-        toml::Value::String(path.into()),
+        toml::Value::String(path),
         toml::Value::String(body.package.clone())
     ));
     Ok(manifest)

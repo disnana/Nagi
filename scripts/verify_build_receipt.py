@@ -8,6 +8,7 @@ import json
 import os
 import re
 import stat
+import unicodedata
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -150,10 +151,24 @@ def _valid_basic_string(value: str) -> bool:
     return not escaped
 
 
+def _valid_literal_string(value: str) -> bool:
+    # Accept only conservative one-line TOML literal strings. Their content
+    # is unescaped, so Windows paths emitted by toml::to_string remain valid.
+    value = value.strip()
+    if len(value) < 2 or value[0] != "'" or value[-1] != "'":
+        return False
+    content = value[1:-1]
+    return all(char != "'" and unicodedata.category(char) != "Cc" for char in content)
+
+
+def _valid_manifest_string(value: str) -> bool:
+    return _valid_basic_string(value) or _valid_literal_string(value)
+
+
 def _valid_manifest_value(kind: str, value: str) -> bool:
     value = value.strip()
     if kind == "string":
-        return _valid_basic_string(value)
+        return _valid_manifest_string(value)
     if kind == "boolean":
         return value in ("true", "false")
     if kind == "integer":
@@ -164,7 +179,7 @@ def _valid_manifest_value(kind: str, value: str) -> bool:
         item = value[1:-1].strip()
         if item.endswith(","):
             item = item[:-1].strip()
-        return _valid_basic_string(item)
+        return _valid_manifest_string(item)
     return False
 
 

@@ -2354,6 +2354,16 @@ fn incremental_reuses_checked_body_but_publishes_unique_bins_and_valid_locked_ma
         .to_owned();
     assert_eq!(stats(&first)["generated_body"]["source_cache"], "miss");
     assert_eq!(stats(&first)["generated_body"]["cargo_fresh"], false);
+    let manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(old.parent().unwrap().join("Cargo.toml")).unwrap())
+            .unwrap();
+    assert_eq!(
+        manifest["dependencies"]["nagi-app-body"]["path"]
+            .as_str()
+            .unwrap(),
+        format!("../../code/{key}"),
+        "the receipt reference must use portable separators on every OS"
+    );
     assert_eq!(run(&old), "42");
     verify_receipt(&old);
     f.write(

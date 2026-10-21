@@ -2,6 +2,7 @@
 import hashlib
 import io
 import json
+import os
 import subprocess
 import tarfile
 import tempfile
@@ -22,6 +23,12 @@ class ReleasePlanTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        # No detached housekeeping may outlive commit() and race cleanup of
+        # this exclusively owned disposable repository. Keep cleanup failures
+        # visible; do not mask them with retries or ignore_errors.
+        for key, value in (("gc.auto", "0"), ("maintenance.auto", "false"),
+                           ("gc.autoDetach", "false"), ("maintenance.autoDetach", "false")):
+            subprocess.run(["git", "config", "--local", key, value], cwd=self.root, check=True)
         self.change("Cargo.toml", '[workspace.package]\nversion = "0.1.0"\nedition = "2021"\nlicense = "MIT"\n')
         self.change("editors/vscode-nagi/package.json", '{"version":"0.1.5"}\n')
         self.change("editors/jetbrains-nagi/build.gradle.kts", 'group = "com.disnana.nagi"\nversion = "0.1.0"\n')
@@ -540,19 +547,51 @@ class ReleasePlanTests(unittest.TestCase):
 
 
     def test_package_fails_before_output_when_selected_package_has_no_license_source(self):
-        self.change("runtime/src/lib.rs", "// committed runtime\n")
-        self.change("LICENSE", "MIT license fixture\n")
-        metadata_fixture, graph_fixture = self.add_notice_graph_fixture(missing_runtime_license=True)
-        self.add_project_tool_fixtures()
-        commit = self.commit()
-        binary = self.root / "compiler-test"
-        binary.write_bytes(b"prebuilt compiler fixture")
-        output = self.root / "blocked-distribution"
-        metadata_patch, graph_patch = self.patch_notice_graph(metadata_fixture, graph_fixture)
-        with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
-            with self.assertRaisesRegex(ValueError, "No license text source for runtime-dep@3.0.0"):
-                package.package(binary, "0.1.0", "linux-x86_64", output, commit)
-        self.assertFalse(output.exists())
+        with tempfile.TemporaryDirectory(prefix="nagi-release-git-config-") as config_dir:
+            config_root = Path(config_dir)
+            system_config = config_root / "system.gitconfig"
+            global_config = config_root / "global.gitconfig"
+            system_config.write_text(
+                "[gc]\nauto = 1\nautoDetach = true\n"
+                "[maintenance]\nauto = true\nautoDetach = true\n",
+                encoding="utf-8",
+            )
+            global_config.write_text("", encoding="utf-8")
+            with patch.dict(os.environ, {
+                "GIT_CONFIG_SYSTEM": str(system_config),
+                "GIT_CONFIG_GLOBAL": str(global_config),
+                "GIT_CONFIG_NOSYSTEM": "false",
+            }):
+                self.change("runtime/src/lib.rs", "// committed runtime\n")
+                self.change("LICENSE", "MIT license fixture\n")
+                metadata_fixture, graph_fixture = self.add_notice_graph_fixture(missing_runtime_license=True)
+                self.add_project_tool_fixtures()
+                commit = self.commit()
+                binary = self.root / "compiler-test"
+                binary.write_bytes(b"prebuilt compiler fixture")
+
+                before = subprocess.check_output(
+                    ["git", "count-objects", "-v"], cwd=self.root, text=True,
+                )
+                loose_before = int(next(line.split(":", 1)[1] for line in before.splitlines()
+                                        if line.startswith("count:")))
+                self.assertGreater(loose_before, 1)
+                subprocess.run(["git", "gc", "--auto"], cwd=self.root, check=True)
+                subprocess.run(["git", "maintenance", "run", "--auto"], cwd=self.root, check=True)
+                after = subprocess.check_output(
+                    ["git", "count-objects", "-v"], cwd=self.root, text=True,
+                )
+                loose_after = int(next(line.split(":", 1)[1] for line in after.splitlines()
+                                       if line.startswith("count:")))
+                self.assertEqual(loose_after, loose_before,
+                                 "Automatic Git maintenance ran in the disposable test repository")
+
+                output = self.root / "blocked-distribution"
+                metadata_patch, graph_patch = self.patch_notice_graph(metadata_fixture, graph_fixture)
+                with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
+                    with self.assertRaisesRegex(ValueError, "No license text source for runtime-dep@3.0.0"):
+                        package.package(binary, "0.1.0", "linux-x86_64", output, commit)
+                self.assertFalse(output.exists())
 
     def test_package_refuses_working_lock_different_from_release_commit(self):
         self.change("runtime/src/lib.rs", "// committed runtime\n")

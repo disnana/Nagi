@@ -104,6 +104,27 @@ class ReceiptTests(unittest.TestCase):
         self.write()
         MODULE.verify(self.path)
 
+    def test_schema2_accepts_conservative_literal_manifest_strings(self):
+        self.configure_schema2()
+        cargo_path = self.root / "Cargo.toml"
+        cargo = cargo_path.read_text(encoding="utf-8")
+        cargo = cargo.replace(
+            'path = "../../code/nagi-runtime"',
+            r"path = '../../../../../../rust\root/runtime'",
+        )
+        cargo = cargo.replace(
+            'exclude = ["../../code/ignored"]',
+            "exclude = ['../../code/ignored-雪']",
+        )
+        cargo_path.write_text(cargo, encoding="utf-8")
+        self.receipt["artifacts"]["Cargo.toml"] = MODULE.identity(cargo_path)
+        self.write()
+        MODULE.verify(self.path)
+
+        for value in ("'embedded'quote'", "'''multi-line'''", "'line\nbreak'", "'\x85'"):
+            with self.subTest(value=value):
+                self.assertFalse(MODULE._valid_literal_string(value))
+
     def test_schema2_snapshot_and_cache_tampering_are_rejected(self):
         self.configure_schema2()
         main = self.root / "src/main.rs"
