@@ -1,0 +1,24 @@
+E
+======================================================================
+ERROR: test_schema3_alias_above_output_and_receipt_matches_canonical_producer (before_canonical_fixture.ReceiptTests.test_schema3_alias_above_output_and_receipt_matches_canonical_producer)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Nagi/scripts/tests/test_build_receipt.py", line 356, in test_schema3_alias_above_output_and_receipt_matches_canonical_producer
+    MODULE.verify(self.path)
+  File "/workspace/Nagi/scripts/verify_build_receipt.py", line 625, in verify
+    _verify_generated_units(receipt_path, receipt, app.rsplit("-", 1)[-1])
+  File "/workspace/Nagi/scripts/verify_build_receipt.py", line 551, in _verify_generated_units
+    body = visit(digest, None)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/workspace/Nagi/scripts/verify_build_receipt.py", line 546, in visit
+    visit(match[1], child, dependency["path"], depth + 1)
+  File "/workspace/Nagi/scripts/verify_build_receipt.py", line 516, in visit
+    _v3_reference(reference, manifest.parent)
+  File "/workspace/Nagi/scripts/verify_build_receipt.py", line 470, in _v3_reference
+    raise ValueError("schema 3 unit dependency path mismatch")
+ValueError: schema 3 unit dependency path mismatch
+
+----------------------------------------------------------------------
+Ran 1 test in 0.005s
+
+FAILED (errors=1)

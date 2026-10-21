@@ -106,6 +106,10 @@ class ReceiptTests(unittest.TestCase):
         digest = framed.hexdigest()
         directory = self.root.parent.parent / "code" / digest
         (directory / "src").mkdir(parents=True, exist_ok=True)
+        # The compiler publishes dependency paths from its canonical output
+        # root. Match that producer contract, including macOS /var aliases
+        # and Windows short-name temporary directories.
+        directory = directory.resolve(strict=True)
         (directory / "Cargo.toml").write_bytes(manifest)
         (directory / "src/lib.rs").write_bytes(source)
         return {"unit": unit, "path": directory, "digest": digest,
@@ -334,6 +338,23 @@ class ReceiptTests(unittest.TestCase):
         self.addCleanup(parent_alias.unlink)
         aliased = parent_alias / self.app / "generations" / self.generation / "build-receipt.json"
         MODULE.verify(aliased)
+
+    def test_schema3_alias_above_output_and_receipt_matches_canonical_producer(self):
+        # Reproduce two distinct lexical aliases even on Linux, where the
+        # default temp root usually has no OS-provided alias.
+        original = Path(self.temporary.name)
+        aliases = [original.with_name(original.name + suffix) for suffix in ("-output", "-receipt")]
+        for alias in aliases:
+            try:
+                alias.symlink_to(original, target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"OS does not permit test symlinks: {error}")
+            self.addCleanup(alias.unlink)
+        self.root = aliases[0] / self.app / "generations" / self.generation
+        self.path = self.root / "build-receipt.json"
+        self.configure_schema3()
+        MODULE.verify(self.path)
+        MODULE.verify(aliases[1] / self.app / "generations" / self.generation / "build-receipt.json")
 
     def test_schema3_node_depth_and_file_size_limits(self):
         self.configure_schema3(count=9)
