@@ -36,6 +36,8 @@ class DevelopmentDistributionVerificationTests(unittest.TestCase):
         self.omit_stats = False
         self.working_folder = self.folder
         self.canonical_output = False
+        self.generation_counter = 0
+        self.incremental_counter = 0
 
     def answer(self, command, **kwargs):
         self.assertIsNotNone(kwargs.get("timeout"))
@@ -52,34 +54,104 @@ class DevelopmentDistributionVerificationTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "", "checked source\n")
             self.assertEqual(command[1], "run")
             profile = command[command.index("--profile") + 1]
+            incremental = "--incremental" in command
             output = Path(command[command.index("--out") + 1])
             if self.canonical_output:
                 output = output.resolve()
             app = "nagi-main-0123456789abcdef"
-            generation = "g-1-2-1" if profile == "dev" else "g-1-2-2"
+            self.generation_counter += 1
+            generation = f"g-1-2-{self.generation_counter}"
             root = output / ".nagi/apps" / app / "generations" / generation
             root.mkdir(parents=True)
             binary = root / f"nagi-0123456789abcdef-{generation}"
-            binary.write_bytes(b"compiled executable")
+            binary_bytes = f"compiled executable {self.generation_counter}".encode()
+            binary.write_bytes(binary_bytes)
+
+            body_manifest = b"[dependencies.nagi-runtime]\npath = \"../../runtime\"\n"
+            body_main = b"pub fn generated_body() {}\n"
+            if incremental:
+                digest_builder = hashlib.sha256()
+                digest_builder.update(b"nagi-generated-body-v1\0")
+                for content in (body_manifest, body_main):
+                    digest_builder.update(len(content).to_bytes(8, "big"))
+                    digest_builder.update(content)
+                body_digest = digest_builder.hexdigest()
+                source_cache = "miss" if self.incremental_counter == 0 else "hit"
+                cargo_fresh = source_cache == "hit"
+                self.incremental_counter += 1
+                app_root = root.parent.parent
+                cache = app_root / "code" / body_digest
+                if source_cache == "miss":
+                    (cache / "src").mkdir(parents=True)
+                    (cache / "Cargo.toml").write_bytes(body_manifest)
+                    (cache / "src" / "lib.rs").write_bytes(body_main)
+                else:
+                    self.assertEqual((cache / "Cargo.toml").read_bytes(), body_manifest)
+                    self.assertEqual((cache / "src" / "lib.rs").read_bytes(), body_main)
+                suffix = app.rsplit("-", 1)[-1]
+                manifest = (
+                    "[[bin]]\n"
+                    f'name = "{binary.stem}"\npath = "src/entry.rs"\n\n'
+                    "[dependencies.nagi-runtime]\npath = \"../../runtime\"\n\n"
+                    "[package]\nautobins = false\nedition = \"2021\"\n"
+                    f'name = "{app}"\nversion = "0.1.0"\n\n'
+                    "[profile.release]\ncodegen-units = 1\nlto = false\n"
+                    "opt-level = 3\npanic = \"unwind\"\n\n"
+                    f'[workspace]\nexclude = ["../../code/{body_digest}"]\n\n'
+                    "[dependencies.nagi-app-body]\n"
+                    f'path = "../../code/{body_digest}"\n'
+                    f'package = "nagi-body-{suffix}"\n'
+                ).encode()
+            else:
+                body_digest = None
+                source_cache = None
+                cargo_fresh = None
+                manifest = b"Cargo.toml"
+
+            file_contents = {
+                "generated.low": b"fn main() -> unit {}\n",
+                "src/main.rs": body_main if incremental else b"src/main.rs",
+                "Cargo.toml": manifest,
+                "Cargo.lock": b"Cargo.lock",
+                "sources.json": b"sources.json",
+                "provenance.json": b"provenance.json",
+                "build-analysis.json": json.dumps(
+                    {"profile": profile, "native_reuse": "cargo_only"}).encode(),
+                binary.name: binary_bytes,
+            }
+            if incremental:
+                file_contents.update({
+                    "src/entry.rs": b"fn main() { ::nagi_app_body::main(); }\n",
+                    "body-Cargo.toml": body_manifest,
+                })
             artifacts = {}
-            for filename in ("generated.low", "src/main.rs", "Cargo.toml", "Cargo.lock",
-                             "sources.json", "provenance.json", "build-analysis.json", binary.name):
+            for filename, content in file_contents.items():
                 path = root / filename
-                path.parent.mkdir(exist_ok=True)
-                if filename == "build-analysis.json":
-                    path.write_text(json.dumps({"profile": profile, "native_reuse": "cargo_only"}), encoding="utf-8")
-                elif path != binary:
-                    path.write_bytes(filename.encode())
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if path != binary:
+                    path.write_bytes(content)
                 data = path.read_bytes()
                 artifacts[filename] = {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
             data = self.compiler.read_bytes()
             receipt = root / "build-receipt.json"
-            receipt.write_text(json.dumps({
-                "schema_version": 1, "app_id": app, "generation": generation,
-                "artifacts": artifacts, "compiler": {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)},
-            }), encoding="utf-8")
-            stats = self.stats_mutation({"profile": profile, "checks": "full", "cargo_always_invoked": True,
-                                         "native_reuse": "cargo_only", "receipt": str(receipt)})
+            receipt_value = {
+                "schema_version": 2 if incremental else 1,
+                "app_id": app,
+                "generation": generation,
+                "artifacts": artifacts,
+                "compiler": {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)},
+            }
+            if incremental:
+                receipt_value["generated_body_sha256"] = body_digest
+            receipt.write_text(json.dumps(receipt_value), encoding="utf-8")
+            stats_value = {"profile": profile, "checks": "full", "cargo_always_invoked": True,
+                           "native_reuse": "cargo_only", "receipt": str(receipt)}
+            if incremental:
+                stats_value["generated_body"] = {
+                    "mode": "cargo_library", "source_cache": source_cache,
+                    "sha256": body_digest, "cargo_fresh": cargo_fresh,
+                }
+            stats = self.stats_mutation(stats_value)
             stderr = f"native: {binary}\n"
             if not self.omit_stats:
                 stderr += f"nagi-build-stats: {json.dumps(stats)}\n"

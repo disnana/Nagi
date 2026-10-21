@@ -1,0 +1,15 @@
+{
+  "baseline_source_commit": "91b27e6da134c541db0e731e2edb4ed83e39c10c",
+  "base_main_commit": "1386411565eeb8b0c00772441395b48e06104b55",
+  "candidate_source_commit": "5a90083",
+  "baseline_compiler_matches_previous_verified_archive": true,
+  "baseline_compiler_sha256": "d401c795096424abc729a833f56130c70eff87e7f16e74e5eb660c326c5eedd8",
+  "candidate_compiler_sha256": "05c904aee72dbb7cf020d641badead96697ba35d2d55f0e2dae182253ac192e7",
+  "baseline_archive_sha256": "33178fc27657c117a6e0befa78d4c47a33502b4ad8d8c732344eb73d17fba39d",
+  "raw_sha256": "c54c0313f42e052e2d22041ca824a8424247d71189a56728f4af9433042d8d5e",
+  "cpu_quota": "400000 / 100000 = 4 CPU time units; os.cpu_count reports 5",
+  "performance_samples_not_parallel_with_other_builds": true,
+  "native_execution_checked_for_every_sample": true,
+  "native_execution_performance_measured": false,
+  "ci_time_and_cost_measured": false
+}

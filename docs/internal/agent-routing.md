@@ -88,3 +88,9 @@ The separate `codex-cli 0.159.0-alpha.3` bundled catalog check from 2026-10-06 d
 base `2c703b89645b164f586a926e473d08395be65c90`。当sessionのspawn catalogにあるIDを使用。Luna Mediumは読取専用の標準API対応調査、Sol 6.1 Highは既存世代契約とcache整合性の実装前確認、Luna Maxは独立した利用者CI generator、別のSol 6.1 Highは実装・対象検査後の最終auditを担当した。子からのspawnと同じfileの並行編集はなし。親を含む同時稼働は最大3体、同じmodel/effortの子は順番に実行した。service-tier指定interface、model別使用量・料金・実model時間は観測できず、Fast速度や費用削減を主張しない。
 
 CLIの公開0.2.0と開発flagの差、生成workflowのtoolchain指定、path記録とcompiler digestの限界を修正・明記し、独立auditで再確認した。独立auditは実Rust/native/full-suite/CIの代わりとせず、実行した範囲は[計測記録](../../benchmarks/results/smart-build-2026-10-20/README.md)へ分離する。新しい生成cacheによるnative再利用は有効にしていない。
+
+## 2026-10-21: 生成本体の再利用
+
+main base `1386411`、Rust実装`5a90083`、PR #140。Sol 6.1 Highを実装前の整合性・世代境界のread-only確認に使い、親がcompiler/generation/testsと実計測を担当した。独立したPython receipt v2と配布gateはLuna Maxが担当し、親reviewで汎用TOML風parserを固定された生成manifestのtable/key検査へ縮小した。親が実Cargoで見つけたworkspace自動membership、Windows表記の診断、projectionからCASへのhardlink aliasは契約を維持して修正し、元assertを緩めていない。
+
+子の追加spawn、同じfileの並行編集、同model/effortの並行子はなし。実行検証後の最終auditは別のSol 6.1 Highへ分離する。service-tier指定interface、model別使用量・料金は不明。今回の[build計測](../../benchmarks/results/generated-body-reuse-2026-10-21/README.md)はmodel速度やCIコストの測定ではない。最終audit/CI状態はPR本文・Checksで読み戻す。
