@@ -25,6 +25,8 @@ Cargo targetの`src_path`が本体libraryと一致する場合だけ、その`sr
 
 schema 2 receiptは既存固定成果物と`src/entry.rs`、`body-Cargo.toml`、body digestを持つ。Python 3.10対応検証器は固定のtable/key形だけを受け入れ、任意のTOML parserは実装しない。snapshotから内容キーを再計算し、既知のapp祖先から導いたCASだけを読み、内容と生成依存参照を照合する。schema 1は維持する。完全なnative入力の証明・署名ではない。外部の悪意ある同時directory差し替え、Cargo cacheの改変、電源断耐久は追加保証しない。
 
+Windowsでもsynthetic body参照は`/`区切りで固定する。root manifestの任意runtime pathは一行のTOML basic stringへescapeし、JSON文字列との字句差であるDELも明示escapeする。独立auditで見つけた改行・DELのP2を修正し、実Cargoで改行／quote／DEL pathを使う回帰とPython検証器で再確認した。one-line literal stringを使う従来のschema 2も受け入れる。
+
 ## 検証
 
 既存generation/shared-target/output-safety/dependency/diagnostic harnessを拡張し、同一・コメント・本体・署名・runtime変更、High/保存Low、sync/async/Result/no-main、fallback、cache破損・link/junction、projection alias、孤児Cargo、Cargo/receipt/projection/latest失敗を観測する。配布gateはcheckout外でschema 1/2、2回の本体再利用、四つの旧exe保持も実行する。

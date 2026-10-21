@@ -1699,6 +1699,20 @@ fn with_generated_body(
         .ok_or("Generated body paths require UTF-8")?
         .replace(std::path::MAIN_SEPARATOR, "/");
     let mut value: toml::Value = toml::from_str(&manifest).map_err(|e| e.to_string())?;
+    let dependencies = value
+        .as_table_mut()
+        .ok_or("Generated manifest is not a table")?
+        .remove("dependencies")
+        .ok_or("Generated runtime dependency missing")?;
+    let runtime_path = dependencies
+        .as_table()
+        .filter(|t| t.len() == 1)
+        .and_then(|t| t.get("nagi-runtime"))
+        .and_then(toml::Value::as_table)
+        .filter(|t| t.len() == 1)
+        .and_then(|t| t.get("path"))
+        .and_then(toml::Value::as_str)
+        .ok_or("Unexpected incremental runtime dependency shape")?;
     // Path dependencies inside the compatibility root would otherwise become
     // automatic workspace members, conflicting with the body's own workspace.
     value["workspace"]
@@ -1713,6 +1727,16 @@ fn with_generated_body(
         value["bin"][0]["path"] = toml::Value::String("src/entry.rs".into());
     }
     manifest = toml::to_string(&value).map_err(|e| e.to_string())?;
+    // JSON's escapes are TOML basic-string escapes, but JSON may leave DEL
+    // raw while TOML prohibits it. Escape that extra character explicitly.
+    // Do not let the pretty-printer choose a multiline filesystem path.
+    let runtime_path = serde_json::to_string(runtime_path)
+        .map_err(|e| e.to_string())?
+        .replace('\u{7f}', "\\u007f");
+    manifest.push_str(&format!(
+        "\n[dependencies.nagi-runtime]\npath = {}\n",
+        runtime_path
+    ));
     // Keep the strict generated table stable for the Python 3.10 receipt
     // verifier. Both root manifests have the same dependency graph/lockfile.
     manifest.push_str(&format!(

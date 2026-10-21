@@ -2450,6 +2450,45 @@ fn incremental_runtime_change_invalidates_native_code_without_changing_generated
     assert_eq!(run(&old), "41");
 }
 
+#[cfg(unix)]
+#[test]
+fn incremental_runtime_paths_with_newlines_and_quotes_use_one_line_root_manifests() {
+    let f = Fixture::new();
+    for name in ["runtime\nroot", "runtime\\\"'root", "runtime\u{7f}root"] {
+        f.write(
+            &format!("{name}/runtime/Cargo.toml"),
+            "[package]\nname='nagi-runtime'\nversion='0.1.0'\nedition='2021'\n[workspace]\n",
+        );
+        f.write(&format!("{name}/runtime/src/lib.rs"), "");
+        for repeat in [false, true] {
+            let mut c = incremental(&f, "build", "main.nagi", "out");
+            c.env("NAGI_ROOT", f.0.join(name));
+            let output = bounded_output(c);
+            let binary = native(&output);
+            assert_eq!(run(&binary), "old");
+            assert_eq!(stats(&output)["generated_body"]["cargo_fresh"], repeat);
+            verify_receipt(&binary);
+            for root in [f.0.join("out"), binary.parent().unwrap().to_owned()] {
+                let text = fs::read_to_string(root.join("Cargo.toml")).unwrap();
+                assert!(
+                    !text.contains("\"\"\"") && !text.contains("'''"),
+                    "root manifest must use only one-line values: {text}"
+                );
+                let parsed: toml::Value = toml::from_str(&text).unwrap();
+                let runtime = root.join(
+                    parsed["dependencies"]["nagi-runtime"]["path"]
+                        .as_str()
+                        .unwrap(),
+                );
+                assert_eq!(
+                    fs::canonicalize(runtime).unwrap(),
+                    fs::canonicalize(f.0.join(name).join("runtime")).unwrap()
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn incremental_cache_corruption_is_not_repaired_or_published() {
     let f = Fixture::new();
