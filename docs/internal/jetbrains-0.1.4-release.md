@@ -16,4 +16,6 @@ GitHub Releaseの予定tagは`jetbrains-v0.1.4`、assetはIDEA/PyCharm共通`nag
 
 ## 維持する制約
 
+利用者から、Windows PyCharmで標準Runボタン／Shift+F10の実行時にRunコンソールだけが緑一色になり、タブを閉じると回復するとの追加報告がある。hoverの受入とは別の未解決表示問題として追跡する。標準Runは`RunContentBuilder.showRunContent(contentToReuse)`、旧Nagi actionは`RunContentExecutor`を使う。タブ再利用・ANSI・IDE描画のどれが原因かは未確定で、設定を強制変更したり原因解決と報告したりしない。Nagi本体0.2.1の公開gateとは分ける。
+
 公開Nagi 0.2.0と連携する。新しいbare module import文法は公開0.2.0にはなく、相対path文字列の既存importを使用する。署名factsがないbuiltin `print`の説明は生成しない。IDEのhover設定、trusted project、現在snapshot、有限待機と取消を維持する。Runのrelease profileと初回Rustビルド時間は今回変更しない。
