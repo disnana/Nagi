@@ -1,0 +1,23 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "nagic",
+    "--test",
+    "frontend_contracts"
+  ],
+  "compiler_scope": "P0 compiler in both fixture before/after",
+  "before_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+  "external_native_target": null,
+  "started_utc": "2026-10-22T07:18:14Z",
+  "free_workspace_before_bytes": 5149839360,
+  "free_tmp_before_bytes": 8849027072,
+  "exit_code": 0,
+  "elapsed_s": 6.001279785996303,
+  "free_workspace_after_bytes": 5143281664,
+  "free_tmp_after_bytes": 8849027072,
+  "after_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+  "compiler_bytes_unchanged": true
+}

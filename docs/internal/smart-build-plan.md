@@ -1,5 +1,9 @@
 # Secure by Designとアプリ開発基盤: 0.2.0調査と第1差分
 
+2026-10-22の0.2.1準備は[ビルド安定性の作業記録](release-0.2.1-build-stability.md)と
+[計測](../../benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md)を参照。
+以下の第1～3差分の実装済み・未実装記述は、それぞれの時点の記録である。
+
 対象base: `2c703b89645b164f586a926e473d08395be65c90`（公開0.2.0後のmain）。公開releaseを変更・再発行しない。現物のコード、契約、CIを照合した。以下は全repositoryの脆弱性監査完了宣言ではない。
 
 ## 現物の構成と制約

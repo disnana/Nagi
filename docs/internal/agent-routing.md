@@ -102,3 +102,9 @@ base `0e9a575`、core `39dc51d`。Sol 6.1 Highで実装前の整合性・Cargo�
 親を含め最大3体、子spawnと同じfileの同時編集なし。同model/effortの子は順番に動かし、実装担当とは別のSol 6.1 Highに必要検証後の最終auditを渡す。native/workspace/配布/CIとauditは別証拠である。役割ごとの実model時間・使用量・費用・service-tier設定interfaceは不明。報告した7%前後のbuild差はmodel速度やCI費用の差ではない。
 
 2026-10-22 Tokio #8692対応では、親がupstream PR/release・tracked locks・生成Cargo境界を調査し、独立Sol 6.1 Highのread-only事前調査がruntime最低版/standalone fixture整合と必須failure casesを確認した。実装はmanifest/lockと日英文書に限定し、cache codeや履歴benchmarkを変えない。focused runtime862成功/計測1ignored、生成appのfresh/1.54.0/1.53.1 lock更新と旧exe保持を実行した。実装後の別のfresh Sol 6.1 High最終監査とexact-head CIはPRで追跡する。model時間/使用量/料金は未計測。ローカルSDK cache削除は初回自動reviewが拒否した後、ユーザーの明示許可により前taskで取得した再download可能なIDE SDK約2.9GBだけを削除し、ZIP/raw logとNagi app cacheは保持した。
+
+## 2026-10-22: 0.2.1の重複処理と計測基盤
+
+base `e2d7280`。Sol 6.1 Highの事前調査でparser token再利用、既存unitsの境界と将来のasync段階案を確認し、親がparser/sourceと回帰・実計測を担当した。CI担当Luna Maxの再開はcapacityエラーで実行できず、同じ証拠と限定file範囲を既存High担当へ渡した。モデル品質の失敗とは扱わず、同じ探索は繰り返さない。HighがCIの未使用release build除去・fixture cache共有・exact inverse検査を実装し、その後に独立fileの8ケースmatrix harnessとpure safety testsを担当した。親を含め最大3体、子spawnと同じfileの並行編集はなし。実行後の最終auditは実装者と別のfresh Highへ分離する。
+
+全workspace検査の初回はsandboxがsocket bindを拒否したため、source/期限/assertを変えずnetwork許可を付けて成功した。670.09秒はvalidationの実測で、before/after速度差やmodel速度ではない。compiler比較では別checkout間のCargo target共有で同じbinaryが残る観測を除外し、candidateを再compileしてSHAを確認した。原因未確定の環境・cache観測をNagi CASの脆弱性やmodel不良と断定しない。ユーザーの追加明示許可に基づき、区切りで両filesystemの容量確認と専有一時targetの整理を行い、source本体・未commit差分・raw log・比較CLI・旧exeを保持した。実model時間・使用量・料金・service tier設定は未観測。実行結果と独立audit/CIは[記録](../../benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md)とPRへ分離する。

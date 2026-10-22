@@ -1,0 +1,30 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "nagic",
+    "--test",
+    "frontend_contracts"
+  ],
+  "compiler_scope": "same P0 CLI as fixture before/warm-after",
+  "before_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+  "external_native_target": "/tmp/nagi-frontend-shared-cold-ei_cm2h2/target",
+  "owned_directory": "/tmp/nagi-frontend-shared-cold-ei_cm2h2",
+  "target_initially_absent": true,
+  "cache_conditions": "fresh shared target; warm registry and OS caches; prior baseline used four fresh fixture-local targets",
+  "started_utc": "2026-10-22T07:20:05Z",
+  "free_workspace_before_bytes": 5141827584,
+  "free_tmp_before_bytes": 8849027072,
+  "exit_code": 0,
+  "elapsed_s": 78.02496883399726,
+  "max_child_rss_kib": 715048,
+  "after_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+  "compiler_bytes_unchanged": true,
+  "target_bytes": 498368938,
+  "free_tmp_before_cleanup_bytes": 8369864704,
+  "owned_target_cleanup_complete": true,
+  "free_tmp_after_bytes": 8849027072,
+  "free_workspace_after_bytes": 5141819392
+}
