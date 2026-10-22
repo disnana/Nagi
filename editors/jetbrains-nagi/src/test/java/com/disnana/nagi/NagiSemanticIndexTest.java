@@ -64,4 +64,37 @@ public final class NagiSemanticIndexTest {
         assertTrue(index.colors(FILE).stream().anyMatch(c -> c.location().equals(at(5, 12, 1))
                 && c.attributes() == DefaultLanguageHighlighterColors.INSTANCE_FIELD));
     }
+
+    @Test public void documentationIncludesDeclarationsClassesAndVirtualStandardTargets() {
+        var point = new NagiAssistProtocol.Definition("Point", "class", at(1, 7, 5), "class Point\n    x: i64",
+                List.of(), null, false, List.of(new NagiAssistProtocol.Parameter("x", "i64")));
+        var standard = new NagiAssistProtocol.Definition("ready", "function",
+                new NagiAssistProtocol.Location("stdlib:async", 1, 1, 5), "def ready() -> unit", List.of());
+        var index = new NagiSemanticIndex(facts("none", List.of(point, standard), List.of(), List.of(
+                new NagiAssistProtocol.Reference(at(4, 9, 5), point.location()),
+                new NagiAssistProtocol.Reference(at(5, 9, 5), standard.location()))));
+        assertEquals(point, index.definition(FILE, 1, 7, 5));
+        assertEquals(point, index.definition(FILE, 4, 9, 5));
+        assertEquals(standard, index.definition(FILE, 5, 9, 5));
+        assertNull(index.definition(FILE, 4, 9, 4));
+        assertNull("class fields are not function parameters", index.function(FILE, 4, 9, 5));
+    }
+
+    @Test public void conflictingOrUnresolvedReferencesFailClosedRegardlessOfOrder() {
+        var a = new NagiAssistProtocol.Definition("same", "function", at(1, 5, 4), "def same() -> i64", List.of());
+        var b = new NagiAssistProtocol.Definition("same", "function", at(2, 5, 4), "def same() -> str", List.of());
+        var first = new NagiAssistProtocol.Reference(at(4, 5, 4), a.location());
+        var second = new NagiAssistProtocol.Reference(at(4, 5, 4), b.location());
+        var unresolved = new NagiAssistProtocol.Reference(at(4, 5, 4), at(8, 5, 4));
+        for (var references : List.of(List.of(first, second), List.of(second, first),
+                List.of(first, unresolved), List.of(unresolved, first))) {
+            var index = new NagiSemanticIndex(facts("none", List.of(a, b), List.of(), references));
+            assertNull(index.definition(FILE, 4, 5, 4));
+            assertNull(index.function(FILE, 4, 5, 4));
+            assertEquals(a, index.definition(FILE, 1, 5, 4));
+        }
+        var collision = new NagiSemanticIndex(facts("none", List.of(a, b), List.of(),
+                List.of(new NagiAssistProtocol.Reference(a.location(), b.location()))));
+        assertNull(collision.definition(FILE, 1, 5, 4));
+    }
 }

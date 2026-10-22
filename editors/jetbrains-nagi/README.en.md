@@ -10,6 +10,14 @@ The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release
 
 The 0.2.1 compiler/plugin candidates add neighboring-file `import models` and `from models import Item`, import-statement completion, and original-source navigation. Published 0.2.0 and plugin 0.1.3 do not include this change. See the [editor guide](../../docs/en/editor.md#import-assistance-in-development) for candidate scope, background updates, external notification latency, and pending GUI verification.
 
+## In development: hover and Quick Documentation
+
+The plugin candidate shows compiler-provided function signatures, parameters and return types, and class fields through mouse-hover documentation and Quick Documentation. Class construction uses named field arguments; an empty compiler parameter list is not presented as a zero-argument constructor. Parameter Info also shows a return type when the compiler supplies it.
+
+Diagnostic hover text presents known CLI framing and token names more readably while keeping the original diagnostic description. Unknown text, notes and hints remain available. HTML and entity-like text are displayed literally, and meaningful type syntax such as `list[str?]` is preserved.
+
+Documentation requires a trusted project, a matching assistance compiler and a current source snapshot. The first request may only start background analysis: hover again or invoke Quick Documentation after warmup. Unsaved edits or dependency/compiler changes invalidate the old result. Missing compiler facts produce no inferred types or documentation. This is partial editor analysis, not a full build check. These changes are unreleased; GUI acceptance is tracked separately from headless tests. See the [design and validation boundaries](../../docs/internal/jetbrains-documentation-plan.md).
+
 ## Features in 0.1.2
 
 - Syntax highlighting for High (`.nagi`) and Low (`.low`).

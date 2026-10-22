@@ -31,6 +31,14 @@ Highでは、自動字下げの後、空行で続けてEnterを押すと1段ず�
 
 Pythonプラグインの追加インストールは不要です。これはPyCharm Pythonとの完全同等性を示すものではありません。調査した補助機能と今後の適用計画は[内部設計資料](../../docs/internal/jetbrains-python-editing-plan.md)に整理しています。全体の自動整形・Rename・自動importは今回の追加に含まれません。
 
+## 開発中: hoverとQuick Documentation
+
+plugin候補版は、マウスhoverの説明とQuick Documentationで、compilerが提供した関数signature・引数・戻り値、classのfieldを表示します。class構築はfieldを名前付き指定する形式です。compilerの空parametersをゼロ引数constructorとは表示しません。引数情報にも、compilerが提供した場合だけ戻り値を表示します。
+
+診断hoverでは既知のCLI装飾とtoken名を読みやすく表示し、元の診断descriptionは保持します。未知の文面・notes・hintsも残します。HTMLやentityに見える文字列は文字として表示し、`list[str?]`など意味のある型構文は削りません。
+
+信頼されたproject・対応するassist compiler・現在のsource snapshotが必要です。初回は背景解析の開始だけになる場合があり、warmup後に再hoverまたはQuick Documentationを再実行してください。未保存の編集・依存・compiler設定変更で古い結果は失効します。compiler情報がない場合に型や説明文を推測しません。部分的なeditor解析であり、完全なbuild検査ではありません。未リリースの変更で、実GUIの受入確認はheadless testと分けて記録します。[設計と検証範囲](../../docs/internal/jetbrains-documentation-plan.md)を参照してください。
+
 ## 0.1.3
 
 この節は0.1.3の機能と制約です。0.1.2とは区別してください。GitHub Releasesに掲載されたplugin ZIPか、Marketplaceで提供される対応版をインストールしてください。GitHubとMarketplaceの公開は別で、CI検証artifactは正式配布物ではありません。

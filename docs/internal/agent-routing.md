@@ -111,3 +111,10 @@ Enter補助の独立Sol 6.1 High監査で、SDK `DocumentEx.getModificationSeque
 修正後は実compiler連携を含む全188件/失敗・skip 0とZIP生成が55秒で成功し、descriptor/hash検証を通した。これはwarm SDK条件の実行時間で、変更前比の高速化は主張しない。
 
 2026-10-22 Tokio #8692対応では、親がupstream PR/release・tracked locks・生成Cargo境界を調査し、独立Sol 6.1 Highのread-only事前調査がruntime最低版/standalone fixture整合と必須failure casesを確認した。実装はmanifest/lockと日英文書に限定し、cache codeや履歴benchmarkを変えない。focused runtime862成功/計測1ignored、生成appのfresh/1.54.0/1.53.1 lock更新と旧exe保持を実行した。実装後の別のfresh Sol 6.1 High最終監査とexact-head CIはPRで追跡する。model時間/使用量/料金は未計測。ローカルSDK cache削除は初回自動reviewが拒否した後、ユーザーの明示許可により前taskで取得した再download可能なIDE SDK約2.9GBだけを削除し、ZIP/raw logとNagi app cacheは保持した。
+
+
+## 2026-10-22: JetBrains documentationの独立差分
+
+base `765f0b0`。Sol 6.1 High担当がread-onlyでhover/diagnostic/compiler JSONとsnapshot境界を調査し、親の設計採用後、専用worktreeでplugin実装・意味のあるnegative/実compiler/JVM表示testsを担当した。compiler/CIは変更せず、子の追加spawnなし。親はSDK bootstrapと別PRのQA・後続PR操作を担当し、Gradleは同じcacheを使うため単独実行した。必要な検証後の独立最終auditは別担当へ渡す。
+
+全214件と追加HTML renderer1件を確認し、原文保持・HTML表示・exact location接続を実fixtureで検証した。SDK準備中に編集開始したbootstrapは厳密なmain baselineと数えない。packagingのread-only data pathとVerifierのread-only home/remote接続失敗をsource不具合と分け、原ログを保持して専有設定だけを修正する。Verifier/他IDE CI/実GUIの未完gateはPRに残す。[詳細記録](jetbrains-documentation-plan.md)。モデル別時間・使用量・料金・service-tierは未計測で、テスト時間をmodel速度の比較には使わない。

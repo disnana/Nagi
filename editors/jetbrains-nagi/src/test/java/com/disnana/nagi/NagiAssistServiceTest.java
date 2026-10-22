@@ -942,6 +942,84 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         assertNull("an imported target overlay edit invalidates its completion response", service.fresh(main, editor));
     }
 
+    public void testRegisteredDocumentationUsesHoveredOffsetAndRejectsShadowedOrStaleFacts() throws Exception {
+        PsiFile file = source("documentation.nagi", "# 😀\r\nclass Point:\r\n    value: i64\r\n"
+                + "def value(x: i64) -> i64:\r\n    return x\r\ndef main():\r\n"
+                + "    print(value(1))\r\n    value = 2\r\n    print(value)\r\n    ready()\r\n");
+        String path = file.getVirtualFile().getPath();
+        var point = new NagiAssistProtocol.Definition("Point", "class", new NagiAssistProtocol.Location(path, 2, 7, 5),
+                "class Point\n    value: i64", List.of(), null, false,
+                List.of(new NagiAssistProtocol.Parameter("value", "i64")));
+        var function = new NagiAssistProtocol.Definition("value", "function", new NagiAssistProtocol.Location(path, 4, 5, 5),
+                "def value(x: i64) -> i64", List.of(new NagiAssistProtocol.Parameter("x", "i64")), "i64", false, List.of());
+        var standard = new NagiAssistProtocol.Definition("ready", "function", new NagiAssistProtocol.Location("stdlib:async", 1, 1, 5),
+                "async def ready() -> unit", List.of(), "unit", true, List.of());
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            assertFalse("documentation analysis never runs on the EDT", javax.swing.SwingUtilities.isEventDispatchThread());
+            calls.incrementAndGet();
+            return new NagiAssistProtocol.Response("none", true, true, false, "names", List.of(), List.of(), List.of(
+                    new NagiAssistProtocol.Reference(new NagiAssistProtocol.Location(path, 7, 11, 5), function.location()),
+                    new NagiAssistProtocol.Reference(new NagiAssistProtocol.Location(path, 9, 11, 5), new NagiAssistProtocol.Location(path, 8, 5, 5)),
+                    new NagiAssistProtocol.Reference(new NagiAssistProtocol.Location(path, 10, 5, 5), standard.location())),
+                    List.of(path), List.of(point, function, standard), List.of());
+        });
+        installService();
+        var provider = com.intellij.codeInsight.documentation.DocumentationManager.getProviderFromElement(file);
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(0);
+        int offset = file.getText().indexOf("value(1)");
+        var hovered = provider.getCustomDocumentationElement(editor, file, file.findElementAt(0), offset + 2);
+        assertNotNull("the registered provider must use the hovered token, not the caret", hovered);
+        assertEquals("value", hovered.getText());
+        assertNull("cold documentation only requests worker warmup", provider.generateDoc(hovered, hovered));
+        waitUntil(() -> service.fresh(file) != null);
+        String html = provider.generateDoc(hovered, hovered);
+        assertNotNull(html);
+        assertTrue(html.contains("Returns:</b> <code>i64"));
+        assertEquals(1, calls.get());
+        var declaration = file.findElementAt(file.getText().indexOf("def value") + 4);
+        assertNotNull(provider.generateDoc(declaration, declaration));
+        var className = file.findElementAt(file.getText().indexOf("Point"));
+        assertTrue(provider.generateDoc(className, className).contains("Fields (use named arguments"));
+        var shadow = file.findElementAt(file.getText().lastIndexOf("print(value)") + 6);
+        assertNull("same spelling is not a semantic target", provider.generateDoc(shadow, shadow));
+        var virtual = file.findElementAt(file.getText().indexOf("ready()"));
+        assertTrue("virtual stdlib documentation needs no navigable source PSI", provider.generateDoc(virtual, virtual).contains("Async function"));
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> editor.getDocument().insertString(0, "# changed\n"));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        var changed = file.findElementAt(file.getText().indexOf("value(1)"));
+        assertNull("an edited snapshot cannot display an old return type", provider.generateDoc(changed, changed));
+        TrustedProjects.setProjectTrusted(getProject(), false);
+        assertNull(provider.generateDoc(changed, changed));
+    }
+
+    public void testDiagnosticDescriptionsKeepOriginalTextWhileAllTooltipRangesAreEscaped() throws Exception {
+        PsiFile file = source("tooltips.nagi", "def main():\n    print(1)\n\n");
+        String path = file.getVirtualFile().getPath();
+        String raw = "error: line 2: bad <tag>&lt; (found Id(\"value\"))\n --> " + path + ":2\n 2 |     print(1)\nhint: keep";
+        var diagnostics = List.of(
+                new NagiAssistProtocol.Diagnostic(raw, path, 2, new NagiAssistProtocol.Location(path, 2, 5, 5)),
+                new NagiAssistProtocol.Diagnostic(raw + " range-zero", path, 2, new NagiAssistProtocol.Location(path, 2, 5, 0)),
+                new NagiAssistProtocol.Diagnostic(raw + " end", path, 2, new NagiAssistProtocol.Location(path, 2, 13, 0)),
+                new NagiAssistProtocol.Diagnostic(raw + " line", path, 2, null),
+                new NagiAssistProtocol.Diagnostic("empty <tag>&lt;", path, 3, null),
+                new NagiAssistProtocol.Diagnostic("file <tag>&lt;", path, null, null),
+                new NagiAssistProtocol.Diagnostic("unknown origin <tag>&lt;", "stdlib:missing", null, null));
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) ->
+                new NagiAssistProtocol.Response("none", true, false, false, "names", diagnostics, List.of(), List.of(), List.of(path)));
+        installService();
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        var highlighted = myFixture.doHighlighting();
+        for (var diagnostic : diagnostics) {
+            var info = highlighted.stream().filter(value -> diagnostic.message().equals(value.getDescription())).findFirst();
+            assertTrue("original diagnostic description must survive every annotation range: " + diagnostic.message(), info.isPresent());
+            assertTrue(info.get().getToolTip().contains("&lt;tag&gt;&amp;lt;"));
+            assertFalse(info.get().getToolTip().contains("<tag>"));
+        }
+    }
+
     private void installService() {
         serviceReplacement = com.intellij.openapi.util.Disposer.newDisposable("Nagi import assistance service replacement");
         ServiceContainerUtil.replaceService(getProject(), NagiAssistService.class, service, serviceReplacement);

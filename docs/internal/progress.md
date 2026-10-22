@@ -1,5 +1,11 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-22: JetBrainsのhover / Quick Documentation
+
+main `765f0b0`からcompiler/CIと独立したplugin差分を実装した。既存hoverのCLI診断装飾とparser token Debug到達を調査し、診断原文とdescriptionを保持したままtooltipをescapeして整形する。関数・classの説明はcompilerの正確な位置graphと既存JSONの引数・戻り値・async・fieldだけを使い、同名local・衝突・cold/stale/untrustedでは推測表示しない。coldは背景解析後の再hover/再実行が必要。[設計・表示範囲・検証記録](jetbrains-documentation-plan.md)を参照。
+
+ローカルIC251で全214件failure/error/skip 0、追加HTML renderer1件も成功し合計215件を検証。High/Low・import alias・class/function/asyncは実compiler JSONから登録Providerまで確認した。最初のpackagingはread-onlyなIDE共通data pathで失敗し、HOMEを維持した専有tmp/XDG再実行は成功。ZIPのdescriptorとhashも確認した。Plugin Verifierはhome設定の解決後、remote依存のConnection refusedでproxy引継ぎ調査中。Verifier・他IDE/版のCI・独立最終audit・実GUI受入は未完で、公開成功と混同しない。版更新・release・Marketplace公開は行っていない。
+
 ## 2026-10-22 JST: PyCharm編集補助の調査とNagi入力補正
 
 main `5d3e58e`を基準にPython実装・登録を固定commitで調査し、[対応表と実装順](jetbrains-python-editing-plan.md)を作成した。Highの手動dedentを維持し、Nagi独自の連続Enter退出、else/caseのコロン補正、High/Lowの独立した閉じ括弧の整列を追加した。上限付きの既知文脈だけでleading whitespaceを変更し、Python専用構文やfull formatter/renameを推測実装しない。#141の名前付きimportは別作業として維持する。実IDE操作とcompiler連携を含む188件/0skip、Java 21、候補ZIP生成・descriptor/hash検証を確認した。[raw/観測条件/RED-GREEN](../../editors/jetbrains-nagi/benchmarks/python-editing-2026-10-22/README.md)。独立監査・exact-headのIDEA/PyCharm stable/EAP CIはPR本文で追跡し、ローカル成功やPython source比較をGUI/IME受入・完全同等性の証拠にしない。

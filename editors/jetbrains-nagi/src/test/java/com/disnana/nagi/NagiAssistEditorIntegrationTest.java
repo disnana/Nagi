@@ -158,6 +158,15 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
         var aliasUseReference = file.findReferenceAt(aliasUse);
         assertNotNull("alias use has compiler navigation facts", aliasUseReference);
         assertEquals("helper.nagi", aliasUseReference.resolve().getContainingFile().getName());
+        var documentation = com.intellij.codeInsight.documentation.DocumentationManager.getProviderFromElement(file);
+        for (int offset : new int[]{originalName, alias, aliasUse, text.indexOf("make()", moduleUse)}) {
+            var hovered = documentation.getCustomDocumentationElement(myFixture.getEditor(), file, file.findElementAt(0), offset);
+            assertNotNull(hovered);
+            String html = documentation.generateDoc(hovered, hovered);
+            assertNotNull("named imports must connect exact compiler targets to documentation", html);
+            assertTrue(html.contains("def make() -&gt; i64"));
+            assertTrue(html.contains("Returns:</b> <code>i64"));
+        }
     }
 
     public void testImportSourceAndFromNameCompletionUseCompilerContextAndSuppressCallParentheses() throws Exception {

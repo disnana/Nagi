@@ -373,6 +373,22 @@ public final class NagiAssistService implements Disposable {
                 start - document.getLineStartOffset(line) + 1, end - start);
     }
 
+    /** Documentation uses exact compiler spans, including declaration names and virtual stdlib targets. */
+    public NagiAssistProtocol.Definition documentedDefinition(PsiFile file, PsiElement element) {
+        CachedResponse response = fresh(file);
+        if (response == null || element == null || !element.isValid() || element.getContainingFile() != file) return null;
+        Document document = PsiDocumentManager.getInstance(project).getDocument(file);
+        if (document == null) return null;
+        int start = element.getTextRange().getStartOffset();
+        int end = element.getTextRange().getEndOffset();
+        if (start < 0 || end <= start || end > document.getTextLength()) return null;
+        int line = document.getLineNumber(start);
+        if (end > document.getLineEndOffset(line)) return null;
+        String path = canonicalPathFor(response.snapshot, file.getVirtualFile());
+        return response.semanticIndex.definition(path, line + 1,
+                start - document.getLineStartOffset(line) + 1, end - start);
+    }
+
     public List<NagiSemanticIndex.Color> semanticColors(PsiFile file, CachedResponse response) {
         if (!isCurrent(file, response)) return List.of();
         return response.semanticIndex.colors(canonicalPathFor(response.snapshot, file.getVirtualFile()));

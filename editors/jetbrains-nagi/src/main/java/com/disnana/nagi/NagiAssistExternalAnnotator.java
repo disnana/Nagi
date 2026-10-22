@@ -85,11 +85,13 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             if (!result.service().diagnosticTargetsFile(result.response(), file.getVirtualFile(), diagnostic.file())) continue;
             String message = diagnostic.message();
             if (message == null || message.isBlank() || message.length() > 4096) continue;
+            String tooltip = NagiDocumentation.diagnosticTooltip(diagnostic);
             // Unloaded/missing modules and virtual stdlib origins retain the
             // compiler's message, but never acquire a guessed local range.
             if (diagnostic.file() != null && !result.service().diagnosticOriginMatchesFile(
                     result.response(), file.getVirtualFile(), diagnostic.file())) {
-                holder.newAnnotation(HighlightSeverity.ERROR, message).fileLevel().create();
+                holder.newAnnotation(HighlightSeverity.ERROR, message)
+                        .tooltip(tooltip).fileLevel().create();
                 continue;
             }
             NagiAssistProtocol.Location point = diagnostic.range();
@@ -100,7 +102,8 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
                 if (splitsSurrogatePair(document, start) || splitsSurrogatePair(document, end)) continue;
                 int line = point.line() - 1;
                 if (line < 0 || line >= document.getLineCount() || end > document.getLineEndOffset(line)) continue;
-                var annotation = holder.newAnnotation(HighlightSeverity.ERROR, message);
+                var annotation = holder.newAnnotation(HighlightSeverity.ERROR, message)
+                        .tooltip(tooltip);
                 if (point.length() == 0 && start == document.getLineEndOffset(line)) {
                     annotation.afterEndOfLine().create();
                 } else {
@@ -110,14 +113,16 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             }
             Integer line = diagnostic.line();
             if (line == null) {
-                holder.newAnnotation(HighlightSeverity.ERROR, message).fileLevel().create();
+                holder.newAnnotation(HighlightSeverity.ERROR, message)
+                        .tooltip(tooltip).fileLevel().create();
                 continue;
             }
             int lineIndex = line - 1;
             if (lineIndex < 0 || lineIndex >= document.getLineCount()) continue;
             int start = document.getLineStartOffset(lineIndex);
             int end = document.getLineEndOffset(lineIndex);
-            var annotation = holder.newAnnotation(HighlightSeverity.ERROR, message);
+            var annotation = holder.newAnnotation(HighlightSeverity.ERROR, message)
+                    .tooltip(tooltip);
             if (start == end) annotation.afterEndOfLine().create();
             else annotation.range(new TextRange(start, end)).create();
         }

@@ -18,6 +18,7 @@ final class NagiSemanticIndex {
     }
     record Color(NagiAssistProtocol.Location location, TextAttributesKey attributes) {}
     private final Map<Key, NagiAssistProtocol.Definition> functions;
+    private final Map<Key, NagiAssistProtocol.Definition> documented;
     private final Map<String, List<Color>> colors;
 
     NagiSemanticIndex(NagiAssistProtocol.Response response) {
@@ -26,6 +27,7 @@ final class NagiSemanticIndex {
         // completion context exists (for example, between call arguments).
         if (!response.frontendAccepted() && !response.semanticStatus().equals("editor-partial")) {
             functions = Map.of();
+            documented = Map.of();
             colors = Map.of();
             return;
         }
@@ -60,11 +62,29 @@ final class NagiSemanticIndex {
             classified.put(Key.of(role.location()), new Color(role.location(), attributes));
         }
         for (Key key : ambiguous) { definitions.remove(key); classified.remove(key); }
+        Map<Key, Key> targets = new HashMap<>();
+        Set<Key> conflictingReferences = new HashSet<>();
+        for (var reference : response.references()) {
+            Key location = Key.of(reference.location());
+            Key target = Key.of(reference.target());
+            Key previous = targets.putIfAbsent(location, target);
+            if (previous != null && !previous.equals(target)) conflictingReferences.add(location);
+        }
+        Map<Key, NagiAssistProtocol.Definition> descriptions = new HashMap<>(definitions);
         Map<Key, NagiAssistProtocol.Definition> callable = new HashMap<>();
         for (var reference : response.references()) {
+            Key location = Key.of(reference.location());
             Key target = Key.of(reference.target());
             var definition = definitions.get(target);
-            if (definition != null && definition.kind().equals("function")) callable.put(Key.of(reference.location()), definition);
+            if (definition == null || conflictingReferences.contains(location)) {
+                // An unresolved/conflicting reference must not inherit a
+                // coincident declaration's presentation either.
+                conflictingReferences.add(location);
+            } else {
+                var previous = descriptions.putIfAbsent(location, definition);
+                if (previous != null && !previous.equals(definition)) conflictingReferences.add(location);
+                if (definition.kind().equals("function")) callable.put(location, definition);
+            }
             Color color = classified.get(target);
             if (color != null) {
                 TextAttributesKey attributes = color.attributes();
@@ -73,6 +93,8 @@ final class NagiSemanticIndex {
                 classified.put(Key.of(reference.location()), new Color(reference.location(), attributes));
             }
         }
+        for (Key key : conflictingReferences) { descriptions.remove(key); callable.remove(key); }
+        for (Key key : ambiguous) { descriptions.remove(key); callable.remove(key); }
         Map<String, List<Color>> byFile = new HashMap<>();
         for (Color color : classified.values()) {
             if (color.location().length() > 0 && !color.location().file().startsWith("stdlib:")) {
@@ -83,10 +105,14 @@ final class NagiSemanticIndex {
         byFile.forEach((path, values) -> frozen.put(path, List.copyOf(values)));
         colors = Map.copyOf(frozen);
         functions = Map.copyOf(callable);
+        documented = Map.copyOf(descriptions);
     }
 
     NagiAssistProtocol.Definition function(String file, int line, int column, int length) {
         return functions.get(new Key(NagiAssistService.normalizePath(file), line, column, length));
+    }
+    NagiAssistProtocol.Definition definition(String file, int line, int column, int length) {
+        return documented.get(new Key(NagiAssistService.normalizePath(file), line, column, length));
     }
     List<Color> colors(String file) { return colors.getOrDefault(NagiAssistService.normalizePath(file), List.of()); }
 }

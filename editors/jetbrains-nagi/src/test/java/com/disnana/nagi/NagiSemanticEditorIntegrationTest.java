@@ -154,6 +154,26 @@ public final class NagiSemanticEditorIntegrationTest extends BasePlatformTestCas
             assertEquals("add", definition.name());
             assertEquals("right", definition.parameters().get(1).name());
             assertEquals("i64", definition.parameters().get(1).type());
+            assertEquals("i64", definition.returnType());
+            var documentation = com.intellij.codeInsight.documentation.DocumentationManager.getProviderFromElement(file);
+            // Exercise registered documentation dispatch at an offset different
+            // from the parameter-info caret, using real compiler JSON facts.
+            var hovered = documentation.getCustomDocumentationElement(editor, file, file.findElementAt(second), calleeOffset + 1);
+            assertNotNull(hovered);
+            String functionDoc = documentation.generateDoc(hovered, hovered);
+            assertNotNull(functionDoc);
+            assertTrue(functionDoc.contains("left: i64"));
+            assertTrue(functionDoc.contains("Returns:</b> <code>i64"));
+            int pointUse = text.indexOf("Point(value=");
+            var pointElement = file.findElementAt(pointUse);
+            var pointDefinition = service.documentedDefinition(file, pointElement);
+            assertNotNull(pointDefinition);
+            assertEquals(java.util.List.of(new NagiAssistProtocol.Parameter("value", "i64")), pointDefinition.fields());
+            String classDoc = documentation.generateDoc(pointElement, pointElement);
+            assertNotNull(classDoc);
+            assertTrue(classDoc.contains("Fields (use named arguments"));
+            assertTrue(classDoc.contains("value: i64"));
+            assertFalse(classDoc.contains("Point()"));
             var colors = service.semanticColors(file, response);
             assertTrue(colors.stream().anyMatch(c -> c.attributes() == DefaultLanguageHighlighterColors.PARAMETER));
             assertTrue(colors.stream().anyMatch(c -> c.attributes() == DefaultLanguageHighlighterColors.INSTANCE_FIELD));
@@ -181,6 +201,35 @@ public final class NagiSemanticEditorIntegrationTest extends BasePlatformTestCas
             PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
             assertNull("old coordinates cannot survive an edit", service.functionDefinition(file, file.findElementAt(calleeOffset + 9)));
             assertTrue(service.semanticColors(file, response).isEmpty());
+        }
+    }
+
+    public void testHighLowAsyncDocumentationUsesCompilerReturnAndAsyncFacts() throws Exception {
+        for (boolean low : new boolean[]{false, true}) {
+            String text = low
+                    ? "async fn fetch(value: i64) -> i64 { return value; }\nasync fn main() { print(await fetch(7)); }\n"
+                    : "async def fetch(value: i64) -> i64:\n    return value\nasync def main():\n    print(await fetch(7))\n";
+            Path path = root.resolve(low ? "async.low" : "async.nagi");
+            Files.writeString(path, text);
+            var virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path);
+            assertNotNull(virtualFile);
+            myFixture.configureFromExistingVirtualFile(virtualFile);
+            var file = myFixture.getFile();
+            var service = getProject().getService(NagiAssistService.class);
+            service.requestBaseline(file);
+            waitFor(() -> service.fresh(file) != null);
+            assertTrue(service.fresh(file).response().frontendAccepted());
+            var use = file.findElementAt(text.lastIndexOf("fetch(7)"));
+            var definition = service.documentedDefinition(file, use);
+            assertNotNull(definition);
+            assertTrue(definition.asynchronous());
+            assertEquals("i64", definition.returnType());
+            var documentation = com.intellij.codeInsight.documentation.DocumentationManager.getProviderFromElement(file);
+            String html = documentation.generateDoc(use, use);
+            assertNotNull(html);
+            assertTrue(html.contains("Async function"));
+            assertTrue(html.contains("Returns:</b> <code>i64"));
+            assertTrue(html.contains(low ? "async fn fetch" : "async def fetch"));
         }
     }
 }

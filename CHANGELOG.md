@@ -4,6 +4,8 @@
 
 ### JetBrains editing assistance
 
+- Add compiler-backed hover/Quick Documentation for exact function/class targets, including available arguments, return types and fields. Render diagnostic tooltips with escaped readable framing while preserving original descriptions, unknown details and hints; retain cold/current-snapshot and trusted-project restrictions.
+
 - Preserve manually chosen High indentation on Enter, and add a Nagi-specific consecutive-Enter gesture to leave one block at a time. Keep delimiter continuations, Low brace context, smart-indent settings and undo behavior.
 - Align supported High `else`/`case` headers on colon input and standalone High/Low closing delimiters with their known owner. Use bounded lexical context and leading-whitespace edits; preserve ordinary input when context is unknown.
 - Document the source-based comparison with PyCharm Python editing, applicable improvements and the compiler/formatter work needed for broader support. Do not claim full Python editor parity.

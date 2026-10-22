@@ -34,6 +34,8 @@
         <completion.contributor language="NagiLow" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
         <codeInsight.parameterInfo language="Nagi" implementationClass="com.disnana.nagi.NagiParameterInfoHandler"/>
         <codeInsight.parameterInfo language="NagiLow" implementationClass="com.disnana.nagi.NagiParameterInfoHandler"/>
+        <lang.documentationProvider language="Nagi" implementationClass="com.disnana.nagi.NagiDocumentationProvider"/>
+        <lang.documentationProvider language="NagiLow" implementationClass="com.disnana.nagi.NagiDocumentationProvider"/>
         <psi.referenceContributor implementation="com.disnana.nagi.NagiAssistReferenceContributor"/>
         <externalAnnotator language="Nagi" implementationClass="com.disnana.nagi.NagiAssistExternalAnnotator"/>
         <externalAnnotator language="NagiLow" implementationClass="com.disnana.nagi.NagiAssistExternalAnnotator"/>
