@@ -18,6 +18,8 @@ PREPARING→ABORTED/HANDED_OFFの単一CASでterminal writerを決め、setResul
 
 ## 検証
 
+`f6cb92c`の別High auditは指摘なし。独立focused56件と公開0.2.0 fallback1件も成功した。最新CI `39787558400`ではIDEA/PyCharm stableが成功し、EAP（IC263.7031.23／PC263.7031.30、Java25）は4件の取消型assertで停止した。JDK25の`CompletableFuture.reportGet`が保存したPCEを新しいCancellationExceptionのcauseへ包むためであり、SDK263の`AsyncPromise.nullizeCancelled`にも同じ互換処理がある。Architectの確認を受け、test専用`awaitFailure`で既存PCEを保持し、CEの直接causeがPCEの場合だけ一段取り出す。製品source、4件のPCE assert、root/child終了・cache0、timeoutのExecutionException期待は変えない。修正後EAPでそれらが最後まで実行されることは新HEADの必須gateとする。先行ZIP／audit／stable成功をこの完走確認へ付け替えない。
+
 初回focusedで、incremental optionの説明中にもprofile語があるため対応helpを拒否する欠陥を発見し、独立したoption宣言行へ修正した。取消はSDK PCEがCancellationExceptionであることを保持して検証する。子processを同時にkillすると親がreapする前に孤児化し得るため、worker cleanupで親のreap猶予を設けた。元失敗logを保持。
 
 実行logはrepository外のtracked対象外 `local-only/pr148-dev-run/`。公開0.2.0実binary、正式0.2.1 Linux CI配布候補、fake malformed/oversize/UTF8/timeout/cancel/identity交換、cache上限・再利用・独立同時miss、標準Runの保存/Stop/trust/settings/config/close/dispose/console失敗とhandoffの正負を検証する。最終結果は下記へ記録する。GUI実機、Windowsでの新候補受入と最終HEAD 4 IDE CIは別gate。

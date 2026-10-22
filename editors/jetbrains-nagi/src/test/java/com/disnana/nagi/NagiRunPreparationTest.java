@@ -249,7 +249,11 @@ public class NagiRunPreparationTest extends BasePlatformTestCase {
     private Throwable awaitFailure(CompletableFuture<?> pending) throws Exception {
         try { await(pending); fail("Preparation unexpectedly succeeded"); return null; }
         catch (java.util.concurrent.ExecutionException expected) { return expected.getCause(); }
-        catch (java.util.concurrent.CancellationException expected) { return expected; }
+        catch (java.util.concurrent.CancellationException expected) {
+            // JDK 25 CompletableFuture.get wraps cancellation once; retain the typed cause.
+            if (expected instanceof ProcessCanceledException) return expected;
+            return expected.getCause() instanceof ProcessCanceledException canceled ? canceled : expected;
+        }
     }
     private static String quote(Path path) { return path.toString().replace("'", "'\"'\"'"); }
 }
