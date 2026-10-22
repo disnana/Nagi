@@ -66,7 +66,10 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
         try {
             var plan = NagiCommandPlan.create(values.compilerPath, command, source, workspace, output, SystemInfo.isWindows);
             int timeout = values.checkTimeoutSeconds;
+            var preparation = command.equals("run") ? NagiRunPreparation.getInstance(project) : null;
+            var selection = preparation == null ? null : preparation.select(values.compilerPath, workspace);
             new Task.Backgroundable(project, "Starting Nagi " + command, true) {
+                @Override public boolean isHeadless() { return false; }
                 @Override public void run(@NotNull ProgressIndicator indicator) {
                     if (indicator.isCanceled() || project.isDisposed() || !TrustedProjects.isProjectTrusted(project)) return;
                     try {
@@ -74,12 +77,26 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
                         // The compiler reads ordinary paths, so wait off the EDT before spawning it.
                         flushInputs();
                         if (indicator.isCanceled() || project.isDisposed() || !TrustedProjects.isProjectTrusted(project)) return;
-                        var line = new GeneralCommandLine(plan.executable()).withParameters(plan.arguments())
-                                .withWorkDirectory(plan.directory().toFile()).withCharset(StandardCharsets.UTF_8);
+                        var prepared = preparation == null ? null : preparation.prepare(plan, NagiBuildProfile.DEVELOPMENT,
+                                selection, indicator, () -> !project.isDisposed() && !indicator.isCanceled());
+                        var resolvedPlan = prepared == null ? plan : prepared.plan();
+                        if (preparation != null) {
+                            preparation.checkCurrent(selection);
+                            indicator.checkCanceled();
+                            if (FileDocumentManager.getInstance().getUnsavedDocuments().length != 0)
+                                throw new ExecutionException("Files changed while preparing Nagi Run. Save them and run again.");
+                        }
+                        var line = new GeneralCommandLine(resolvedPlan.executable()).withParameters(resolvedPlan.arguments())
+                                .withWorkDirectory(resolvedPlan.directory().toFile()).withCharset(StandardCharsets.UTF_8);
                         if (command.equals("run")) line.withEnvironment("NAGI_RUN_RETENTION", "latest");
                         var handler = new OSProcessHandler(line);
                         handler.setShouldDestroyProcessRecursively(true);
                         ProcessTerminatedListener.attach(handler);
+                        if (prepared != null && !prepared.notice().isEmpty()) handler.addProcessListener(new ProcessListener() {
+                            @Override public void startNotified(@NotNull ProcessEvent event) {
+                                handler.notifyTextAvailable(prepared.notice(), ProcessOutputTypes.SYSTEM);
+                            }
+                        });
                         if (command.equals("check")) {
                             var deadline = AppExecutorUtil.getAppScheduledExecutorService().schedule(() -> {
                                 if (!handler.isProcessTerminated()) {
@@ -92,7 +109,11 @@ public abstract class NagiCompilerAction extends AnAction implements DumbAware {
                             });
                         }
                         ApplicationManager.getApplication().invokeLater(() -> {
-                            if (project.isDisposed() || indicator.isCanceled()) { stopBeforeConsole(handler); return; }
+                            if (project.isDisposed() || indicator.isCanceled() || !TrustedProjects.isProjectTrusted(project)) { stopBeforeConsole(handler); return; }
+                            if (preparation != null) {
+                                try { preparation.checkCurrent(selection); }
+                                catch (ExecutionException failure) { stopBeforeConsole(handler); return; }
+                            }
                             new RunContentExecutor(project, handler).withTitle("Nagi " + command)
                                     .withFilter(new NagiDiagnosticFilter(project, plan.directory()))
                                     .withStop(handler::destroyProcess, () -> !handler.isProcessTerminated()).run();

@@ -569,3 +569,13 @@ fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inv
 
 
 同cold sourceの最終全243件77秒成功、ZIP21秒成功、IC251 Plugin Verifier Compatible（11秒、deprecated3/experimental12）。source/test/docsを凍結し、別High audit・最新HEADの4IDE CI・実GUI受入を残す。ZIPとログ/実験失敗は作業環境の `local-only/pr148-stability/` に保持する。
+
+
+### 2026-10-22 JetBrains Development Runと受理時content寿命（未リリース）
+
+標準RunへDevelopment既定/Release保存選択を追加し、legacy Nagi: Runも共通worker preparerを使う。Checkと明示Releaseはprobe/新flagなし。semverだけで能力を判断せず、bounded helpと実行体identityに基づく8件cacheを使い、既知公開0.2.0/0.1.11は実際のReleaseをconsoleへ表示してfallbackする。初回同時missは独立probeの所有と取消を保つ。ユーザーRun UI異常の別調査ではSDK262の同期callbackとenvironment破棄をRED再現し、単一terminal CASで受理済みdescriptorを維持、project終了時は一時process fallbackで停止する。ANSI/GPU/reuse無効化は加えない。
+
+全266件83秒成功後の割込みcleanup補強を対象検査し、最終全267件84秒成功（failure/error/skip0）。実公開0.2.0 fallbackと正式CI候補0.2.1のDev/Release/native出力42、warm Dev単発0.301秒/197 Fresh/1 compiledを確認した。cold/warm非対称のため速度比較にはしない。receiptと旧exe bytesを確認し、所有native targetのみ整理。ZIP/Verifierの確定結果、独立最終High audit、最新4IDE CI、Windows GUI受入は別gate。[設計・証拠](jetbrains-dev-run-plan.md)。
+
+
+同sourceのZIP21秒成功、保持ZIPに対するIC251 Verifier10秒Compatible（deprecated3/experimental17）、CI policy160件成功。最終source/test/docsを凍結し、独立High audit・最新HEAD CIと新候補Windows GUI受入へ渡す。rawlog/ZIP/hash/267件XML/native証拠は `local-only/pr148-dev-run/` に保持。

@@ -139,3 +139,9 @@ Session65/SF07 summary37/native-finish20/source guard16/CI policy160件が成功
 
 
 cold最終guard後の全243件77秒・ZIP21秒・IC251 Verifier11秒Compatible（deprecated3/experimental12）を実行し、source/test/docsを凍結。API警告を隠さず最新4IDE CIへ渡し、別Highの独立最終auditと実GUIを未完gateとして維持する。
+
+
+2026-10-22、Sol 6.1 Highが1792138から専有worktreeでJetBrains Development/Release Runを実装。事前read-only designを親が採用し、in-flight共有を省いて各Runの独立bounded probeと完了cacheへ限定した。Luna Medium/親のconsoleログ・SDK262調査で同期callback中のenvironment破棄を絞り、Highが実registered runnerでRED、Architect xhighが単一CAS＋project-only temporary process fallbackを事前確認してGREENにした。全266件83秒後、割込みcleanupの対象回帰18秒を経て最終267件84秒成功。正式CI候補0.2.1のnativeはcold条件非対称を明記し、harness誤期待と正規管理run拒否を製品不具合と区別した。probe実行数・cache再利用・独立同時miss・取消/trust/settings/dispose/identity交換を検証し、native所有targetだけ整理。別High auditは実行完了後、model単体時間・利用量・費用は未測定。子の追加spawnなし、他worktree/本体CLI/CIは変更しない。
+
+
+上記Run候補は最終267件/ZIP21秒/保持ZIPのVerifier10秒Compatible（deprecated3/experimental17）/CI policy160件まで実行。専有native targetは証拠保護後に削除し、全実行終了・source/test/docs凍結後に親へ所有権を返す。別High audit・最新HEAD CI・Windows GUIは未実施gateとして分離する。
