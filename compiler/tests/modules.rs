@@ -80,6 +80,54 @@ fn successful(output: Output) -> String {
 }
 
 #[test]
+fn named_imports_select_only_the_importers_same_language_sibling_and_share_identity() {
+    let f = Fixture::new();
+    f.write("foo.nagi", "def answer() -> i64:\n    return 99\n");
+    f.write(
+        "nested/foo.nagi",
+        "class Thing:\n    value: i64\ndef answer() -> i64:\n    return 42\n",
+    );
+    f.write(
+        "nested/foo.low",
+        "record Thing { value: i64; }\nfn answer() -> i64 { return 43; }\n",
+    );
+    for (entry, text) in [
+        ("nested/main.nagi", "import foo\nimport foo as again\nfrom foo import Thing as Item, answer as run\nimport \"foo.nagi\" as quoted\ndef main():\n    callback = foo.answer\n    item: again.Thing = Item(value=callback())\n    print(quoted.answer() + run() + item.value)\n"),
+        ("nested/main.low", "import foo;\nimport foo as again;\nfrom foo import Thing as Item, answer as run;\nimport \"foo.low\" as quoted;\nfn main() { let callback = foo.answer; let item: again.Thing = Item(value=callback()); print(quoted.answer() + run() + item.value); }\n"),
+    ] {
+        f.write(entry, text);
+        let loaded = f.checked(entry);
+        assert_eq!(loaded.program.classes.len(), 1);
+        assert_eq!(loaded.program.functions.len(), 2);
+        f.write("saved.low", &emit::low(&loaded.program));
+        f.checked("saved.low");
+        successful(f.cli(&f.0, &["check", entry, "--out", "named-out"]));
+    }
+    f.write("nested/wrong.low", "");
+    fs::create_dir_all(f.0.join("nested/directory")).unwrap();
+    for name in ["missing", "wrong", "directory"] {
+        f.write("nested/main.nagi", &format!("import {name}\n"));
+        let error = f.error("nested/main.nagi");
+        assert!(
+            error.contains("main.nagi:1") && error.contains(&format!("{name}.nagi")),
+            "{error}"
+        );
+    }
+    f.write("nested/main.nagi", "import main\n");
+    assert!(f.error("nested/main.nagi").contains("循環import"));
+    f.write("nested/std.nagi", "class Shadow:\n    value: i64\n");
+    for text in [
+        "import std\n",
+        "import std.not_registered as x\n",
+        "from foo import missing\n",
+        "import foo as x\nimport \"../foo.nagi\" as x\n",
+    ] {
+        f.write("nested/main.nagi", text);
+        assert!(f.error("nested/main.nagi").contains("main.nagi"));
+    }
+}
+
+#[test]
 fn aliases_from_imports_and_flat_imports_share_the_canonical_class() {
     let f = Fixture::new();
     f.write(

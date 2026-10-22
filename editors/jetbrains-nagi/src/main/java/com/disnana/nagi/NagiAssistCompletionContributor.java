@@ -11,15 +11,23 @@ import com.intellij.codeInsight.CodeInsightSettings;
 import com.intellij.codeInsight.lookup.AutoCompletionPolicy;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
+import com.intellij.codeInsight.lookup.LookupEvent;
+import com.intellij.codeInsight.lookup.LookupEx;
+import com.intellij.codeInsight.lookup.LookupListener;
+import com.intellij.codeInsight.lookup.LookupManager;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.patterns.PlatformPatterns;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.TokenType;
 import com.intellij.util.ProcessingContext;
+import com.intellij.util.Alarm;
 import org.jetbrains.annotations.NotNull;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Declaration keywords are lexical; names and members come only from current compiler facts. */
 public final class NagiAssistCompletionContributor extends CompletionContributor implements DumbAware {
@@ -48,6 +56,11 @@ public final class NagiAssistCompletionContributor extends CompletionContributor
                     service.requestCompletion(file, editor);
                     return;
                 }
+                NagiAssistProtocol.ImportContext importContext = current.response().importContext();
+                if (importContext != null) {
+                    offerImportNames(file, editor, current, service, result, importContext);
+                    return;
+                }
                 for (NagiAssistProtocol.CompletionItem item : current.response().completions()) {
                     com.intellij.openapi.progress.ProgressManager.checkCanceled();
                     LookupElementBuilder lookup = LookupElementBuilder.create(item.name());
@@ -63,6 +76,183 @@ public final class NagiAssistCompletionContributor extends CompletionContributor
                 }
             }
         });
+    }
+
+    /** Import spellings and replacement ranges are supplied by the compiler. */
+    private static void offerImportNames(PsiFile file, Editor editor,
+                                         NagiAssistService.CachedResponse current,
+                                         NagiAssistService service, CompletionResultSet result,
+                                         NagiAssistProtocol.ImportContext importContext) {
+        if (!"names".equals(current.response().completionKind()) || importContext.incomplete()) return;
+        NagiAssistProtocol.Location location = importContext.replacement();
+        if (location == null || file.getVirtualFile() == null) return;
+        String currentPath = file.getVirtualFile().getCanonicalPath();
+        if (currentPath == null) currentPath = file.getVirtualFile().getPath();
+        if (!NagiAssistService.normalizePath(location.file()).equals(NagiAssistService.normalizePath(currentPath))) return;
+        Document document = editor.getDocument();
+        int caret = editor.getCaretModel().getOffset();
+        ImportRange range = importRange(document, location, caret);
+        if (range == null) return;
+
+        CharSequence chars = document.getCharsSequence();
+        String beforeCaret = chars.subSequence(range.start(), caret).toString();
+        String afterCaret = chars.subSequence(caret, range.end()).toString();
+        AtomicBoolean selectionValidated = new AtomicBoolean();
+        watchImportLookup(file, editor, current, service, selectionValidated);
+        CompletionResultSet importResults = result.withPrefixMatcher(beforeCaret);
+        for (NagiAssistProtocol.CompletionItem item : current.response().completions()) {
+            com.intellij.openapi.progress.ProgressManager.checkCanceled();
+            LookupElementBuilder lookup = LookupElementBuilder.create(item.name());
+            String detail = item.type() != null ? item.type() : item.signature();
+            if (detail != null && !detail.isBlank()) lookup = lookup.withTypeText(detail, true);
+            if (item.access().equals("namespace")) lookup = lookup.withTailText(" namespace", true);
+            else if (item.borrowed()) lookup = lookup.withTailText(" borrowed read", true);
+            boolean importedFunctionName = importContext.kind().equals("import-names")
+                    && item.kind().equals("function");
+            lookup = lookup.withInsertHandler((insertion, selected) -> insertImportName(
+                    insertion, item.name(), range, beforeCaret, afterCaret, importedFunctionName,
+                    selectionValidated));
+            importResults.addElement(AutoCompletionPolicy.NEVER_AUTOCOMPLETE.applyPolicy(lookup));
+        }
+    }
+
+    /** Refuse selection if the compiler snapshot went stale while the lookup was open. */
+    private static void watchImportLookup(PsiFile file, Editor editor,
+                                          NagiAssistService.CachedResponse current,
+                                          NagiAssistService service,
+                                          AtomicBoolean selectionValidated) {
+        LookupEx lookup = LookupManager.getActiveLookup(editor);
+        if (lookup != null && lookup.isCompletion()) {
+            attachImportLookupListener(lookup, file, editor, current, service, selectionValidated);
+            return;
+        }
+
+        // Completion providers can run before the platform creates its lookup.
+        // Observe that single lookup transition briefly; if it never appears,
+        // the insertion handler fails closed and restores the original token.
+        var scope = Disposer.newDisposable("Nagi import completion lookup guard");
+        Disposer.register(file.getProject(), scope);
+        Alarm watcher = new Alarm(Alarm.ThreadToUse.SWING_THREAD, scope);
+        AtomicBoolean attached = new AtomicBoolean();
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(5000);
+        Runnable poll = new Runnable() {
+            @Override public void run() {
+                if (attached.get()) return;
+                LookupEx active = LookupManager.getActiveLookup(editor);
+                if (active != null && active.getEditor() == editor && active.isCompletion()
+                        && attached.compareAndSet(false, true)) {
+                    attachImportLookupListener(active, file, editor, current, service, selectionValidated);
+                    Disposer.dispose(scope);
+                    return;
+                }
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) {
+                    Disposer.dispose(scope);
+                    return;
+                }
+                int nextDelay = (int) Math.max(1, Math.min(25, TimeUnit.NANOSECONDS.toMillis(remaining)));
+                watcher.addRequest(this, nextDelay);
+            }
+        };
+        LookupEx active = LookupManager.getActiveLookup(editor);
+        if (active != null && active.isCompletion() && attached.compareAndSet(false, true)) {
+            attachImportLookupListener(active, file, editor, current, service, selectionValidated);
+            Disposer.dispose(scope);
+        } else {
+            watcher.addRequest(poll, 0);
+        }
+    }
+
+    private static void attachImportLookupListener(LookupEx lookup, PsiFile file, Editor editor,
+                                                    NagiAssistService.CachedResponse current,
+                                                    NagiAssistService service,
+                                                    AtomicBoolean selectionValidated) {
+        LookupListener listener = new LookupListener() {
+            private void detach(LookupEvent event) {
+                event.getLookup().removeLookupListener(this);
+            }
+
+            @Override public boolean beforeItemSelected(LookupEvent event) {
+                if (event.getLookup() != lookup) return true;
+                selectionValidated.set(false);
+                if (service.fresh(file, editor) == current) {
+                    selectionValidated.set(true);
+                    return true;
+                }
+                lookup.removeLookupListener(this);
+                lookup.hideLookup(true);
+                return false;
+            }
+
+            @Override public void itemSelected(LookupEvent event) { detach(event); }
+
+            @Override public void lookupCanceled(LookupEvent event) { detach(event); }
+        };
+        lookup.addLookupListener(listener);
+    }
+
+    private static ImportRange importRange(Document document, NagiAssistProtocol.Location location, int caret) {
+        int lineIndex = location.line() - 1;
+        if (lineIndex < 0 || lineIndex >= document.getLineCount()) return null;
+        int lineStart = document.getLineStartOffset(lineIndex);
+        int lineEnd = document.getLineEndOffset(lineIndex);
+        long startLong = (long) lineStart + location.column() - 1;
+        long endLong = startLong + location.length();
+        if (startLong < lineStart || endLong > lineEnd || endLong > document.getTextLength()
+                || startLong > caret || caret > endLong) return null;
+        return new ImportRange((int) startLong, (int) endLong);
+    }
+
+    private static void insertImportName(InsertionContext context, String name, ImportRange range,
+                                         String beforeCaret, String afterCaret, boolean importedFunctionName,
+                                         AtomicBoolean selectionValidated) {
+        if (importedFunctionName && context.getCompletionChar() == '(') context.setAddCompletionChar(false);
+        Document document = context.getDocument();
+        int start = context.getStartOffset();
+        int tail = context.getTailOffset();
+        if (!selectionValidated.getAndSet(false)) {
+            restoreOriginalTarget(context, name, range, beforeCaret, afterCaret, start, tail);
+            context.setAddCompletionChar(false);
+            return;
+        }
+        CharSequence chars = document.getCharsSequence();
+        int retainedPrefixLength = start - range.start();
+        boolean insertedAtExpectedRange = range.start() >= 0 && range.start() <= chars.length()
+                && retainedPrefixLength >= 0
+                && retainedPrefixLength <= beforeCaret.length()
+                && start <= tail && tail - start == name.length() && tail <= chars.length()
+                && chars.subSequence(range.start(), start).toString()
+                    .equals(beforeCaret.substring(0, retainedPrefixLength))
+                && chars.subSequence(start, tail).toString().equals(name)
+                && tail + afterCaret.length() <= chars.length()
+                && chars.subSequence(tail, tail + afterCaret.length()).toString().equals(afterCaret);
+        if (!insertedAtExpectedRange) {
+            restoreOriginalTarget(context, name, range, beforeCaret, afterCaret, start, tail);
+            return;
+        }
+        document.replaceString(range.start(), tail + afterCaret.length(), name);
+        context.setTailOffset(range.start() + name.length());
+    }
+
+    private static void restoreOriginalTarget(InsertionContext context, String insertedName,
+                                              ImportRange range, String originalPrefix,
+                                              String originalSuffix, int start, int tail) {
+        context.setAddCompletionChar(false);
+        Document document = context.getDocument();
+        CharSequence chars = document.getCharsSequence();
+        int retainedPrefixLength = start - range.start();
+        if (range.start() >= 0 && range.start() <= chars.length()
+                && retainedPrefixLength >= 0 && retainedPrefixLength <= originalPrefix.length()
+                && start <= tail && tail - start == insertedName.length()
+                && tail <= chars.length()
+                && chars.subSequence(range.start(), start).toString()
+                    .equals(originalPrefix.substring(0, retainedPrefixLength))
+                && chars.subSequence(start, tail).toString().equals(insertedName)
+                && tail + originalSuffix.length() <= chars.length()
+                && chars.subSequence(tail, tail + originalSuffix.length()).toString().equals(originalSuffix)) {
+            document.replaceString(range.start(), tail + originalSuffix.length(), originalPrefix + originalSuffix);
+            context.setTailOffset(range.start() + originalPrefix.length() + originalSuffix.length());
+        }
     }
 
     private static void offerDeclarationKeyword(PsiFile file, Editor editor, CompletionResultSet result) {
@@ -134,4 +324,6 @@ public final class NagiAssistCompletionContributor extends CompletionContributor
                 || token == NagiTokens.get(NagiTokenScanner.Kind.COMMENT)
                 || token == TokenType.BAD_CHARACTER;
     }
+
+    private record ImportRange(int start, int end) { }
 }

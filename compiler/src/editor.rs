@@ -14,6 +14,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod imports;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Query {
@@ -545,6 +547,9 @@ pub(crate) fn analyze(
             response["diagnostics"] = json!([diagnostic(error, "check", &request.files)])
         }
         Err(error) => response["diagnostics"] = json!([diagnostic(error, "load", &request.files)]),
+    }
+    if imports::complete(&mut response, &original, &request)? {
+        return Ok(response);
     }
     let cursor = request.query.as_ref().and_then(|q| {
         let text = request

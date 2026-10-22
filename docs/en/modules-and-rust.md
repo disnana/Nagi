@@ -33,6 +33,28 @@ The program prints `Nagi` and `42`. Paths are relative to the file containing th
 
 This traditional import loads definitions from the file and its dependencies into the same namespace. Built-in functions remain available as before.
 
+### In development: import a neighboring file by name
+
+This feature is in development for 0.2.1. With published 0.2.0, use the quoted paths above. To try the new syntax, use a compiler containing this change.
+
+With the same `models.nagi`, save this as `app.nagi` beside it. Resolution starts beside the importing file, independently of the working directory.
+
+```nagi
+import models
+from models import Item as SavedItem
+
+def main():
+    item: SavedItem = models.Item(name="Nagi", count=42)
+    print(item.name)
+    print(item.count)
+```
+
+Run `nagic run app.nagi` in that directory to print `Nagi` and `42`. `import models` means `import "models.nagi" as models`. It differs from the traditional flat `import "models.nagi"`. You can also write `import models as inventory`.
+
+In Low, `import models;` loads the neighboring `models.low`; `from models import Item;` also works. There is no fallback to the other language's extension. Own exports, aliases, duplicate and cycle detection, and size limits follow quoted module imports. Saved Low generated from High retains loaded definitions and their type IDs.
+
+The name must be a single identifier. `import helpers.models`, `import models.nagi`, package discovery, `__init__`, and configurable search paths are unsupported. Use `import "helpers/models.nagi" as models` for a subdirectory. The import source `std` is reserved for standard libraries, and local files cannot replace `std.*`. Standard module imports still require `as`.
+
 ### Module names and definition aliases
 
 Put these definitions in `orders.nagi`:
@@ -61,7 +83,7 @@ def main():
 
 A module name exposes functions, classes, and enums defined in that file. Imported names are not automatically re-exported. The alias is optional in `from "orders.nagi" import Order`. Select several definitions with commas, for example `from "orders.nagi" import Order as SavedOrder, score`. Do not add a trailing comma. `from` and `as` are contextual import keywords and can still be function or variable names. A local with the same name as a module follows the existing local-variable rules. Class method calls remain unsupported.
 
-Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. Unquoted imports select registered modules such as `std.http.server`, `std.actor`, and `std.result`. Nagi 0.1.11 and later also provide the registered modules `std.auth`, `std.ownership`, and `std.task`. Confirm the installed compiler version. General package discovery and visibility declarations are unsupported.
+Each real file is loaded once, even through several module names, from aliases, or traditional imports. Import cycles, missing files, and mixed High/Low files are errors. A from import of a missing definition, or an import that gives different definitions the same name in one scope, reports an error at that import. In published 0.2.0, unquoted imports select registered modules such as `std.http.server`, `std.actor`, and `std.result`. Nagi 0.1.11 and later also provide the registered modules `std.auth`, `std.ownership`, and `std.task`. Confirm the installed compiler version. General package discovery and visibility declarations are unsupported.
 
 Nagi 0.2.0 SF01 uses request-bound `AuthScope` and `Grant[P]` in `std.auth`. Principal and indefinite issuers are removed. See [authentication and authorization](security.md) for type, lease and trusted-adapter duties, and [migration](migration-0.2.0.md) for changes. The [example](../../test-nagi-code/application-examples/auth-boundary/README.en.md) uses standard Policy with bounded fixture credentials; it does not implement production cryptographic verification or durable Sessions.
 

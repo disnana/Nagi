@@ -56,6 +56,9 @@ public final class NagiAssistProtocol {
     public record Diagnostic(String message, String file, Integer line, Location range) {}
     public record CompletionItem(String name, String kind, String type, String signature,
                                 Location target, boolean borrowed, String access) {}
+    public record ImportContext(String kind, Location replacement, List<String> directories, boolean incomplete) {
+        public ImportContext { directories = List.copyOf(directories); }
+    }
     public record Reference(Location location, Location target) {}
     public record Parameter(String name, String type) {}
     public record Definition(String name, String kind, Location location, String signature,
@@ -67,7 +70,15 @@ public final class NagiAssistProtocol {
     public record Response(String semanticStatus, boolean frontendChecked, boolean frontendAccepted,
                           boolean recovered, String completionKind, List<Diagnostic> diagnostics,
                           List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles,
-                          List<Definition> definitions, List<Local> locals, List<SymbolRole> roles) {
+                          List<Definition> definitions, List<Local> locals, List<SymbolRole> roles,
+                          ImportContext importContext) {
+        public Response(String semanticStatus, boolean frontendChecked, boolean frontendAccepted,
+                        boolean recovered, String completionKind, List<Diagnostic> diagnostics,
+                        List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles,
+                        List<Definition> definitions, List<Local> locals, List<SymbolRole> roles) {
+            this(semanticStatus, frontendChecked, frontendAccepted, recovered, completionKind,
+                    diagnostics, completions, references, sourceFiles, definitions, locals, roles, null);
+        }
         public Response(String semanticStatus, boolean frontendChecked, boolean frontendAccepted,
                         boolean recovered, String completionKind, List<Diagnostic> diagnostics,
                         List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles) {
@@ -165,6 +176,44 @@ public final class NagiAssistProtocol {
                         optionalLocation(item.get("target")), optionalBoolean(item, "borrowed"), access));
             }
 
+            ImportContext importContext = null;
+            if (completion.has("context")) {
+                String context = string(completion, "context");
+                if (!Set.of("import-source", "import-names").contains(context)
+                        || !completionKind.equals("names")) throw new IllegalArgumentException("invalid import completion context");
+                Location replacement = requiredLocation(completion, "replacement");
+                requireProtocolPath(replacement.file(), false);
+                if ((long) replacement.column() + replacement.length() > Integer.MAX_VALUE)
+                    throw new IllegalArgumentException("import replacement range exceeds its limit");
+                List<String> directories = new ArrayList<>();
+                if (completion.has("directories")) {
+                    JsonArray paths = array(completion, "directories");
+                    if (paths.size() > 1 || (context.equals("import-names") && !paths.isEmpty()))
+                        throw new IllegalArgumentException("invalid import directories");
+                    for (JsonElement element : paths) {
+                        if (!element.isJsonPrimitive() || !element.getAsJsonPrimitive().isString())
+                            throw new IllegalArgumentException("invalid import directory");
+                        String directory = element.getAsString();
+                        requireProtocolPath(directory, false);
+                        Path actual = Path.of(physicalPath(directory));
+                        Path parent = Path.of(physicalPath(replacement.file())).getParent();
+                        if (parent == null || !actual.equals(parent))
+                            throw new IllegalArgumentException("import directory is not the query parent");
+                        directories.add(directory);
+                    }
+                }
+                boolean incomplete = completion.has("incomplete") && bool(completion, "incomplete");
+                if (incomplete && !completions.isEmpty()) throw new IllegalArgumentException("incomplete import enumeration has candidates");
+                for (CompletionItem item : completions) {
+                    if ((context.equals("import-source") && !item.kind().equals("module"))
+                            || (context.equals("import-names") && !Set.of("function", "class", "enum", "resource").contains(item.kind())))
+                        throw new IllegalArgumentException("invalid import candidate kind");
+                }
+                importContext = new ImportContext(context, replacement, directories, incomplete);
+            } else if (completion.has("replacement") || completion.has("directories") || completion.has("incomplete")) {
+                throw new IllegalArgumentException("import metadata requires a context");
+            }
+
             JsonArray diagnosticArray = array(root, "diagnostics");
             if (diagnosticArray.size() > MAX_DIAGNOSTICS) throw new IllegalArgumentException("too many diagnostics");
             List<Diagnostic> diagnostics = new ArrayList<>(diagnosticArray.size());
@@ -250,7 +299,7 @@ public final class NagiAssistProtocol {
             }
             if (status.equals("none") && !completions.isEmpty()) throw new IllegalArgumentException("unverified candidates in empty semantic response");
             return new Response(status, frontendChecked, frontendAccepted, recovered, completionKind,
-                    diagnostics, completions, references, sourceFiles, definitions, locals, roles);
+                    diagnostics, completions, references, sourceFiles, definitions, locals, roles, importContext);
         } catch (IllegalStateException | NumberFormatException | ArithmeticException | CharacterCodingException | JsonParseException exception) {
             throw new IllegalArgumentException("malformed editor response", exception);
         }

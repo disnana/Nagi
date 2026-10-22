@@ -43,6 +43,58 @@ public final class NagiAssistProtocolTest {
         assertEquals(0, response.diagnostics().getFirst().range().length());
         assertEquals(2, response.references().getFirst().target().line());
         assertEquals(List.of(TEST_PATH), response.sourceFiles());
+        assertNull("legacy expression completion has no import context", response.importContext());
+    }
+
+    @Test public void decodesSourceAndSelectedNameImportContextsWithUtf16Locations() {
+        var sourceRoot = withImportContext("import-source", 1, 8, 2, List.of(Path.of(TEST_PATH).getParent().toString()), false);
+        sourceRoot.getAsJsonObject("completion").getAsJsonArray("items").get(0).getAsJsonObject().addProperty("kind", "module");
+        sourceRoot.getAsJsonObject("completion").getAsJsonArray("items").get(0).getAsJsonObject().addProperty("name", "std.fs");
+        var source = NagiAssistProtocol.decode(sourceRoot.toString().getBytes(StandardCharsets.UTF_8));
+        assertEquals("import-source", source.importContext().kind());
+        assertEquals(new NagiAssistProtocol.Location(TEST_PATH, 1, 8, 2), source.importContext().replacement());
+        assertEquals(List.of(Path.of(TEST_PATH).getParent().toString()), source.importContext().directories());
+        assertFalse(source.importContext().incomplete());
+
+        var namesRoot = withImportContext("import-names", 4, 12, 0, List.of(), false);
+        namesRoot.getAsJsonObject("completion").getAsJsonArray("items").get(0).getAsJsonObject().addProperty("kind", "function");
+        var names = NagiAssistProtocol.decode(namesRoot.toString().getBytes(StandardCharsets.UTF_8));
+        assertEquals("import-names", names.importContext().kind());
+        assertEquals(0, names.importContext().replacement().length());
+        assertTrue(names.importContext().directories().isEmpty());
+    }
+
+    @Test public void rejectsUnknownOrContextlessImportMetadataAndOutOfParentDirectories() {
+        var unknown = withImportContext("import-members", 1, 8, 2, List.of(), false);
+        assertThrows(IllegalArgumentException.class,
+                () -> NagiAssistProtocol.decode(unknown.toString().getBytes(StandardCharsets.UTF_8)));
+
+        var contextless = com.google.gson.JsonParser.parseString(VALID).getAsJsonObject();
+        contextless.getAsJsonObject("completion").add("replacement", location(1, 8, 2));
+        assertThrows(IllegalArgumentException.class,
+                () -> NagiAssistProtocol.decode(contextless.toString().getBytes(StandardCharsets.UTF_8)));
+
+        var outside = withImportContext("import-source", 1, 8, 2, List.of(Path.of(TEST_PATH).getParent().resolve("child").toString()), false);
+        assertThrows(IllegalArgumentException.class,
+                () -> NagiAssistProtocol.decode(outside.toString().getBytes(StandardCharsets.UTF_8)));
+
+        var namedWithDirectory = withImportContext("import-names", 1, 8, 0,
+                List.of(Path.of(TEST_PATH).getParent().toString()), false);
+        namedWithDirectory.getAsJsonObject("completion").getAsJsonArray("items").get(0).getAsJsonObject().addProperty("kind", "function");
+        assertThrows(IllegalArgumentException.class,
+                () -> NagiAssistProtocol.decode(namedWithDirectory.toString().getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Test public void rejectsPartialImportEnumerationWhenItContainsCandidates() {
+        var partial = withImportContext("import-source", 1, 8, 2, List.of(), true);
+        partial.getAsJsonObject("completion").getAsJsonArray("items").get(0).getAsJsonObject().addProperty("kind", "module");
+        assertThrows(IllegalArgumentException.class,
+                () -> NagiAssistProtocol.decode(partial.toString().getBytes(StandardCharsets.UTF_8)));
+
+        partial.getAsJsonObject("completion").add("items", new com.google.gson.JsonArray());
+        var exhausted = NagiAssistProtocol.decode(partial.toString().getBytes(StandardCharsets.UTF_8));
+        assertTrue(exhausted.importContext().incomplete());
+        assertTrue(exhausted.completions().isEmpty());
     }
 
     @Test public void rejectsFullCompileClaimsAndCandidatesFromAnEmptySemanticResult() {
@@ -115,5 +167,30 @@ public final class NagiAssistProtocolTest {
 
     private static String escapeJson(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static com.google.gson.JsonObject withImportContext(String kind, int line, int column,
+                                                                 int length, List<String> directories,
+                                                                 boolean incomplete) {
+        var root = com.google.gson.JsonParser.parseString(VALID).getAsJsonObject();
+        var completion = root.getAsJsonObject("completion");
+        completion.addProperty("context", kind);
+        completion.add("replacement", location(line, column, length));
+        if (!directories.isEmpty()) {
+            var paths = new com.google.gson.JsonArray();
+            directories.forEach(paths::add);
+            completion.add("directories", paths);
+        }
+        if (incomplete) completion.addProperty("incomplete", true);
+        return root;
+    }
+
+    private static com.google.gson.JsonObject location(int line, int column, int length) {
+        var location = new com.google.gson.JsonObject();
+        location.addProperty("file", JSON_TEST_PATH);
+        location.addProperty("line", line);
+        location.addProperty("column", column);
+        location.addProperty("length", length);
+        return location;
     }
 }
