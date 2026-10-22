@@ -19,6 +19,14 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.d
 
 0.1.3の実装は[main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923)でIDEA/PyCharmのstable/EAP計4経路のtestとPlugin Verifierに成功しました。EAPのVerifierには各IDEで既存のdeprecated API 3件・experimental API 1件の警告があり、警告なしの結果ではありません。headless検証はGUI受入を意味せず、利用者による既存GUI確認は受入済みです。今回の掲載情報・compiler案内の更新ではIDE機能の制御ロジックを変更していません。IME、EditorConfig modifierと設定変更後の再読み込みは未確認です。
 
+## 開発中の編集補助（未リリース）
+
+Highでは、自動字下げの後、空行で続けてEnterを押すと1段ずつブロックを抜けられます。手動入力・Backspace・paste・undoの後のEnterはその操作で選んだ字下げを尊重します。括弧内の継続行とLowのbrace内では、この退出補助は行いません。
+
+`else:`・`case ...:`の入力で対応するHighブロックへ字下げを合わせます。複数行caseの相対位置も維持します。独立した閉じ括弧の行では、Highの`)`・`]`、Lowの`)`・`]`・`}`を開始行の段へ合わせます。新しい補正はIDEのSmart Indentが有効な単一caretの入力が対象で、選択範囲の置換は対象外です。分岐・閉じ括弧の補正は先頭から8192文字・96行・4096 token以内で文脈を確認できる場合に限り、範囲外や不明な場合は通常の入力を残します。
+
+Pythonプラグインの追加インストールは不要です。これはPyCharm Pythonとの完全同等性を示すものではありません。調査した補助機能と今後の適用計画は[内部設計資料](../../docs/internal/jetbrains-python-editing-plan.md)に整理しています。全体の自動整形・Rename・自動importは今回の追加に含まれません。
+
 ## 0.1.3
 
 この節は0.1.3の機能と制約です。0.1.2とは区別してください。GitHub Releasesに掲載されたplugin ZIPか、Marketplaceで提供される対応版をインストールしてください。GitHubとMarketplaceの公開は別で、CI検証artifactは正式配布物ではありません。

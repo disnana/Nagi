@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-22 JST: PyCharm編集補助の調査とNagi入力補正
+
+main `5d3e58e`を基準にPython実装・登録を固定commitで調査し、[対応表と実装順](jetbrains-python-editing-plan.md)を作成した。Highの手動dedentを維持し、Nagi独自の連続Enter退出、else/caseのコロン補正、High/Lowの独立した閉じ括弧の整列を追加した。上限付きの既知文脈だけでleading whitespaceを変更し、Python専用構文やfull formatter/renameを推測実装しない。#141の名前付きimportは別作業として維持する。実IDE操作とcompiler連携を含む186件/0skip、Java 21、候補ZIP生成・descriptor/hash検証を確認した。[raw/観測条件/RED-GREEN](../../editors/jetbrains-nagi/benchmarks/python-editing-2026-10-22/README.md)。独立監査・exact-headのIDEA/PyCharm stable/EAP CIはPR本文で追跡し、ローカル成功やPython source比較をGUI/IME受入・完全同等性の証拠にしない。
+
 ## 2026-10-10 JST: #104へ最新mainを統合する候補
 
 ユーザーが#105/#106/#107をマージし、mainは`8c926e09`へ進んだ。#104のIDE assistance/標準Run/世代回収を維持し、SF05 Query・bounded source reader・共通HTTP修正と4 OS対象テストを統合する。過去段落のCI/未完状態は当時のsnapshotであり、今回の統合後HEADのCI・GUI受入成功を意味しない。rootはPRのmerge/Draft変更・版更新・tag/releaseを実行しない。

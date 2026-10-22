@@ -1,0 +1,27 @@
+{
+  "date_jst": "2026-10-22",
+  "base": "5d3e58e0cde41b463197982b0fbb7c17f257f259",
+  "platform": {
+    "name": "IntelliJ IDEA",
+    "version": "2025.1.1",
+    "buildNumber": "251.25410.109"
+  },
+  "host": "Linux x86_64",
+  "compiler": "SDK-provided JBR 21.0.6, javac release 21",
+  "gradle": "9.4.0",
+  "tests": {
+    "tests": 186,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "source_sha256": {
+    "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiEnterHandler.java": "2bae2e4144c90912e347edda3918ed59b8f37a1c365855ca61415a9cbff69a0a",
+    "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiEditorIndent.java": "b4b662ab07db90069a8e9d70b893e2f58116f7661ec0d97fdbac2ffdae50c476",
+    "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiTypedHandler.java": "a78a7d2b1e50fa56bba8bc1bec7ab562665a780401242badd56985d456c3c029",
+    "editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiTypedIndent.java": "68838d15ad831c72da541e71020e2454b07ccd1808c8747f4fda95904cf51cdc"
+  },
+  "archive_sha256": "f24c5b47daa8c79891216dd80a1551919d659a9919e6547e27dd7214dafc4ea4",
+  "metric_raw_sha256": "88b407a83842f78948cd4a42197aa861d799fd6cfcb023e336447a6bafafe259",
+  "method": "Real IDE actions; 3 warmups and 20 samples per action. No before/after speedup claim. 10000-line typed corrections deliberately fall back at bounded context limits."
+}

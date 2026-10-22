@@ -100,3 +100,9 @@ main base `1386411`、Rust実装`5a90083`、PR #140。Sol 6.1 Highを実装前�
 base `0e9a575`、core `39dc51d`。Sol 6.1 Highで実装前の整合性・Cargo単位境界とmixed facade案を確認し、親がcompiler/CAS/generation/native回帰を実装した。schema 3の閉じたmanifest grammar/依存閉包/Windows pathは契約判断を伴うため、同じHigh担当へ独立fileの実装を分離した。Luna Maxは仕様が固まったbenchmark harnessのmode/fixture/repeated editsだけを担当し、実計測は親が他のローカルbuildを止めて行った。Highによるmixed fixtureの修正は、最小runtimeのSerde不足と禁止fn fieldというfixture不備を言語契約へ戻す作業であり、成功までassertや期限を緩めていない。canonical shadow例のenum比較も非対応のため既存matchへ修正した。
 
 親を含め最大3体、子spawnと同じfileの同時編集なし。同model/effortの子は順番に動かし、実装担当とは別のSol 6.1 Highに必要検証後の最終auditを渡す。native/workspace/配布/CIとauditは別証拠である。役割ごとの実model時間・使用量・費用・service-tier設定interfaceは不明。報告した7%前後のbuild差はmodel速度やCI費用の差ではない。
+
+## 2026-10-22: PyCharm編集補助の適用
+
+base `5d3e58e`。Luna MaxへPython/Nagiのsource比較と、既存VS Code実装を根拠としたbounded typed補正の独立fileを担当させ、親がEnter履歴・実IDE検証・Docsを担当した。担当範囲を分離し、子の追加spawnなし。親reviewでtoken型、immutable Listのsort、非先頭closer、設定幅の上限を修正し、実fixtureでは選択解除のphaseとUndo/Redoによるstamp復元をRED/GREENで確認した。modelだけを原因とせず、SDKのcallback順序とsource/fixture不備を区別した。参照URLの親の推測5件も実sourceと照合して修正した。
+
+ローカルはsystem JREにCLI javacがなく、SDK付属JBRを実toolchainとして指定した。Gradle/SDK初回準備は約9分、cache準備後の全186件とZIP生成は72秒（IDE背景接続警告あり）。これらはmodel時間やNagi利用者のbuild速度比較ではない。model使用量・料金・service-tier指定は未計測/未対応。実装検証後の独立Sol 6.1 High監査とexact-head CIの結果はPR本文で別記する。
