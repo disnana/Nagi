@@ -1,5 +1,7 @@
 # JetBrains hover / Quick Documentation
 
+2026-10-22追記: 利用者が最新候補の動作を確認し、0.1.4としての公開準備を依頼した。以下のGUI未確認・cold未対応の記述は各検証段階の履歴。現在の受入範囲と版更新gateは[0.1.4公開準備](jetbrains-0.1.4-release.md)を参照する。
+
 2026-10-22。base main `765f0b0`。compiler/CIを変更せず、plugin側でcompiler事実の表示を追加する未リリースの作業。
 
 以下の初期設計・検証記録と、その後の色保持/cold非同期修正を段階別に残す。現候補のcold動作は末尾の「cold要求の非同期完了とlocals」で更新する。

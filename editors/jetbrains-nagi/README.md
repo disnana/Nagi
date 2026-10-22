@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.disnana.nagi`を維持し、表示名を**Nagi**とします。利用可能な版はGitHub ReleasesとMarketplaceの一覧で確認してください。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
+IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.4の公開を準備しています。ID `com.disnana.nagi`と表示名**Nagi**を維持します。利用可能な版はGitHub ReleasesとMarketplaceの一覧で確認してください。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
 
 プラグインの版は`build.gradle.kts`で管理します。公開済み0.1.2には両IDE共通ZIPがあり、新しい利用可能な成果物はReleasesで確認してください。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
 
@@ -23,7 +23,7 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.d
 
 0.1.3の実装は[main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923)でIDEA/PyCharmのstable/EAP計4経路のtestとPlugin Verifierに成功しました。EAPのVerifierには各IDEで既存のdeprecated API 3件・experimental API 1件の警告があり、警告なしの結果ではありません。headless検証はGUI受入を意味せず、利用者による既存GUI確認は受入済みです。今回の掲載情報・compiler案内の更新ではIDE機能の制御ロジックを変更していません。IME、EditorConfig modifierと設定変更後の再読み込みは未確認です。
 
-## 開発中の編集補助（未リリース）
+## 0.1.4の編集補助（公開準備中）
 
 Highでは、自動字下げの後、空行で続けてEnterを押すと1段ずつブロックを抜けられます。手動入力・Backspace・paste・undoの後のEnterはその操作で選んだ字下げを尊重します。括弧内の継続行とLowのbrace内では、この退出補助は行いません。
 
@@ -31,7 +31,7 @@ Highでは、自動字下げの後、空行で続けてEnterを押すと1段ず�
 
 Pythonプラグインの追加インストールは不要です。これはPyCharm Pythonとの完全同等性を示すものではありません。調査した補助機能と今後の適用計画は[内部設計資料](../../docs/internal/jetbrains-python-editing-plan.md)に整理しています。全体の自動整形・Rename・自動importは今回の追加に含まれません。
 
-## 開発中: hoverとQuick Documentation
+## 0.1.4: hoverとQuick Documentation（公開準備中）
 
 plugin候補版は、マウスhoverの説明とQuick Documentationで、compilerが提供した関数signature・引数・戻り値、classのfield、正確な位置に対応する変数の型を表示します。class構築はfieldを名前付き指定する形式です。compilerの空parametersをゼロ引数constructorとは表示しません。引数情報にも、compilerが提供した場合だけ戻り値を表示します。
 
@@ -41,6 +41,8 @@ plugin候補版は、マウスhoverの説明とQuick Documentationで、compiler
 
 信頼されたproject・対応するassist compiler・現在のsource snapshotが必要です。初回は同じ説明要求が背景解析の完了を待ちます。待機中に編集・依存・設定・信頼状態が変わった要求は取り消します。マウス表示にはIDE側のhover documentation設定が必要で、Quick Documentation actionも同じ情報を表示します。未保存の編集・依存・compiler設定変更で古い結果は失効します。compiler情報がない場合に型や説明文を推測しません。現protocolが署名を返さない組み込み`print`などには引数説明を作りません。部分的なeditor解析であり、完全なbuild検査ではありません。未リリースの変更で、実GUIの受入確認はheadless testと分けて記録します。[設計と検証範囲](../../docs/internal/jetbrains-documentation-plan.md)を参照してください。
 
+利用者によるホバー・色付け候補の動作確認を受け、0.1.4として公開準備しています。公開Nagi 0.2.0と組み合わせて使います。正式配布には0.1.4の最終CI・四IDEのtest/Verifier成功が必要です。GitHub公開とMarketplaceでの提出・承認は別です。候補での動作確認をすべてのGUI操作の検証とは扱いません。
+
 ## 0.1.3
 
 この節は0.1.3の機能と制約です。0.1.2とは区別してください。GitHub Releasesに掲載されたplugin ZIPか、Marketplaceで提供される対応版をインストールしてください。GitHubとMarketplaceの公開は別で、CI検証artifactは正式配布物ではありません。
@@ -49,6 +51,7 @@ plugin候補版は、マウスhoverの説明とQuick Documentationで、compiler
 
 | plugin | compiler | 対応範囲 |
 |---|---|---|
+| 0.1.4（公開準備中） | 公開Nagi 0.2.0 | 0.1.3の機能に加え、ホバー説明・初回解析待ち・色保持・編集補助の改善 |
 | 公開済み0.1.2 | 公開Nagi 0.2.0 / 0.1.11 | 手動Check/Runと基本編集。semantic assistance・標準Run Configuration・世代回収は0.1.2に含まれません |
 | 0.1.3 | 公開Nagi 0.2.0 | High/Lowのsemantic assistance、標準Run/Stop、IDE管理runの世代回収 |
 | 0.1.3 | 公開Nagi 0.1.11 | 通常Check/Runと標準Run Configurationによる通常実行。assist protocolと世代回収modeは未対応 |

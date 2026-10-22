@@ -2,14 +2,6 @@
 
 ## 未リリース / Unreleased
 
-### JetBrains editing assistance
-
-- Add compiler-backed hover/Quick Documentation for exact function/class targets, including available arguments, return types and fields. Render diagnostic tooltips with escaped readable framing while preserving original descriptions, unknown details and hints; retain cold/current-snapshot and trusted-project restrictions.
-
-- Preserve manually chosen High indentation on Enter, and add a Nagi-specific consecutive-Enter gesture to leave one block at a time. Keep delimiter continuations, Low brace context, smart-indent settings and undo behavior.
-- Align supported High `else`/`case` headers on colon input and standalone High/Low closing delimiters with their known owner. Use bounded lexical context and leading-whitespace edits; preserve ordinary input when context is unknown.
-- Document the source-based comparison with PyCharm Python editing, applicable improvements and the compiler/formatter work needed for broader support. Do not claim full Python editor parity.
-
 ### Runtime dependency maintenance
 
 - Require Tokio 1.54.1 or newer for the runtime and update the active workspace/fixture locks to 1.54.1, incorporating the timer-driver synchronization fix in [Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692). The previous tracked locks used 1.53.1/1.53.2, not the reported affected 1.54.0. Generated applications have independent locks: rebuild them with the updated runtime; updating Nagi's root lock alone does not update existing binaries. This change is unreleased.
@@ -27,6 +19,15 @@
 - Add opt-in `--build-stats` with typed declaration/function change observations, dependency graphs, Cargo artifact counts and phase timings. Record and verify published artifact hashes; semantic observations do not authorize native reuse or skipped checks/tests.
 - Bundle standard-library-only Python CI-generation and receipt-verification tools in future distributions. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.
 - Document the existing security API guarantees, unsupported transports and staged build roadmap, with measured application build results and their limits. These features are unreleased; published 0.2.0 remains unchanged.
+
+## JetBrains 0.1.4
+
+- Add compiler-backed hover/Quick Documentation for exact function/class/variable targets, including available arguments, return types and fields. Complete the same initial documentation request after background analysis, without waiting on the UI thread or starting a Rust build. Keep bounded waits, cancellation, current-snapshot and trusted-project restrictions; do not invent missing builtin signatures.
+- Keep colors for untouched identifiers visible during background analysis, independently of invalidated types, diagnostics and navigation. Discard touched tokens and hard-invalidated presentation data with bounded ownership.
+- Render diagnostic tooltips with escaped readable framing while preserving original descriptions, unknown details and hints. Show compiler-provided return types in Parameter Info.
+- Preserve manually chosen High indentation on Enter, and add a consecutive-Enter gesture to leave one block at a time. Keep delimiter continuations, Low brace context, smart-indent settings and undo behavior. Align supported High `else`/`case` headers and standalone High/Low closing delimiters with their known owner; preserve ordinary input when context is unknown.
+- 関数・class・変数のホバー説明、初回解析待ち、入力中の色保持、診断表示と編集補助を改善。公開Nagi 0.2.0に対応し、既存plugin IDとIDEA/PyCharm共通ZIPを維持します。利用者が確認した0.1.3候補から版番号と公開案内だけを更新しています。
+- Prepare version 0.1.4 for publication. The user confirmed the hover/color candidate works; this is not exhaustive GUI coverage. Publish only after the final version's required CI and four IDE test/Verifier paths succeed. GitHub Release and Marketplace submission/approval are separate; this entry does not claim either has already happened. Full PyCharm Python parity, whole-file formatting, Rename and automatic imports remain out of scope.
 
 ## JetBrains 0.1.3
 

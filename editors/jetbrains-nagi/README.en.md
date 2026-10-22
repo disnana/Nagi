@@ -2,7 +2,7 @@
 
 [日本語](README.md)
 
-Nagi support for IntelliJ IDEA and PyCharm. Version 0.1.3 keeps plugin ID `com.disnana.nagi` and uses **Nagi** as its display name. Check GitHub Releases and the Marketplace listing for available versions. [Install the compiler separately](https://nagi.disnana.com/en/docs/getting-started/).
+Nagi support for IntelliJ IDEA and PyCharm. Version 0.1.4 is being prepared for publication, preserving plugin ID `com.disnana.nagi` and display name **Nagi**. Check GitHub Releases and the Marketplace listing for available versions. [Install the compiler separately](https://nagi.disnana.com/en/docs/getting-started/).
 
 The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release includes a common ZIP for both IDEs; check Releases for newer available assets. For Marketplace installs, check the existing listing's Versions view for available versions and compatible IDE builds. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download one common ZIP for both IDEs from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
@@ -10,7 +10,7 @@ The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release
 
 The 0.2.1 compiler/plugin candidates add neighboring-file `import models` and `from models import Item`, import-statement completion, and original-source navigation. Published 0.2.0 and plugin 0.1.3 do not include this change. See the [editor guide](../../docs/en/editor.md#import-assistance-in-development) for candidate scope, background updates, external notification latency, and pending GUI verification.
 
-## In development: hover and Quick Documentation
+## 0.1.4: hover and Quick Documentation (preparing publication)
 
 The plugin candidate shows compiler-provided function signatures, parameters and return types, class fields, and variable types at exact compiler locations through mouse-hover documentation and Quick Documentation. Class construction uses named field arguments; an empty compiler parameter list is not presented as a zero-argument constructor. Parameter Info also shows a return type when the compiler supplies it.
 
@@ -33,13 +33,15 @@ These features describe the published 0.1.2 release. It does not support whole-f
 
 The 0.1.3 implementation passed tests and Plugin Verifier on all four IDEA/PyCharm stable/EAP paths in [main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923). Each EAP IDE retains three deprecated-API and one experimental-API Verifier warnings; this was not a warning-free result. Headless checks do not establish GUI acceptance. The user has accepted the earlier GUI checks; this update changes listing text and compiler guidance without changing IDE feature control flow. IME, the full EditorConfig modifier and live configuration reload remain unconfirmed.
 
-## Editing improvements in development (unreleased)
+## Editing improvements in 0.1.4 (preparing publication)
 
 In High, consecutive Enter presses on an automatically indented blank line leave one block at a time. After typing, Backspace, paste or undo, Enter respects the indentation chosen by that operation. This exit gesture does not leave delimiter continuations or Low brace blocks.
 
 Typing the colon of `else:` or `case ...:` aligns the High header with its known owner, preserving relative indentation in multiline case headers. A standalone closing-delimiter line aligns with its opening line: `)` and `]` in High, and `)`, `]` and `}` in Low. The new corrections require Smart Indent, a single caret and no selection replacement. Branch and closing-delimiter corrections require a known complete prefix within 8192 characters, 96 lines and 4096 tokens; ordinary input is preserved beyond those limits or when context is uncertain.
 
 No Python plugin dependency is added. This does not establish full parity with PyCharm Python. The [internal comparison and implementation plan](../../docs/internal/jetbrains-python-editing-plan.md) records the researched features and remaining work. Full formatting, Rename and automatic imports are not included in this addition.
+
+The user confirmed that the hover/color candidate works, and version 0.1.4 is being prepared for publication with public Nagi 0.2.0. Final version-specific CI and all four IDE test/Verifier paths must pass before distribution. GitHub publication and Marketplace submission/approval are separate. Candidate acceptance does not establish exhaustive GUI coverage.
 
 ## 0.1.3
 
@@ -49,6 +51,7 @@ This section describes 0.1.3 features and their limits, separately from 0.1.2. I
 
 | Plugin | Compiler | Supported behavior |
 |---|---|---|
+| 0.1.4 (preparing publication) | Public Nagi 0.2.0 | Inherits 0.1.3 and improves documentation, initial-analysis waits, color retention and editing assistance |
 | Published 0.1.2 | Public Nagi 0.2.0 / 0.1.11 | Manual Check/Run and basic editing; no semantic assistance, standard Run Configuration, or generation cleanup in 0.1.2 |
 | 0.1.3 | Public Nagi 0.2.0 | High/Low semantic assistance, standard Run/Stop, and generation cleanup for IDE-managed runs |
 | 0.1.3 | Public Nagi 0.1.11 | Ordinary Check/Run and normal execution through the standard Run Configuration; no assist protocol or generation-retention mode |
