@@ -57,6 +57,49 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn named_imports_survive_low_transport_and_native_alias_execution_without_high_files() {
+    let f = Fixture::new();
+    f.write("domain.nagi", "class Item:\n    value: i64\nenum Choice:\n    Empty\n    Data(value: i64)\ndef score(item: Item) -> i64:\n    return item.value\n");
+    f.write("main.nagi", "import domain\nfrom domain import Item as SavedItem, Choice as SavedChoice, score as saved_score\ndef answer() -> i64:\n    callback = domain.score\n    item: SavedItem = domain.Item(value=42)\n    choice: domain.Choice = SavedChoice.Data(value=callback(item))\n    match choice:\n        case domain.Choice.Empty:\n            return 0\n        case SavedChoice.Data(value):\n            return value\ndef main():\n    assert_true(answer() == 42)\n");
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    f.write("saved.low", &emit::low(&loaded.program));
+    fs::remove_file(f.0.join("domain.nagi")).unwrap();
+    fs::remove_file(f.0.join("main.nagi")).unwrap();
+    let mut saved = source::load(&f.0.join("saved.low"), false).unwrap();
+    check::check(&mut saved.program).unwrap();
+    let rust = emit::rust(&checked_emission::seal(&saved.program)).unwrap();
+    assert!(rust.contains(" as SavedItem;"));
+    assert!(rust.contains("pub mod domain"));
+    f.write("native.low", "@replace generated::domain::score;\nfn rewritten(item: SavedItem) -> i64 { return item.value; }\n");
+    let mut native = source::load(&f.0.join("native.low"), false)
+        .unwrap()
+        .program;
+    nagic::modules::prepare_native_fragment(&mut native, &saved.program);
+    let mut integrated = saved.program.clone();
+    check::integrate(&mut integrated, native).unwrap();
+    nagic::modules::validate(&integrated).unwrap();
+    f.write("integrated.low", &emit::low(&integrated));
+    let mut reloaded = source::load(&f.0.join("integrated.low"), false).unwrap();
+    check::check(&mut reloaded.program).unwrap();
+    // Record bridges also derive runtime serde/SQL traits; their actual Cargo
+    // build remains covered by the existing project/native integration target.
+    // This small enum/function bridge can execute with rustc alone.
+    f.write("domain.nagi", "enum Choice:\n    Empty\n    Data(value: i64)\ndef score(value: i64) -> i64:\n    return value + 1\n");
+    f.write("main.nagi", "import domain\nfrom domain import Choice as SavedChoice, score as saved_score\ndef main():\n    choice = domain.Choice.Data(value=saved_score(41))\n    match choice:\n        case SavedChoice.Empty:\n            assert_true(False)\n        case SavedChoice.Data(value):\n            assert_true(value == 42)\n");
+    let mut loaded = source::load(&f.0.join("main.nagi"), true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    f.write("saved.low", &emit::low(&loaded.program));
+    fs::remove_file(f.0.join("domain.nagi")).unwrap();
+    fs::remove_file(f.0.join("main.nagi")).unwrap();
+    let mut saved = source::load(&f.0.join("saved.low"), false).unwrap();
+    check::check(&mut saved.program).unwrap();
+    let mut rust = emit::rust(&checked_emission::seal(&saved.program)).unwrap();
+    rust.push_str("\n#[test] fn native_aliases() { assert_eq!(saved_score(6), 7); let _choice: SavedChoice = domain::Choice::Empty; main(); }\n");
+    f.compile_and_run(&rust);
+}
+
+#[test]
 fn independent_low_parser_preserves_module_ids_and_native_function_aliases() {
     let fixture = Fixture::new();
     fixture.write(

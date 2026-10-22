@@ -33,6 +33,28 @@ nagic run app.nagi
 
 この従来のimportは、依存先も含めた定義を同じ名前空間に読み込みます。組み込み関数も従来どおり使えます。
 
+### 開発中：隣のファイルを名前でimportする
+
+以下は0.2.1向けの開発中機能です。公開済み0.2.0では上の引用符付きパスを使ってください。試す場合は、この変更を含むコンパイラを使います。
+
+同じディレクトリの`models.nagi`を、次の`app.nagi`から読み込めます。実行するディレクトリではなく、importを書いたファイルの隣を探します。
+
+```nagi
+import models
+from models import Item as SavedItem
+
+def main():
+    item: SavedItem = models.Item(name="Nagi", count=42)
+    print(item.name)
+    print(item.count)
+```
+
+そのディレクトリで`nagic run app.nagi`を実行すると、`Nagi`と`42`を表示します。`import models`は`import "models.nagi" as models`と同じです。定義を平坦に読み込む`import "models.nagi"`とは異なります。`import models as inventory`も使えます。
+
+Lowでは`import models;`が隣の`models.low`を読み込みます。`from models import Item;`も使えます。拡張子の違うファイルへは切り替えません。module名で見える定義、別名、重複・循環・サイズの検査は引用符付きのmodule importと同じです。Highから生成・保存したLowは、読み込み済みの定義と型のIDを保持します。
+
+名前は単独の識別子に限ります。`import helpers.models`や`import models.nagi`、package検索、`__init__`、検索パスの設定には対応しません。サブディレクトリには`import "helpers/models.nagi" as models`を使ってください。`std`は標準ライブラリ用のimport先として予約し、`std.*`をローカルファイルで置き換えません。標準moduleのimportには引き続き`as`が必要です。
+
 ### module名と定義の別名
 
 `orders.nagi`に次の定義を置きます。
@@ -61,7 +83,7 @@ def main():
 
 module名で見えるのは、そのファイル自身が定義した関数・class・enumです。importした名前は自動で再公開しません。`from "orders.nagi" import Order`のように別名を省略することもできます。複数の定義は`from "orders.nagi" import Order as SavedOrder, score`のように`,`で選べます。末尾の余分な`,`は付けません。`from`と`as`はimportの文脈だけで解釈し、関数や変数の名前にも使えます。関数内でmodule名と同じローカル名を使った場合は、現在のローカル変数の規則に従います。classのmethod呼び出しには対応していません。
 
-同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。引用符なしのimportは登録済みの`std.http.server`、`std.actor`、`std.result`等を対象にします。
+同じ実ファイルは、複数のmodule名・fromの別名・従来のimportを使っても1回だけ読み込みます。循環するimport、見つからないファイル、HighとLowの混在はエラーです。存在しない定義のfrom importや、同じ場所で異なる定義を同じ名前にするimportは、そのimport文でエラーになります。公開済み0.2.0の引用符なしimportは登録済みの`std.http.server`、`std.actor`、`std.result`等を対象にします。
 
 0.2.0 SF01の`std.auth`はrequest-bound `AuthScope`と`Grant[P]`を使います。旧Principalと無期限issuerは廃止しました。[認証・認可](security.md)に型・lease・trusted adapterの責務、[移行](migration-0.2.0.md)に差分があります。[サンプル](../test-nagi-code/application-examples/auth-boundary/README.md)は標準Policy経路を使う有限credentialの検証例で、productionの暗号検証や永続Sessionを実装したとは扱いません。
 
