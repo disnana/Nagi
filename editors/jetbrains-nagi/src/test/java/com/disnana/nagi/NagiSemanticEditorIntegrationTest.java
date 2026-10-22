@@ -204,6 +204,55 @@ public final class NagiSemanticEditorIntegrationTest extends BasePlatformTestCas
         }
     }
 
+    private String modernDocumentation(com.intellij.psi.PsiFile file, int offset) throws Exception {
+        var editor = myFixture.getEditor();
+        var indicator = new com.intellij.openapi.progress.EmptyProgressIndicator();
+        var finished = new java.util.concurrent.CountDownLatch(1);
+        var future = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread(
+                (java.util.concurrent.Callable<String>) () -> {
+                    try { return com.intellij.openapi.progress.ProgressManager.getInstance().runProcess(
+                        () -> com.intellij.openapi.progress.CoroutinesKt.runBlockingCancellable((scope, continuation) ->
+                                com.intellij.openapi.progress.CoroutinesKt.blockingContext(() ->
+                                        com.intellij.openapi.application.ReadAction.compute(() -> {
+                                            var targets = com.intellij.lang.documentation.ide.IdeDocumentationTargetProvider.getInstance(getProject())
+                                                    .documentationTargets(editor, file, offset);
+                                            assertFalse("the platform must create a hover target at the requested offset", targets.isEmpty());
+                                            var result = targets.getFirst().computeDocumentation();
+                                            return result instanceof com.intellij.platform.backend.documentation.DocumentationData data ? data.getHtml() : null;
+                                        }), continuation)), indicator); }
+                    finally { finished.countDown(); }
+                });
+        try {
+            waitFor(future::isDone);
+            return future.get(1, TimeUnit.SECONDS);
+        } finally {
+            if (!future.isDone()) {
+                indicator.cancel();
+                future.cancel(true);
+            }
+            waitFor(() -> finished.getCount() == 0);
+        }
+    }
+
+    public void testModernPlatformDocumentationDispatchUsesActualHoverOffset() throws Exception {
+        String text = "def add(left: i64, right: i64) -> i64:\n    return left + right\ndef main():\n    print(add(1, 2))\n";
+        Path path = root.resolve("modern-hover.nagi");
+        Files.writeString(path, text);
+        var virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path);
+        assertNotNull(virtualFile);
+        myFixture.configureFromExistingVirtualFile(virtualFile);
+        var file = myFixture.getFile();
+        myFixture.getEditor().getCaretModel().moveToOffset(0);
+        var service = getProject().getService(NagiAssistService.class);
+        service.requestBaseline(file);
+        waitFor(() -> service.fresh(file) != null);
+        String html = modernDocumentation(file, text.lastIndexOf("add(") + 1);
+        assertNotNull("mouse-hover platform target must expose compiler documentation while the caret is elsewhere", html);
+        assertTrue(html.contains("left: i64"));
+        assertTrue(html.contains("Returns:</b> <code>i64"));
+        assertFalse("frontend assistance must not create a native Cargo project", Files.exists(root.resolve("target")));
+    }
+
     public void testHighLowAsyncDocumentationUsesCompilerReturnAndAsyncFacts() throws Exception {
         for (boolean low : new boolean[]{false, true}) {
             String text = low

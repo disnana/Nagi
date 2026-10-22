@@ -57,6 +57,7 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             if (document.getModificationStamp() != result.documentStamp()
                     || result.service().state() != result.state()
                     || !result.service().statusMessage().equals(result.message())) return;
+            paintRoles(result.service().rolePresentation(file, document, null), holder);
             if (shouldRenderFileLevelState(result.state())) {
                 holder.newAnnotation(HighlightSeverity.WEAK_WARNING,
                         "Nagi editor assistance: " + result.message()).fileLevel().create();
@@ -64,23 +65,7 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             return;
         }
         if (!result.service().isCurrent(file, result.response())) return;
-        for (NagiSemanticIndex.Color color : result.service().semanticColors(file, result.response())) {
-            com.intellij.openapi.progress.ProgressManager.checkCanceled();
-            var point = color.location();
-            int start = lineColumnToOffset(document, point.line(), point.column());
-            if (start < 0 || point.length() < 1 || point.length() > document.getTextLength() - start) continue;
-            int end = start + point.length();
-            if (end > document.getLineEndOffset(point.line() - 1)
-                    || splitsSurrogatePair(document, start) || splitsSurrogatePair(document, end)) continue;
-            var token = file.findElementAt(start);
-            if (token == null || token.getTextRange().getStartOffset() != start
-                    || token.getTextRange().getEndOffset() != end) continue;
-            var kind = token.getNode().getElementType();
-            if (kind != NagiTokens.get(NagiTokenScanner.Kind.IDENTIFIER)
-                    && kind != NagiTokens.get(NagiTokenScanner.Kind.TYPE)) continue;
-            holder.newSilentAnnotation(HighlightSeverity.INFORMATION).range(new TextRange(start, end))
-                    .textAttributes(color.attributes()).create();
-        }
+        paintRoles(result.service().rolePresentation(file, document, result.response()), holder);
         for (NagiAssistProtocol.Diagnostic diagnostic : result.response().response().diagnostics()) {
             if (!result.service().diagnosticTargetsFile(result.response(), file.getVirtualFile(), diagnostic.file())) continue;
             String message = diagnostic.message();
@@ -125,6 +110,14 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
                     .tooltip(tooltip);
             if (start == end) annotation.afterEndOfLine().create();
             else annotation.range(new TextRange(start, end)).create();
+        }
+    }
+
+    private static void paintRoles(List<NagiSemanticPresentation.Paint> roles, AnnotationHolder holder) {
+        for (var role : roles) {
+            com.intellij.openapi.progress.ProgressManager.checkCanceled();
+            holder.newSilentAnnotation(HighlightSeverity.INFORMATION).range(role.range())
+                    .textAttributes(role.attributes()).create();
         }
     }
 

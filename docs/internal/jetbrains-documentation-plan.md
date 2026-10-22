@@ -41,3 +41,22 @@ SDK 251でのJVM tests、実compiler assist連携、ZIP生成、Plugin Verifier�
 - Plugin Verifierの初回は解析開始前に `/home/agent/.pluginVerifier` read-onlyで失敗。現行CLIの `plugin.verifier.home.dir` 固有propertyを確認し、専有tmp指定でIC251解析へ進んだが、子Javaのremote依存解決でConnection refusedを観測。proxy設定の引継ぎ調査中で、Verifier gateは未完。TLS検証や検査は無効化しない。
 
 raw logは作業環境の `local-only/plugin-documentation-{focused,integration,full,html-renderer,package,verifier,verifier-retry}.log` に保持する。SDK取得中のbootstrap試行は編集中sourceも含むため厳密なmain baselineや性能比較に数えない。他IDE/版のCI、独立最終audit、実GUI受入は未完gateとしてPRで追跡する。
+
+
+## 入力中の色と標準hover経路の回帰（2026-10-22、未リリース）
+
+利用者から候補ZIPでhover無表示と入力ごとの色消失が報告された。compiler設定の切替だけではhoverは解消しなかったとの報告を維持する。headlessのProvider直呼び成功を実GUI表示成功と扱わない。
+
+色消失はSDK 251の実ExternalToolPassで再現した。解析待ちの空annotation結果も既存highlighterを置き換えるため、単にcollect/applyを省略する方法では維持できない。新しいpresentation storeは最後にpaintしたrole属性・token文字列/種別・RangeMarkerだけを所有する。世代照合はresponseへの参照ではなく、responseごとに割り当てる独立opaque identityを使う。型、reference、診断、compiler responseそのものを保存しない。soft editは接触範囲（境界への挿入を含む）と他documentのmarkerを破棄し、残ったmarkerにも現在の完全tokenとの一致を要求する。
+
+storeは128 documents / 20,000 roles / token当たり256 UTF-16 code unitsで制限する。dependency/manifest、VFS、config/compiler、trust、file close、service disposeはhard invalidationとなり全markerをdisposeする。fresh失敗・新responseも旧presentationを破棄する。fresh/current判定、350ms診断・80ms補完debounce、worker取消、診断の元descriptionと位置のfresh条件は維持する。paint途中の取消・例外でも作成済markerを解放する。trust喪失時のpaintは既存invalidate境界を使い、再信頼後に破棄済presentationへ旧cacheを紐付けたままにしない。
+
+modern hoverの試験は実compiler factsを使い、SDKのIdeDocumentationTargetProvider service→DocumentationTarget.computeDocumentationをactual hover offsetで呼び出す。workerのindicator→runBlockingCancellable→blockingContext→read actionというSDK所定のcontextを使い、caretは別位置に置く。testのtimeout/例外時にはindicatorとFutureを取消し、Callableのfinally latchで実終了を有界に確認する。最初の試験harnessはJob context不足で失敗したが、これはprovider不具合の証拠としない。warmの関数説明は標準経路で成功した。GUIのmouse設定・実popup受入は引き続き未確認。
+
+coldのnull応答後に同じhoverを更新しない制限は未解決。標準async DocumentationTargetで既存workerの完了を待つ案は別の承認・実装段階に分ける。builtin printは現compilerのdefinition/reference graphに署名を持たず、実helloのprint位置へ送ったcursor requestもcompletion署名を返さなかった。call expression結果unitを関数署名として転用しない。localsにはexact location/typeがあるが、この色修正では新たなhover情報を追加しない。
+
+実測logは local-only/pr148-stability/ に保持する。real annotation passの保持assertは変更前RED→修正後GREEN。初回fullは224中223成功、1件は新trust復帰caseで失敗し、上述の失効処理を修正後targeted 6件成功。20,000同位置markerを生成する病的な上限fixtureはCPU負荷が大きいため所有test processを停止し、上限直前のcountをtest-only reflectionで置く境界試験へ置き換えた（製品の上限とassertは維持）。正式全suiteの最終結果は後続記録に確定する。cold async、run profile、compiler変更はこの区切りに含めない。
+
+正式最終検査: IC 2025.1.1 / SDK251、Java21、`NAGI_TEST_COMPILER=/workspace/Nagi/target/release/nagic` で全plugin 225件、failure/error/skip 0（71秒）。保存fixtureの既存NagiSaveBarrier追加も含む。`git diff --check` 成功。最終raw log: `local-only/pr148-stability/full-final.log`。新sourceのpackaging/Verifier・exact HEADの4IDE CI・別担当の独立audit・実GUIはこの時点では未完。
+
+opaque identityへの最終3行修正後にも全225件を再実行し、failure/error/skip 0（71秒、`full-opaque-generation.log`）。旧responseへの不要な強参照を保持しない。Verifierはcold asyncの後続差分後、最終sourceでまとめて行う。cold async開始前にこの色修正を凍結し、別Highの独立auditへ渡す。

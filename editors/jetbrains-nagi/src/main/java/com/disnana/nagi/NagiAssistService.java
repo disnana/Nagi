@@ -77,6 +77,7 @@ public final class NagiAssistService implements Disposable {
         private final Set<String> sourceFileKeys;
         private final Map<ReferenceKey, NagiAssistProtocol.Location> referenceTargets;
         private final NagiSemanticIndex semanticIndex;
+        private final Object presentationIdentity = new Object();
         private CachedResponse(Snapshot snapshot, NagiAssistProtocol.Response response) {
             this.snapshot = snapshot;
             this.response = response;
@@ -151,6 +152,7 @@ public final class NagiAssistService implements Disposable {
     private volatile State state = State.IDLE;
     private volatile String statusMessage = "";
     private volatile CachedResponse cached;
+    private final NagiSemanticPresentation presentation = new NagiSemanticPresentation();
     private volatile Set<String> knownSourcePaths = Set.of();
     private volatile Set<String> knownDependencies = Set.of();
     // Discovery hints only: candidate meaning remains entirely compiler-owned.
@@ -394,6 +396,19 @@ public final class NagiAssistService implements Disposable {
         return response.semanticIndex.colors(canonicalPathFor(response.snapshot, file.getVirtualFile()));
     }
 
+    List<NagiSemanticPresentation.Paint> rolePresentation(PsiFile file, Document document, CachedResponse response) {
+        if (disposed || project.isDisposed()) { presentation.clear(); return List.of(); }
+        if (!trustedForCompiler()) {
+            invalidate(State.UNTRUSTED, "Project trust is required before the Nagi compiler can run.");
+            return List.of();
+        }
+        if (response != null) {
+            if (!isCurrent(file, response)) return List.of();
+            return presentation.current(file, document, response.presentationIdentity, semanticColors(file, response));
+        }
+        return presentation.retained(file, document);
+    }
+
     /** Resolve only a compiler-provided path and range in the same loaded source graph. */
     public PsiElement resolveTarget(PsiFile context, CachedResponse response, NagiAssistProtocol.Location target) {
         if (!isCurrent(context, response) || target == null) return null;
@@ -565,6 +580,7 @@ public final class NagiAssistService implements Disposable {
                 if (!key.equals(activeKey) || responseSnapshot.epoch() != epoch.get()
                         || disposed || project.isDisposed()) return;
                 cached = result;
+                presentation.published(result.presentationIdentity, responseSnapshot.focusDocument());
                 knownSourcePaths = knownPaths(snapshot, response);
                 setState(State.READY, "Compiler assistance is current for this editor snapshot.");
             }
@@ -1143,8 +1159,12 @@ public final class NagiAssistService implements Disposable {
             for (RawFile raw : files) {
                 if (documentListeners.containsKey(raw.document())) continue;
                 DocumentListener listener = new DocumentListener() {
+                    @Override public void beforeDocumentChange(@NotNull DocumentEvent event) {
+                        presentation.beforeEdit(event);
+                    }
                     @Override public void documentChanged(@NotNull DocumentEvent event) {
-                        invalidate(State.STALE, "An open Nagi source or manifest changed.");
+                        invalidate(State.STALE, "An open Nagi source or manifest changed.",
+                                !isManifest(raw.file()) && presentation.softEdit(event.getDocument()));
                     }
                 };
                 // Complete the document subscription before publishing its
@@ -1313,6 +1333,11 @@ public final class NagiAssistService implements Disposable {
     }
 
     private void invalidate(State reason, String message) {
+        invalidate(reason, message, false);
+    }
+
+    private void invalidate(State reason, String message, boolean keepRolePresentation) {
+        if (!keepRolePresentation) presentation.clear();
         epoch.incrementAndGet();
         cached = null;
         synchronized (lock) {
@@ -1425,6 +1450,8 @@ public final class NagiAssistService implements Disposable {
     }
 
     private void setState(State state, String message) {
+        if (state == State.FAILED || state == State.UNTRUSTED || state == State.UNSAVED_MANIFEST
+                || state == State.LIMIT || state == State.COMPILER_UNAVAILABLE || state == State.CLOSED) presentation.clear();
         this.state = state;
         this.statusMessage = message;
     }
@@ -1437,6 +1464,7 @@ public final class NagiAssistService implements Disposable {
     private void setStateForActive(String key, State state, String message) {
         synchronized (lock) {
             if (key.equals(activeKey)) {
+                if (state == State.STALE) presentation.clear();
                 setState(state, message);
                 if (state == State.FAILED || state == State.UNSAVED_MANIFEST || state == State.LIMIT) {
                     failedKey = key;
@@ -1504,6 +1532,7 @@ public final class NagiAssistService implements Disposable {
 
     @Override public void dispose() {
         disposed = true;
+        presentation.clear();
         knownImportDirectories = Set.of();
         importQueryFile = null;
         cached = null;

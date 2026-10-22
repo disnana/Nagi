@@ -556,3 +556,8 @@ base `e2d7280`から、physical moduleを2回lexする経路をparser所有token
 [設計](release-0.2.1-build-stability.md)と[raw計測](../../benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md)を追加。release compilerの完全検査は最大約3%短縮、小規模入力は差が小さく遅いsampleも残した。生成Low/Rust一致、release loopの全checksumと旧exe不変を確認し、実行速度向上は主張しない。frontend23件は4個別cold targetで221.11秒、1共有cold76.71秒、warm共有4.38秒（各1回、registry/OS warm）。cold/warmやCI全体の改善率を混同しない。
 
 fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inventory37、利用者CI generator7、network許可下の全workspace `cargo test --locked --quiet`が成功した。全workspace670.09秒は同条件の速度比較ではない。最初のsocket権限拒否の失敗logも保持した。ordinary devとunitsの8ケースを各3回測定し、48成功exe・6回の不正lock拒否/回復を確認した。100関数では変更なしが約16%速い一方、編集は約9–21%遅いためopt-inを維持する。全構成の専有targetは完了後に整理した。独立最終audit、exact-head CIとリリース工程は別gateとして追跡する。query cache・一般async/type分割・自動最適化は未実装で、将来案を今回の成果に数えない。
+
+
+### 2026-10-22 JetBrains候補の入力中role色維持（未リリース）
+
+候補ZIPの利用者報告から実ExternalToolPassの空結果による色消失をRED再現し、色属性だけをbounded RangeMarker storeへ保存する修正を追加。接触token・dependency/config/compiler/trust/VFS/close/dispose/fresh失敗は破棄し、古い型・診断・参照を再利用しない。既存350/80ms debounce・取消契約は維持。標準DocumentationTargetのwarm経路を実compiler/actual offset/worker read actionで検証したが、cold同hover更新とbuiltin署名情報の不足、実GUIの無表示報告は未解決として分離した。全plugin225件成功（71秒、skip0）。packaging/Verifier/4IDE CI/独立audit/GUI gateは別検証。[設計・失敗と検査記録](jetbrains-documentation-plan.md)。

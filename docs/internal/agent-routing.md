@@ -130,3 +130,6 @@ base `e2d7280`。Sol 6.1 Highの事前調査でparser token再利用、既存uni
 Sol 6.1 High担当がread-onlyで保存済みCI事実とbrowser Handler境界、既存counter parserを調査し、親が最小Python補助出力の設計を承認した。同担当が合成RED→GREENとprivacy/owner/bounds回帰を実装し、親は事前固定のstock/diagnostic各3run比較を別に担当した。全run成功・未再現を原因解決と混同せず、runtime/期限/assert/parallelismを変更しない。親reviewのwire assertion終端を反映し、同ownerの両iteration拒否もRED→GREENで確認した。
 
 Session65/SF07 summary37/native-finish20/source guard16/CI policy160件が成功。実装後の最終auditは別のSol 6.1 Highへ分離し、子の追加spawnなし。新HEAD CIと1000ms原因の継続調査はPRへ残す。model時間・使用量・費用・service tierは未計測。Python検査時間やcompile込み比較時間をmodel性能の根拠には使わない。
+
+
+2026-10-22、#148候補の入力時色消失をSol 6.1 Highが事前承認済みpresentation-only設計で実装。実ExternalToolPassのRED→GREEN、debounce起動/取消数、marker上限/取消cleanup、trust復帰の初回full失敗と修正を記録した。modernDocumentationTarget testのJob context不足はSDK bridgeをArchitect xhighがread-only確認し、正規indicator/coroutine/blocking/read contextでwarm成功。全225件71秒成功。病的な同位置20,000marker fixtureは停止し、製品上限を維持したtest-only境界注入へ変更。compiler/CI/run profile/coldasyncの製品変更は行わず、別Highの最終auditと4IDE CI/実GUIを残す。親と担当のGradle共有cacheを直列使用し、workspace空き4.4GiB/tmp7.9GiBを維持。利用量・モデル単体時間は未測定。
