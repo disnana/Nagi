@@ -96,5 +96,26 @@ public final class NagiSemanticIndexTest {
         var collision = new NagiSemanticIndex(facts("none", List.of(a, b), List.of(),
                 List.of(new NagiAssistProtocol.Reference(a.location(), b.location()))));
         assertNull(collision.definition(FILE, 1, 5, 4));
+    }    @Test public void localDocumentationRequiresExactUnambiguousCompilerFacts() {
+        var local = new NagiAssistProtocol.Local("value", "i64", at(4, 5, 5), "local");
+        var index = new NagiSemanticIndex(facts("none", List.of(), List.of(local), List.of()));
+        assertEquals(local, index.local(FILE, 4, 5, 5));
+        assertNull(index.local(FILE, 4, 6, 4));
+        var other = new NagiAssistProtocol.Local("value", "str", local.location(), "local");
+        assertNull(new NagiSemanticIndex(facts("none", List.of(), List.of(local, other), List.of())).local(FILE, 4, 5, 5));
+        var references = List.of(new NagiAssistProtocol.Reference(local.location(), at(1, 1, 5)),
+                new NagiAssistProtocol.Reference(local.location(), at(2, 1, 5)));
+        assertNull(new NagiSemanticIndex(facts("none", List.of(), List.of(local), references)).local(FILE, 4, 5, 5));
+        var a = new NagiAssistProtocol.Definition("value", "function", local.location(), "def value()", List.of());
+        var b = new NagiAssistProtocol.Definition("value", "class", local.location(), "class value", List.of());
+        assertNull(new NagiSemanticIndex(facts("none", List.of(a, b), List.of(local), List.of())).local(FILE, 4, 5, 5));
+        var collision = new NagiSemanticIndex(facts("none", List.of(a), List.of(local), List.of()));
+        assertNull(collision.local(FILE, 4, 5, 5));
+        assertNull(collision.definition(FILE, 4, 5, 5));
+        var unresolved = new NagiSemanticIndex(facts("none", List.of(a, b),
+                List.of(new NagiAssistProtocol.Local("value", "i64", at(6, 5, 5), "local")),
+                List.of(new NagiAssistProtocol.Reference(at(6, 5, 5), a.location()))));
+        assertNull(unresolved.local(FILE, 6, 5, 5));
     }
+
 }

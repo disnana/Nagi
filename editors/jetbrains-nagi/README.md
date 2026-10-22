@@ -33,13 +33,13 @@ Pythonプラグインの追加インストールは不要です。これはPyCha
 
 ## 開発中: hoverとQuick Documentation
 
-plugin候補版は、マウスhoverの説明とQuick Documentationで、compilerが提供した関数signature・引数・戻り値、classのfieldを表示します。class構築はfieldを名前付き指定する形式です。compilerの空parametersをゼロ引数constructorとは表示しません。引数情報にも、compilerが提供した場合だけ戻り値を表示します。
+plugin候補版は、マウスhoverの説明とQuick Documentationで、compilerが提供した関数signature・引数・戻り値、classのfield、正確な位置に対応する変数の型を表示します。class構築はfieldを名前付き指定する形式です。compilerの空parametersをゼロ引数constructorとは表示しません。引数情報にも、compilerが提供した場合だけ戻り値を表示します。
 
 入力中の背景解析には既存の待ち時間を使い、変更していない名前の色は解析待ちの間も維持します。編集箇所に触れた名前や、依存ファイル・設定・信頼状態が変わった場合の色は破棄します。保持するのは表示用の色だけで、古い型・説明・診断・定義移動には使いません。
 
 診断hoverでは既知のCLI装飾とtoken名を読みやすく表示し、元の診断descriptionは保持します。未知の文面・notes・hintsも残します。HTMLやentityに見える文字列は文字として表示し、`list[str?]`など意味のある型構文は削りません。
 
-信頼されたproject・対応するassist compiler・現在のsource snapshotが必要です。初回は背景解析の開始だけになる場合があり、warmup後に再hoverまたはQuick Documentationを再実行してください。未保存の編集・依存・compiler設定変更で古い結果は失効します。compiler情報がない場合に型や説明文を推測しません。部分的なeditor解析であり、完全なbuild検査ではありません。未リリースの変更で、実GUIの受入確認はheadless testと分けて記録します。[設計と検証範囲](../../docs/internal/jetbrains-documentation-plan.md)を参照してください。
+信頼されたproject・対応するassist compiler・現在のsource snapshotが必要です。初回は同じ説明要求が背景解析の完了を待ちます。待機中に編集・依存・設定・信頼状態が変わった要求は取り消します。マウス表示にはIDE側のhover documentation設定が必要で、Quick Documentation actionも同じ情報を表示します。未保存の編集・依存・compiler設定変更で古い結果は失効します。compiler情報がない場合に型や説明文を推測しません。現protocolが署名を返さない組み込み`print`などには引数説明を作りません。部分的なeditor解析であり、完全なbuild検査ではありません。未リリースの変更で、実GUIの受入確認はheadless testと分けて記録します。[設計と検証範囲](../../docs/internal/jetbrains-documentation-plan.md)を参照してください。
 
 ## 0.1.3
 

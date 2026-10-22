@@ -561,3 +561,11 @@ fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inv
 ### 2026-10-22 JetBrains候補の入力中role色維持（未リリース）
 
 候補ZIPの利用者報告から実ExternalToolPassの空結果による色消失をRED再現し、色属性だけをbounded RangeMarker storeへ保存する修正を追加。接触token・dependency/config/compiler/trust/VFS/close/dispose/fresh失敗は破棄し、古い型・診断・参照を再利用しない。既存350/80ms debounce・取消契約は維持。標準DocumentationTargetのwarm経路を実compiler/actual offset/worker read actionで検証したが、cold同hover更新とbuiltin署名情報の不足、実GUIの無表示報告は未解決として分離した。全plugin225件成功（71秒、skip0）。packaging/Verifier/4IDE CI/独立audit/GUI gateは別検証。[設計・失敗と検査記録](jetbrains-documentation-plan.md)。
+
+
+### 2026-10-22 JetBrains cold documentationとexact locals（未リリース）
+
+色保持の独立audit後、標準DocumentationTargetProvider＋SDK async supplierで同じcold hover要求を既存worker完了へ接続。Boolean通知ticketは8件、独立deadline・epoch/stamp/trust/pointer再検証・lock外通知・取消/失効/終了時解放を実装した。新dependencyの既存precapture再予約だけをattempt tokenで引き継ぎ、旧factsを採用せず期限も延長しない。localsの型は既存exact compiler locationsだけを表示し、衝突とbuiltin署名推測を拒否する。公開0.2.0の実配布CLIでもHigh/Low function/class/locals/asyncを確認、bare import文法差は正式quoted path fixtureで分離した。全243件84秒成功後、dispose済みtrust eventの追加RED→1行guard→targeted GREENを確認し、最終全体/ZIP/Verifier・独立audit・最新HEAD CIへ進める。実GUI受入は未完。[設計・検証記録](jetbrains-documentation-plan.md)。
+
+
+同cold sourceの最終全243件77秒成功、ZIP21秒成功、IC251 Plugin Verifier Compatible（11秒、deprecated3/experimental12）。source/test/docsを凍結し、別High audit・最新HEADの4IDE CI・実GUI受入を残す。ZIPとログ/実験失敗は作業環境の `local-only/pr148-stability/` に保持する。

@@ -32,17 +32,14 @@ public final class NagiDocumentationProvider extends AbstractDocumentationProvid
             service.requestNavigation(file);
             return null;
         }
-        var definition = service.documentedDefinition(file, source);
-        if (definition == null) return null;
-        String html = NagiDocumentation.definition(definition);
-        return service.isCurrent(file, response) ? html : null;
+        return service.documentationHtml(file, source);
     }
 
     @Override public @Nullable String getQuickNavigateInfo(PsiElement element, PsiElement originalElement) {
         return generateDoc(element, originalElement);
     }
 
-    private static @Nullable PsiElement sourceElement(@Nullable PsiElement element) {
+    static @Nullable PsiElement sourceElement(@Nullable PsiElement element) {
         if (element == null || !element.isValid()) return null;
         PsiFile file = element.getContainingFile();
         if (file == null || !NagiCompilerAction.isSourceFile(file.getVirtualFile())) return null;

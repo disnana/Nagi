@@ -133,3 +133,9 @@ Session65/SF07 summary37/native-finish20/source guard16/CI policy160件が成功
 
 
 2026-10-22、#148候補の入力時色消失をSol 6.1 Highが事前承認済みpresentation-only設計で実装。実ExternalToolPassのRED→GREEN、debounce起動/取消数、marker上限/取消cleanup、trust復帰の初回full失敗と修正を記録した。modernDocumentationTarget testのJob context不足はSDK bridgeをArchitect xhighがread-only確認し、正規indicator/coroutine/blocking/read contextでwarm成功。全225件71秒成功。病的な同位置20,000marker fixtureは停止し、製品上限を維持したtest-only境界注入へ変更。compiler/CI/run profile/coldasyncの製品変更は行わず、別Highの最終auditと4IDE CI/実GUIを残す。親と担当のGradle共有cacheを直列使用し、workspace空き4.4GiB/tmp7.9GiBを維持。利用量・モデル単体時間は未測定。
+
+
+2026-10-22、Sol 6.1 Highが#148のcold hover/localsを、前段colorの別High audit後に実装。Architect xhighはscalar通知・timer所有・read→lock順・限定recapture責任移譲を事前/境界発見時にread-only確認した。取消testの同assert2失敗で停止し、SDK ApplicationImplのPCE→null wrapperを根拠にtest executorを是正、assertを維持してactual SDK Deferred取消を検証。公開0.2.0と開発版のimport文法差、CRLF/Low commentのfixture不備を製品bugと区別。14ticket検査/公開CLI連携と全243件84秒成功、dispose後trust eventのRED→guard→targeted16秒成功後に最終全体/ZIP/Verifierを実行する。新run profile/compiler変更なし。別High最終audit/4IDE CI/実GUI受入は別gate、model単体時間と利用量は未測定。
+
+
+cold最終guard後の全243件77秒・ZIP21秒・IC251 Verifier11秒Compatible（deprecated3/experimental12）を実行し、source/test/docsを凍結。API警告を隠さず最新4IDE CIへ渡し、別Highの独立最終auditと実GUIを未完gateとして維持する。

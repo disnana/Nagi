@@ -92,5 +92,12 @@ public final class NagiDocumentationTest {
         });
         assertTrue(rendered.get(), rendered.get().contains(literal));
         assertTrue(rendered.get(), rendered.get().contains("hint: " + literal));
+    }    @Test public void localTypesAreEscapedWithoutInventingCallableFacts() {
+        String html = NagiDocumentation.local(new NagiAssistProtocol.Local("value", "list[str?] &lt; <tag> 😀", LOCATION, "local"));
+        assertTrue(html.contains("value: list[str?] &amp;lt; &lt;tag&gt; 😀"));
+        assertFalse(html.contains("<tag>"));
+        assertFalse(html.contains("Returns:"));
+        assertFalse(html.contains("Parameters"));
     }
+
 }

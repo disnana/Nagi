@@ -2,6 +2,8 @@
 
 2026-10-22。base main `765f0b0`。compiler/CIを変更せず、plugin側でcompiler事実の表示を追加する未リリースの作業。
 
+以下の初期設計・検証記録と、その後の色保持/cold非同期修正を段階別に残す。現候補のcold動作は末尾の「cold要求の非同期完了とlocals」で更新する。
+
 ## 調査した表示経路
 
 - `NagiAssistExternalAnnotator` の診断注釈が既存のmouse-hover本文を供給する。実compilerのread-only assistで `error: line 2:12: 式が必要です (found Sym(")"))`、` --> path:2`、` 2 | source` がmessageに入ることを確認した。parserのtoken Debugはここへ到達する。
@@ -60,3 +62,29 @@ coldのnull応答後に同じhoverを更新しない制限は未解決。標準a
 正式最終検査: IC 2025.1.1 / SDK251、Java21、`NAGI_TEST_COMPILER=/workspace/Nagi/target/release/nagic` で全plugin 225件、failure/error/skip 0（71秒）。保存fixtureの既存NagiSaveBarrier追加も含む。`git diff --check` 成功。最終raw log: `local-only/pr148-stability/full-final.log`。新sourceのpackaging/Verifier・exact HEADの4IDE CI・別担当の独立audit・実GUIはこの時点では未完。
 
 opaque identityへの最終3行修正後にも全225件を再実行し、failure/error/skip 0（71秒、`full-opaque-generation.log`）。旧responseへの不要な強参照を保持しない。Verifierはcold asyncの後続差分後、最終sourceでまとめて行う。cold async開始前にこの色修正を凍結し、別Highの独立auditへ渡す。
+
+
+## cold要求の非同期完了とlocals（2026-10-22、未リリース）
+
+利用者はActions ZIPを試し、本体0.2.0を正しく指定した後も「全部」のhover説明が出ないと報告した。printだけの問題と扱わない。初期版のProvider直呼び/warm成功では、coldでnullを返した後に同じ要求を更新しないDX不足を検証できていなかった。SDK251のEditorMouseHoverPopupManagerはmouse設定を満たすactual offsetのPSIを取り、標準DocumentationTarget consumerへ進む。今回の実テストはplugin.xml登録EPがNagi/NagiLowそれぞれで新Targetを選んだことと、SDK consumerが同じcold要求のasync resultを最後まで解決することを検証する。実GUI表示の受入をこのheadless検査へ置き換えない。
+
+標準DocumentationTargetProviderはNagi sourceだけに応答する。TargetはSmartPsiPointer・actual token位置/長さ・Document stamp・service epochを保持し、型/Definition/旧CachedResponseを保持しない。warmは現在の既存renderer、coldはSDK asyncDocumentation Supplierを返す。Supplierはread action外でSDK awaitWithCheckCanceledを使い、前後にも取消を確認する。最後の短いreadでpointer/範囲/stamp/epoch/trust/fresh/isCurrentを再検査してから表示する。EDT待機、read lockを保った待機、poll/sleep、新たなretry loop、強制popup、グローバルIDE設定変更は追加しない。旧DocumentationProviderの互換経路も維持する。
+
+待機ticketは最大8件、FutureはBoolean readinessだけを渡す。同じfile/Document stamp/epoch groupの解析を共有し、cursor query置換では引き継ぐ。登録/publishはread→service lock順でlost wakeを防ぎ、terminal通知はlock内でdetachした所有者がlock外で行う。private deadline futureは独立JDK executorでcheck timeout＋350ms（1,350〜300,350ms）を待ち、compiler workerが停止中でもregistryを解放してから公開signalをfalse完了する。publish/失効/cancelはprivate deadlineも取り消し、sourceやticketを期限まで不要保持しない。AppLevel trust失効通知は対象projectだけをhard invalidateし、待機・cache・role store・daemon表示を更新する。
+
+新dependencyを初めて報告した結果は既存どおりdiscardし、precaptureをやり直す既存予約を使う。この予約が受理された1分岐だけ、origin attemptと同file/Document stamp/epochへ束縛するscalar tokenでticket責任を移譲する。新しいretryを増やさず、最初の独立deadlineを延長しない。再予約の拒否、callback失効、generic STALE、編集・VFS・設定・trust・failure・disposeは解除する。owner identityを使い、遅れて終わった旧attempt/finally/callbackが新ticketを消さない。tokenにも旧source snapshotやcompiler factsを保持しない。
+
+localsは既存protocolのname/type/exact locationだけを使い、現在の完全tokenと一致する位置へ型を表示する。definitionとの衝突、異なるlocal facts、異なるreference targets、曖昧な定義はfail closed。名前だけでbuiltin/alias/型を判定せず、local型から関数の引数・戻り値を合成しない。builtin printは署名がないため未表示の制限を明記する。
+
+検証中の失敗も保持する。CRLF文書のIDE正規化に対するfixture offsetをactual PSIへ訂正し、Lowの不正な// commentを正式な#へ直した。CRLF生成のassertはIDEがdiskを正規化する前のwrite直後に置く。取消testのApplication.executeOnPooledThreadはSDK自体がPCEを正常nullへ変換するため、raw AppExecutor submitとactual SDK Deferred取消へ是正し、例外/他ticket生存/compiler非取消のassertを維持した（製品取消不具合とは断定しない）。timeout完了とregistry解放の競合もprivate deadline＋detach所有で修正した。
+
+公開Nagi 0.2.0実配布binaryでもHigh/Lowのcold関数/class/localsとasync/戻り値、renderer/index負検査が成功。初回35 focused中の残1件は公開版がbare module `from helper import ...`を拒否する文法差で、両CLIが受理する `from "helper.nagi" import ...` へfixtureを訂正し、公開版の同cold SDK consumerも成功した。bare module文法が公開0.2.0対応だとは主張しない。14件のticket検査では上限8/9、共有worker、別ticket取消、独立timeout、解析失敗/拒否、同group query置換、別file置換、edit/dependency/config/trust/close/dispose、old pointer、safe recaptureと遅延finally/rejected enqueueを確認する。raw logは `local-only/pr148-stability/async-*.log` とquoted-import JSONに保持する。正式全suite/ZIP/Verifier/独立audit/最新HEAD CIとGUI受入は別gateで確定する。
+
+
+cold最終sourceの全plugin243件、failure/error/skip 0（84秒、`async-full.log`）。その後、新AppLevel listenerが明示dispose済みserviceのCLOSEDを上書きするcaseを追加assertでRED再現し、disposed/projectDisposed guardを追加してtargeted GREEN（16秒）。この最小修正後の全体・ZIP・Verifierを続けて検証する。旧失敗log/JSONを削除せず、未確認GUIと最新HEAD CIを残す。
+
+
+最終guardを含む正式全plugin243件、failure/error/skip 0（77秒、`async-full-final.log`）。`git diff --check` 成功。source/testの変更はここで凍結し、同sourceのZIPとVerifierを検証する。新規run profile・compiler・CI製品変更は含めない。
+
+
+同sourceのZIP生成は21秒で成功、SHA-256 `30293d30acac49be8ee12a7dfe655a4a075698cde07d24f96f841f88c58e183e`。実ZIPから新async EP登録1件・新TargetProvider・旧Providerを確認した。IC 2025.1.1 / 251.25410.109のPlugin Verifierは11秒でCompatible（deprecated API 3、experimental API 12）。標準Documentation/TargetPresentationとtrust listenerを含むexperimental APIの版変更リスクは残し、4IDEの最新HEAD CIで検査する。HOME/TLSと検査を維持し、専有Verifier home、既存proxyのhost/port、SDK/cacheを再利用した。raw log `async-package.log` / `async-verifier.log`。source/test/docsを凍結し、別Highの独立audit・最新HEAD CI・利用者の実GUI受入へ渡す。今回のheadless成功を利用者の実mouse表示確認と報告しない。

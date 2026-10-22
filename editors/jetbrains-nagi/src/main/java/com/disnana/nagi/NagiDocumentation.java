@@ -42,6 +42,10 @@ final class NagiDocumentation {
         return html.append("</body></html>").toString();
     }
 
+    static String local(NagiAssistProtocol.Local local) {
+        return "<html><body><pre>" + escape(local.name()) + ": " + escape(local.type()) + "</pre></body></html>";
+    }
+
     static String diagnosticTooltip(NagiAssistProtocol.Diagnostic diagnostic) {
         String[] lines = diagnostic.message().split("\n", -1);
         var header = HEADER.matcher(lines[0]);

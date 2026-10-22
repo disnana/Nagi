@@ -20,6 +20,7 @@ final class NagiSemanticIndex {
     private final Map<Key, NagiAssistProtocol.Definition> functions;
     private final Map<Key, NagiAssistProtocol.Definition> documented;
     private final Map<String, List<Color>> colors;
+    private final Map<Key, NagiAssistProtocol.Local> localDescriptions;
 
     NagiSemanticIndex(NagiAssistProtocol.Response response) {
         // semantic_status describes cursor completion, not the whole symbol
@@ -29,6 +30,7 @@ final class NagiSemanticIndex {
             functions = Map.of();
             documented = Map.of();
             colors = Map.of();
+            localDescriptions = Map.of();
             return;
         }
         Map<Key, NagiAssistProtocol.Definition> definitions = new HashMap<>();
@@ -70,6 +72,7 @@ final class NagiSemanticIndex {
             Key previous = targets.putIfAbsent(location, target);
             if (previous != null && !previous.equals(target)) conflictingReferences.add(location);
         }
+        Set<Key> ambiguousTargets = new HashSet<>(conflictingReferences);
         Map<Key, NagiAssistProtocol.Definition> descriptions = new HashMap<>(definitions);
         Map<Key, NagiAssistProtocol.Definition> callable = new HashMap<>();
         for (var reference : response.references()) {
@@ -103,6 +106,28 @@ final class NagiSemanticIndex {
         }
         Map<String, List<Color>> frozen = new HashMap<>();
         byFile.forEach((path, values) -> frozen.put(path, List.copyOf(values)));
+        Map<Key, NagiAssistProtocol.Local> locals = new HashMap<>();
+        Set<Key> conflictingLocals = new HashSet<>();
+        for (var local : response.locals()) {
+            Key key = Key.of(local.location());
+            var previous = locals.putIfAbsent(key, local);
+            if (previous != null && !previous.equals(local)) conflictingLocals.add(key);
+        }
+        Set<Key> collidingLocalKeys = new HashSet<>(locals.keySet());
+        collidingLocalKeys.retainAll(descriptions.keySet());
+        for (var reference : response.references()) {
+            if (ambiguous.contains(Key.of(reference.target()))) conflictingLocals.add(Key.of(reference.location()));
+        }
+        conflictingLocals.addAll(collidingLocalKeys);
+        collidingLocalKeys.forEach(descriptions::remove);
+        collidingLocalKeys.forEach(callable::remove);
+        // A local's own exact type is authoritative even without a navigable
+        // definition. It cannot resurrect conflicting targets or declarations.
+        conflictingLocals.addAll(ambiguousTargets);
+        conflictingLocals.addAll(ambiguous);
+        conflictingLocals.addAll(definitions.keySet());
+        conflictingLocals.forEach(locals::remove);
+        localDescriptions = Map.copyOf(locals);
         colors = Map.copyOf(frozen);
         functions = Map.copyOf(callable);
         documented = Map.copyOf(descriptions);
@@ -113,6 +138,9 @@ final class NagiSemanticIndex {
     }
     NagiAssistProtocol.Definition definition(String file, int line, int column, int length) {
         return documented.get(new Key(NagiAssistService.normalizePath(file), line, column, length));
+    }
+    NagiAssistProtocol.Local local(String file, int line, int column, int length) {
+        return localDescriptions.get(new Key(NagiAssistService.normalizePath(file), line, column, length));
     }
     List<Color> colors(String file) { return colors.getOrDefault(NagiAssistService.normalizePath(file), List.of()); }
 }
