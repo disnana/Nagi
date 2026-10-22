@@ -1,6 +1,15 @@
 # コンパイラ・Rust境界の進捗
 
 
+## 2026-10-22: #147 BrowserLogin失敗counterの観測欠落
+
+CI run `39747673107` / Linux packageで、BrowserLogin strict JSON public testの最後のvalid requestが504になった。保存済み診断はHandler phase16 / Pending / HandlerTimer / Expired、claim消費・restore commit ackを示す。phase16はbefore_handler・handler・issue・mapperを含むため、SQLite issueの停滞と断定しない。1000msのタイムアウト原因は未解決。親の同cfg通常suite1回と、事前に各3回と決めたstock/diagnostic交互比較の全6runは各10件成功し、再現しなかった。compile時間を含む試行を速度比較に使わず、成功までの盲目retryとは扱わない。
+
+確定した問題は、testが既に出す `sf03_browser_failure_counters_v1` をSession診断が認識せずraw削除時に捨てること。Sol 6.1 Highの事前設計と親の採用後、Pythonのfailure-only console補助行だけを追加した。既存SF07 parserのgrammar・secret拒否・64KiB制限を再利用し、source pin・完全な失敗inventory・正確なfailed stdout ownerと全出現を照合する。各ownerはcounter直後のassertで終了するため1件だけ、全体2ownerまで。未知/重複/外側marker・taint等は固定unavailableだけとしrawを再表示しない。callbackのissue_committed flagは観測済み位置を示し、falseからnative commit不在を推定しない。
+
+合成CLI回帰は修正前にcounter0件でRED、修正後に既存counterを保持してGREEN。JSON v2のbytes・exit・marker_countは不変。runtime/fixture/workflow、期限/assert/parallelismは変更しない。wire両iterationが同じfailed ownerから出る到達不能形も別RED→GREENで拒否した。最終Python検査はSession診断65件、SF07 summary37件、native-finish20件、browser source/projection guard16件、CI policy160件が成功。原ログは `local-only/release-0.2.1/browser-counter-*.log`、比較条件と全結果は同所の `session-probe.json` / `session-paired-probe.json` に保持。独立最終auditと新HEAD CIはPR #147で追跡し、この補助観測をタイムアウト自体の修正とは報告しない。
+
+
 ## 2026-10-22 JST: Tokioタイマー修正の独立対応
 
 main `5d3e58e`から#145に依存しない緊急差分。公式[Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692)と[1.54.1 release](https://github.com/tokio-rs/tokio/releases/tag/tokio-1.54.1)を確認した。報告は1.54.0のTimerEntry破棄とdriverの並行アクセスであり、Nagiへのremote exploitは未確認。提示GHSA番号のglobal GitHub APIは404のため、その識別子の正しさは未確認とする。追跡済みlockは1.53.1×8、1.53.2×17で1.54.0なし。履歴のbenchmark証拠は改変しない。
