@@ -170,6 +170,10 @@ class IntegrationTests(unittest.TestCase):
     def setUp(self):
         # Retained owned fake data only; no real CA/key/DB or input deletion.
         self.work=Path(tempfile.mkdtemp(prefix='unit-',dir=os.environ.get('SF08_UNIT_ROOT','/tmp')))
+        # Public image source bytes, not host APT configuration or a bypass of the pin.
+        source = patch.object(ci, 'PREREQUISITE_SOURCE', ci.HERE/'ubuntu.sources.fixture')
+        source.start()
+        self.addCleanup(source.stop)
 
     def fake(self, fail_browser=False, bad_ack=False, resets=12, closure=True, cancel=False,
              failure_stage='engine_wrong_ca',browser_status=0,browser_report=None,wait_error=None,failure_engine='firefox'):
@@ -467,6 +471,8 @@ class IntegrationTests(unittest.TestCase):
                     expected = {'class': 'child_exit', 'status': 100} if cause == 'exit' else (
                         {'class': 'child_signal', 'status': 9} if cause == 'signal' else {'class': cause})
                     self.assertEqual(error.detail, expected)
+                    self.assertEqual(error.prerequisite_diagnostic['install_spawned'], failed_stage == 'apt_install')
+                    self.assertIsNotNone(ci.prerequisite_diagnostic(error.prerequisite_diagnostic))
                     expected_names = ['prerequisite_apt_update']
                     if failed_stage == 'apt_install': expected_names.append('prerequisite_apt_install')
                     self.assertEqual([name for name, _ in owner.started], expected_names)
@@ -499,6 +505,10 @@ class IntegrationTests(unittest.TestCase):
                 if transition == 'spent_budget': expected.append('prerequisite_apt_install')
                 self.assertEqual(owner.started, expected)
                 self.assertLess(clock[0], 241.0)
+                observation = caught.exception.prerequisite_diagnostic
+                self.assertEqual(observation['install_spawned'], transition == 'spent_budget')
+                self.assertEqual(observation['install_admission_remaining_ms'], 1000 if transition == 'spent_budget' else 0)
+                self.assertEqual(observation['update_elapsed_ms'], 0 if transition == 'already_cancelled' else (240000 if transition == 'expired_before_install' else 239000))
 
     def test_prerequisite_commands_bound_transport_and_keep_all_required_packages(self):
         owner = Mock(cancelled=False)
@@ -509,7 +519,8 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         update, install = [call.args[1] for call in calls]
         for command in (update, install):
-            for option in ('Acquire::http::Timeout=30', 'Acquire::https::Timeout=30', 'Acquire::Retries=0'):
+            for option in ('Acquire::http::Timeout=30', 'Acquire::https::Timeout=30', 'Acquire::Retries=0',
+                           'Dir::Etc::sourcelist=' + str(ci.PREREQUISITE_SOURCE), 'Dir::Etc::sourceparts=-'):
                 self.assertEqual(command.count(option), 1)
             self.assertNotIn('/bin/bash', command)
         self.assertEqual(update[-3:], ['APT::Update::Error-Mode=any', 'update', '-qq'])
@@ -517,10 +528,64 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(install[-6:], ['install', '-y', '--no-install-recommends',
                                       'libnss3-tools', 'build-essential', 'pkg-config'])
 
+    def test_prerequisite_source_pin_refuses_missing_changed_and_nonregular_before_spawn(self):
+        valid = (ci.HERE/'ubuntu.sources.fixture').read_bytes()
+        self.assertEqual(ci.hashlib.sha256(valid).hexdigest(), ci.PREREQUISITE_SOURCE_SHA)
+        for kind in ('missing', 'changed', 'directory', 'symlink', 'fifo', 'oversized'):
+            with self.subTest(kind=kind):
+                path = self.work / kind
+                if kind == 'changed': path.write_bytes(valid + b'\n')
+                if kind == 'directory': path.mkdir()
+                if kind == 'symlink': path.symlink_to(ci.HERE/'ubuntu.sources.fixture')
+                if kind == 'fifo': os.mkfifo(path)
+                if kind == 'oversized': path.write_bytes(b'x' * (ci.PREREQUISITE_SOURCE_MAX_BYTES + 1))
+                owner = Mock(cancelled=False)
+                with patch.object(ci, 'PREREQUISITE_SOURCE', path):
+                    with self.assertRaises(ci.PrerequisiteFailure) as caught:
+                        ci.run_prerequisites(owner)
+                self.assertEqual(caught.exception.detail, {'class': 'unknown'})
+                self.assertEqual(caught.exception.prerequisite_stage, 'apt_update')
+                self.assertIsNone(caught.exception.leader)
+                owner.spawn.assert_not_called()
+
+    def test_prerequisite_pin_is_rechecked_before_install_and_consumes_original_budget(self):
+        for cause in ('changed', 'timeout', 'cancelled'):
+            with self.subTest(cause=cause):
+                clock = [0.0]
+                owner = Mock(cancelled=False)
+                owner.peek.return_value = NS(si_code=os.CLD_EXITED, si_status=0)
+                owner.drain_captured_stderr.return_value = None
+                checks = []
+                def check():
+                    checks.append(None)
+                    if len(checks) == 2:
+                        if cause == 'changed': raise ValueError('private-sentinel')
+                        if cause == 'timeout': clock[0] = 240
+                        if cause == 'cancelled': owner.cancelled = True
+                with patch.object(ci, 'check_prerequisite_source', side_effect=check), \
+                     patch.object(ci.time, 'monotonic', side_effect=lambda: clock[0]):
+                    with self.assertRaises(ci.PrerequisiteFailure) as caught:
+                        ci.run_prerequisites(owner)
+                self.assertEqual(caught.exception.detail, {'class': {'changed': 'unknown', 'timeout': 'timeout', 'cancelled': 'cancelled'}[cause]})
+                self.assertEqual(caught.exception.prerequisite_stage, 'apt_install')
+                self.assertFalse(caught.exception.prerequisite_diagnostic['install_spawned'])
+                self.assertEqual(owner.spawn.call_count, 1)
+
+    def test_prerequisite_diagnostic_rejects_unknown_fields_and_unbounded_or_noncanonical_scalars(self):
+        valid = dict(update_elapsed_ms=240000, install_spawned=True, install_admission_remaining_ms=1)
+        self.assertEqual(ci.prerequisite_diagnostic(valid), valid)
+        bad = [None, [], {**valid, 'raw': 'secret'}, {key: value for key, value in valid.items() if key != 'install_spawned'}]
+        for key, values in (('update_elapsed_ms', [-1, 240001, True, 1.0, '1', None]),
+                            ('install_admission_remaining_ms', [-1, 240001, False, float('nan')]),
+                            ('install_spawned', [0, 1, 'true', None])):
+            bad.extend({**valid, key: value} for value in values)
+        for value in bad:
+            with self.subTest(value=value): self.assertIsNone(ci.prerequisite_diagnostic(value))
+
     def test_prerequisite_summary_is_fixed_and_requires_closed_ownership(self):
         for stage in ('apt_update', 'apt_install'):
-            for closed in (True, False):
-                with self.subTest(stage=stage, closed=closed):
+            for closed, echild in ((True, True), (True, False), (False, True), (False, False)):
+                with self.subTest(stage=stage, closed=closed, echild=echild):
                     class AptOwner:
                         cancelled = False
                         def __init__(self): self.started, self.closes = [], []
@@ -532,9 +597,9 @@ class IntegrationTests(unittest.TestCase):
                         def peek(self, _leader): return NS(si_code=os.CLD_EXITED, si_status=0)
                         def close_all(self, **kwargs):
                             self.closes.append(kwargs)
-                            return NS(closed=closed, echild_observed=closed)
+                            return NS(closed=closed, echild_observed=echild)
                     owner = AptOwner()
-                    run_root = self.work / ('apt-' + stage + str(closed))
+                    run_root = self.work / ('apt-' + stage + str(closed) + str(echild))
                     run_root.mkdir(mode=0o700)
                     def load(name, _path):
                         if name == 'owned_processes':
@@ -551,9 +616,17 @@ class IntegrationTests(unittest.TestCase):
                     raw = emitted.call_args.args[0]
                     record = json.loads(raw)
                     self.assertEqual(result, 1)
-                    self.assertEqual(record['code'], 'prerequisites' if closed else 'ownership')
+                    self.assertEqual(record['code'], 'prerequisites' if closed and echild else 'ownership')
                     self.assertEqual(record['failure'], {'class': 'unknown'})
-                    self.assertEqual(record.get('prerequisite_stage'), stage if closed else None)
+                    self.assertEqual(record.get('prerequisite_stage'), stage if closed and echild else None)
+                    observation = record.get('prerequisite_diagnostic')
+                    if closed and echild:
+                        self.assertEqual(set(observation), {'update_elapsed_ms', 'install_spawned', 'install_admission_remaining_ms'})
+                        # spawn raised: admission differs from successful process ownership.
+                        self.assertFalse(observation['install_spawned'])
+                        self.assertIsNotNone(ci.prerequisite_diagnostic(observation))
+                    else:
+                        self.assertIsNone(observation)
                     self.assertEqual(owner.closes, [{'timeout': 20, 'grace': .05}])
                     self.assertNotIn('build', owner.started)
                     self.assertEqual((record['browser_executions_accepted'], record['resets_accepted']), (0, 0))

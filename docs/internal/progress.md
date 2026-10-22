@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-22: #149 SF08 prerequisitesの不要repository依存
+
+[限定修正と実行証拠](sf08-prerequisite-repositories.md)。固定imageの公式Ubuntu sourceをregular-file/有限bytes/SHAで検証し、APT update/install双方へ同じsource選択を指定した。不要なNodeSource結合を除き、失敗時の厳密な3scalarをclosed＋actual ECHILD後だけ公開する。240秒/署名/TLS/required packages/capsule/browser検査は不変。Python64・Node148・source/projection16・CI policy160成功。原trustのfresh全実行はAPT通過後build101/unknown、browser0で未受入。GitHubの期限失敗と同根とは断定せず、新HEADの実3engine CIと別High最終監査を必須で残す。
+
 ## 2026-10-22 JST: PyCharm編集補助の調査とNagi入力補正
 
 main `5d3e58e`を基準にPython実装・登録を固定commitで調査し、[対応表と実装順](jetbrains-python-editing-plan.md)を作成した。Highの手動dedentを維持し、Nagi独自の連続Enter退出、else/caseのコロン補正、High/Lowの独立した閉じ括弧の整列を追加した。上限付きの既知文脈だけでleading whitespaceを変更し、Python専用構文やfull formatter/renameを推測実装しない。#141の名前付きimportは別作業として維持する。実IDE操作とcompiler連携を含む188件/0skip、Java 21、候補ZIP生成・descriptor/hash検証を確認した。[raw/観測条件/RED-GREEN](../../editors/jetbrains-nagi/benchmarks/python-editing-2026-10-22/README.md)。独立監査・exact-headのIDEA/PyCharm stable/EAP CIはPR本文で追跡し、ローカル成功やPython source比較をGUI/IME受入・完全同等性の証拠にしない。
