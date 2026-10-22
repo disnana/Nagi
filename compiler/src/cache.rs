@@ -370,4 +370,28 @@ mod tests {
         assert!(!encoded.contains("safe_to_delete"));
         assert!(!encoded.contains("eligible"));
     }
+
+    #[cfg(unix)]
+    #[test]
+    fn invalid_unicode_root_and_sample_bytes_survive_without_filesystem_support() {
+        use std::os::unix::ffi::OsStringExt;
+        let raw = PathBuf::from(std::ffi::OsString::from_vec(vec![b'r', 0xff, b'w']));
+        // A relative root is rejected before IO, so this also runs on APFS,
+        // which cannot create the invalid-Unicode filename used on Linux.
+        let mut report =
+            cache_inventory::scan_root(&raw, RootKind::Output, Limits::new(1, 1).unwrap());
+        assert!(report.invalid_root);
+        report.samples.push(cache_inventory::Sample {
+            relative_path: raw,
+            class: cache_inventory::PathClass::Unknown,
+            use_hint: cache_inventory::UseHint::Unknown,
+            holding: cache_inventory::Holding::Unknown,
+            kind: cache_inventory::EntryKind::File,
+            logical_bytes: Some(8),
+        });
+        let serialized = root_json(&report);
+        let expected = json!({"encoding": "unix_bytes", "units": [114, 255, 119]});
+        assert_eq!(serialized["root_os"], expected);
+        assert_eq!(serialized["samples"][0]["relative_path_os"], expected);
+    }
 }

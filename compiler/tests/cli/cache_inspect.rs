@@ -253,7 +253,15 @@ fn inspect_reads_only_explicit_roots_and_emits_versioned_lossless_json() {
     #[cfg(unix)]
     {
         use std::os::unix::ffi::{OsStrExt, OsStringExt};
-        let name = std::ffi::OsString::from_vec(vec![b'r', 0xff, b'w']);
+        // APFS rejects ill-formed UTF-8 filenames with EILSEQ. Keep the same
+        // filesystem/no-write assertions there using a representable name;
+        // Linux still exercises an actual non-Unicode directory entry.
+        let filename_bytes = if cfg!(target_os = "macos") {
+            "r猫w".as_bytes().to_vec()
+        } else {
+            vec![b'r', 0xff, b'w']
+        };
+        let name = std::ffi::OsString::from_vec(filename_bytes.clone());
         let path = fixture.output.join(name);
         fs::write(&path, b"raw name").unwrap();
         let before_cwd = fixture.snapshot(&fixture.cwd);
@@ -276,9 +284,7 @@ fn inspect_reads_only_explicit_roots_and_emits_versioned_lossless_json() {
             .as_array()
             .unwrap()
             .iter()
-            .find(|sample| {
-                sample["relative_path_os"]["units"] == serde_json::json!([114, 255, 119])
-            })
+            .find(|sample| sample["relative_path_os"]["units"] == serde_json::json!(filename_bytes))
             .expect("the raw filename bytes should be preserved in the sample");
         assert_eq!(raw_sample["relative_path_os"]["encoding"], "unix_bytes");
         assert_eq!(
