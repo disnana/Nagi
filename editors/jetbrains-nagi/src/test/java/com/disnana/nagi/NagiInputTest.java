@@ -121,10 +121,10 @@ public class NagiInputTest extends BasePlatformTestCase {
         myFixture.checkResult("def main():\n    if ready:\n        return 1\n    <caret>");
     }
 
-    public void testEnterAfterEmptyLineKeepsHighBlockContext() {
+    public void testEnterAfterEmptyLineHonorsExplicitHighDedent() {
         myFixture.configureByText("main.nagi", "def main():\n\n<caret>");
         myFixture.performEditorAction(IdeActions.ACTION_EDITOR_ENTER);
-        myFixture.checkResult("def main():\n\n\n    <caret>");
+        myFixture.checkResult("def main():\n\n\n<caret>");
     }
 
     public void testMultilineReturnDedentsAfterClosingCall() {
@@ -447,11 +447,11 @@ public class NagiInputTest extends BasePlatformTestCase {
         myFixture.configureByText("main.nagi", "def main():<caret>");
         myFixture.performEditorAction(IdeActions.ACTION_EDITOR_ENTER);
         myFixture.performEditorAction(IdeActions.ACTION_EDITOR_ENTER);
-        myFixture.checkResult("def main():\n    \n    <caret>");
+        myFixture.checkResult("def main():\n    \n<caret>");
         myFixture.performEditorAction(IdeActions.ACTION_UNDO);
         myFixture.checkResult("def main():\n    <caret>");
         myFixture.performEditorAction(IdeActions.ACTION_REDO);
-        myFixture.checkResult("def main():\n    \n    <caret>");
+        myFixture.checkResult("def main():\n    \n<caret>");
     }
 
     @FunctionalInterface

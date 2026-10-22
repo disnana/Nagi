@@ -23,6 +23,14 @@ These features describe the published 0.1.2 release. It does not support whole-f
 
 The 0.1.3 implementation passed tests and Plugin Verifier on all four IDEA/PyCharm stable/EAP paths in [main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923). Each EAP IDE retains three deprecated-API and one experimental-API Verifier warnings; this was not a warning-free result. Headless checks do not establish GUI acceptance. The user has accepted the earlier GUI checks; this update changes listing text and compiler guidance without changing IDE feature control flow. IME, the full EditorConfig modifier and live configuration reload remain unconfirmed.
 
+## Editing improvements in development (unreleased)
+
+In High, consecutive Enter presses on an automatically indented blank line leave one block at a time. After typing, Backspace, paste or undo, Enter respects the indentation chosen by that operation. This exit gesture does not leave delimiter continuations or Low brace blocks.
+
+Typing the colon of `else:` or `case ...:` aligns the High header with its known owner, preserving relative indentation in multiline case headers. A standalone closing-delimiter line aligns with its opening line: `)` and `]` in High, and `)`, `]` and `}` in Low. The new corrections require Smart Indent, a single caret and no selection replacement. Branch and closing-delimiter corrections require a known complete prefix within 8192 characters, 96 lines and 4096 tokens; ordinary input is preserved beyond those limits or when context is uncertain.
+
+No Python plugin dependency is added. This does not establish full parity with PyCharm Python. The [internal comparison and implementation plan](../../docs/internal/jetbrains-python-editing-plan.md) records the researched features and remaining work. Full formatting, Rename and automatic imports are not included in this addition.
+
 ## 0.1.3
 
 This section describes 0.1.3 features and their limits, separately from 0.1.2. Install only a plugin ZIP listed in GitHub Releases or a compatible version offered by Marketplace. GitHub and Marketplace publication are separate; CI validation artifacts are not formal releases.

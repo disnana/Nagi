@@ -101,6 +101,15 @@ base `0e9a575`、core `39dc51d`。Sol 6.1 Highで実装前の整合性・Cargo�
 
 親を含め最大3体、子spawnと同じfileの同時編集なし。同model/effortの子は順番に動かし、実装担当とは別のSol 6.1 Highに必要検証後の最終auditを渡す。native/workspace/配布/CIとauditは別証拠である。役割ごとの実model時間・使用量・費用・service-tier設定interfaceは不明。報告した7%前後のbuild差はmodel速度やCI費用の差ではない。
 
+## 2026-10-22: PyCharm編集補助の適用
+
+base `5d3e58e`。Luna MaxへPython/Nagiのsource比較と、既存VS Code実装を根拠としたbounded typed補正の独立fileを担当させ、親がEnter履歴・実IDE検証・Docsを担当した。担当範囲を分離し、子の追加spawnなし。親reviewでtoken型、immutable Listのsort、非先頭closer、設定幅の上限を修正し、実fixtureでは選択解除のphaseとUndo/Redoによるstamp復元をRED/GREENで確認した。modelだけを原因とせず、SDKのcallback順序とsource/fixture不備を区別した。参照URLの親の推測5件も実sourceと照合して修正した。
+
+ローカルはsystem JREにCLI javacがなく、SDK付属JBRを実toolchainとして指定した。Gradle/SDK初回準備は約9分、cache準備後の全186件とZIP生成は72秒（IDE背景接続警告あり）。これらはmodel時間やNagi利用者のbuild速度比較ではない。model使用量・料金・service-tier指定は未計測/未対応。実装検証後の独立Sol 6.1 High監査とexact-head CIの結果はPR本文で別記する。
+
+Enter補助の独立Sol 6.1 High監査で、SDK `DocumentEx.getModificationSequence()` default恒常0を有効な履歴と扱うP2を検出した。親が実actionを保ったdelegate/document proxy回帰を追加し、2件中1件RED（16秒）を確認した。正値sequenceだけ記録・照合し、0開始の実sequenceは初回Enterから有効にする。監査対象旧HEAD `6ed5520`と修正後HEADの証拠を分け、更新差分・実行結果の再reviewを依頼する。
+修正後は実compiler連携を含む全188件/失敗・skip 0とZIP生成が55秒で成功し、descriptor/hash検証を通した。これはwarm SDK条件の実行時間で、変更前比の高速化は主張しない。
+
 2026-10-22 Tokio #8692対応では、親がupstream PR/release・tracked locks・生成Cargo境界を調査し、独立Sol 6.1 Highのread-only事前調査がruntime最低版/standalone fixture整合と必須failure casesを確認した。実装はmanifest/lockと日英文書に限定し、cache codeや履歴benchmarkを変えない。focused runtime862成功/計測1ignored、生成appのfresh/1.54.0/1.53.1 lock更新と旧exe保持を実行した。実装後の別のfresh Sol 6.1 High最終監査とexact-head CIはPRで追跡する。model時間/使用量/料金は未計測。ローカルSDK cache削除は初回自動reviewが拒否した後、ユーザーの明示許可により前taskで取得した再download可能なIDE SDK約2.9GBだけを削除し、ZIP/raw logとNagi app cacheは保持した。
 
 ## 2026-10-22: 0.2.1の重複処理と計測基盤
