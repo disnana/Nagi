@@ -61,6 +61,7 @@
         <editor.backspaceModeOverride language="NagiLow" implementationClass="com.disnana.nagi.NagiBackspaceModeOverride"/>
         <editorFactoryListener implementation="com.disnana.nagi.NagiEditorSettingsListener"/>
         <enterHandlerDelegate implementation="com.disnana.nagi.NagiEnterHandler"/>
+        <typedHandler implementation="com.disnana.nagi.NagiTypedHandler"/>
     </extensions>
     <applicationListeners>
         <listener class="com.disnana.nagi.NagiEditorSettingsListener" topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>

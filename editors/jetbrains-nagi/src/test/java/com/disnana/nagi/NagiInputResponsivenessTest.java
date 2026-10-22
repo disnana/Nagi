@@ -21,6 +21,35 @@ public class NagiInputResponsivenessTest extends BasePlatformTestCase {
         measureFile(10_000);
     }
 
+    public void testSmallAndTenThousandLineBranchAndClosingCorrections() {
+        for (int lines : new int[]{20, 10_000}) {
+            measureTypedCorrection(lines, true);
+            measureTypedCorrection(lines, false);
+        }
+    }
+
+    private void measureTypedCorrection(int lines, boolean branch) {
+        String prefix = branch ? "def main():\n    if ready:\n" : "def main():\n    call(\n";
+        String original = branch ? "        else" : "        ";
+        String body = branch ? "        value = 0\n" : "        value,\n";
+        myFixture.configureByText("typed-" + branch + "-" + lines + ".nagi",
+                prefix + body.repeat(lines - 3) + original + "<caret>");
+        Editor editor = myFixture.getEditor();
+        Document document = editor.getDocument();
+        int tailStart = document.getLineStartOffset(lines - 1);
+        String expected = (lines == 20 ? "    " : "        ") + (branch ? "else:" : ")");
+        long[] samples = new long[SAMPLES];
+        for (int index = -WARMUPS; index < SAMPLES; index++) {
+            long started = System.nanoTime();
+            myFixture.type(branch ? ':' : ')');
+            long elapsed = System.nanoTime() - started;
+            if (index >= 0) samples[index] = elapsed;
+            assertEquals(expected, document.getText(new TextRange(tailStart, document.getTextLength())));
+            replaceTail(editor, document, tailStart, original);
+        }
+        reportSamples(lines, branch ? "else-colon" : "closing-parenthesis", samples);
+    }
+
     private void measureFile(int lines) {
         var source = new StringBuilder("def main():\n");
         for (int index = 0; index < lines - 2; index++) source.append("    value = 0\n");
@@ -55,6 +84,10 @@ public class NagiInputResponsivenessTest extends BasePlatformTestCase {
             assertFalse("Nagi editor actions must not insert tabs", editedTail.contains("\t"));
             replaceTail(editor, document, tailStart, originalTail);
         }
+        reportSamples(lines, action, samples);
+    }
+
+    private static void reportSamples(int lines, String action, long[] samples) {
         Arrays.sort(samples);
         double medianMs = (samples[SAMPLES / 2 - 1] + samples[SAMPLES / 2]) / 2_000_000.0;
         double p95Ms = samples[(int) Math.ceil(SAMPLES * 0.95) - 1] / 1_000_000.0;
