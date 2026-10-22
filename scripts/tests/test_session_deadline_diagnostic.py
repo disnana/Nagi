@@ -1508,5 +1508,212 @@ class ReusableCsrfFailureSupplementTests(unittest.TestCase):
             self.assertIsNone(diag.csrf_reusable_observation(raw, 101, record=record))
 
 
+class BrowserFailureCounterSupplementTests(unittest.TestCase):
+    CASE = "input_and_strict_json_rejections_do_not_consume_or_call_verifier"
+    WIRE_CASE = "wire_body_cap_is_independent_of_db_quota_and_checked_before_claim"
+    FAMILY = "sf03_browser_failure_counter"
+    PREFIX = "browser_failure_counter="
+    UNAVAILABLE = [PREFIX + "unavailable"]
+
+    @staticmethod
+    def marker():
+        # Reuse the established sanitizer's fixtures; no second grammar.
+        from test_sf07_checkpoint_summary import browser_strict_counter_line
+        return (browser_strict_counter_line().replace("status=403", "status=504")
+                .replace("verifier_calls=0", "verifier_calls=1")
+                .replace("handler_calls=0", "handler_calls=1")
+                .replace("claim_committed=false", "claim_committed=true"))
+
+    def raw(self, markers=None, failed=None):
+        raw = cargo_log(diag.BROWSER_CASES, failed=failed or {self.CASE},
+                        markers=markers if markers is not None else {self.CASE: [self.marker()]})
+        # The generic primary-parser fixture deliberately contains a secret
+        # sentinel. An ordinary assertion is needed for a valid strict sidecar.
+        return raw.replace(b"thread 'test' panicked at /private/path: token=PRIVATE_SENTINEL",
+                           b"assertion failed: good.status == 200")
+
+    @staticmethod
+    def wire_markers(iteration=0):
+        from test_sf07_checkpoint_summary import browser_wire_counter_line
+        # The existing public parser also requires the wire witness emitted
+        # immediately before the counter. Keep that earlier contract intact.
+        public = (f"browser_login_public_api_diag case=wire_body_cap phase=exact_body_response iteration={iteration} "
+                  "status=504 body_bytes=15 expected_body_bytes=192 body_matches=false "
+                  "set_cookie_count=1 auth_cookie=false deletion=true")
+        counter = (browser_wire_counter_line(iteration).replace("status=200", "status=504")
+                   .replace(" body_bytes=192", " body_bytes=15")
+                   .replace("body_matches=true", "body_matches=false")
+                   .replace("set_cookie_count=2", "set_cookie_count=1")
+                   .replace("auth_cookie=true", "auth_cookie=false"))
+        return [public, counter]
+
+    def test_cli_preserves_v2_bytes_exit_and_marker_count_while_retaining_existing_counter(self):
+        raw = self.raw()
+        record, expected_status = parse_both(browser_raw=raw, browser_exit=101)
+        expected_bytes = (json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii")
+        self.assertEqual((record["status"], expected_status, record["marker_count"]), ("tests_failed", 1, 0))
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+            (root / "session-deadline-session.raw").write_bytes(cargo_log(diag.SESSION_CASES))
+            (root / "session-deadline-browser.raw").write_bytes(raw)
+            output = root / "result.json"
+            console = io.StringIO()
+            with contextlib.redirect_stdout(console):
+                status = diag.main(["diag", str(root), "0", "101", str(output)])
+            self.assertEqual(status, 1)
+            self.assertEqual(output.read_bytes(), expected_bytes)
+            lines = [line for line in console.getvalue().splitlines() if line.startswith(self.PREFIX)]
+            self.assertEqual(len(lines), 1, "the existing failed BrowserLogin counter must survive raw deletion")
+            fact = json.loads(lines[0].removeprefix(self.PREFIX))
+            self.assertEqual((fact["test"], fact["case"], fact["status"]), (self.CASE, "strict_json_valid", 504))
+            self.assertEqual((fact["verifier_calls"], fact["handler_calls"], fact["issue_committed"]), (1, 1, False))
+
+    def test_both_families_crlf_and_existing_phase_facts_keep_separate_counts(self):
+        for iteration in (0, 1):
+            raw = self.raw(markers={
+                self.CASE: [SessionDeadlineDiagnosticTests.BROWSER_PHASE, self.marker()],
+                self.WIRE_CASE: self.wire_markers(iteration),
+            }, failed={self.CASE, self.WIRE_CASE})
+            for payload in [raw, raw.replace(b"\n", b"\r\n")]:
+                record, status = parse_both(browser_raw=payload, browser_exit=101)
+                before = json.dumps(record, sort_keys=True)
+                lines = diag.browser_failure_counter_lines(payload, 101, record)
+                self.assertEqual(len(lines), 2)
+                samples = [json.loads(line.removeprefix(self.PREFIX)) for line in lines]
+                self.assertEqual([sample["test"] for sample in samples], [self.CASE, self.WIRE_CASE])
+                self.assertEqual([sample.get("iteration") for sample in samples], [None, iteration])
+                self.assertEqual((status, record["marker_count"], len(record["suites"]["browser"]["browser_phase"])), (1, 2, 1))
+                self.assertEqual(json.dumps(record, sort_keys=True), before)
+                self.assertTrue(all(len(line.encode("ascii")) <= 2048 for line in lines))
+
+    def test_owner_binding_adds_protection_beyond_the_existing_numeric_parser(self):
+        import sf07_checkpoint_summary as checkpoints
+        public, counter = self.wire_markers()
+        raw = self.raw(markers={self.CASE: [counter], self.WIRE_CASE: [public, self.marker()]},
+                       failed={self.CASE, self.WIRE_CASE})
+        record, _ = parse_both(browser_raw=raw, browser_exit=101)
+        self.assertEqual(record["status"], "tests_failed")
+        projection = checkpoints._browser_counter_profile_projection(raw, "browser-counter-parallel")
+        self.assertEqual((projection["state"], projection["counter_state"]), ("test_failed", "present"))
+        self.assertEqual(diag.browser_failure_counter_lines(raw, 101, record), self.UNAVAILABLE)
+
+    def test_each_failed_owner_emits_only_one_counter_before_the_assertion_exits(self):
+        import sf07_checkpoint_summary as checkpoints
+        public, first = self.wire_markers(0)
+        second = self.wire_markers(1)[1]
+        raw = self.raw(markers={self.WIRE_CASE: [public, first, second]}, failed={self.WIRE_CASE})
+        record, _ = parse_both(browser_raw=raw, browser_exit=101)
+        self.assertEqual(record["status"], "tests_failed")
+        projection = checkpoints._browser_counter_profile_projection(raw, "browser-counter-parallel")
+        self.assertEqual((projection["state"], projection["counter_state"]), ("test_failed", "present"))
+        self.assertEqual(diag.browser_failure_counter_lines(raw, 101, record), self.UNAVAILABLE)
+
+    def test_absence_and_success_do_not_add_output_to_existing_cli_contracts(self):
+        for raw, exit_code in [(cargo_log(diag.BROWSER_CASES), 0), (self.raw(markers={}), 101)]:
+            record, _ = parse_both(browser_raw=raw, browser_exit=exit_code)
+            self.assertEqual(diag.browser_failure_counter_lines(raw, exit_code, record), [])
+
+    def test_all_occurrences_must_belong_to_the_exact_failed_owner(self):
+        from test_sf07_checkpoint_summary import browser_wire_counter_line
+        marker = self.marker()
+        good = self.raw()
+        foreign = next(name for name in diag.BROWSER_CASES if name not in {self.CASE, self.WIRE_CASE})
+        candidates = [
+            self.raw(markers={self.CASE: [marker, marker]}),
+            (marker + "\n").encode() + self.raw(markers={}),
+            self.raw(markers={}) + (marker + "\n").encode(),
+            self.raw(markers={foreign: [marker]}, failed={foreign}),
+            self.raw(markers={self.CASE: [browser_wire_counter_line()], self.WIRE_CASE: [marker]},
+                     failed={self.CASE, self.WIRE_CASE}),
+            good.replace(("---- " + self.CASE + " stdout ----").encode(),
+                         ("---- " + self.CASE + " stdout ----\n---- " + self.CASE + " stdout ----").encode()),
+            good.replace(("---- " + self.CASE + " stdout ----").encode(),
+                         ("---- " + foreign + " stdout ----").encode()),
+        ]
+        for raw in candidates:
+            with self.subTest(raw_hash=hashlib.sha256(raw).hexdigest()):
+                record, _ = parse_both(browser_raw=raw, browser_exit=101)
+                self.assertEqual(diag.browser_failure_counter_lines(raw, 101, record), self.UNAVAILABLE)
+
+    def test_existing_secret_rejection_and_marker_grammar_never_render_private_text(self):
+        marker = self.marker()
+        malformed = [
+            marker + " token=PRIVATE_SENTINEL",
+            marker + " sql=PRIVATE_SENTINEL",
+            "PRIVATE_SENTINEL " + marker,
+            marker.replace("status=504", "status=0504"),
+            marker.replace("verifier_calls=1", "verifier_calls=1024"),
+            marker.replace("handler_calls=1", "handler_calls=-1"),
+            marker.replace("handler_calls=1", "handler_calls=1.0"),
+            marker.replace("handler_calls=1", "handler_calls=１"),
+            marker.replace("issue_committed=false", "issue_committed=False"),
+            marker.replace("case=strict_json_valid", "case=PRIVATE_SENTINEL"),
+            marker.replace("counters_v1", "counter_future_v2"),
+        ]
+        for bad in malformed:
+            raw = self.raw(markers={self.CASE: [bad]})
+            record, _ = parse_both(browser_raw=raw, browser_exit=101)
+            lines = diag.browser_failure_counter_lines(raw, 101, record)
+            self.assertEqual(lines, self.UNAVAILABLE)
+            self.assertNotIn("PRIVATE_SENTINEL", "\n".join(lines))
+        for private in ["secret PRIVATE_SENTINEL", "Cookie: PRIVATE_SENTINEL", "password=PRIVATE_SENTINEL"]:
+            raw = self.raw() + (private + "\n").encode()
+            record, _ = parse_both(browser_raw=raw, browser_exit=101)
+            self.assertEqual(diag.browser_failure_counter_lines(raw, 101, record), self.UNAVAILABLE)
+        # Unknown non-marker output never enters the reconstructed numeric fact.
+        raw = self.raw() + b"SQL or path PRIVATE_SENTINEL\n"
+        record, _ = parse_both(browser_raw=raw, browser_exit=101)
+        lines = diag.browser_failure_counter_lines(raw, 101, record)
+        self.assertEqual(len(lines), 1)
+        self.assertNotIn("PRIVATE_SENTINEL", "\n".join(lines))
+
+    def test_existing_64k_bound_utf8_and_line_endings_are_not_relaxed(self):
+        raw = self.raw()
+        record, _ = parse_both(browser_raw=raw, browser_exit=101)
+        bounded = raw + b"x" * (65536 - len(raw))
+        self.assertEqual(len(diag.browser_failure_counter_lines(bounded, 101, record)), 1)
+        for bad in [bounded + b"x", raw + b"\xff", raw + b"\r", None, raw.decode()]:
+            self.assertEqual(diag.browser_failure_counter_lines(bad, 101, record), self.UNAVAILABLE)
+
+    def test_source_pin_exit_inventory_and_record_binding_fail_closed(self):
+        raw = self.raw()
+        record, _ = parse_both(browser_raw=raw, browser_exit=101)
+        self.assertTrue(diag._browser_native_call_source_current())
+        with mock.patch.object(diag, "_browser_native_call_source_current", return_value=False):
+            self.assertEqual(diag.browser_failure_counter_lines(raw, 101, record), self.UNAVAILABLE)
+        for exit_code in [0, 1, 124, 137, True, "101"]:
+            self.assertEqual(diag.browser_failure_counter_lines(raw, exit_code, record), self.UNAVAILABLE)
+        for bad in [raw.replace(b"running 10 tests", b"running 0 tests"),
+                    raw.replace(b"9 passed; 1 failed", b"10 passed; 0 failed"),
+                    raw.replace(("test " + self.CASE + " ... FAILED").encode(),
+                                ("test " + self.CASE + " ... ignored").encode())]:
+            self.assertEqual(diag.browser_failure_counter_lines(bad, 101, record), self.UNAVAILABLE)
+        altered = json.loads(json.dumps(record))
+        altered["suites"]["browser"]["failed_cases"] = [self.WIRE_CASE]
+        self.assertEqual(diag.browser_failure_counter_lines(raw, 101, altered), self.UNAVAILABLE)
+        altered = dict(record, injected="PRIVATE_SENTINEL")
+        self.assertEqual(diag.browser_failure_counter_lines(raw, 101, altered), self.UNAVAILABLE)
+        altered = dict(record, marker_count=True)
+        self.assertEqual(diag.browser_failure_counter_lines(raw, 101, altered), self.UNAVAILABLE)
+
+    def test_cli_never_reprints_rejected_counter_or_private_log_text(self):
+        for raw in [self.raw() + b"Cookie: PRIVATE_SENTINEL\n",
+                    self.raw(markers={self.CASE: [self.marker() + " sql=PRIVATE_SENTINEL"]}),
+                    self.raw(markers={}) + (self.marker() + "\n").encode()]:
+            expected, expected_status = parse_both(browser_raw=raw, browser_exit=101)
+            with tempfile.TemporaryDirectory() as folder:
+                root = pathlib.Path(folder)
+                (root / "session-deadline-session.raw").write_bytes(cargo_log(diag.SESSION_CASES))
+                (root / "session-deadline-browser.raw").write_bytes(raw)
+                output = root / "result.json"
+                console = io.StringIO()
+                with contextlib.redirect_stdout(console):
+                    status = diag.main(["diag", str(root), "0", "101", str(output)])
+                self.assertEqual((status, expected_status), (1, 1))
+                self.assertEqual(json.loads(output.read_text()), expected)
+                self.assertEqual([line for line in console.getvalue().splitlines() if line.startswith(self.PREFIX)], self.UNAVAILABLE)
+                self.assertNotIn("PRIVATE_SENTINEL", console.getvalue() + output.read_text())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
