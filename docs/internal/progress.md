@@ -1,5 +1,16 @@
 # コンパイラ・Rust境界の進捗
 
+
+## 2026-10-22 JST: Tokioタイマー修正の独立対応
+
+main `5d3e58e`から#145に依存しない緊急差分。公式[Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692)と[1.54.1 release](https://github.com/tokio-rs/tokio/releases/tag/tokio-1.54.1)を確認した。報告は1.54.0のTimerEntry破棄とdriverの並行アクセスであり、Nagiへのremote exploitは未確認。提示GHSA番号のglobal GitHub APIは404のため、その識別子の正しさは未確認とする。追跡済みlockは1.53.1×8、1.53.2×17で1.54.0なし。履歴のbenchmark証拠は改変しない。
+
+root lockだけでは独立した生成app lockに効かないため、runtime normal/devの最低Tokioを1.54.1へ上げ、root lockとstandalone SF08 fixtureのexact要求/lockを整合した。両lockの差分はTokio版とchecksumだけ。registry checksum `b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3`、MIT、宣言Rust1.85（以前1.53.1は1.71）。runtime全graph/既存CIの最低版契約を新設・緩和しない。feature、cache、timer実装、公開Nagi APIは変更しない。
+
+ローカル: `cargo test --locked -p nagi-runtime --lib`は862成功/失敗0、既存の計測専用1 ignored。`cargo fmt --all -- --check`、`cargo check --locked --manifest-path tools/sf08-fixture-runtime/Cargo.toml --target-dir target`、`cargo test --locked -p nagic --test build_generations cargo_failure_retains_latest_and_inherited_lockfile`成功。実`nagic build --profile dev --incremental --build-stats`でsleep(1)をawaitするHighを生成し、新規lock、同じ出力lockのTokio packageを公式registry checksum付き1.54.0、次いで1.53.1へseedした各通常再buildが全て1.54.1へ解決し、`timer-ok`を実行した。全回で同じnative targetを使い、以前の成功exeのhashと出力を保持した。再現は非決定的なUAF自体ではなく、修正版へのversion-selection境界を実行検証したもの。既に配備済みの古いexeや公開0.2.0を自動で修正したとは扱わない。日英[利用者手順](../security.md)を更新した。
+
+全workspace検査・独立最終監査・exact-head CIとReady判断は対応PR本文に記録する。
+
 ## 2026-10-10 JST: #104へ最新mainを統合する候補
 
 ユーザーが#105/#106/#107をマージし、mainは`8c926e09`へ進んだ。#104のIDE assistance/標準Run/世代回収を維持し、SF05 Query・bounded source reader・共通HTTP修正と4 OS対象テストを統合する。過去段落のCI/未完状態は当時のsnapshotであり、今回の統合後HEADのCI・GUI受入成功を意味しない。rootはPRのmerge/Draft変更・版更新・tag/releaseを実行しない。
