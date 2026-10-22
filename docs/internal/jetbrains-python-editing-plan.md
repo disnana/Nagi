@@ -65,6 +65,7 @@ JetBrains/intellij-communityのPython実装・登録を調査した。参照comm
 - Python plugin APIは使わず、既存のIntelliJ Platform依存を維持する。
 - Enter履歴はeditorごとにmodification stamp・変更sequence・caret offsetだけを記録する。
   手動入力、paste、Backspace、undoなどのdocument変更後は連続Enterとして扱わない。
+  変更sequenceを実装せず恒常0を返すdocumentでは追加退出を無効化する。実sequenceが0から増加する通常文書は初回Enterから記録できる。
   multi-caret・選択範囲・Smart Indent OFFでも追加の退出を行わない。
 - 連続Enter退出はHighのみ。Lowはbrace文脈を維持する。
 - 分岐と閉じ括弧はtokenから確認できるleading whitespaceだけを変更する。
@@ -90,7 +91,7 @@ JetBrains/intellij-communityのPython実装・登録を調査した。参照comm
 選択範囲・multi-caret・不明/上限文脈を検査する。Java compile、実fixture実行、Plugin Verifier、
 GUI上の見た目・IMEを別々に扱い、未実行の段階を成功と数えない。
 
-ローカルの実IDE action・compiler連携を含む全186件と候補ZIP生成/descriptor検証は成功した。
+ローカルの実IDE action・compiler連携を含む全188件と候補ZIP生成/descriptor検証は成功した。
 入力時間の条件・raw・RED/GREEN・未確認範囲は[観測記録](../../editors/jetbrains-nagi/benchmarks/python-editing-2026-10-22/README.md)を参照。
 
 [python-enter]: https://github.com/JetBrains/intellij-community/blob/56f1f5c09bece0c124a3684a64c189b4532a1054/python/python-syntax/src/com/jetbrains/python/editor/PythonEnterHandler.java

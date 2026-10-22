@@ -32,7 +32,10 @@ public final class NagiEnterHandler extends EnterHandlerDelegateAdapter {
                 || extended.getModificationSequence() < 0) return Result.Continue;
         // Only an unchanged, automatically indented line qualifies. Typing,
         // Backspace, paste and undo invalidate this editor-local observation.
-        editor.putUserData(REPEATED_ENTER, previous != null
+        // DocumentEx defaults to a constant zero when no sequence is available.
+        // A fresh real document may start at zero and advance during this Enter.
+        editor.putUserData(REPEATED_ENTER, extended.getModificationSequence() > 0
+                && previous != null
                 && previous.stamp() == editor.getDocument().getModificationStamp()
                 // Undo/redo may restore a stamp. The edit sequence also has to match.
                 && previous.sequence() == extended.getModificationSequence()
@@ -64,7 +67,7 @@ public final class NagiEnterHandler extends EnterHandlerDelegateAdapter {
         int after = editor.getCaretModel().getOffset();
         if (file.getLanguage() == NagiLanguage.HIGH && repeated != null
                 && after == document.getLineEndOffset(line) && document instanceof DocumentEx extended
-                && extended.getModificationSequence() >= 0) {
+                && extended.getModificationSequence() > 0) {
             editor.putUserData(LAST_ENTER, new LastEnter(document.getModificationStamp(),
                     extended.getModificationSequence(), after));
         }
