@@ -1,0 +1,928 @@
+{
+  "schema_version": 1,
+  "complete": true,
+  "compiler_sha256": "95272f76f73e0fbfd3cd3623889b4e0eb102ac16dd6b00156dd92f8a24b63ebd",
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "machine": "x86_64",
+  "cpu_count": 5,
+  "repeat": 3,
+  "functions": 100,
+  "conditions": "sequential; alternating mode order by trial; same source/runtime paths; fresh per-configuration targets and identical seed lock; warm registry/OS caches; standard generated dev profile; full checks and Cargo on every build; CPU includes descendants; RSS is one child high-water mark, not a concurrent sum",
+  "runtime_copy": {
+    "source": "/workspace/Nagi",
+    "copy": "/tmp/nagi-release021-matrix/nagi-smart-matrix-giae6pzo/runtime-copy",
+    "original_workspace_manifest_sha256": "8d64c9ba13484993346bfda9febe412082df962ffc6fb1f4e26593dd8de9a031",
+    "copied_workspace_manifest_sha256": "d1f96fefa887fce8742e2fd73c4f230e5a8cddaaf582d6ba8c0cd1d11ab0821b",
+    "original_members": [
+      "compiler",
+      "runtime"
+    ],
+    "copied_members": [
+      "runtime"
+    ],
+    "workspace_change": "workspace.members only",
+    "seed_lock_sha256": "bc94373a1953cb5174daa9ec2250badadb6f469ac58a5203a545ece923f17e8a",
+    "source_library_sha256": "1e4060d4eac067d80ebfd85e88883c88b11c00c1f75f8b6a90d6bf2f9604511d",
+    "copied_runtime_bytes": 2864941
+  },
+  "summaries": {
+    "ordinary": {
+      "clean": {
+        "wall_s": {
+          "median": 37.07933755101112,
+          "min": 36.91861717699794,
+          "max": 38.385917068997514
+        },
+        "cpu_s": {
+          "median": 98.582106,
+          "min": 97.864655,
+          "max": 103.048338
+        },
+        "peak_child_rss_kib": {
+          "median": 785656.0,
+          "min": 783152.0,
+          "max": 790372.0
+        },
+        "target_bytes": {
+          "median": 1280628898,
+          "min": 1280628896,
+          "max": 1280628902
+        },
+        "output_bytes": {
+          "median": 82417067,
+          "min": 82417067,
+          "max": 82417067
+        },
+        "cargo_fresh_artifacts": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "cargo_compiled_artifacts": {
+          "median": 198,
+          "min": 198,
+          "max": 198
+        },
+        "source_cache_hits": null,
+        "source_cache_misses": null,
+        "native_startup_wall_s": {
+          "median": 0.0023794190055923536,
+          "min": 0.0023504640121245757,
+          "max": 0.002614334996906109
+        },
+        "count": 3
+      },
+      "nochange": {
+        "wall_s": {
+          "median": 0.5303972849942511,
+          "min": 0.5280815139994957,
+          "max": 0.5650125980027951
+        },
+        "cpu_s": {
+          "median": 0.831766,
+          "min": 0.805271,
+          "max": 0.835104
+        },
+        "peak_child_rss_kib": {
+          "median": 496784.0,
+          "min": 495844.0,
+          "max": 497844.0
+        },
+        "target_bytes": {
+          "median": 1445847364,
+          "min": 1445847337,
+          "max": 1445847434
+        },
+        "output_bytes": {
+          "median": 164564076,
+          "min": 164564060,
+          "max": 164564108
+        },
+        "cargo_fresh_artifacts": {
+          "median": 197,
+          "min": 197,
+          "max": 197
+        },
+        "cargo_compiled_artifacts": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "source_cache_hits": null,
+        "source_cache_misses": null,
+        "native_startup_wall_s": {
+          "median": 0.002318482002010569,
+          "min": 0.002133588001015596,
+          "max": 0.002337997007998638
+        },
+        "count": 3
+      },
+      "bodyedit": {
+        "wall_s": {
+          "median": 0.5364253059960902,
+          "min": 0.5307111159927445,
+          "max": 0.5371579810016556
+        },
+        "cpu_s": {
+          "median": 0.8321879999999999,
+          "min": 0.806777,
+          "max": 0.844372
+        },
+        "peak_child_rss_kib": {
+          "median": 498528.0,
+          "min": 498088.0,
+          "max": 498880.0
+        },
+        "target_bytes": {
+          "median": 1611065883,
+          "min": 1611065820,
+          "max": 1611065980
+        },
+        "output_bytes": {
+          "median": 246711116,
+          "min": 246711084,
+          "max": 246711164
+        },
+        "cargo_fresh_artifacts": {
+          "median": 197,
+          "min": 197,
+          "max": 197
+        },
+        "cargo_compiled_artifacts": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "source_cache_hits": null,
+        "source_cache_misses": null,
+        "native_startup_wall_s": {
+          "median": 0.002326167988940142,
+          "min": 0.00225266300549265,
+          "max": 0.002399809003691189
+        },
+        "count": 3
+      },
+      "public_api_edit": {
+        "wall_s": {
+          "median": 0.5130821510101669,
+          "min": 0.5034639579971554,
+          "max": 0.5175485399959143
+        },
+        "cpu_s": {
+          "median": 0.7995079999999999,
+          "min": 0.7923129999999999,
+          "max": 0.8244419999999999
+        },
+        "peak_child_rss_kib": {
+          "median": 498388.0,
+          "min": 498268.0,
+          "max": 498776.0
+        },
+        "target_bytes": {
+          "median": 1776314122,
+          "min": 1776314010,
+          "max": 1776314215
+        },
+        "output_bytes": {
+          "median": 328858535,
+          "min": 328858479,
+          "max": 328858583
+        },
+        "cargo_fresh_artifacts": {
+          "median": 197,
+          "min": 197,
+          "max": 197
+        },
+        "cargo_compiled_artifacts": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "source_cache_hits": null,
+        "source_cache_misses": null,
+        "native_startup_wall_s": {
+          "median": 0.002366977001656778,
+          "min": 0.002340038990951143,
+          "max": 0.0023956930090207607
+        },
+        "count": 3
+      },
+      "multimodule_edit": {
+        "wall_s": {
+          "median": 0.5147284959966782,
+          "min": 0.4938478489930276,
+          "max": 0.5171139839949319
+        },
+        "cpu_s": {
+          "median": 0.810584,
+          "min": 0.7905949999999999,
+          "max": 0.832154
+        },
+        "peak_child_rss_kib": {
+          "median": 498404.0,
+          "min": 496820.0,
+          "max": 498608.0
+        },
+        "target_bytes": {
+          "median": 1941562279,
+          "min": 1941562246,
+          "max": 1941562389
+        },
+        "output_bytes": {
+          "median": 411005895,
+          "min": 411005879,
+          "max": 411005951
+        },
+        "cargo_fresh_artifacts": {
+          "median": 197,
+          "min": 197,
+          "max": 197
+        },
+        "cargo_compiled_artifacts": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "source_cache_hits": null,
+        "source_cache_misses": null,
+        "native_startup_wall_s": {
+          "median": 0.002185805991757661,
+          "min": 0.00212406599894166,
+          "max": 0.0023840549984015524
+        },
+        "count": 3
+      },
+      "async_edit": {
+        "wall_s": {
+          "median": 0.5390883770014625,
+          "min": 0.5244012449984439,
+          "max": 0.5445197649969487
+        },
+        "cpu_s": {
+          "median": 0.8621789999999999,
+          "min": 0.845556,
+          "max": 0.9151210000000001
+        },
+        "peak_child_rss_kib": {
+          "median": 498460.0,
+          "min": 498280.0,
+          "max": 499300.0
+        },
+        "target_bytes": {
+          "median": 2106810470,
+          "min": 2106810437,
+          "max": 2106810596
+        },
+        "output_bytes": {
+          "median": 493153270,
+          "min": 493153254,
+          "max": 493153334
+        },
+        "cargo_fresh_artifacts": {
+          "median": 197,
+          "min": 197,
+          "max": 197
+        },
+        "cargo_compiled_artifacts": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "source_cache_hits": null,
+        "source_cache_misses": null,
+        "native_startup_wall_s": {
+          "median": 0.0022772000083932653,
+          "min": 0.0021693849994335324,
+          "max": 0.0024330650048796088
+        },
+        "count": 3
+      },
+      "runtime_dependency_edit": {
+        "wall_s": {
+          "median": 1.524090311009786,
+          "min": 1.4823158440121915,
+          "max": 1.5980961800087243
+        },
+        "cpu_s": {
+          "median": 1.8515320000000002,
+          "min": 1.8136609999999997,
+          "max": 1.9112739999999997
+        },
+        "peak_child_rss_kib": {
+          "median": 497820.0,
+          "min": 497440.0,
+          "max": 497848.0
+        },
+        "target_bytes": {
+          "median": 2423673969,
+          "min": 2423673940,
+          "max": 2423674121
+        },
+        "output_bytes": {
+          "median": 575300643,
+          "min": 575300627,
+          "max": 575300723
+        },
+        "cargo_fresh_artifacts": {
+          "median": 196,
+          "min": 196,
+          "max": 196
+        },
+        "cargo_compiled_artifacts": {
+          "median": 2,
+          "min": 2,
+          "max": 2
+        },
+        "source_cache_hits": null,
+        "source_cache_misses": null,
+        "native_startup_wall_s": {
+          "median": 0.0023376259923679754,
+          "min": 0.0022478059981949627,
+          "max": 0.0024965149932540953
+        },
+        "count": 3
+      },
+      "corrupt_cache": {
+        "rejected": {
+          "wall_s": {
+            "median": 0.03208876399730798,
+            "min": 0.03139264399942476,
+            "max": 0.03247356398787815
+          },
+          "cpu_s": {
+            "median": 0.031979,
+            "min": 0.03086,
+            "max": 0.032021
+          },
+          "peak_child_rss_kib": {
+            "median": 106660.0,
+            "min": 103480.0,
+            "max": 107240.0
+          },
+          "target_bytes": null,
+          "output_bytes": null,
+          "cargo_fresh_artifacts": null,
+          "cargo_compiled_artifacts": null,
+          "source_cache_hits": null,
+          "source_cache_misses": null,
+          "native_startup_wall_s": null,
+          "count": 3
+        },
+        "recovery": {
+          "wall_s": {
+            "median": 0.5289959880028618,
+            "min": 0.5268746669898974,
+            "max": 0.5490261960076168
+          },
+          "cpu_s": {
+            "median": 0.852903,
+            "min": 0.836811,
+            "max": 0.869274
+          },
+          "peak_child_rss_kib": {
+            "median": 498624.0,
+            "min": 498272.0,
+            "max": 499128.0
+          },
+          "target_bytes": {
+            "median": 2588922178,
+            "min": 2588922145,
+            "max": 2588922314
+          },
+          "output_bytes": {
+            "median": 658660789,
+            "min": 658660773,
+            "max": 658660861
+          },
+          "cargo_fresh_artifacts": {
+            "median": 197,
+            "min": 197,
+            "max": 197
+          },
+          "cargo_compiled_artifacts": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "source_cache_hits": null,
+          "source_cache_misses": null,
+          "native_startup_wall_s": {
+            "median": 0.0022852480033179745,
+            "min": 0.002234882995253429,
+            "max": 0.002372030998230912
+          },
+          "count": 3
+        }
+      }
+    },
+    "units": {
+      "clean": {
+        "wall_s": {
+          "median": 37.104358185009914,
+          "min": 36.901038732001325,
+          "max": 37.59898766699189
+        },
+        "cpu_s": {
+          "median": 99.459881,
+          "min": 97.886032,
+          "max": 100.661952
+        },
+        "peak_child_rss_kib": {
+          "median": 789828.0,
+          "min": 782556.0,
+          "max": 791512.0
+        },
+        "target_bytes": {
+          "median": 1283513957,
+          "min": 1283513908,
+          "max": 1283514100
+        },
+        "output_bytes": {
+          "median": 82679169,
+          "min": 82679153,
+          "max": 82679193
+        },
+        "cargo_fresh_artifacts": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "cargo_compiled_artifacts": {
+          "median": 207,
+          "min": 207,
+          "max": 207
+        },
+        "source_cache_hits": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "source_cache_misses": {
+          "median": 9,
+          "min": 9,
+          "max": 9
+        },
+        "native_startup_wall_s": {
+          "median": 0.002372549002757296,
+          "min": 0.002200034010456875,
+          "max": 0.0023993810027604923
+        },
+        "count": 3
+      },
+      "nochange": {
+        "wall_s": {
+          "median": 0.4450783279899042,
+          "min": 0.4414940990100149,
+          "max": 0.4614124270010507
+        },
+        "cpu_s": {
+          "median": 0.710187,
+          "min": 0.683643,
+          "max": 0.730528
+        },
+        "peak_child_rss_kib": {
+          "median": 498048.0,
+          "min": 496644.0,
+          "max": 498220.0
+        },
+        "target_bytes": {
+          "median": 1445560971,
+          "min": 1445560919,
+          "max": 1445561191
+        },
+        "output_bytes": {
+          "median": 164993173,
+          "min": 164993157,
+          "max": 164993237
+        },
+        "cargo_fresh_artifacts": {
+          "median": 206,
+          "min": 206,
+          "max": 206
+        },
+        "cargo_compiled_artifacts": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "source_cache_hits": {
+          "median": 9,
+          "min": 9,
+          "max": 9
+        },
+        "source_cache_misses": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "native_startup_wall_s": {
+          "median": 0.002530005993321538,
+          "min": 0.0020955939980922267,
+          "max": 0.0033118339924840257
+        },
+        "count": 3
+      },
+      "bodyedit": {
+        "wall_s": {
+          "median": 0.5930456339992816,
+          "min": 0.585948002000805,
+          "max": 0.6871275640005479
+        },
+        "cpu_s": {
+          "median": 0.888541,
+          "min": 0.8789939999999999,
+          "max": 0.9663799999999999
+        },
+        "peak_child_rss_kib": {
+          "median": 497164.0,
+          "min": 497160.0,
+          "max": 498072.0
+        },
+        "target_bytes": {
+          "median": 1612904104,
+          "min": 1612904064,
+          "max": 1612904271
+        },
+        "output_bytes": {
+          "median": 247403019,
+          "min": 247403011,
+          "max": 247403059
+        },
+        "cargo_fresh_artifacts": {
+          "median": 203,
+          "min": 203,
+          "max": 203
+        },
+        "cargo_compiled_artifacts": {
+          "median": 4,
+          "min": 4,
+          "max": 4
+        },
+        "source_cache_hits": {
+          "median": 6,
+          "min": 6,
+          "max": 6
+        },
+        "source_cache_misses": {
+          "median": 3,
+          "min": 3,
+          "max": 3
+        },
+        "native_startup_wall_s": {
+          "median": 0.002082217004499398,
+          "min": 0.0019583389948820695,
+          "max": 0.0022599020012421533
+        },
+        "count": 3
+      },
+      "public_api_edit": {
+        "wall_s": {
+          "median": 0.606764818992815,
+          "min": 0.5952501510037109,
+          "max": 0.6126981690031243
+        },
+        "cpu_s": {
+          "median": 0.90605,
+          "min": 0.895269,
+          "max": 0.9089809999999999
+        },
+        "peak_child_rss_kib": {
+          "median": 498552.0,
+          "min": 497228.0,
+          "max": 498772.0
+        },
+        "target_bytes": {
+          "median": 1780151084,
+          "min": 1780150959,
+          "max": 1780151217
+        },
+        "output_bytes": {
+          "median": 329809172,
+          "min": 329809140,
+          "max": 329809196
+        },
+        "cargo_fresh_artifacts": {
+          "median": 204,
+          "min": 204,
+          "max": 204
+        },
+        "cargo_compiled_artifacts": {
+          "median": 3,
+          "min": 3,
+          "max": 3
+        },
+        "source_cache_hits": {
+          "median": 7,
+          "min": 7,
+          "max": 7
+        },
+        "source_cache_misses": {
+          "median": 2,
+          "min": 2,
+          "max": 2
+        },
+        "native_startup_wall_s": {
+          "median": 0.0020780949998879805,
+          "min": 0.0020606220059562474,
+          "max": 0.002517547007300891
+        },
+        "count": 3
+      },
+      "multimodule_edit": {
+        "wall_s": {
+          "median": 0.6240188090014271,
+          "min": 0.5927702659973875,
+          "max": 0.6313570630009053
+        },
+        "cpu_s": {
+          "median": 0.95177,
+          "min": 0.89371,
+          "max": 0.972004
+        },
+        "peak_child_rss_kib": {
+          "median": 497480.0,
+          "min": 497368.0,
+          "max": 498392.0
+        },
+        "target_bytes": {
+          "median": 1947525107,
+          "min": 1947524894,
+          "max": 1947525247
+        },
+        "output_bytes": {
+          "median": 412219391,
+          "min": 412219335,
+          "max": 412219415
+        },
+        "cargo_fresh_artifacts": {
+          "median": 203,
+          "min": 203,
+          "max": 203
+        },
+        "cargo_compiled_artifacts": {
+          "median": 4,
+          "min": 4,
+          "max": 4
+        },
+        "source_cache_hits": {
+          "median": 6,
+          "min": 6,
+          "max": 6
+        },
+        "source_cache_misses": {
+          "median": 3,
+          "min": 3,
+          "max": 3
+        },
+        "native_startup_wall_s": {
+          "median": 0.002262099995277822,
+          "min": 0.0021418199903564528,
+          "max": 0.0024263439991045743
+        },
+        "count": 3
+      },
+      "async_edit": {
+        "wall_s": {
+          "median": 0.588651882004342,
+          "min": 0.5759731030120747,
+          "max": 0.6014092479890678
+        },
+        "cpu_s": {
+          "median": 0.967983,
+          "min": 0.923689,
+          "max": 0.9694929999999999
+        },
+        "peak_child_rss_kib": {
+          "median": 498196.0,
+          "min": 497144.0,
+          "max": 498692.0
+        },
+        "target_bytes": {
+          "median": 2114158645,
+          "min": 2114158420,
+          "max": 2114158786
+        },
+        "output_bytes": {
+          "median": 494581760,
+          "min": 494581696,
+          "max": 494581784
+        },
+        "cargo_fresh_artifacts": {
+          "median": 205,
+          "min": 205,
+          "max": 205
+        },
+        "cargo_compiled_artifacts": {
+          "median": 2,
+          "min": 2,
+          "max": 2
+        },
+        "source_cache_hits": {
+          "median": 8,
+          "min": 8,
+          "max": 8
+        },
+        "source_cache_misses": {
+          "median": 1,
+          "min": 1,
+          "max": 1
+        },
+        "native_startup_wall_s": {
+          "median": 0.0020864450052613392,
+          "min": 0.002060237995465286,
+          "max": 0.0024055000103544444
+        },
+        "count": 3
+      },
+      "runtime_dependency_edit": {
+        "wall_s": {
+          "median": 1.4477281420113286,
+          "min": 1.4204046730010305,
+          "max": 1.456946717997198
+        },
+        "cpu_s": {
+          "median": 1.9171989999999999,
+          "min": 1.895319,
+          "max": 1.921052
+        },
+        "peak_child_rss_kib": {
+          "median": 498076.0,
+          "min": 497352.0,
+          "max": 498272.0
+        },
+        "target_bytes": {
+          "median": 2431864573,
+          "min": 2431864266,
+          "max": 2431864708
+        },
+        "output_bytes": {
+          "median": 576896138,
+          "min": 576896050,
+          "max": 576896162
+        },
+        "cargo_fresh_artifacts": {
+          "median": 196,
+          "min": 196,
+          "max": 196
+        },
+        "cargo_compiled_artifacts": {
+          "median": 11,
+          "min": 11,
+          "max": 11
+        },
+        "source_cache_hits": {
+          "median": 9,
+          "min": 9,
+          "max": 9
+        },
+        "source_cache_misses": {
+          "median": 0,
+          "min": 0,
+          "max": 0
+        },
+        "native_startup_wall_s": {
+          "median": 0.002221758011728525,
+          "min": 0.0021870570053579286,
+          "max": 0.0028873909905087203
+        },
+        "count": 3
+      },
+      "corrupt_cache": {
+        "rejected": {
+          "wall_s": {
+            "median": 0.035890538987587206,
+            "min": 0.034267898998223245,
+            "max": 0.04042063899396453
+          },
+          "cpu_s": {
+            "median": 0.035031,
+            "min": 0.033711,
+            "max": 0.039868
+          },
+          "peak_child_rss_kib": {
+            "median": 105688.0,
+            "min": 104588.0,
+            "max": 109432.0
+          },
+          "target_bytes": null,
+          "output_bytes": null,
+          "cargo_fresh_artifacts": null,
+          "cargo_compiled_artifacts": null,
+          "source_cache_hits": null,
+          "source_cache_misses": null,
+          "native_startup_wall_s": null,
+          "count": 3
+        },
+        "recovery": {
+          "wall_s": {
+            "median": 0.4744973339984426,
+            "min": 0.44482034898828715,
+            "max": 0.4846261130005587
+          },
+          "cpu_s": {
+            "median": 0.8109489999999999,
+            "min": 0.753447,
+            "max": 0.8284229999999999
+          },
+          "peak_child_rss_kib": {
+            "median": 498488.0,
+            "min": 497044.0,
+            "max": 498788.0
+          },
+          "target_bytes": {
+            "median": 2593912195,
+            "min": 2593911874,
+            "max": 2593912328
+          },
+          "output_bytes": {
+            "median": 660585118,
+            "min": 660585022,
+            "max": 660585142
+          },
+          "cargo_fresh_artifacts": {
+            "median": 206,
+            "min": 206,
+            "max": 206
+          },
+          "cargo_compiled_artifacts": {
+            "median": 1,
+            "min": 1,
+            "max": 1
+          },
+          "source_cache_hits": {
+            "median": 9,
+            "min": 9,
+            "max": 9
+          },
+          "source_cache_misses": {
+            "median": 0,
+            "min": 0,
+            "max": 0
+          },
+          "native_startup_wall_s": {
+            "median": 0.002452950007864274,
+            "min": 0.002342373991268687,
+            "max": 0.0025622940011089668
+          },
+          "count": 3
+        }
+      }
+    }
+  },
+  "configuration_completion": [
+    {
+      "mode": "ordinary",
+      "trial": 1,
+      "executables": 8,
+      "old_exe_checks": true,
+      "target_pruned": true,
+      "final_target_bytes_before_prune": 2588922178,
+      "final_output_bytes": 658660789
+    },
+    {
+      "mode": "units",
+      "trial": 1,
+      "executables": 8,
+      "old_exe_checks": true,
+      "target_pruned": true,
+      "final_target_bytes_before_prune": 2593912328,
+      "final_output_bytes": 660585142
+    },
+    {
+      "mode": "units",
+      "trial": 2,
+      "executables": 8,
+      "old_exe_checks": true,
+      "target_pruned": true,
+      "final_target_bytes_before_prune": 2593912195,
+      "final_output_bytes": 660585118
+    },
+    {
+      "mode": "ordinary",
+      "trial": 2,
+      "executables": 8,
+      "old_exe_checks": true,
+      "target_pruned": true,
+      "final_target_bytes_before_prune": 2588922145,
+      "final_output_bytes": 658660773
+    },
+    {
+      "mode": "ordinary",
+      "trial": 3,
+      "executables": 8,
+      "old_exe_checks": true,
+      "target_pruned": true,
+      "final_target_bytes_before_prune": 2588922314,
+      "final_output_bytes": 658660861
+    },
+    {
+      "mode": "units",
+      "trial": 3,
+      "executables": 8,
+      "old_exe_checks": true,
+      "target_pruned": true,
+      "final_target_bytes_before_prune": 2593911874,
+      "final_output_bytes": 660585022
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--quiet"
+  ],
+  "network_permission": true,
+  "started_utc": "2026-10-22T07:35:13Z",
+  "free_start": {
+    "/workspace": 4487217152,
+    "/tmp": 8848551936
+  },
+  "exit_code": 0,
+  "elapsed_s": 670.0896516990033,
+  "free_end": {
+    "/workspace": 4176162816,
+    "/tmp": 8848547840
+  }
+}

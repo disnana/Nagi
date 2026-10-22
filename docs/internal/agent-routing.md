@@ -118,3 +118,15 @@ Enter補助の独立Sol 6.1 High監査で、SDK `DocumentEx.getModificationSeque
 base `765f0b0`。Sol 6.1 High担当がread-onlyでhover/diagnostic/compiler JSONとsnapshot境界を調査し、親の設計採用後、専用worktreeでplugin実装・意味のあるnegative/実compiler/JVM表示testsを担当した。compiler/CIは変更せず、子の追加spawnなし。親はSDK bootstrapと別PRのQA・後続PR操作を担当し、Gradleは同じcacheを使うため単独実行した。必要な検証後の独立最終auditは別担当へ渡す。
 
 全214件と追加HTML renderer1件を確認し、原文保持・HTML表示・exact location接続を実fixtureで検証した。SDK準備中に編集開始したbootstrapは厳密なmain baselineと数えない。packagingのread-only data pathとVerifierのread-only home/remote接続失敗をsource不具合と分け、原ログを保持して専有設定だけを修正する。Verifier/他IDE CI/実GUIの未完gateはPRに残す。[詳細記録](jetbrains-documentation-plan.md)。モデル別時間・使用量・料金・service-tierは未計測で、テスト時間をmodel速度の比較には使わない。
+## 2026-10-22: 0.2.1の重複処理と計測基盤
+
+base `e2d7280`。Sol 6.1 Highの事前調査でparser token再利用、既存unitsの境界と将来のasync段階案を確認し、親がparser/sourceと回帰・実計測を担当した。CI担当Luna Maxの再開はcapacityエラーで実行できず、同じ証拠と限定file範囲を既存High担当へ渡した。モデル品質の失敗とは扱わず、同じ探索は繰り返さない。HighがCIの未使用release build除去・fixture cache共有・exact inverse検査を実装し、その後に独立fileの8ケースmatrix harnessとpure safety testsを担当した。親を含め最大3体、子spawnと同じfileの並行編集はなし。実行後の最終auditは実装者と別のfresh Highへ分離する。
+
+全workspace検査の初回はsandboxがsocket bindを拒否したため、source/期限/assertを変えずnetwork許可を付けて成功した。670.09秒はvalidationの実測で、before/after速度差やmodel速度ではない。compiler比較では別checkout間のCargo target共有で同じbinaryが残る観測を除外し、candidateを再compileしてSHAを確認した。原因未確定の環境・cache観測をNagi CASの脆弱性やmodel不良と断定しない。ユーザーの追加明示許可に基づき、区切りで両filesystemの容量確認と専有一時targetの整理を行い、source本体・未commit差分・raw log・比較CLI・旧exeを保持した。実model時間・使用量・料金・service tier設定は未観測。実行結果と独立audit/CIは[記録](../../benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md)とPRへ分離する。
+
+
+## 2026-10-22: #147の失敗診断counter保持
+
+Sol 6.1 High担当がread-onlyで保存済みCI事実とbrowser Handler境界、既存counter parserを調査し、親が最小Python補助出力の設計を承認した。同担当が合成RED→GREENとprivacy/owner/bounds回帰を実装し、親は事前固定のstock/diagnostic各3run比較を別に担当した。全run成功・未再現を原因解決と混同せず、runtime/期限/assert/parallelismを変更しない。親reviewのwire assertion終端を反映し、同ownerの両iteration拒否もRED→GREENで確認した。
+
+Session65/SF07 summary37/native-finish20/source guard16/CI policy160件が成功。実装後の最終auditは別のSol 6.1 Highへ分離し、子の追加spawnなし。新HEAD CIと1000ms原因の継続調査はPRへ残す。model時間・使用量・費用・service tierは未計測。Python検査時間やcompile込み比較時間をmodel性能の根拠には使わない。

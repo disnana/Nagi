@@ -1,0 +1,25 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "nagic",
+    "--test",
+    "frontend_contracts"
+  ],
+  "head": "e2d728006dbfe49eb8a382f88ce777f29284ed4c",
+  "before_cli_sha256": "713a1a1bf0352630c9c1e74de9a6570a0992e802753f8712b45e3faebf1a9635",
+  "external_native_target": null,
+  "started_utc": "2026-10-22T07:13:11Z",
+  "free_before_bytes": 3528552448,
+  "exit_code": 0,
+  "elapsed_s": 232.0924255449936,
+  "free_after_bytes": 5149855744,
+  "after_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+  "compiler_scope": "fixture cache before; rebuilt CLI includes parent P0 parser/source changes; not exact-main CLI",
+  "observed_native_fixture_pid": 696234,
+  "owned_fixture_paths_remaining": [],
+  "free_tmp_after_bytes": 8849027072,
+  "free_workspace_after_bytes": 5149839360
+}
