@@ -1,5 +1,7 @@
 pub mod ast;
 mod build_analysis;
+mod cache;
+mod cache_inventory;
 mod capabilities;
 pub mod check;
 pub mod checked;

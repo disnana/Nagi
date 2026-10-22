@@ -1,3 +1,6 @@
+#[path = "cli/cache_inspect.rs"]
+mod cache_inspect;
+
 use std::{fs, path::PathBuf, process::Command};
 
 static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

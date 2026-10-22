@@ -123,6 +123,10 @@ CRC32、JSON整形、asyncのRust関数を呼びます。[タスク管理サイ�
 
 プロジェクトの生成Low・Rust・Cargo.tomlは`build/<入口のファイル名>/`に出力します。ビルド用のキャッシュは`build/native-target/`です。実際の実行ファイルは`build`／`run`が標準エラーへ出す`native:`行で確認できます。
 
+開発版source checkoutの`nagic cache inspect`は、指定した生成先と共有Cargo cacheを読み取り、version付きJSONで観測内容を出力します。使用する形式は`nagic cache inspect --out-root ABS --cargo-root ABS --max-entries N --max-depth N`です。絶対パスのrootと、両rootごとのentry上限（1..4096）・depth上限（1..64）をすべて1回ずつ指定します。rootのOS encoded path長は各4096 bytes以下です。省略時のroot探索や環境変数からの補完は行いません。コマンドはファイルやlockを作らず、Cargoも起動しません。
+
+JSONにはroot別の分類、論理file長、上限付きsample、link・error・上限到達などの理由counterが入ります。missing rootや不完全な走査でもJSONを出力して終了status 1になります。構文エラーはscan前に終了し、JSONを出しません。分類は構造上のヒントです。hardlinkはpathごとに数えるため論理bytesが重複する場合があり、物理allocation・空き容量・削除で戻る容量は測りません。二つのrootは字句上重ならなくても同じ場所を指す場合があり、集計結果を固有disk使用量として合算できません。link/reparse pointを飛ばす処理を含め、走査はatomic snapshotではなく、pathのcheck/use競合を防ぐ境界でもありません。削除の判断には使わないでください。rootとsampleには`root_os`・`relative_path_os`も出力し、現在のCLI argument APIが受け付けたpathをOS単位で表します。CLI引数そのものには現在の文字列入力制約があり、任意の非UTF-8 root引数を受け付けるものではありません。
+
 Nagi 0.1.11への導入対象では、生成先の`.nagi/`内にbuild世代ごとの実行ファイルを保存します。同じ入口ソースと生成先ならアプリIDは変わりませんが、再ビルド後の実行ファイルのパスは変わります。起動中の旧実行ファイルを上書き・削除・停止する処理はありません。ビルドが失敗した場合は、新しい実行ファイルを起動せず、前回の成功を示すmetadataを残します。
 
 公開版`nagic` 0.1.11の通常のCLI build/runは成功世代を自動削除せず、保持上限もありません。これは`build/native-target/`や`NAGI_NATIVE_TARGET_DIR`のCargo共有cacheとは別です。通常のCLI用generation cleanup commandはありません。JetBrains plugin 0.1.3では、plugin管理runだけがcompiler 0.2.0へ`NAGI_RUN_RETENTION=latest`を渡す保持modeを利用できます。公開compiler 0.1.11はこのmodeを実装していません。compiler 0.1.12の一時候補は中止され、この機能はJetBrains plugin 0.1.3とcompiler 0.2.0を必要とします。

@@ -1830,7 +1830,11 @@ fn with_generated_body(
 pub fn cli(args: Vec<String>) -> Result<(), String> {
     let started = std::time::Instant::now();
     #[cfg(nagi_editor_stage_diag)]
-    let _editor_stage = crate::editor_stage_diag::begin(&args);
+    let _editor_stage = if args.first().map(String::as_str) == Some("cache") {
+        None
+    } else {
+        Some(crate::editor_stage_diag::begin(&args))
+    };
     if crate::sql_check::worker(&args)? {
         return Ok(());
     }
@@ -1848,7 +1852,10 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         args.first().map(String::as_str),
         Some("help" | "--help" | "-h")
     ) || args.first().is_some_and(|command| {
-        ["check", "lower", "build", "run", "symbols", "assist", "map"].contains(&command.as_str())
+        [
+            "check", "lower", "build", "run", "symbols", "assist", "map", "cache",
+        ]
+        .contains(&command.as_str())
             && args[1..].iter().any(|arg| arg == "--help" || arg == "-h")
     });
     if help {
@@ -1858,6 +1865,9 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             crate::project::USAGE
         );
         return Ok(());
+    }
+    if args.first().map(String::as_str) == Some("cache") {
+        return crate::cache::cli(&args);
     }
     let cwd = std::env::current_dir().map_err(|e| e.to_string())?;
     let (options, map_options) = if args.first().map(String::as_str) == Some("map") {
