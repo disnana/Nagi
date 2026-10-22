@@ -162,6 +162,7 @@ public final class NagiAssistImportInsertionTest extends BasePlatformTestCase {
         accept("build", '(');
         assertEquals("# 🐈\nfrom helper import build\n", myFixture.getEditor().getDocument().getText());
         FileDocumentManager.getInstance().saveDocument(myFixture.getEditor().getDocument());
+        NagiSaveBarrier.awaitDiskWrites();
         assertEquals("# 🐈\r\nfrom helper import build\r\n", Files.readString(root.resolve("empty.nagi")));
     }
 
