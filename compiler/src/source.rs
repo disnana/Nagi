@@ -408,8 +408,8 @@ pub fn load_with_overlays(
             (source.text, source.bytes)
         };
         let source = source_after_read(&path, source, read_bytes, &mut out.bytes)?;
-        let mut program =
-            crate::parser::parse(&source, high).map_err(|e| diagnostic(&path, &source, &e))?;
+        let (mut program, tokens) = crate::parser::parse_with_tokens(&source, high)
+            .map_err(|e| diagnostic(&path, &source, &e))?;
         stack.insert(path.clone());
         let imports = if program.module_imports.is_empty() {
             program
@@ -478,8 +478,6 @@ pub fn load_with_overlays(
         }
         program.imports.clear();
         program.module_imports.clear();
-        let tokens =
-            crate::lexer::lex(&source, high).map_err(|e| diagnostic(&path, &source, &e))?;
         let module = program
             .modules
             .root

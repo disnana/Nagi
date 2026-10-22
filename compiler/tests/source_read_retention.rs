@@ -95,3 +95,78 @@ fn small_invalid_utf8_import_keeps_standard_read_error_at_parent_line() {
         )
     );
 }
+
+#[test]
+fn retained_module_tokens_preserve_crlf_unicode_and_eof_locations() {
+    for high in [true, false] {
+        let f = Fixture::new();
+        let extension = if high { "nagi" } else { "low" };
+        let (part, main) = if high {
+            (
+                "# 日本語\r\ndef value(number: i64) -> i64:\r\n    return number",
+                "import \"part.nagi\" as part\r\ndef main():\r\n    print(part.value(7))",
+            )
+        } else {
+            (
+                "# 日本語\r\nfn value(number: i64) -> i64 { return number; }",
+                "import \"part.low\" as part;\r\nfn main() -> unit { print(part.value(7)); }",
+            )
+        };
+        f.write(&format!("part.{extension}"), part);
+        f.write(&format!("main.{extension}"), main);
+        let mut loaded = source::load(&f.0.join(format!("main.{extension}")), high).unwrap();
+        check::check(&mut loaded.program).unwrap();
+        let index = nagic::symbols::index(&loaded, &[&loaded.program]).unwrap();
+        let reference = index["references"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|reference| {
+                reference["location"]["file"]
+                    .as_str()
+                    .unwrap()
+                    .ends_with(&format!("main.{extension}"))
+                    && reference["location"]["line"] == if high { 3 } else { 2 }
+                    && reference["location"]["column"]
+                        == main.lines().last().unwrap().find("value").unwrap() + 1
+            });
+        let reference = reference.unwrap_or_else(|| panic!("qualified reference lost: {index}"));
+        assert_eq!(reference["location"]["length"], 5);
+        assert_eq!(reference["target"]["line"], 2);
+        assert!(reference["target"]["file"]
+            .as_str()
+            .unwrap()
+            .ends_with(&format!("part.{extension}")));
+    }
+}
+
+#[test]
+fn imported_parse_and_lex_errors_keep_physical_source_locations() {
+    let f = Fixture::new();
+    for high in [true, false] {
+        let extension = if high { "nagi" } else { "low" };
+        let name = format!("bad.{extension}");
+        let main = format!("import \"{name}\"{}\n", if high { "" } else { ";" });
+        f.write(&format!("main.{extension}"), main);
+        for bad in ["# 日本語\r\n\tbad", "# 日本語\r\n)"] {
+            f.write(&name, bad);
+            let parser_error = nagic::parser::parse(bad, high).err().unwrap();
+            let error = source::load(&f.0.join(format!("main.{extension}")), high)
+                .err()
+                .unwrap();
+            assert!(
+                error.starts_with(&format!("error: {parser_error}\n")),
+                "{error}"
+            );
+            assert!(error.contains(&format!("{name}:2")), "{error}");
+            assert!(
+                error.ends_with(if bad.contains('\t') {
+                    "2 | \tbad"
+                } else {
+                    "2 | )"
+                }),
+                "{error}"
+            );
+        }
+    }
+}

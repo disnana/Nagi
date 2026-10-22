@@ -9,6 +9,12 @@ pub(crate) const SOURCE_LIMIT_ERROR: &str = "source limit: 2 MB";
 const GENERATED_LOW_LIMIT: usize = 64_000_000;
 
 pub fn parse(src: &str, high: bool) -> Result<Program, String> {
+    parse_with_tokens(src, high).map(|(program, _)| program)
+}
+
+// Source loading needs the exact tokens used to construct AST spans. Retain
+// that allocation rather than lexing the physical module a second time.
+pub(crate) fn parse_with_tokens(src: &str, high: bool) -> Result<(Program, Vec<Token>), String> {
     parse_bounded(src, high, SOURCE_LIMIT, SOURCE_LIMIT_ERROR)
 }
 
@@ -19,6 +25,7 @@ pub(crate) fn parse_generated_low(src: &str) -> Result<Program, String> {
         GENERATED_LOW_LIMIT,
         "generated Low limit: 64 MB",
     )
+    .map(|(program, _)| program)
 }
 
 fn parse_bounded(
@@ -26,7 +33,7 @@ fn parse_bounded(
     high: bool,
     limit: usize,
     limit_error: &str,
-) -> Result<Program, String> {
+) -> Result<(Program, Vec<Token>), String> {
     if src.len() > limit {
         return Err(limit_error.into());
     }
@@ -61,15 +68,15 @@ fn parse_bounded(
             }
         }
     }
-    let mut program = Parser {
+    let mut parser = Parser {
         ts: lex(src, high)?,
         pos: 0,
         high,
         depth: 0,
-    }
-    .program()?;
+    };
+    let mut program = parser.program()?;
     program.modules = modules;
-    Ok(program)
+    Ok((program, parser.ts))
 }
 struct Parser {
     ts: Vec<Token>,
@@ -234,7 +241,7 @@ impl Parser {
             self.expect("}")
         }
     }
-    fn program(mut self) -> Result<Program, String> {
+    fn program(&mut self) -> Result<Program, String> {
         let mut p = Program::default();
         let mut attrs = vec![];
         self.skip();
