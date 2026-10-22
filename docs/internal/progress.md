@@ -550,3 +550,10 @@ base `e2d7280`から、physical moduleを2回lexする経路をparser所有token
 [設計](release-0.2.1-build-stability.md)と[raw計測](../../benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md)を追加。release compilerの完全検査は最大約3%短縮、小規模入力は差が小さく遅いsampleも残した。生成Low/Rust一致、release loopの全checksumと旧exe不変を確認し、実行速度向上は主張しない。frontend23件は4個別cold targetで221.11秒、1共有cold76.71秒、warm共有4.38秒（各1回、registry/OS warm）。cold/warmやCI全体の改善率を混同しない。
 
 fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inventory37、利用者CI generator7、network許可下の全workspace `cargo test --locked --quiet`が成功した。全workspace670.09秒は同条件の速度比較ではない。最初のsocket権限拒否の失敗logも保持した。ordinary devとunitsの8ケースを各3回測定し、48成功exe・6回の不正lock拒否/回復を確認した。100関数では変更なしが約16%速い一方、編集は約9–21%遅いためopt-inを維持する。全構成の専有targetは完了後に整理した。独立最終audit、exact-head CIとリリース工程は別gateとして追跡する。query cache・一般async/type分割・自動最適化は未実装で、将来案を今回の成果に数えない。
+
+
+### 2026-10-22 SupervisorのSHUTDOWN publicationとterminal完了（未リリース）
+
+Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが失敗したが、実数が未保存のため根因断定を避けて調査した。別に、最初のrequest_stopがstop/abort後・SHUTDOWN送信前で停止すると、drainerがcleanup完了からchannel closeへ先行するraceをinstance限定finite gateで決定的RED（SHUTDOWN0/STOPPED1）再現した。採用済み設計に従い、SHUTDOWN後のRelease publication flagとterminal条件のAcquireを追加し、取消・cleanup・join・STOPPED・既存lock orderは維持する。
+
+同回帰GREEN、既存actor45件、全runtime923 passed/3既存ignored（failure0、33.06秒）、all-targets clippy -D warningsとfmtが成功。supervised-workerのHighと独立saved Lowは既存12項目（STOPPED3/SHUTDOWN1を含む）を維持してnative成功した。source/testを凍結し、独立High audit・改訂0.2.1の4OS CIへ渡す。Windowsの元失敗と同根とは未断定。[設計・証拠](supervisor-shutdown-publication.md)。

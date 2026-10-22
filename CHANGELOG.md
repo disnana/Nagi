@@ -17,6 +17,10 @@
 
 - Require Tokio 1.54.1 or newer for the runtime and update the active workspace/fixture locks to 1.54.1, incorporating the timer-driver synchronization fix in [Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692). The previous tracked locks used 1.53.1/1.53.2, not the reported affected 1.54.0. Generated applications have independent locks: rebuild them with the updated runtime; updating Nagi's root lock alone does not update existing binaries.
 
+### Supervisor shutdown stability
+
+- Keep the Supervisor event stream open until the first stop request has published SHUTDOWN. Prevent a concurrent completed cleanup from closing the stream before that notification; preserve child joins, cancellation, STOPPED events and shutdown deadlines. Add a deterministic regression and retain the supervised-worker sample's exact event counts.
+
 ### Nagi application development tools
 
 - Add bounded, read-only `nagic cache inspect` for explicitly selected generation and Cargo-cache roots. Report logical sizes, incomplete scans and lossless OS paths; do not delete caches, claim reclaimable space or use observations to authorize native artifact reuse.

@@ -1115,3 +1115,97 @@ async fn a_late_buffered_outer_failure_obeys_the_same_reply_deadline() {
     let error = super::receive_reply(deadline, receiver).await.unwrap_err();
     assert_eq!(error.kind(), super::CallKind::REPLY_TIMEOUT);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn terminal_waits_for_the_first_stop_request_to_publish_shutdown() {
+    let (context, drops) = context();
+    let group = new_group(context, 1);
+    let control = observe(&group);
+    let (gate, _release) = Gate::new();
+    let publication_gate = gate.clone();
+    *control.group.before_shutdown_publish.lock().unwrap() =
+        Some(Box::new(move || publication_gate.wait_native()));
+    let (started_tx, started_rx) = oneshot::channel();
+    register_once(&group, "publication-race", move |_context| async move {
+        let _ = started_tx.send(());
+        pending::<Result<(), Error>>().await
+    })
+    .unwrap();
+    // The test owns polling, so no background run task can publish terminal
+    // before the exact observation below has been captured.
+    let mut running = Box::pin(run(group));
+    std::future::poll_fn(|cx| {
+        assert!(running.as_mut().poll(cx).is_pending());
+        std::task::Poll::Ready(())
+    })
+    .await;
+    tokio::time::timeout(ASSERT_TIMEOUT, started_rx)
+        .await
+        .expect("the registered child did not start")
+        .unwrap();
+    let stop_control = clone_control(&control);
+    let (stopped_tx, stopped_rx) = oneshot::channel();
+    let stopper = std::thread::spawn(move || {
+        stop_control.request_stop();
+        let _ = stopped_tx.send(());
+    });
+    gate.wait_entered().await;
+    let before_publication = tokio::time::timeout(
+        ASSERT_TIMEOUT,
+        std::future::poll_fn(|cx| {
+            let observed = running.as_mut().poll(cx);
+            let snapshot = control.snapshot();
+            if snapshot.active_children == 0
+                && snapshot.retained_child_records == 0
+                && !snapshot.retained_cleanup_record
+                && snapshot.context_destroyed
+            {
+                std::task::Poll::Ready(observed)
+            } else {
+                std::task::Poll::Pending
+            }
+        }),
+    )
+    .await
+    .expect("the stopped child and context cleanup did not finish");
+    let waited_for_publication = before_publication.is_pending();
+
+    // Release and join before the regression assertion, including on the old
+    // implementation's Ready path. A RED must not leave the stop thread gated.
+    gate.release();
+    tokio::time::timeout(ASSERT_TIMEOUT, stopped_rx)
+        .await
+        .expect("the released stop request did not finish")
+        .unwrap();
+    stopper.join().unwrap();
+    match before_publication {
+        std::task::Poll::Ready(result) => result,
+        std::task::Poll::Pending => tokio::time::timeout(ASSERT_TIMEOUT, running)
+            .await
+            .expect("run did not finish after shutdown publication"),
+    }
+    .expect("an explicit stop must finish successfully");
+    complete(&control).await;
+    let (shutdown, stopped) = tokio::time::timeout(ASSERT_TIMEOUT, async {
+        let mut shutdown = 0;
+        let mut stopped = 0;
+        while let Some(event) = next_event(&control).await.unwrap() {
+            shutdown += usize::from(event.kind() == super::EventKind::SHUTDOWN);
+            stopped += usize::from(event.kind() == super::EventKind::STOPPED);
+        }
+        (shutdown, stopped)
+    })
+    .await
+    .expect("the event channel did not close after shutdown publication");
+    gate.assert_released_by_test();
+    assert_eq!(drops.load(Ordering::Acquire), 1);
+    assert!(
+        waited_for_publication,
+        "run completed before SHUTDOWN publication: shutdown={shutdown}, stopped={stopped}"
+    );
+    assert_eq!(
+        shutdown, 1,
+        "the first stop must publish one shutdown event"
+    );
+    assert_eq!(stopped, 1, "the child must publish one stopped event");
+}

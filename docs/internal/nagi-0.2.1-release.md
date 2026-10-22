@@ -2,6 +2,8 @@
 
 2026-10-22。main `f75300a`に統合済みのビルド・安定性改善を0.2.1として公開する。新しい最適化やIDEの実行設定変更を追加せず、workspace版と稼働するlock内のlocal package版、CHANGELOGを揃える。外部依存版・release profile・High/Low意味論・安全検査は変更しない。
 
+初回HEAD `c640223`の正式CI `39779857773`は、Windowsのsupervised-worker High nativeで終了イベント数のassertに失敗した。実数は記録されず、他3OS配布と全OS regressionの成功もWindows必須gateの代わりにならない。調査で別途確定した「stop要求後、SHUTDOWN公開前にevent streamが閉じる競合」を小さいruntime修正として追加した。[設計と決定的RED/GREEN](supervisor-shutdown-publication.md)を参照する。終了通知0件の再現から1件へ修正し、既存join・取消・STOPPED処理・期限を維持した。元Windows失敗との同根性を断定せず、改訂HEADの全4OS CIを公開条件とする。
+
 ## 対象と保証
 
 - 開発時は`nagic run app.nagi --profile dev`を選べる。CLI既定はreleaseのまま。初回はRust依存のコンパイルが必要で、すべてのcold buildを瞬時にする変更ではない。
