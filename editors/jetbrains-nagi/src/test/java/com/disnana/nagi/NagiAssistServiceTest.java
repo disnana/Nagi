@@ -1,11 +1,13 @@
 package com.disnana.nagi;
 
 import com.intellij.ide.trustedProjects.TrustedProjects;
+import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.command.WriteCommandAction;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VfsUtil;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent;
@@ -13,10 +15,12 @@ import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
 import com.intellij.testFramework.fixtures.BasePlatformTestCase;
-import com.intellij.util.ui.UIUtil;
+import com.intellij.testFramework.ServiceContainerUtil;
+import com.intellij.testFramework.PlatformTestUtil;
 import com.intellij.util.messages.MessageBus;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,6 +31,7 @@ import java.util.function.Supplier;
 /** Real Platform documents, background snapshots and deterministic cancellation gates. */
 public class NagiAssistServiceTest extends BasePlatformTestCase {
     private Path root;
+    private Path externalRoot;
     private NagiAssistService service;
     private com.intellij.openapi.Disposable serviceReplacement;
     private boolean originalTrust;
@@ -55,6 +60,9 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             try (var files = Files.walk(root)) {
                 for (Path file : files.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(file);
             }
+            if (externalRoot != null) try (var files = Files.walk(externalRoot)) {
+                for (Path file : files.sorted(java.util.Comparator.reverseOrder()).toList()) Files.deleteIfExists(file);
+            }
         } finally { super.tearDown(); }
     }
     private PsiFile source(String name, String text) throws Exception {
@@ -81,7 +89,8 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
     private void waitUntil(BooleanSupplier done) throws Exception {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
         while (!done.getAsBoolean() && System.nanoTime() < deadline) {
-            UIUtil.dispatchAllInvocationEvents();
+            // Let the IDE dispatcher release implicit write intent for background VFS events.
+            PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue();
             Thread.sleep(5);
         }
         assertTrue("service state: " + service.state() + ": " + service.statusMessage(), done.getAsBoolean());
@@ -89,11 +98,26 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
     private void waitUntil(BooleanSupplier done, Supplier<String> failureMessage) throws Exception {
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(10);
         while (!done.getAsBoolean() && System.nanoTime() < deadline) {
-            UIUtil.dispatchAllInvocationEvents();
+            PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue();
             Thread.sleep(5);
         }
         boolean complete = done.getAsBoolean();
         assertTrue(complete ? "" : failureMessage.get(), complete);
+    }
+    private void refreshNioDirectory(Path directory) throws Exception {
+        var virtualDirectory = LocalFileSystem.getInstance().findFileByPath(directory.toString());
+        assertNotNull("the targeted parent was registered with VFS before the mutation", virtualDirectory);
+        VfsUtil.markDirty(false, false, virtualDirectory);
+        CountDownLatch refreshed = new CountDownLatch(1);
+        virtualDirectory.refresh(true, false, refreshed::countDown);
+        waitUntil(() -> refreshed.getCount() == 0, () -> "targeted VFS refresh did not finish for " + directory);
+    }
+    private static NagiAssistProtocol.Response importSourceResponse(String file, Path directory, String candidateName) {
+        var context = new NagiAssistProtocol.ImportContext("import-source",
+                new NagiAssistProtocol.Location(file, 1, 8, 2), List.of(directory.toString()), false);
+        var item = new NagiAssistProtocol.CompletionItem(candidateName, "module", null, null, null, false, "read");
+        return new NagiAssistProtocol.Response("editor-partial", false, false, false, "names", List.of(),
+                List.of(item), List.of(), List.of(file), List.of(), List.of(), List.of(), context);
     }
     private static final class CompilerVfsCounters {
         private final String compilerPath;
@@ -212,14 +236,17 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         assertEquals(2, calls.get());
     }
     public void testUntrustedProjectAndUnsavedManifestNeverLaunchCompiler() throws Exception {
-        PsiFile file = source("main.nagi", "def main():\n    print(1)\n");
+        PsiFile file = source("main.nagi", "import ut\n");
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(file.getTextLength() - 1);
         AtomicInteger calls = new AtomicInteger();
         service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
             calls.incrementAndGet(); throw new AssertionError("must not launch");
         });
         TrustedProjects.setProjectTrusted(getProject(), false);
-        service.requestBaseline(file);
+        service.requestCompletion(file, editor);
         assertEquals(NagiAssistService.State.UNTRUSTED, service.state());
+        assertNull("an untrusted import slot has no compiler completion snapshot", service.fresh(file, editor));
         assertEquals(0, calls.get());
         TrustedProjects.setProjectTrusted(getProject(), true);
         var manifest = source("nagi.toml", "entry = \"main.nagi\"\n");
@@ -448,7 +475,9 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
     }
 
     public void testMissingCompilerIsQuietUntilCompilerAppearsAndRejectsOlderResponse() throws Exception {
-        PsiFile file = source("main.nagi", "def main():\n    print(1)\n");
+        PsiFile file = source("main.nagi", "import ut\n");
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(file.getTextLength() - 1);
         Path missingCompiler = root.resolve("tools/" + (com.intellij.openapi.util.SystemInfo.isWindows ? "nagic.exe" : "nagic"));
         Files.createDirectories(missingCompiler.getParent());
         var compilerDirectory = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(missingCompiler.getParent());
@@ -506,10 +535,11 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         observeCompilerVfs(serviceReplacement, ApplicationManager.getApplication().getMessageBus(), appVfs);
         observeCompilerVfs(serviceReplacement, getProject().getMessageBus(), projectVfs);
 
-        service.requestBaseline(file);
+        service.requestCompletion(file, editor);
         waitUntil(() -> service.state() == NagiAssistService.State.COMPILER_UNAVAILABLE && notices.get() == 1);
         assertEquals("initial resolution attempt", 1, compilerProbes.get());
         assertEquals(0, calls.get());
+        assertNull("an import slot with no executable has no semantic candidates", service.fresh(file, editor));
         assertNotNull(retry.get());
         assertTrue(service.statusMessage().contains("could not be resolved"));
         assertFalse(NagiAssistExternalAnnotator.shouldRenderFileLevelState(
@@ -664,5 +694,256 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             return current != null;
         });
         assertTrue("changed dependency must be re-analysed", calls.get() >= warmCalls + 2);
+    }
+
+    public void testStaleImportCompletionReplyCannotPublishOrOfferOldCandidates() throws Exception {
+        PsiFile file = source("main.nagi", "from helper import old\n");
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(file.getText().indexOf("old") + 3);
+        CountDownLatch enteredOld = new CountDownLatch(1);
+        CountDownLatch releaseOld = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            int call = calls.incrementAndGet();
+            if (call == 1) {
+                enteredOld.countDown();
+                while (releaseOld.getCount() != 0) {
+                    try { releaseOld.await(); } catch (InterruptedException ignored) { }
+                }
+            }
+            String text = new String(input, java.nio.charset.StandardCharsets.UTF_8);
+            String path = file.getVirtualFile().getPath();
+            int nameStart = 19;
+            var context = new NagiAssistProtocol.ImportContext("import-names",
+                    new NagiAssistProtocol.Location(path, 1, nameStart + 1, text.contains("import newer") ? 5 : 3),
+                    List.of(), false);
+            var item = new NagiAssistProtocol.CompletionItem(call == 1 ? "obsolete" : "current",
+                    "function", null, null, null, false, "read");
+            return new NagiAssistProtocol.Response("editor-partial", false, false, false, "names", List.of(),
+                    List.of(item), List.of(), List.of(path), List.of(), List.of(), List.of(), context);
+        });
+        installService();
+        service.requestCompletion(file, editor);
+        waitUntil(() -> enteredOld.getCount() == 0);
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> editor.getDocument().setText("from helper import newer\n"));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        editor.getCaretModel().moveToOffset(editor.getDocument().getText().indexOf("newer") + 5);
+        assertNull(service.fresh(file, editor));
+        service.requestCompletion(file, editor);
+        LookupElement[] staleOffer = myFixture.completeBasic();
+        assertTrue(staleOffer == null || Arrays.stream(staleOffer)
+                .noneMatch(item -> item.getLookupString().equals("obsolete")));
+        releaseOld.countDown();
+        waitUntil(() -> {
+            var current = service.fresh(file, editor);
+            return current != null && current.response().completions().stream()
+                    .anyMatch(candidate -> candidate.name().equals("current"));
+        });
+        assertFalse(service.fresh(file, editor).response().completions().stream()
+                .anyMatch(candidate -> candidate.name().equals("obsolete")));
+        assertTrue(calls.get() >= 2);
+    }
+
+    public void testReportedExternalImportDirectoryCreateRenameMoveAndDeleteInvalidateAfterTargetedRefresh() throws Exception {
+        externalRoot = Files.createTempDirectory("nagi-assist-external-import-");
+        com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess.allowRootAccess(getTestRootDisposable(), externalRoot.toString());
+        Path oldParent = Files.createDirectories(externalRoot.resolve("old-parent"));
+        Path newParent = Files.createDirectories(externalRoot.resolve("new-parent"));
+        assertNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(newParent));
+        Path mainPath = Files.writeString(oldParent.resolve("main.nagi"), "import he\n");
+        var mainVirtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(mainPath);
+        assertNotNull(mainVirtualFile);
+        myFixture.configureFromExistingVirtualFile(mainVirtualFile);
+        PsiFile file = myFixture.getFile();
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(file.getTextLength() - 1);
+        String path = mainVirtualFile.getPath();
+        AtomicReference<NagiAssistProtocol.Response> reply = new AtomicReference<>(
+                importSourceResponse(path, oldParent, "helper"));
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            calls.incrementAndGet();
+            return reply.get();
+        });
+        installService();
+
+        service.requestCompletion(file, editor);
+        waitUntil(() -> service.fresh(file, editor) != null);
+        assertTrue("initial import-directory discovery discards and retries its first compiler response",
+                calls.get() >= 2);
+        var published = service.fresh(file, editor);
+        assertNotNull(published);
+        ApplicationManager.getApplication().invokeAndWait(() -> {
+            for (int read = 0; read < 500; read++) assertSame(published, service.fresh(file, editor));
+        });
+
+        Path created = Files.writeString(oldParent.resolve("created.nagi"), "def created():\n    return 1\n");
+        refreshNioDirectory(oldParent);
+        assertNull("external creation invalidates after targeted VFS delivery", service.fresh(file, editor));
+        service.requestCompletion(file, editor);
+        waitUntil(() -> service.fresh(file, editor) != null);
+
+        Path renamed = oldParent.resolve("renamed.nagi");
+        Files.move(created, renamed);
+        refreshNioDirectory(oldParent);
+        assertNull("external rename invalidates after targeted VFS delivery", service.fresh(file, editor));
+        service.requestCompletion(file, editor);
+        waitUntil(() -> service.fresh(file, editor) != null);
+
+        Path moved = newParent.resolve("moved.nagi");
+        Files.move(renamed, moved);
+        refreshNioDirectory(oldParent);
+        refreshNioDirectory(newParent);
+        assertNull("move from an external old parent invalidates after both parents are refreshed",
+                service.fresh(file, editor));
+
+        Path newMainPath = Files.writeString(newParent.resolve("main-new.nagi"), "import he\n");
+        var newMainVirtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(newMainPath);
+        assertNotNull("opening the exact external query path discovers its VFS file", newMainVirtualFile);
+        myFixture.configureFromExistingVirtualFile(newMainVirtualFile);
+        PsiFile newFile = myFixture.getFile();
+        var newEditor = myFixture.getEditor();
+        newEditor.getCaretModel().moveToOffset(newFile.getTextLength() - 1);
+        String newPath = newMainVirtualFile.getPath();
+        int callsBeforeNewParent = calls.get();
+        reply.set(importSourceResponse(newPath, newParent, "helper"));
+        service.requestCompletion(newFile, newEditor);
+        waitUntil(() -> service.fresh(newFile, newEditor) != null);
+        assertTrue("newly reported external parent is captured on a retried worker request",
+                calls.get() >= callsBeforeNewParent + 2);
+
+        Files.delete(moved);
+        refreshNioDirectory(newParent);
+        assertNull("external deletion invalidates after targeted VFS delivery", service.fresh(newFile, newEditor));
+        service.requestCompletion(newFile, newEditor);
+        waitUntil(() -> service.fresh(newFile, newEditor) != null);
+        assertTrue("the first directory discovery and the moved-to parent both required retries", calls.get() >= 5);
+    }
+
+    public void testUnnotifiedImportDirectoryMutationDuringRunnerDiscardsWorkerResponse() throws Exception {
+        externalRoot = Files.createTempDirectory("nagi-assist-import-postcheck-");
+        com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess.allowRootAccess(getTestRootDisposable(), externalRoot.toString());
+        Path mainPath = Files.writeString(externalRoot.resolve("main.nagi"), "import he\n");
+        var mainVirtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(mainPath);
+        assertNotNull(mainVirtualFile);
+        myFixture.configureFromExistingVirtualFile(mainVirtualFile);
+        PsiFile file = myFixture.getFile();
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(file.getTextLength() - 1);
+        String path = mainVirtualFile.getPath();
+        var discovery = importSourceResponse(path, externalRoot, "discovery");
+        var staleDuringRun = importSourceResponse(path, externalRoot, "stale-during-run");
+        var afterPostcheck = importSourceResponse(path, externalRoot, "current-after-retry");
+        CountDownLatch secondRunnerEntered = new CountDownLatch(1);
+        CountDownLatch releaseSecondRunner = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            assertFalse("filesystem-backed analysis must run off the EDT", javax.swing.SwingUtilities.isEventDispatchThread());
+            int call = calls.incrementAndGet();
+            if (call == 1) return discovery;
+            if (call == 2) {
+                secondRunnerEntered.countDown();
+                releaseSecondRunner.await();
+                return staleDuringRun;
+            }
+            return afterPostcheck;
+        });
+        installService();
+
+        service.requestCompletion(file, editor);
+        try {
+            waitUntil(() -> secondRunnerEntered.getCount() == 0);
+            var oldDirectoryTime = Files.getLastModifiedTime(externalRoot);
+            Files.setLastModifiedTime(externalRoot,
+                    java.nio.file.attribute.FileTime.fromMillis(oldDirectoryTime.toMillis() + 10_000));
+            assertTrue("directory metadata mutation must be visible to the worker postcheck",
+                    !oldDirectoryTime.equals(Files.getLastModifiedTime(externalRoot)));
+        } finally {
+            releaseSecondRunner.countDown();
+        }
+        waitUntil(() -> {
+            var current = service.fresh(file, editor);
+            return current != null && current.response().completions().getFirst().name().equals("current-after-retry");
+        });
+        assertTrue("the worker's post-run directory check must discard the in-flight facts and retry", calls.get() >= 3);
+        assertFalse("the unnotified in-flight compiler result is never published", service.fresh(file, editor)
+                .response().completions().stream().anyMatch(item -> item.name().equals("stale-during-run")));
+    }
+
+    public void testExpressionCompletionDropsPreviousImportDirectoryInterest() throws Exception {
+        externalRoot = Files.createTempDirectory("nagi-assist-import-to-expression-");
+        com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess.allowRootAccess(getTestRootDisposable(), externalRoot.toString());
+        Path mainPath = Files.writeString(externalRoot.resolve("main.nagi"), "import he\n");
+        var mainVirtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(mainPath);
+        assertNotNull(mainVirtualFile);
+        myFixture.configureFromExistingVirtualFile(mainVirtualFile);
+        PsiFile file = myFixture.getFile();
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(file.getTextLength() - 1);
+        String path = file.getVirtualFile().getPath();
+        var sourceContext = new NagiAssistProtocol.ImportContext("import-source",
+                new NagiAssistProtocol.Location(path, 1, 8, 2), List.of(externalRoot.toString()), false);
+        var module = new NagiAssistProtocol.CompletionItem("helper", "module", null, null, null, false, "read");
+        var importReply = new NagiAssistProtocol.Response("editor-partial", false, false, false, "names", List.of(),
+                List.of(module), List.of(), List.of(path), List.of(), List.of(), List.of(), sourceContext);
+        AtomicReference<NagiAssistProtocol.Response> reply = new AtomicReference<>(importReply);
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> reply.get());
+        installService();
+
+        service.requestCompletion(file, editor);
+        waitUntil(() -> service.fresh(file, editor) != null);
+        assertEquals("import-source", service.fresh(file, editor).response().importContext().kind());
+
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> editor.getDocument().setText("helper\n"));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        editor.getCaretModel().moveToOffset(editor.getDocument().getTextLength() - 1);
+        reply.set(response(path, "helper"));
+        service.requestCompletion(file, editor);
+        waitUntil(() -> {
+            var current = service.fresh(file, editor);
+            return current != null && current.response().importContext() == null;
+        });
+
+        Files.writeString(externalRoot.resolve("late.nagi"), "def late():\n    return 1\n");
+        assertNotNull("expression response no longer depends on the previous import directory",
+                service.fresh(file, editor));
+    }
+
+    public void testImportedTargetOverlayChangesInvalidateCompletionSnapshot() throws Exception {
+        Path helperPath = Files.writeString(root.resolve("helper.nagi"), "def build() -> i64:\n    return 1\n");
+        var helperVirtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(helperPath);
+        assertNotNull(helperVirtualFile);
+        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(getProject()).openFile(helperVirtualFile, true);
+        var helperDocument = FileDocumentManager.getInstance().getDocument(helperVirtualFile);
+        assertNotNull(helperDocument);
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> helperDocument.setText(
+                "def build() -> i64:\n    return 2\n"));
+        PsiFile main = source("main.nagi", "from helper import bu\n");
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(main.getTextLength() - 1);
+        String mainPath = main.getVirtualFile().getPath();
+        var context = new NagiAssistProtocol.ImportContext("import-names",
+                new NagiAssistProtocol.Location(mainPath, 1, 20, 2), List.of(), false);
+        var candidate = new NagiAssistProtocol.CompletionItem("build", "function", null, null, null, false, "read");
+        AtomicReference<String> captured = new AtomicReference<>();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            captured.set(new String(input, java.nio.charset.StandardCharsets.UTF_8));
+            return new NagiAssistProtocol.Response("editor-partial", false, false, false, "names", List.of(),
+                    List.of(candidate), List.of(), List.of(mainPath, helperVirtualFile.getPath()),
+                    List.of(), List.of(), List.of(), context);
+        });
+        installService();
+        service.requestCompletion(main, editor);
+        waitUntil(() -> service.fresh(main, editor) != null);
+        assertTrue("unsaved imported target text is included in the compiler overlay",
+                captured.get().contains("return 2"));
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> helperDocument.setText(
+                "def build() -> i64:\n    return 3\n"));
+        assertNull("an imported target overlay edit invalidates its completion response", service.fresh(main, editor));
+    }
+
+    private void installService() {
+        serviceReplacement = com.intellij.openapi.util.Disposer.newDisposable("Nagi import assistance service replacement");
+        ServiceContainerUtil.replaceService(getProject(), NagiAssistService.class, service, serviceReplacement);
     }
 }

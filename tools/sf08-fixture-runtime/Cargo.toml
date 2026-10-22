@@ -8,4 +8,4 @@ edition = "2021"
 
 [dependencies]
 nagi-runtime = { path = "../../runtime" }
-tokio = { version = "=1.53.1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util", "io-std", "test-util"] }
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "io-util", "io-std", "test-util"] }

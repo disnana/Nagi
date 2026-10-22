@@ -109,3 +109,5 @@ base `5d3e58e`。Luna MaxへPython/Nagiのsource比較と、既存VS Code実装�
 
 Enter補助の独立Sol 6.1 High監査で、SDK `DocumentEx.getModificationSequence()` default恒常0を有効な履歴と扱うP2を検出した。親が実actionを保ったdelegate/document proxy回帰を追加し、2件中1件RED（16秒）を確認した。正値sequenceだけ記録・照合し、0開始の実sequenceは初回Enterから有効にする。監査対象旧HEAD `6ed5520`と修正後HEADの証拠を分け、更新差分・実行結果の再reviewを依頼する。
 修正後は実compiler連携を含む全188件/失敗・skip 0とZIP生成が55秒で成功し、descriptor/hash検証を通した。これはwarm SDK条件の実行時間で、変更前比の高速化は主張しない。
+
+2026-10-22 Tokio #8692対応では、親がupstream PR/release・tracked locks・生成Cargo境界を調査し、独立Sol 6.1 Highのread-only事前調査がruntime最低版/standalone fixture整合と必須failure casesを確認した。実装はmanifest/lockと日英文書に限定し、cache codeや履歴benchmarkを変えない。focused runtime862成功/計測1ignored、生成appのfresh/1.54.0/1.53.1 lock更新と旧exe保持を実行した。実装後の別のfresh Sol 6.1 High最終監査とexact-head CIはPRで追跡する。model時間/使用量/料金は未計測。ローカルSDK cache削除は初回自動reviewが拒否した後、ユーザーの明示許可により前taskで取得した再download可能なIDE SDK約2.9GBだけを削除し、ZIP/raw logとNagi app cacheは保持した。

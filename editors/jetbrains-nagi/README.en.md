@@ -6,6 +6,10 @@ Nagi support for IntelliJ IDEA and PyCharm. Version 0.1.3 keeps plugin ID `com.d
 
 The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release includes a common ZIP for both IDEs; check Releases for newer available assets. For Marketplace installs, check the existing listing's Versions view for available versions and compatible IDE builds. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download one common ZIP for both IDEs from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
+## In development: named imports
+
+The 0.2.1 compiler/plugin candidates add neighboring-file `import models` and `from models import Item`, import-statement completion, and original-source navigation. Published 0.2.0 and plugin 0.1.3 do not include this change. See the [editor guide](../../docs/en/editor.md#import-assistance-in-development) for candidate scope, background updates, external notification latency, and pending GUI verification.
+
 ## Features in 0.1.2
 
 - Syntax highlighting for High (`.nagi`) and Low (`.low`).

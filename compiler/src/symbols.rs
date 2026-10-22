@@ -909,6 +909,79 @@ pub(crate) fn index_with_types(
 ) -> Result<serde_json::Value, String> {
     index_impl(sources, programs, false, typed)
 }
+
+/// Import selection needs declared export names and original locations only.
+/// Do not build or publish unverified signatures, locals or expression types.
+pub(crate) fn import_exports(
+    sources: &Sources,
+    program: &Program,
+    module: &ModuleId,
+    prefix: &str,
+) -> Result<Vec<serde_json::Value>, String> {
+    let files = sources
+        .files()
+        .map(|(path, text, start)| {
+            Ok(File {
+                path,
+                module: module.clone(),
+                lines: text.lines().collect(),
+                start,
+                tokens: lex(text, path.extension().is_none_or(|x| x != "low"))?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let mut declarations = HashMap::new();
+    for (file_index, file) in files.iter().enumerate() {
+        for (token_index, pair) in file.tokens.windows(2).enumerate() {
+            if matches!(&pair[0].kind, K::Id(keyword) if matches!(keyword.as_str(), "def" | "fn" | "class" | "record" | "enum"))
+            {
+                if let K::Id(name) = &pair[1].kind {
+                    declarations.insert(
+                        (pair[1].line + file.start - 1, name.clone()),
+                        (file_index, token_index + 1),
+                    );
+                }
+            }
+        }
+    }
+    let mut items = vec![];
+    let mut bytes = 0usize;
+    for definition in program
+        .modules
+        .exports(module)
+        .filter(|d| d.id.name.starts_with(prefix))
+    {
+        let location = if crate::stdlib::is_registered_module(module) {
+            standard_definition(definition, &definition.id.name, &module.0, &program.modules)
+                .map(|d| d.location)
+        } else {
+            declarations
+                .get(&(definition.line, definition.id.name.clone()))
+                .or_else(|| declarations.get(&(definition.line, definition.symbol.clone())))
+                .map(|&(file, token)| {
+                    files[file].location(
+                        &files[file].tokens[token],
+                        files[file].token_length(&files[file].tokens[token]),
+                    )
+                })
+        };
+        let Some(location) = location else { continue };
+        let kind = match definition.id.kind {
+            DefKind::Function => "function",
+            DefKind::Class => "class",
+            DefKind::Enum => "enum",
+            DefKind::Resource => "resource",
+        };
+        let item = serde_json::json!({"name":definition.id.name,"kind":kind,"target":location,"access":"read"});
+        bytes += item.to_string().len();
+        items.push(item);
+        // The assistance layer reports exhaustion with an empty incomplete list.
+        if items.len() > 8192 || bytes > 8_000_000 {
+            break;
+        }
+    }
+    Ok(items)
+}
 fn index_impl(
     sources: &Sources,
     programs: &[&Program],
@@ -1337,45 +1410,41 @@ fn index_impl(
             }
         }
     }
-    // Import strings navigate to the loaded canonical file, including `from`.
-    for file in &files {
-        for (i, token) in file.tokens.iter().enumerate() {
-            if matches!(&token.kind, K::Id(name) if name == "import" || name == "from") {
-                for &module in crate::stdlib::MODULES {
-                    let info = crate::stdlib::module_info(module);
-                    let parts = info.name.split('.').collect::<Vec<_>>();
-                    let width = parts.len() * 2 - 1;
-                    if let Some(path) = file.tokens.get(i + 1..i + 1 + width) {
-                        if parts.iter().enumerate().all(|(index, name)| {
-                            matches!(&path[index * 2].kind, K::Id(part) if part == name)
-                                && (index == 0 || matches!(&path[index * 2 - 1].kind, K::Sym(dot) if dot == "."))
-                        }) {
-                            references.push(Reference {
-                                location: file.location(&path[0], info.name.len()),
-                                target: Location { file: info.id.into(), line: 1, column: 1, length: 0 },
-                            });
-                        }
-                    }
-                }
-            }
-            if let K::Str(import) = &token.kind {
-                if i > 0
-                    && matches!(&file.tokens[i-1].kind, K::Id(n) if n == "import" || n == "from")
-                {
-                    let target = std::fs::canonicalize(file.path.parent().unwrap().join(import))
-                        .map_err(|e| e.to_string())?;
-                    references.push(Reference {
-                        location: file.location(token, file.string_length(token)),
-                        target: Location {
-                            file: target.display().to_string(),
-                            line: 1,
-                            column: 1,
-                            length: 0,
-                        },
-                    });
-                }
+    // Source navigation uses the loader's resolved provenance, never a second
+    // filesystem lookup or a token-shaped guess at an import.
+    for resolved in sources.resolved_imports() {
+        let Some(file) = files.iter().find(|f| f.path == resolved.file) else {
+            continue;
+        };
+        let Some(first) = file.tokens.get(resolved.import.span.start + 1) else {
+            continue;
+        };
+        let target = Location {
+            file: resolved
+                .target_file
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|| resolved.target.0.clone()),
+            line: 1,
+            column: 1,
+            length: 0,
+        };
+        let mut length = file.token_length(first);
+        if matches!(first.kind, K::Id(_)) {
+            let mut index = resolved.import.span.start + 2;
+            while index + 1 < resolved.import.span.end
+                && matches!(&file.tokens[index].kind, K::Sym(s) if s == ".")
+                && matches!(file.tokens[index + 1].kind, K::Id(_))
+            {
+                let member = &file.tokens[index + 1];
+                length = member.col - first.col + file.token_length(member);
+                index += 2;
             }
         }
+        references.push(Reference {
+            location: file.location(first, length),
+            target,
+        });
     }
     for definition in &definitions {
         references.push(Reference {

@@ -8,6 +8,28 @@ pub(crate) const SOURCE_LIMIT_ERROR: &str = "source limit: 2 MB";
 // without treating that transport as one user source file.
 const GENERATED_LOW_LIMIT: usize = 64_000_000;
 
+/// Named local sources have one exact sibling target, never a search path.
+pub(crate) fn named_import_source(
+    name: &str,
+    high: bool,
+) -> Result<(String, ImportSource), &'static str> {
+    if name == "std" {
+        return Err("stdのimportには登録済みstd module名が必要です");
+    }
+    if name.starts_with("std.") {
+        return Ok((name.to_owned(), ImportSource::Standard));
+    }
+    if name.contains('.') {
+        return Err(
+            "別のdirectoryやファイル名を指定するimportには引用符付きの相対パスを使ってください",
+        );
+    }
+    Ok((
+        format!("{name}.{}", if high { "nagi" } else { "low" }),
+        ImportSource::File,
+    ))
+}
+
 pub fn parse(src: &str, high: bool) -> Result<Program, String> {
     parse_bounded(src, high, SOURCE_LIMIT, SOURCE_LIMIT_ERROR)
 }
@@ -246,17 +268,17 @@ impl Parser {
                     return Err(self.err("importに属性は付けられません"));
                 }
                 let line = self.ts[import_start].line;
-                let (path, source) = if let K::Str(file) = self.t().kind.clone() {
+                let source_start = self.pos;
+                let (path, source, implicit_alias) = if let K::Str(file) = self.t().kind.clone() {
                     self.pos += 1;
-                    (file, ImportSource::File)
+                    (file, ImportSource::File, None)
                 } else {
                     let name = self.qualified_name()?;
-                    if !name.starts_with("std.") {
-                        return Err(
-                            self.err("importには相対ファイルパスの文字列かstd module名が必要です")
-                        );
-                    }
-                    (name, ImportSource::Standard)
+                    let (path, source) = named_import_source(&name, self.high)
+                        .map_err(|message| self.err(message))?;
+                    let alias =
+                        (source == ImportSource::File).then(|| (name, self.span(source_start)));
+                    (path, source, alias)
                 };
                 let kind = if from {
                     self.expect("import")?;
@@ -290,6 +312,8 @@ impl Parser {
                         alias,
                         alias_span: self.span(start),
                     }
+                } else if let Some((alias, alias_span)) = implicit_alias {
+                    ImportKind::Module { alias, alias_span }
                 } else if source == ImportSource::File {
                     p.imports.push((path.clone(), line));
                     ImportKind::Flat
