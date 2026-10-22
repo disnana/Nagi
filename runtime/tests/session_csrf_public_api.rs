@@ -758,11 +758,11 @@ async fn guarded_rotation_and_logout_invalidate_old_generation_tokens() {
         .token();
     let removed = request(&s, "POST", "/logout", &guarded(&new, &fresh), b"").await;
     assert!(removed.status == 200 && removed.cookie().ends_with('='));
-    assert!(
+    assert_eq!(
         request(&s, "POST", "/write", &guarded(&new, &fresh), b"")
             .await
-            .status
-            == 401
+            .status,
+        401
     );
     assert!(
         s.state.calls.load(Ordering::SeqCst) == 0

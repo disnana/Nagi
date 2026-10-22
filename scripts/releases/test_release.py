@@ -26,7 +26,10 @@ class ReleasePlanTests(unittest.TestCase):
         # No detached housekeeping may outlive commit() and race cleanup of
         # this exclusively owned disposable repository. Keep cleanup failures
         # visible; do not mask them with retries or ignore_errors.
+        # Git 2.54+ defaults explicit maintenance --auto to geometric, whose
+        # repack threshold is independent of gc.auto. Pin the fixture to gc.
         for key, value in (("gc.auto", "0"), ("maintenance.auto", "false"),
+                           ("maintenance.strategy", "gc"),
                            ("gc.autoDetach", "false"), ("maintenance.autoDetach", "false")):
             subprocess.run(["git", "config", "--local", key, value], cwd=self.root, check=True)
         self.change("Cargo.toml", '[workspace.package]\nversion = "0.1.0"\nedition = "2021"\nlicense = "MIT"\n')
@@ -553,7 +556,8 @@ class ReleasePlanTests(unittest.TestCase):
             global_config = config_root / "global.gitconfig"
             system_config.write_text(
                 "[gc]\nauto = 1\nautoDetach = true\n"
-                "[maintenance]\nauto = true\nautoDetach = true\n",
+                "[maintenance]\nauto = true\nautoDetach = true\nstrategy = geometric\n"
+                "[maintenance \"geometric-repack\"]\nauto = -1\n",
                 encoding="utf-8",
             )
             global_config.write_text("", encoding="utf-8")

@@ -435,6 +435,131 @@ class IntegrationTests(unittest.TestCase):
         self.assertIn('originalCookieSnapshot',spec)
         self.assertIn('original_prelogin_unexpired',spec)
 
+    def test_prerequisites_fail_closed_without_starting_later_stages(self):
+        for failed_stage in ('apt_update', 'apt_install'):
+            for cause in ('exit', 'signal', 'timeout', 'cancelled'):
+                with self.subTest(stage=failed_stage, cause=cause):
+                    clock = [0.0]
+                    class AptOwner:
+                        cancelled = False
+                        def __init__(self): self.started = []
+                        def spawn(self, name, argv):
+                            self.started.append((name, argv))
+                            return NS(name=name)
+                        def peek(self, leader):
+                            if leader.name != 'prerequisite_' + failed_stage:
+                                return NS(si_code=os.CLD_EXITED, si_status=0)
+                            if cause == 'timeout':
+                                clock[0] = 241.0
+                                return None
+                            if cause == 'cancelled':
+                                self.cancelled = True
+                                return None
+                            return NS(si_code=os.CLD_EXITED if cause == 'exit' else os.CLD_KILLED,
+                                      si_status=100 if cause == 'exit' else 9)
+                    owner = AptOwner()
+                    with patch.object(ci.time, 'monotonic', side_effect=lambda: clock[0]), \
+                         patch.object(ci.time, 'sleep'):
+                        with self.assertRaises(ci.PrerequisiteFailure) as caught:
+                            ci.run_prerequisites(owner)
+                    error = caught.exception
+                    self.assertEqual(error.prerequisite_stage, failed_stage)
+                    expected = {'class': 'child_exit', 'status': 100} if cause == 'exit' else (
+                        {'class': 'child_signal', 'status': 9} if cause == 'signal' else {'class': cause})
+                    self.assertEqual(error.detail, expected)
+                    expected_names = ['prerequisite_apt_update']
+                    if failed_stage == 'apt_install': expected_names.append('prerequisite_apt_install')
+                    self.assertEqual([name for name, _ in owner.started], expected_names)
+
+    def test_prerequisites_share_one_deadline_and_refuse_expired_or_cancelled_admission(self):
+        for transition in ('spent_budget', 'expired_before_install', 'cancelled_before_install', 'already_cancelled'):
+            with self.subTest(transition=transition):
+                clock = [0.0]
+                class AptOwner:
+                    cancelled = transition == 'already_cancelled'
+                    def __init__(self): self.started = []
+                    def spawn(self, name, argv):
+                        self.started.append(name)
+                        return NS(name=name)
+                    def peek(self, leader):
+                        if leader.name == 'prerequisite_apt_update':
+                            clock[0] = 240.0 if transition == 'expired_before_install' else 239.0
+                            self.cancelled = transition == 'cancelled_before_install'
+                            return NS(si_code=os.CLD_EXITED, si_status=0)
+                        clock[0] = 240.01
+                        return None
+                owner = AptOwner()
+                with patch.object(ci.time, 'monotonic', side_effect=lambda: clock[0]), \
+                     patch.object(ci.time, 'sleep'):
+                    with self.assertRaises(ci.PrerequisiteFailure) as caught:
+                        ci.run_prerequisites(owner)
+                cancelled = 'cancelled' in transition
+                self.assertEqual(caught.exception.detail, {'class': 'cancelled' if cancelled else 'timeout'})
+                expected = [] if transition == 'already_cancelled' else ['prerequisite_apt_update']
+                if transition == 'spent_budget': expected.append('prerequisite_apt_install')
+                self.assertEqual(owner.started, expected)
+                self.assertLess(clock[0], 241.0)
+
+    def test_prerequisite_commands_bound_transport_and_keep_all_required_packages(self):
+        owner = Mock(cancelled=False)
+        owner.peek.return_value = NS(si_code=os.CLD_EXITED, si_status=0)
+        owner.drain_captured_stderr.return_value = None
+        ci.run_prerequisites(owner)
+        calls = owner.spawn.call_args_list
+        self.assertEqual(len(calls), 2)
+        update, install = [call.args[1] for call in calls]
+        for command in (update, install):
+            for option in ('Acquire::http::Timeout=30', 'Acquire::https::Timeout=30', 'Acquire::Retries=0'):
+                self.assertEqual(command.count(option), 1)
+            self.assertNotIn('/bin/bash', command)
+        self.assertEqual(update[-3:], ['APT::Update::Error-Mode=any', 'update', '-qq'])
+        self.assertEqual(install[:2], ['env', 'DEBIAN_FRONTEND=noninteractive'])
+        self.assertEqual(install[-6:], ['install', '-y', '--no-install-recommends',
+                                      'libnss3-tools', 'build-essential', 'pkg-config'])
+
+    def test_prerequisite_summary_is_fixed_and_requires_closed_ownership(self):
+        for stage in ('apt_update', 'apt_install'):
+            for closed in (True, False):
+                with self.subTest(stage=stage, closed=closed):
+                    class AptOwner:
+                        cancelled = False
+                        def __init__(self): self.started, self.closes = [], []
+                        def spawn(self, name, _argv, **_kwargs):
+                            self.started.append(name)
+                            if name == 'prerequisite_' + stage:
+                                raise RuntimeError('/private/path https://unit.invalid token=secret-sentinel')
+                            return NS(name=name)
+                        def peek(self, _leader): return NS(si_code=os.CLD_EXITED, si_status=0)
+                        def close_all(self, **kwargs):
+                            self.closes.append(kwargs)
+                            return NS(closed=closed, echild_observed=closed)
+                    owner = AptOwner()
+                    run_root = self.work / ('apt-' + stage + str(closed))
+                    run_root.mkdir(mode=0o700)
+                    def load(name, _path):
+                        if name == 'owned_processes':
+                            return NS(LinuxProcessOwner=NS(activate_in_dedicated_cli=lambda: owner))
+                        raise FileNotFoundError
+                    def project(_checkout, target):
+                        target.mkdir(mode=0o700)
+                        return {'unit': 'fixed'}
+                    with patch.object(ci.provision, 'check_scope'), \
+                         patch.object(ci.tempfile, 'mkdtemp', return_value=str(run_root)), \
+                         patch.object(ci, 'projection', side_effect=project), \
+                         patch.object(ci.co, 'load', side_effect=load), patch('builtins.print') as emitted:
+                        result = ci.run(self.work)
+                    raw = emitted.call_args.args[0]
+                    record = json.loads(raw)
+                    self.assertEqual(result, 1)
+                    self.assertEqual(record['code'], 'prerequisites' if closed else 'ownership')
+                    self.assertEqual(record['failure'], {'class': 'unknown'})
+                    self.assertEqual(record.get('prerequisite_stage'), stage if closed else None)
+                    self.assertEqual(owner.closes, [{'timeout': 20, 'grace': .05}])
+                    self.assertNotIn('build', owner.started)
+                    self.assertEqual((record['browser_executions_accepted'], record['resets_accepted']), (0, 0))
+                    for secret in ('/private/path', 'unit.invalid', 'secret-sentinel'):
+                        self.assertNotIn(secret, raw)
+
     def test_ci_wait_failure_keeps_only_closed_waitid_facts(self):
         class WaitOwner:
             def __init__(self, status=None, cancelled=False, blocked=None):

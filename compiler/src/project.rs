@@ -9,6 +9,7 @@ use std::{
 pub const USAGE: &str = "Usage:
   nagic <check|lower|build|run|symbols|assist> [SOURCE] [OPTIONS]
   nagic map [types|modules|calls] [SOURCE] [OPTIONS]
+  nagic cache inspect --out-root ABS --cargo-root ABS --max-entries N --max-depth N
   nagic version
 
 Commands:
@@ -19,7 +20,10 @@ Commands:
   symbols  Print type and definition information as JSON
   assist   Print compiler-authoritative editor assistance as JSON (internal)
   map      Map checked source types, modules, or calls (default: types)
+  cache    Inspect explicitly supplied output and shared Cargo roots (read-only)
   version  Print the compiler version
+
+Cache inspect roots must be absolute and at most 4096 encoded OS path bytes each.
 
 Options:
   --project DIR|nagi.toml  Select a project
@@ -43,13 +47,22 @@ Options:
   --depth N               Limit relationships from the focused definition
   --output FILE           Write the map to FILE instead of stdout
   --layout elk|dagre|tala  SVG/PNG layout (default: elk; requires local D2)
+  --out-root ABS           Cache inspect output root (required)
+  --cargo-root ABS         Cache inspect shared Cargo root (required)
+  --max-entries N          Cache inspect per-root entry bound (1..4096, required)
+  --max-depth N            Cache inspect traversal depth (1..64, required)
   -h, --help              Show this help
   -V, --version           Print the compiler version
 
 Map notes:
   SVG/PNG require --output with a matching .svg/.png extension and local D2.
   Available layouts depend on the installed D2 version.
-  architecture, dataflow, trace, cost, and map --serve are not implemented.";
+  architecture, dataflow, trace, cost, and map --serve are not implemented.
+
+Cache inspection notes:
+  Both roots and both bounds are mandatory. The command only reads these roots;
+  it does not discover project or environment defaults, invoke Cargo, or write files.
+  Its bounded structural observations are not an atomic snapshot or deletion authority.";
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
