@@ -43,6 +43,11 @@ class ParallelWorkflowTests(unittest.TestCase):
         ).group()
         self.assertIn(parallel.CLI_STEP + parallel.EDITOR_ANCHOR, package)
         self.assertIn(parallel.GENERATED_STEP + parallel.SF01_ANCHOR, package)
+        # The package still builds the compiler shipped in the release archive.
+        # Regression tests obtain the debug compiler through CARGO_BIN_EXE_nagic.
+        release_build = "      - run: cargo build --release --locked -p nagic\n"
+        self.assertEqual(package.count(release_build), 1)
+        self.assertNotIn(release_build, parallel.REGRESSION_JOB)
 
     def test_added_job_is_exact_and_cannot_omit_coverage_or_evidence(self):
         job = parallel.REGRESSION_JOB
@@ -66,7 +71,7 @@ class ParallelWorkflowTests(unittest.TestCase):
             ("node-version: '22'", "node-version: '20'"),
             ("RELEASE_RUST_HOST: ${{ matrix.rust_host }}", "RELEASE_RUST_HOST: wrong"),
             ('run: cargo fetch --locked --target "$RELEASE_RUST_HOST"', "run: cargo fetch"),
-            ("      - run: cargo build --release --locked -p nagic\n", ""),
+            (parallel.CLI_STEP, "      - run: cargo build --release --locked -p nagic\n" + parallel.CLI_STEP),
             ("NAGI_FAILURE_DIR:", "NAGI_OTHER_FAILURE_DIR:"),
             ("NAGI_GOLDEN_CAPTURE_DIR:", "NAGI_OTHER_GOLDEN_DIR:"),
             ("            native-target\n", ""),
@@ -94,6 +99,7 @@ class ParallelWorkflowTests(unittest.TestCase):
             self.workflow.replace(parallel.PUBLISH_NEW, parallel.PUBLISH_OLD, 1),
             self.workflow.replace(parallel.PUBLISH_CONDITION_NEW,
                                   parallel.PUBLISH_CONDITION_OLD, 1),
+            self.workflow.replace("      - run: cargo build --release --locked -p nagic\n", "", 1),
             self.workflow.replace("name: Nagi checks\n", "name: Other checks\n", 1),
         ]
         for changed in mutations:
