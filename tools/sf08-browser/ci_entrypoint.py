@@ -144,7 +144,10 @@ def cargo_diagnostic(sample, truncated, eof, capture_error):
 
 
 def await_zero(owner, leader, seconds):
-    deadline = time.monotonic() + seconds
+    return await_zero_until(owner, leader, time.monotonic() + seconds)
+
+
+def await_zero_until(owner, leader, deadline):
     while time.monotonic() < deadline:
         if owner.cancelled:
             raise ChildWaitFailure({'class': 'cancelled'}, leader)
@@ -160,6 +163,38 @@ def await_zero(owner, leader, seconds):
             return
         time.sleep(.05)
     raise ChildWaitFailure({'class': 'timeout'}, leader)
+
+
+class PrerequisiteFailure(ChildWaitFailure):
+    def __init__(self, detail, leader, stage):
+        self.prerequisite_stage = stage
+        super().__init__(detail, leader)
+
+
+def run_prerequisites(owner):
+    # A single budget covers both apt commands, including admission/spawn time.
+    # Keep all output private and keep the ownership capsule unchanged.
+    deadline = time.monotonic() + 240
+    options = ['-o', 'Acquire::http::Timeout=30', '-o', 'Acquire::https::Timeout=30',
+               '-o', 'Acquire::Retries=0']
+    commands = (
+        ('apt_update', ['apt-get', *options, '-o', 'APT::Update::Error-Mode=any', 'update', '-qq']),
+        ('apt_install', ['env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', *options,
+                         'install', '-y', '--no-install-recommends',
+                         'libnss3-tools', 'build-essential', 'pkg-config']),
+    )
+    for stage, argv in commands:
+        leader = None
+        try:
+            if owner.cancelled:
+                raise ChildWaitFailure({'class': 'cancelled'})
+            if time.monotonic() >= deadline:
+                raise ChildWaitFailure({'class': 'timeout'})
+            leader = owner.spawn('prerequisite_' + stage, argv)
+            await_zero_until(owner, leader, deadline)
+        except BaseException as error:
+            detail = error.detail if isinstance(error, ChildWaitFailure) else {'class': 'unknown'}
+            raise PrerequisiteFailure(detail, leader, stage) from error
 
 
 def browser_report_diagnostic(failure, phase, closure, outer_diagnostic, work):
@@ -203,6 +238,7 @@ def run(checkout):
     diagnostic = None
     failure = None
     failure_leader = build_leader = None
+    prerequisite_stage = None
     passed = False
     phase = 'scope'
     try:
@@ -218,9 +254,7 @@ def run(checkout):
         owned = co.load('owned_processes', HERE/'context/owned_processes.py')
         owner = owned.LinuxProcessOwner.activate_in_dedicated_cli()
         phase = 'prerequisites'
-        prerequisites = owner.spawn('prerequisites', ['/bin/bash', '-c',
-            'apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libnss3-tools build-essential pkg-config'])
-        await_zero(owner, prerequisites, 240)
+        run_prerequisites(owner)
         # Owned container HOME/cache only; no runner HOME or shared Cargo/npm cache.
         home = work/'home'
         home.mkdir(mode=0o700)
@@ -274,6 +308,8 @@ def run(checkout):
         if isinstance(error, ChildWaitFailure):
             failure = error.detail
             failure_leader = error.leader
+            if isinstance(error, PrerequisiteFailure):
+                prerequisite_stage = error.prerequisite_stage
     finally:
         if owner is not None:
             try:
@@ -319,6 +355,9 @@ def run(checkout):
         'retain_data': True}
     if not passed:
         summary['failure'] = failure or {'class': 'unknown'}
+        if (phase == 'prerequisites' and closure and closure.closed and closure.echild_observed
+                and prerequisite_stage in ('apt_update', 'apt_install')):
+            summary['prerequisite_stage'] = prerequisite_stage
         if business_diagnostic is not None:
             summary['browser_report_diagnostic'] = business_diagnostic
     print(json.dumps(summary, separators=(',', ':')))
