@@ -26,7 +26,9 @@
 - Keep colors for untouched identifiers visible during background analysis, independently of invalidated types, diagnostics and navigation. Discard touched tokens and hard-invalidated presentation data with bounded ownership.
 - Render diagnostic tooltips with escaped readable framing while preserving original descriptions, unknown details and hints. Show compiler-provided return types in Parameter Info.
 - Preserve manually chosen High indentation on Enter, and add a consecutive-Enter gesture to leave one block at a time. Keep delimiter continuations, Low brace context, smart-indent settings and undo behavior. Align supported High `else`/`case` headers and standalone High/Low closing delimiters with their known owner; preserve ordinary input when context is unknown.
-- 関数・class・変数のホバー説明、初回解析待ち、入力中の色保持、診断表示と編集補助を改善。公開Nagi 0.2.0に対応し、既存plugin IDとIDEA/PyCharm共通ZIPを維持します。利用者が確認した0.1.3候補から版番号と公開案内だけを更新しています。
+- Default IDE Run to Development when the compiler advertises support; keep explicit Release available in Run Configuration. Validate bounded compiler capabilities off the UI thread. Known older compilers retain Release with an explanatory notice; unknown or failed probes do not silently run. CLI defaults and Check remain unchanged.
+- Fix a standard Run handoff race that could dispose an already accepted new Run descriptor when the old environment closes. Preserve cancellation before handoff and process cleanup when the project closes. The reported Windows green console still requires validation with the new candidate.
+- 関数・class・変数のホバー説明、初回解析待ち、入力中の色保持、診断表示と編集補助を改善。IDEの開発用Runと画面引き渡しの修正も追加し、既存plugin IDとIDEA/PyCharm共通ZIPを維持します。先行候補のホバー受入を追加修正のGUI確認へ流用しません。
 - Prepare version 0.1.4 for publication. The user confirmed the hover/color candidate works; this is not exhaustive GUI coverage. Publish only after the final version's required CI and four IDE test/Verifier paths succeed. GitHub Release and Marketplace submission/approval are separate; this entry does not claim either has already happened. Full PyCharm Python parity, whole-file formatting, Rename and automatic imports remain out of scope.
 
 ## JetBrains 0.1.3
