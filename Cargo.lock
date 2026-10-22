@@ -930,7 +930,7 @@ dependencies = [
 
 [[package]]
 name = "nagi-runtime"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aws-lc-rs",
  "axum",
@@ -960,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "nagic"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "rusqlite",
  "serde",
