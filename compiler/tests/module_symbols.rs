@@ -45,6 +45,38 @@ fn at(index: &serde_json::Value, line: u64, column: u64) -> &serde_json::Value {
 }
 
 #[test]
+fn named_import_sources_and_selected_names_navigate_to_resolved_files_and_definitions() {
+    let f = Fixture::new();
+    f.write(
+        "foo.nagi",
+        "class Thing:\n    value: i64\ndef run() -> i64:\n    return 7\n",
+    );
+    f.write("main.nagi", "import foo\nimport foo as bar\nfrom foo import Thing as Item, run as execute\nimport \"foo.nagi\" as quoted\ndef main():\n    item = bar.Thing(value=execute())\n    print(foo.run())\n");
+    let index = f.index(HashMap::new());
+    for (line, column) in [(1, 8), (2, 8), (3, 6), (4, 8)] {
+        let reference = at(&index, line, column);
+        assert!(reference["target"]["file"]
+            .as_str()
+            .unwrap()
+            .ends_with("foo.nagi"));
+        assert_eq!(reference["target"]["length"], 0);
+    }
+    for (column, target_line) in [(17, 1), (26, 1), (32, 3), (39, 3)] {
+        let reference = at(&index, 3, column);
+        assert_eq!(reference["target"]["line"], target_line);
+        assert!(reference["target"]["file"]
+            .as_str()
+            .unwrap()
+            .ends_with("foo.nagi"));
+    }
+    assert_eq!(
+        at(&index, 7, 11)["target"]["line"],
+        1,
+        "module use still navigates to its import binding"
+    );
+}
+
+#[test]
 fn module_bindings_export_only_own_definitions_and_share_definition_identity() {
     let fixture = Fixture::new();
     fixture.write("dependency.nagi", "class Private:\n    hidden: bool\n");

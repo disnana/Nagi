@@ -17,6 +17,11 @@ final class NagiEditorIndent {
     /** A null result leaves the IDE's own indent in place. */
     static String afterLine(Document document, EditorHighlighter highlighter, int line, boolean low,
                             int indentSize, int continuationSize, int tabSize) {
+        return afterLine(document, highlighter, line, low, indentSize, continuationSize, tabSize, false);
+    }
+
+    static String afterLine(Document document, EditorHighlighter highlighter, int line, boolean low,
+                            int indentSize, int continuationSize, int tabSize, boolean dedentBlankLine) {
         int start = document.getLineStartOffset(line);
         int end = document.getLineEndOffset(line);
         if (end - start > MAX_SCAN_CHARS || highlighter == null) return null;
@@ -29,8 +34,10 @@ final class NagiEditorIndent {
 
         NagiTokenScanner.Token first = null;
         NagiTokenScanner.Token last = null;
+        boolean blank = true;
         for (var token = NagiTokenScanner.next(text, start, end, low); token != null;
              token = NagiTokenScanner.next(text, token.end(), end, low)) {
+            if (token.kind() != NagiTokenScanner.Kind.SPACE) blank = false;
             if (token.kind() == NagiTokenScanner.Kind.SPACE || token.kind() == NagiTokenScanner.Kind.COMMENT) continue;
             if (first == null) first = token;
             last = token;
@@ -40,7 +47,12 @@ final class NagiEditorIndent {
         boolean returns = !low && first != null && first.kind() == NagiTokenScanner.Kind.KEYWORD
                 && tokenTextIs(text, first, "return");
 
-        if (first == null && base.isEmpty() && line > 0) {
+        // Honor an explicitly chosen High indentation, including column zero.
+        // A second unchanged Enter can exit one block, but only after the
+        // bounded delimiter scan below proves this is not a continuation.
+        if (!low && blank && !dedentBlankLine) return base;
+
+        if (first == null && base.isEmpty() && line > 0 && (low || !blank)) {
             for (int previous = line - 1; previous >= Math.max(0, line - 8); previous--) {
                 int previousStart = document.getLineStartOffset(previous);
                 if (start - previousStart > MAX_SCAN_CHARS) return null;
@@ -95,6 +107,7 @@ final class NagiEditorIndent {
             if (!low) returns |= startsWithReturn(text, anchorStart, document.getLineEndOffset(document.getLineNumber(closedAnchor)), low);
         }
         if (block) return base + " ".repeat(blockWidth);
+        if (!low && blank && dedentBlankLine) return " ".repeat(Math.max(0, base.length() - blockWidth));
         if (returns) return " ".repeat(Math.max(0, base.length() - blockWidth));
         return base;
     }

@@ -1,0 +1,12 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked"
+  ],
+  "source_commit": "39dc51d6c559e99523833a5a518e02b57f202e30",
+  "elapsed_s": 831.4666997069944,
+  "exit_code": 0,
+  "native_target": "/workspace/Nagi/local-only/function-delta-probe-20261021/nagi-incremental-szxaxdt2/current-units-dev/target",
+  "conditions": "full workspace; socket-enabled sandbox; offline dependencies; shared native target contains prior measured dev dependencies; no timing comparison claimed"
+}

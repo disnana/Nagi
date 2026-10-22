@@ -9,13 +9,21 @@ static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "nagi-frontend-{}-{}",
-            std::process::id(),
-            ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&root).unwrap();
-        Self(root)
+        loop {
+            let root = std::env::temp_dir().join(format!(
+                "nagi-frontend-{}-{}",
+                std::process::id(),
+                ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            ));
+            match fs::create_dir(&root) {
+                Ok(()) => return Self(root),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!(
+                    "Cannot reserve frontend fixture {}: {error}",
+                    root.display()
+                ),
+            }
+        }
     }
 
     fn write(&self, name: &str, source: &str) {
@@ -23,9 +31,20 @@ impl Fixture {
     }
 
     fn run(&self, command: &str, name: &str) -> std::process::Output {
+        // Keep sources and generations fixture-local while sharing only Cargo's
+        // dependency cache, as ordinary distinct applications already do.
+        let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .parent()
+                    .unwrap()
+                    .join("native-target")
+            });
         Command::new(env!("CARGO_BIN_EXE_nagic"))
             .args([command, name, "--no-project", "--out", "out"])
             .current_dir(&self.0)
+            .env("NAGI_NATIVE_TARGET_DIR", target)
             .output()
             .unwrap()
     }

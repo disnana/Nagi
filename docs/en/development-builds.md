@@ -30,6 +30,20 @@ Stats expose `generated_body.mode`, generated-source `source_cache` (`hit` / `mi
 
 Bodies remain in `.nagi/apps/<app>/code/<sha256>/` under the output and are not automatically pruned. Their identities are not guaranteed portable across checkouts and do not authenticate shared caches. Noncooperating processes concurrently replacing directories or modifying Cargo caches are outside this guarantee.
 
+## Rust units from function dependencies (unreleased)
+
+```sh
+nagic run --project my-app --profile dev --incremental=units --build-stats
+```
+
+The checked emission plan supplies direct-call dependencies. Closed function groups become at most eight Cargo libraries; mutually recursive functions stay together. An edit recompiles its unit and reverse dependents, while unrelated units can reuse their generated Rust and Cargo artifacts. This does not replace machine code for just one edited function. Small functions share compilation units.
+
+The initial extraction supports synchronous functions whose parameters, results and internal values use `i32`, `i64`, `bool` or `unit`, with supported operators, direct calls, branches and loops. Functions using async, user types, standard APIs or function values, and callers depending on those functions, remain in the existing body. That facade depends on every unit, conservatively covering unknown callback relationships. HTTP and async applications can therefore reuse independent calculation functions. With no eligible group, the mode falls back to body reuse and reports `generated_body.partition_reason`. The existing monolithic fallback for adapters, additional Rust dependencies and IDE-managed runs still applies.
+
+Stats report `generated_body.mode` as `cargo_units`, with each unit's functions, content identity, `source_cache` and `cargo_fresh` in `units`. Full checks, Rust emission and Cargo run every time. Selected functions use stable symbol order to avoid declaration-reordering noise. Adding functions or changing the call graph may change group membership and trigger a wider rebuild.
+
+Receipt schema 3 verifies the complete referenced source-unit graph and requires its source caches. The verifier checks the closed generated manifest format, at most nine nodes, each content identity and file, and agreement of runtime and root dependencies. Schemas 1/2 remain supported. This adds neither shared native-cache authentication nor cross-checkout portability.
+
 ## Reading observations
 
 On success, `--build-stats` writes one `nagi-build-stats: {JSON}` line to stderr. Application stdout stays pipeable. Times are milliseconds.
@@ -57,6 +71,8 @@ Digest comparison detects corruption, not an attacker who can replace both files
 
 ## Local development and CI
 
+The CI generator for published 0.2.0 does not enable this unreleased flag automatically. Use it explicitly in development jobs only when CI pins a compiler built from the matching source revision. Full pre-merge checks and production release builds remain necessary.
+
 `NAGI_NATIVE_TARGET_DIR` still chooses the shared dependency cache. App IDs and immutable success generations remain separate, with `debug/` for dev and `release/` for release. Ordinary generations are not automatically pruned; monitor disk usage. IDE-internal retention settings are not general CLI garbage collection.
 
 See the [project CI generator](user-ci.md), which works with released 0.2.0, the [implementation plan](../internal/smart-build-plan.md), and [measurements](../../benchmarks/results/smart-build-2026-10-20/README.md).
@@ -66,3 +82,5 @@ Module identities contain canonical paths. These initial semantic hashes are not
 The compiler digest reopens the `current_exe()` pathname during publication. Replacing that file during a build can make it differ from the executing image; it is not executing-image provenance.
 
 `receipt` is a display path; `receipt_os` preserves OS units using the existing snapshot encoding (Unix bytes or Windows UTF-16).
+
+[unit reuse measurements](../../benchmarks/results/function-unit-reuse-2026-10-21/README.md)

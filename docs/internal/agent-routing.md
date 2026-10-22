@@ -94,3 +94,33 @@ CLIの公開0.2.0と開発flagの差、生成workflowのtoolchain指定、path�
 main base `1386411`、Rust実装`5a90083`、PR #140。Sol 6.1 Highを実装前の整合性・世代境界のread-only確認に使い、親がcompiler/generation/testsと実計測を担当した。独立したPython receipt v2と配布gateはLuna Maxが担当し、親reviewで汎用TOML風parserを固定された生成manifestのtable/key検査へ縮小した。親が実Cargoで見つけたworkspace自動membership、Windows表記の診断、projectionからCASへのhardlink aliasは契約を維持して修正し、元assertを緩めていない。
 
 子の追加spawn、同じfileの並行編集、同model/effortの並行子はなし。実行検証後の最終auditは別のSol 6.1 Highへ分離する。service-tier指定interface、model別使用量・料金は不明。今回の[build計測](../../benchmarks/results/generated-body-reuse-2026-10-21/README.md)はmodel速度やCIコストの測定ではない。最終audit/CI状態はPR本文・Checksで読み戻す。
+
+## 2026-10-21: 関数依存単位への拡張
+
+base `0e9a575`、core `39dc51d`。Sol 6.1 Highで実装前の整合性・Cargo単位境界とmixed facade案を確認し、親がcompiler/CAS/generation/native回帰を実装した。schema 3の閉じたmanifest grammar/依存閉包/Windows pathは契約判断を伴うため、同じHigh担当へ独立fileの実装を分離した。Luna Maxは仕様が固まったbenchmark harnessのmode/fixture/repeated editsだけを担当し、実計測は親が他のローカルbuildを止めて行った。Highによるmixed fixtureの修正は、最小runtimeのSerde不足と禁止fn fieldというfixture不備を言語契約へ戻す作業であり、成功までassertや期限を緩めていない。canonical shadow例のenum比較も非対応のため既存matchへ修正した。
+
+親を含め最大3体、子spawnと同じfileの同時編集なし。同model/effortの子は順番に動かし、実装担当とは別のSol 6.1 Highに必要検証後の最終auditを渡す。native/workspace/配布/CIとauditは別証拠である。役割ごとの実model時間・使用量・費用・service-tier設定interfaceは不明。報告した7%前後のbuild差はmodel速度やCI費用の差ではない。
+
+## 2026-10-22: PyCharm編集補助の適用
+
+base `5d3e58e`。Luna MaxへPython/Nagiのsource比較と、既存VS Code実装を根拠としたbounded typed補正の独立fileを担当させ、親がEnter履歴・実IDE検証・Docsを担当した。担当範囲を分離し、子の追加spawnなし。親reviewでtoken型、immutable Listのsort、非先頭closer、設定幅の上限を修正し、実fixtureでは選択解除のphaseとUndo/Redoによるstamp復元をRED/GREENで確認した。modelだけを原因とせず、SDKのcallback順序とsource/fixture不備を区別した。参照URLの親の推測5件も実sourceと照合して修正した。
+
+ローカルはsystem JREにCLI javacがなく、SDK付属JBRを実toolchainとして指定した。Gradle/SDK初回準備は約9分、cache準備後の全186件とZIP生成は72秒（IDE背景接続警告あり）。これらはmodel時間やNagi利用者のbuild速度比較ではない。model使用量・料金・service-tier指定は未計測/未対応。実装検証後の独立Sol 6.1 High監査とexact-head CIの結果はPR本文で別記する。
+
+Enter補助の独立Sol 6.1 High監査で、SDK `DocumentEx.getModificationSequence()` default恒常0を有効な履歴と扱うP2を検出した。親が実actionを保ったdelegate/document proxy回帰を追加し、2件中1件RED（16秒）を確認した。正値sequenceだけ記録・照合し、0開始の実sequenceは初回Enterから有効にする。監査対象旧HEAD `6ed5520`と修正後HEADの証拠を分け、更新差分・実行結果の再reviewを依頼する。
+修正後は実compiler連携を含む全188件/失敗・skip 0とZIP生成が55秒で成功し、descriptor/hash検証を通した。これはwarm SDK条件の実行時間で、変更前比の高速化は主張しない。
+
+2026-10-22 Tokio #8692対応では、親がupstream PR/release・tracked locks・生成Cargo境界を調査し、独立Sol 6.1 Highのread-only事前調査がruntime最低版/standalone fixture整合と必須failure casesを確認した。実装はmanifest/lockと日英文書に限定し、cache codeや履歴benchmarkを変えない。focused runtime862成功/計測1ignored、生成appのfresh/1.54.0/1.53.1 lock更新と旧exe保持を実行した。実装後の別のfresh Sol 6.1 High最終監査とexact-head CIはPRで追跡する。model時間/使用量/料金は未計測。ローカルSDK cache削除は初回自動reviewが拒否した後、ユーザーの明示許可により前taskで取得した再download可能なIDE SDK約2.9GBだけを削除し、ZIP/raw logとNagi app cacheは保持した。
+
+## 2026-10-22: 0.2.1の重複処理と計測基盤
+
+base `e2d7280`。Sol 6.1 Highの事前調査でparser token再利用、既存unitsの境界と将来のasync段階案を確認し、親がparser/sourceと回帰・実計測を担当した。CI担当Luna Maxの再開はcapacityエラーで実行できず、同じ証拠と限定file範囲を既存High担当へ渡した。モデル品質の失敗とは扱わず、同じ探索は繰り返さない。HighがCIの未使用release build除去・fixture cache共有・exact inverse検査を実装し、その後に独立fileの8ケースmatrix harnessとpure safety testsを担当した。親を含め最大3体、子spawnと同じfileの並行編集はなし。実行後の最終auditは実装者と別のfresh Highへ分離する。
+
+全workspace検査の初回はsandboxがsocket bindを拒否したため、source/期限/assertを変えずnetwork許可を付けて成功した。670.09秒はvalidationの実測で、before/after速度差やmodel速度ではない。compiler比較では別checkout間のCargo target共有で同じbinaryが残る観測を除外し、candidateを再compileしてSHAを確認した。原因未確定の環境・cache観測をNagi CASの脆弱性やmodel不良と断定しない。ユーザーの追加明示許可に基づき、区切りで両filesystemの容量確認と専有一時targetの整理を行い、source本体・未commit差分・raw log・比較CLI・旧exeを保持した。実model時間・使用量・料金・service tier設定は未観測。実行結果と独立audit/CIは[記録](../../benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md)とPRへ分離する。
+
+
+## 2026-10-22: #147の失敗診断counter保持
+
+Sol 6.1 High担当がread-onlyで保存済みCI事実とbrowser Handler境界、既存counter parserを調査し、親が最小Python補助出力の設計を承認した。同担当が合成RED→GREENとprivacy/owner/bounds回帰を実装し、親は事前固定のstock/diagnostic各3run比較を別に担当した。全run成功・未再現を原因解決と混同せず、runtime/期限/assert/parallelismを変更しない。親reviewのwire assertion終端を反映し、同ownerの両iteration拒否もRED→GREENで確認した。
+
+Session65/SF07 summary37/native-finish20/source guard16/CI policy160件が成功。実装後の最終auditは別のSol 6.1 Highへ分離し、子の追加spawnなし。新HEAD CIと1000ms原因の継続調査はPRへ残す。model時間・使用量・費用・service tierは未計測。Python検査時間やcompile込み比較時間をmodel性能の根拠には使わない。

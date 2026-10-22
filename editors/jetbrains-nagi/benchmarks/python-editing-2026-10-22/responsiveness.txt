@@ -1,0 +1,8 @@
+NAGI_INPUT_ACTION action=else-colon lines=20 warmups=3 samples=20 median_ms=3.196 p95_ms=4.533 max_ms=4.637
+NAGI_INPUT_ACTION action=closing-parenthesis lines=20 warmups=3 samples=20 median_ms=3.868 p95_ms=5.197 max_ms=5.527
+NAGI_INPUT_ACTION action=else-colon lines=10000 warmups=3 samples=20 median_ms=2.443 p95_ms=4.600 max_ms=29.362
+NAGI_INPUT_ACTION action=closing-parenthesis lines=10000 warmups=3 samples=20 median_ms=5.693 p95_ms=7.164 max_ms=7.808
+NAGI_INPUT_ACTION action=Enter lines=20 warmups=3 samples=20 median_ms=5.480 p95_ms=5.904 max_ms=6.768
+NAGI_INPUT_ACTION action=open-parenthesis lines=20 warmups=3 samples=20 median_ms=3.038 p95_ms=3.637 max_ms=15.937
+NAGI_INPUT_ACTION action=Enter lines=10000 warmups=3 samples=20 median_ms=4.910 p95_ms=8.207 max_ms=27.709
+NAGI_INPUT_ACTION action=open-parenthesis lines=10000 warmups=3 samples=20 median_ms=12.568 p95_ms=21.863 max_ms=28.347

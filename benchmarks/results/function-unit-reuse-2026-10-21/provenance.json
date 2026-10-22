@@ -1,0 +1,18 @@
+{
+  "source_commit": "39dc51d6c559e99523833a5a518e02b57f202e30",
+  "base_commit": "0e9a575a28df3d006d5d7d160b0bd2e01113c8db",
+  "raw": {
+    "aggregate": {
+      "uncompressed_sha256": "76aee58390d97fb02e311dcc10b2cf547d6b1c2e02eb4d367feee53cc1262985",
+      "gzip_sha256": "e59aff02c6402cb0938bc344d56de4f60414a71852c45ef3f54a456ab0b23c61"
+    },
+    "print-each": {
+      "uncompressed_sha256": "e95063987f0f81b54d6df2f252d364c585d99670c226067c824756eff7259d11",
+      "gzip_sha256": "404fcf35003212ef5f19ad85ef74d25908fee6d5d06824588b8b316c297bcc13"
+    }
+  },
+  "compiler_sha256": "606bfe39a284451c61a088c95936a390e5134fd6ea588cf54cbb415c74a5bfa0",
+  "compiler_tree": "031b40e03ffdb16160bbdf1cadf273b4f9c0fdb3",
+  "runtime_tree": "784d97cbe55e08eb86fd2c43ca57428710f5d90c",
+  "compiler_build_command": "cargo build --locked --release -p nagic"
+}

@@ -850,6 +850,54 @@ fn incremental_backend_errors_map_body_to_high_and_saved_low_sources() {
 }
 
 #[test]
+fn function_unit_diagnostics_use_current_import_and_saved_low_provenance() {
+    let f = Fixture::new();
+    // A user-selected Rust lint is deliberately stricter than Nagi's language
+    // contract. It produces a real backend diagnostic in a split function.
+    f.write("runtime/src/lib.rs", "#![allow(missing_docs)]\n");
+    f.write(
+        "helper.nagi",
+        "# import origin\ndef value(number: i64) -> i64:\n    return number + 1\n",
+    );
+    f.write(
+        "main.nagi",
+        "from \"helper.nagi\" import value\ndef main():\n    print(value(1))\n",
+    );
+    for source in ["main.nagi", "saved.low"] {
+        if source == "saved.low" {
+            fs::copy(f.0.join("out/generated.low"), f.0.join(source)).unwrap();
+        }
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .current_dir(&f.0)
+            .args([
+                "build",
+                source,
+                "--out",
+                "out",
+                "--profile",
+                "dev",
+                "--incremental=units",
+            ])
+            .env("NAGI_ROOT", &f.0)
+            .env("NAGI_NATIVE_TARGET_DIR", f.0.join("cache"))
+            .env("CARGO_NET_OFFLINE", "true")
+            .env_remove("CARGO_ENCODED_RUSTFLAGS")
+            .env("RUSTFLAGS", "-D missing_docs")
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let text = stderr(&output);
+        assert!(text.contains("missing documentation"), "{text}");
+        if source == "main.nagi" {
+            assert!(text.contains("helper.nagi:2"), "{text}");
+        } else {
+            assert!(text.contains("saved.low:"), "{text}");
+            assert!(!text.contains("helper.nagi:"), "{text}");
+        }
+    }
+}
+
+#[test]
 fn windows_paths_and_canonical_prefixes_match_only_the_generated_target() {
     let f = Fixture::new();
     f.write("main.nagi", "def main():\n    print(1)\n");

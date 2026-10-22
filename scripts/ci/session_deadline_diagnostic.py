@@ -10,6 +10,7 @@ import sys
 import auth_stage_diagnostic as auth_diag
 import session_native_finish_diagnostic as native_finish
 import session_private_deadline_diagnostic as private_diag
+import sf07_checkpoint_summary as checkpoints
 
 RAW_LIMIT = 256 * 1024
 OUTPUT_LIMIT = 16 * 1024
@@ -1612,6 +1613,59 @@ def session_native_call_lines(raw, cargo_exit, record, *, suite_name="session") 
     return output_lines
 
 
+def browser_failure_counter_lines(raw, cargo_exit, record) -> list[str]:
+    """Failure-only console supplement; never changes the v2 acceptance record.
+
+    Reuse the SF07 counter grammar, bounds and whole-input secret rejection,
+    then bind every occurrence to its exact source-pinned failed stdout owner.
+    """
+    unavailable = ["browser_failure_counter=unavailable"]
+    family = checkpoints.BROWSER_COUNTER_FAMILY_MARKER
+    if type(raw) is bytes and family.encode("ascii") not in raw:
+        return []
+    if (type(cargo_exit) is not int or cargo_exit != 101 or
+            not _closed_record_shape(record, False) or record["status"] != "tests_failed" or
+            not _browser_native_call_source_current() or
+            type(raw) is not bytes or len(raw) > checkpoints.MAX_BYTES):
+        return unavailable
+    suite = record["suites"]["browser"]
+    if (suite["input_status"] != "valid" or suite["inventory_status"] != "failed" or
+            suite["diagnostic_status"] != "valid" or suite["cargo_exit"] != cargo_exit):
+        return unavailable
+    inventory, text = _suite_structure("browser", raw, "valid", cargo_exit)
+    comparable = ("input_status", "inventory_status", "cargo_exit", "running_count", "passed_count",
+                  "failed_count", "ignored_count", "failed_cases")
+    if text is None or any(inventory[key] != suite[key] for key in comparable):
+        return unavailable
+    projection = checkpoints._browser_counter_profile_projection(raw, "browser-counter-parallel")
+    if projection["state"] != "test_failed" or projection["counter_state"] != "present":
+        return unavailable
+    blocks, duplicate_header = _test_output_blocks(text)
+    if duplicate_header or any(name not in suite["failed_cases"] for name in blocks):
+        return unavailable
+    occurrences = [line for line in text.splitlines() if family in line]
+    owned = [(name, line) for name, block in blocks.items()
+             for line in block.splitlines() if family in line]
+    # Each pinned test asserts immediately after a failed counter, including
+    # the wire loop. Thus each owner can emit only once (at most two owners).
+    # No truncation: an invalid occurrence invalidates the whole supplement.
+    if (not owned or len(owned) > 2 or len({owner for owner, _ in owned}) != len(owned) or
+            occurrences != [line for _, line in owned]):
+        return unavailable
+    lines = []
+    for owner, line in owned:
+        sample = checkpoints._browser_counter_sample(line, "browser-counter-parallel")
+        if (sample is None or checkpoints.BROWSER_COUNTER_FAILURE_CASES[sample["case"]] != owner or
+                sample not in projection["samples"]):
+            return unavailable
+        clean = {"test": owner, **sample}
+        output = "browser_failure_counter=" + json.dumps(clean, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+        if len(output.encode("ascii")) > 2048:
+            return unavailable
+        lines.append(output)
+    return lines
+
+
 def main(argv: list[str]) -> int:
     if len(argv) == 4 and argv[1] == "--csrf-reusable-only":
         try:
@@ -1673,6 +1727,8 @@ def main(argv: list[str]) -> int:
             for line in session_native_call_lines(session_raw, session_exit, record):
                 print(line)
         for line in session_native_call_lines(browser_raw, browser_exit, record, suite_name="browser"):
+            print(line)
+        for line in browser_failure_counter_lines(browser_raw, browser_exit, record):
             print(line)
     return status
 

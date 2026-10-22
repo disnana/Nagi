@@ -79,6 +79,176 @@ fn names(v: &serde_json::Value) -> Vec<&str> {
         .map(|i| i["name"].as_str().unwrap())
         .collect()
 }
+
+#[test]
+fn import_queries_reject_parenthesis_and_bracket_continuations() {
+    let f = Fixture::new();
+    f.write("main.nagi", "");
+    f.write("main.low", "");
+    f.write("foo.nagi", "def run() -> i64:\n    return 1\n");
+    f.write("foo.low", "fn run() -> i64 { return 1; }\n");
+    assert_eq!(names(&f.analyze("import fo", "fo")), ["foo"]);
+    for (entry, text) in [
+        ("main.nagi", "def call(\n    import fo\n)\n"),
+        ("main.nagi", "values = [\n    import fo\n]\n"),
+        ("main.low", "fn call(\n    import fo\n) {}\n"),
+        ("main.nagi", "(]\nimport fo\n"),
+        ("main.nagi", ")\nimport fo\n"),
+    ] {
+        let v = f.request_entry(entry, serde_json::json!({
+            "files":[{"file":entry,"text":text}],
+            "query":{"file":entry,"line":2,"column":text.lines().nth(1).unwrap().encode_utf16().count() + 1}
+        }));
+        assert!(v["completion"].get("context").is_none(), "{text}: {v}");
+        assert!(names(&v).is_empty(), "{text}: {v}");
+        assert!(
+            !v["diagnostics"].as_array().unwrap().is_empty(),
+            "original errors must remain visible: {v}"
+        );
+    }
+    for text in ["# import fo", "\"import fo\""] {
+        let v = f.analyze(text, "fo");
+        assert!(v["completion"].get("context").is_none(), "{text}: {v}");
+        assert!(names(&v).is_empty(), "{text}: {v}");
+    }
+    for text in [
+        "# (]\nimport fo",
+        "def main():\n    value = \"(]\"\nimport fo",
+        "class Box:\n    values: List[i64]\nimport fo",
+    ] {
+        assert_eq!(names(&f.analyze(text, "fo")), ["foo"], "{text}");
+    }
+}
+
+#[test]
+fn import_source_catalog_and_from_exports_use_original_ranges_and_overlays() {
+    let f = Fixture::new();
+    f.write("main.nagi", "");
+    f.write("foo.nagi", "from \"hidden.nagi\" import hidden\nclass Thing:\n    value: i64\ndef run() -> i64:\n    return 1\n");
+    f.write("hidden.nagi", "def hidden() -> i64:\n    return 1\n");
+    f.write("wrong.low", "");
+    f.write("std.nagi", "");
+    let v = f.analyze("import fo\r\n", "import fo");
+    assert_eq!(v["completion"]["context"], "import-source");
+    assert_eq!(names(&v), ["foo"]);
+    assert_eq!(v["completion"]["replacement"]["column"], 8);
+    assert_eq!(v["completion"]["replacement"]["length"], 2);
+    assert_eq!(
+        v["completion"]["directories"],
+        serde_json::json!([fs::canonicalize(&f.0).unwrap()])
+    );
+    assert_eq!(v["frontend_accepted"], false);
+    assert!(!v["diagnostics"].as_array().unwrap().is_empty());
+    let v = f.analyze("from foo import Thing, ru", "ru");
+    assert_eq!(v["completion"]["context"], "import-names");
+    assert_eq!(names(&v), ["run"]);
+    assert_eq!(v["completion"]["replacement"]["column"], 24);
+    assert!(v["completion"]["items"][0].get("signature").is_none());
+    let v = f.request(serde_json::json!({"files":[{"file":"main.nagi","text":"from foo import "},{"file":"foo.nagi","text":"enum Changed:\n    Empty\n"}],"query":{"file":"main.nagi","line":1,"column":17}}));
+    assert_eq!(names(&v), ["Changed"]);
+    assert_eq!(v["completion"]["items"][0]["kind"], "enum");
+    for text in [
+        "import foo as ",
+        "from foo import Thing as ",
+        "def main():\n    import ",
+        "# import ",
+        "def main():\n    value = \"import \"",
+    ] {
+        let v = f.analyze(text, text);
+        assert!(names(&v).is_empty(), "{text}: {v}");
+    }
+}
+
+#[test]
+fn import_queries_handle_empty_std_prefix_utf16_and_full_token_replacement() {
+    let f = Fixture::new();
+    f.write("main.nagi", "");
+    f.write("foo.nagi", "def run() -> i64:\n    return 1\n");
+    f.write("🦀.nagi", "def run() -> i64:\n    return 1\n");
+    let empty = f.analyze("from ", "from ");
+    assert!(names(&empty).contains(&"foo"));
+    assert!(!names(&empty).contains(&"main"));
+    assert_eq!(empty["completion"]["replacement"]["length"], 0);
+    let std = f.analyze("import std.ht", "std.ht");
+    assert!(names(&std).contains(&"std.http.server"));
+    assert!(names(&std).iter().all(|name| name.starts_with("std.ht")));
+    assert_eq!(std["completion"]["replacement"]["column"], 8);
+    assert_eq!(std["completion"]["replacement"]["length"], 6);
+    let unicode = "from \"🦀.nagi\" import ru\r\n";
+    let v = f.analyze(unicode, "ru");
+    assert_eq!(names(&v), ["run"]);
+    assert_eq!(
+        v["completion"]["replacement"]["column"],
+        unicode.split("ru").next().unwrap().encode_utf16().count() + 1
+    );
+    let middle = f.request(serde_json::json!({"files":[{"file":"main.nagi","text":"import foobar"}],"query":{"file":"main.nagi","line":1,"column":10}}));
+    assert_eq!(names(&middle), ["foo"]);
+    assert_eq!(middle["completion"]["replacement"]["length"], 6);
+    let exports = f.analyze("from std.http.server import Sta", "Sta");
+    assert_eq!(names(&exports), ["Status"]);
+    assert!(exports["completion"].get("directories").is_none());
+    assert!(exports["completion"]["items"][0].get("signature").is_none());
+}
+
+#[test]
+fn import_source_enumeration_counts_irrelevant_entries_and_fails_closed_at_budget() {
+    let f = Fixture::new();
+    f.write("main.nagi", "");
+    f.write("foo.nagi", "def run() -> i64:\n    return 1\n");
+    for i in 0..8192 {
+        f.write(&format!("irrelevant-{i}.txt"), "");
+    }
+    let v = f.analyze("import fo", "fo");
+    assert_eq!(v["completion"]["incomplete"], true);
+    assert!(names(&v).is_empty());
+    f.write(
+        "main.nagi",
+        "import foo\ndef main():\n    print(foo.run())\n",
+    );
+    let loaded = nagic::source::load(&f.0.join("main.nagi"), true).unwrap();
+    let mut program = loaded.program;
+    nagic::check::check(&mut program).unwrap();
+}
+
+#[test]
+fn low_import_queries_and_unchecked_export_names_do_not_claim_verified_types() {
+    let f = Fixture::new();
+    f.write("main.low", "");
+    f.write("foo.low", "record Thing { value: i64; }\n");
+    f.write("foo.nagi", "class Wrong:\n    value: i64\n");
+    let v = f.request_entry("main.low", serde_json::json!({"files":[{"file":"main.low","text":"from foo import Thi"}],"query":{"file":"main.low","line":1,"column":20}}));
+    assert_eq!(names(&v), ["Thing"]);
+    assert_eq!(v["completion"]["context"], "import-names");
+    f.write("main.nagi", "");
+    f.write(
+        "foo.nagi",
+        "def run(value: Unknown) -> Unknown:\n    return value\n",
+    );
+    let v = f.analyze("from foo import run", "run");
+    assert_eq!(names(&v), ["run"]);
+    assert_eq!(v["frontend_checked"], true);
+    assert_eq!(v["frontend_accepted"], false);
+    assert!(v["diagnostics"][0]["file"]
+        .as_str()
+        .unwrap()
+        .ends_with("foo.nagi"));
+    assert!(v["completion"]["items"][0].get("signature").is_none());
+    assert!(v["completion"]["items"][0].get("type").is_none());
+    assert!(
+        v["symbols"].get("definitions").is_none(),
+        "unchecked import navigation must not publish signatures: {v}"
+    );
+    for (text, column) in [
+        ("import foo()", 11),
+        ("import foo, bar", 11),
+        ("from foo import run()", 20),
+        ("from foo import run.more", 20),
+    ] {
+        let v = f.request(serde_json::json!({"files":[{"file":"main.nagi","text":text}],"query":{"file":"main.nagi","line":1,"column":column}}));
+        assert!(names(&v).is_empty(), "{text}: {v}");
+        assert!(v["completion"].get("context").is_none());
+    }
+}
 #[test]
 fn checker_completion_uses_unsaved_types_and_excludes_moved_and_out_of_scope_bindings() {
     let f = Fixture::new();

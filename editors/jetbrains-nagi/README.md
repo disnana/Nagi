@@ -6,6 +6,10 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.d
 
 プラグインの版は`build.gradle.kts`で管理します。公開済み0.1.2には両IDE共通ZIPがあり、新しい利用可能な成果物はReleasesで確認してください。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
 
+## 開発中：名前によるimport
+
+0.2.1向けのcompiler／plugin候補では、隣のファイルの`import models`・`from models import Item`と、そのimport文の補完・元位置への移動を追加しています。公開0.2.0／plugin 0.1.3には含まれません。候補の範囲、バックグラウンド更新、外部変更通知の遅延、未確認のGUI検証は[編集ガイド](../../docs/editor.md#開発中のimport編集支援)を参照してください。
+
 ## 0.1.2でできること
 
 - `.nagi`（High）と`.low`（Low）の色分け。
@@ -18,6 +22,14 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.3ではID `com.d
 ここに記した機能は公開済み0.1.2のものです。0.1.2では全体の自動整形、型に基づく補完、定義への移動、自動型検査は未対応です。型検査は手動でNagiコンパイラを呼び出します。
 
 0.1.3の実装は[main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923)でIDEA/PyCharmのstable/EAP計4経路のtestとPlugin Verifierに成功しました。EAPのVerifierには各IDEで既存のdeprecated API 3件・experimental API 1件の警告があり、警告なしの結果ではありません。headless検証はGUI受入を意味せず、利用者による既存GUI確認は受入済みです。今回の掲載情報・compiler案内の更新ではIDE機能の制御ロジックを変更していません。IME、EditorConfig modifierと設定変更後の再読み込みは未確認です。
+
+## 開発中の編集補助（未リリース）
+
+Highでは、自動字下げの後、空行で続けてEnterを押すと1段ずつブロックを抜けられます。手動入力・Backspace・paste・undoの後のEnterはその操作で選んだ字下げを尊重します。括弧内の継続行とLowのbrace内では、この退出補助は行いません。
+
+`else:`・`case ...:`の入力で対応するHighブロックへ字下げを合わせます。複数行caseの相対位置も維持します。独立した閉じ括弧の行では、Highの`)`・`]`、Lowの`)`・`]`・`}`を開始行の段へ合わせます。新しい補正はIDEのSmart Indentが有効な単一caretの入力が対象で、選択範囲の置換は対象外です。分岐・閉じ括弧の補正は先頭から8192文字・96行・4096 token以内で文脈を確認できる場合に限り、範囲外や不明な場合は通常の入力を残します。
+
+Pythonプラグインの追加インストールは不要です。これはPyCharm Pythonとの完全同等性を示すものではありません。調査した補助機能と今後の適用計画は[内部設計資料](../../docs/internal/jetbrains-python-editing-plan.md)に整理しています。全体の自動整形・Rename・自動importは今回の追加に含まれません。
 
 ## 0.1.3
 

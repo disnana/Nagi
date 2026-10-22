@@ -30,6 +30,20 @@ statsの`generated_body`は`mode`、生成ソースの`source_cache`（`hit` / `
 
 本体は出力内の`.nagi/apps/<app>/code/<sha256>/`に保持し、自動削除しません。内容キーのcheckout間の移植可能性や共有cacheの認証は保証しません。協調しない別processによるディレクトリの同時差し替えやCargo cacheの改変は保証範囲外です。
 
+## 関数の依存関係によるRust分割（未リリース）
+
+```sh
+nagic run --project my-app --profile dev --incremental=units --build-stats
+```
+
+型検査済みの生成planから直接callの依存関係を調べ、安全に独立できる関数群を最大8個のCargo libraryへ分けます。相互再帰する関数は同じ単位に置きます。変更した単位とその呼び出し元は再コンパイルされ、無関係な単位のRustソースとCargo成果物を再利用できます。関数内部の編集でも、その関数だけの機械語を差し替える仕組みではありません。小さな関数は同じ単位にまとめられます。
+
+初版の切り出し対象は、引数・戻り値・内部の値が`i32`、`i64`、`bool`、`unit`で、直接callと対応する演算・分岐・loopからなる同期関数です。async、ユーザー型、標準API、関数値などを扱う関数と、それらを呼ぶ関数は既存の本体へ残します。本体は全単位へ依存し、未知のcallback関係があっても保守的に再コンパイルします。HTTPや非同期アプリに独立した計算関数がある場合も利用できます。対象がなければ通常の本体再利用へ戻り、`generated_body.partition_reason`に理由を出します。adapter・追加Rust依存・IDE管理runの単一binへのfallbackは同じです。
+
+statsの`generated_body.mode`は`cargo_units`になり、`units`に各単位の関数、内容キー、`source_cache`、`cargo_fresh`を出します。完全検査とRust生成・Cargoは引き続き毎回行います。型や宣言の並べ替えだけで不要なRust差分が出ないよう、切り出す関数は安定したシンボル順で生成します。関数の追加やcall graphの変更で単位の構成が変わる場合は、より広い範囲が再コンパイルされます。
+
+receipt schema 3は本体から参照する全単位を検査します。対応する全source cacheが必要です。検証器は固定されたmanifest形、最大9ノードの依存閉包、各内容キーと実体、runtime・root manifestの一致を確認します。schema 1/2の対応も維持します。共有native cacheの認証やcheckout間の移植性を追加するものではありません。
+
 ## 時間と再ビルド理由を読む
 
 `--build-stats` は成功時に `nagi-build-stats: {JSON}` を標準エラーへ1行出します。`run` のアプリ標準出力は変えません。時間の単位はmsです。
@@ -57,6 +71,8 @@ SHA-256の照合は破損を検出しますが、記録ごと改変できる攻�
 
 ## ローカルとCI
 
+公開0.2.0用のCI generatorは、この未リリースflagを自動では有効にしません。同じrevisionからビルドしたcompilerをCIに固定する場合に限り、開発用jobで明示指定してください。マージ前の完全検査と本番向けrelease buildは引き続き必要です。
+
 既存の `NAGI_NATIVE_TARGET_DIR` で依存cacheを選べます。同じcacheでもアプリIDと成功世代は分離し、devの `debug/` とreleaseの `release/` を使い分けます。通常の成功世代は自動削除しないため、容量を監視してください。IDE内部の保持設定を一般CLIのGCとして使わないでください。
 
 公開0.2.0で使える[プロジェクトCI生成](user-ci.md)、[実装計画と制約](internal/smart-build-plan.md)、[計測結果](../benchmarks/results/smart-build-2026-10-20/README.md)も参照してください。
@@ -66,3 +82,5 @@ moduleのIDにはcanonical pathが含まれます。この初版の意味hashを
 compilerのdigestは公開時に`current_exe()`のpathから読み直したファイルです。ビルド中にcompilerファイルを置換した環境では、実行中imageの同一性を証明しません。
 
 `receipt` は表示用のpath文字列で、`receipt_os` は既存snapshotと同じOS単位（Unix bytes／Windows UTF-16）です。
+
+[関数分割の実測](../benchmarks/results/function-unit-reuse-2026-10-21/README.md)

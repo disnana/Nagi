@@ -144,6 +144,63 @@ def main():
         verify_task_handles(exe, folder, environment)
         verify_sqlite_pool(exe, folder, environment)
         verify_development_builds(exe, folder, environment)
+        verify_function_units(exe, folder, environment)
+
+
+def verify_function_units(exe: Path, folder: Path, environment: dict) -> None:
+    """Exercise candidate-only unit reuse with extracted compiler/tools."""
+    project = folder / "function units project 凪"
+    project.mkdir()
+    (project / "nagi.toml").write_text("entry='main.nagi'\n", encoding="utf-8")
+    source = ('def value() -> i64:\n    return 41\n'
+              'def stable() -> i64:\n    return 1\n'
+              'def main():\n    print(value() + stable())\n')
+    (project / "main.nagi").write_text(source, encoding="utf-8")
+    out = folder / "function units output 凪"
+    verifier = exe.parent / "tools" / "verify_build_receipt.py"
+    snapshots = []
+    isolated = {**environment, "PATH": "", "NAGI_ROOT": str(folder / "missing runtime")}
+    for stage, expected in (("initial", 42), ("unchanged", 42), ("body-edit", 43)):
+        if stage == "body-edit":
+            (project / "main.nagi").write_text(source.replace("return 41", "return 42"), encoding="utf-8")
+        completed = subprocess.run(
+            [str(exe), "run", "--project", str(project), "--out", str(out),
+             "--profile", "dev", "--incremental=units", "--build-stats"],
+            cwd=folder, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=600)
+        assert completed.returncode == 0, completed.stderr
+        assert completed.stdout.splitlines() == [str(expected)], completed.stdout
+        reports = [json.loads(line.removeprefix("nagi-build-stats: ")) for line in completed.stderr.splitlines()
+                   if line.startswith("nagi-build-stats: ")]
+        assert len(reports) == 1, completed.stderr
+        stats = reports[0]
+        assert stats["checks"] == "full" and stats["cargo_always_invoked"] is True, stats
+        assert stats["profile"] == "dev" and stats["native_reuse"] == "cargo_only", stats
+        body = stats["generated_body"]
+        assert body["mode"] == "cargo_units" and len(body["units"]) == 2, stats
+        assert body["source_cache"] == ("hit" if stage == "unchanged" else "miss"), stats
+        assert body["cargo_fresh"] is (stage == "unchanged"), stats
+        for unit in body["units"]:
+            stable = any(name.endswith("stable") for name in unit["functions"])
+            reused = stage == "unchanged" or stage == "body-edit" and stable
+            assert unit["source_cache"] == ("hit" if reused else "miss"), stats
+            assert unit["cargo_fresh"] is reused, stats
+        paths = [Path(line.removeprefix("native: ")) for line in completed.stderr.splitlines()
+                 if line.startswith("native: ")]
+        assert len(paths) == 1, completed.stderr
+        binary, receipt = paths[0], Path(stats["receipt"])
+        assert receipt.parent == binary.parent and receipt.parents[5].samefile(out), stats
+        assert json.loads(receipt.read_text(encoding="utf-8"))["schema_version"] == 3
+        verified = subprocess.run([sys.executable, str(verifier), str(receipt), "--compiler", str(exe)],
+                                  cwd=project, env=isolated, capture_output=True, text=True, encoding="utf-8", timeout=15)
+        assert verified.returncode == 0, verified.stderr
+        snapshots.append((binary, binary.read_bytes(), str(expected)))
+    assert len({p for p, _, _ in snapshots}) == 3, "Unit builds reused an executable path"
+    for binary, data, expected in snapshots:
+        assert binary.read_bytes() == data, "Unit build overwrote an old executable"
+        result = subprocess.run([str(binary)], cwd=project, env=isolated, capture_output=True,
+                                text=True, encoding="utf-8", timeout=15)
+        assert result.returncode == 0 and result.stdout.splitlines() == [expected], result
+    print("Verified function units: full checks, source miss/hit, body edit with independent unit fresh, schema 3 receipts, immutable executables")
 
 
 def verify_development_builds(exe: Path, folder: Path, environment: dict) -> None:

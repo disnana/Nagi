@@ -2,7 +2,22 @@
 
 ## 未リリース / Unreleased
 
+### JetBrains editing assistance
+
+- Preserve manually chosen High indentation on Enter, and add a Nagi-specific consecutive-Enter gesture to leave one block at a time. Keep delimiter continuations, Low brace context, smart-indent settings and undo behavior.
+- Align supported High `else`/`case` headers on colon input and standalone High/Low closing delimiters with their known owner. Use bounded lexical context and leading-whitespace edits; preserve ordinary input when context is unknown.
+- Document the source-based comparison with PyCharm Python editing, applicable improvements and the compiler/formatter work needed for broader support. Do not claim full Python editor parity.
+
+### Runtime dependency maintenance
+
+- Require Tokio 1.54.1 or newer for the runtime and update the active workspace/fixture locks to 1.54.1, incorporating the timer-driver synchronization fix in [Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692). The previous tracked locks used 1.53.1/1.53.2, not the reported affected 1.54.0. Generated applications have independent locks: rebuild them with the updated runtime; updating Nagi's root lock alone does not update existing binaries. This change is unreleased.
+
 ### Nagi application development tools
+
+- Reuse the parser's original physical-module tokens during source loading, avoiding a second lex while preserving full High/Low checks and diagnostics. Share Cargo dependency targets across frontend regression fixtures and remove an unused duplicate CI release-compiler build; keep all tests and distribution builds.
+- Add repeatable full-check and eight-case ordinary-versus-units build benchmarks, including runtime edits, corrupt-lock rejection and old-executable preservation. Report slow cases and cache conditions separately; do not change the default release profile.
+
+- Add opt-in `--profile dev --incremental=units` to group closed primitive synchronous functions into at most eight dependency-ordered Cargo libraries. Keep unsupported functions, async and user types in a facade; rebuild affected units and reverse dependents while Cargo can reuse independent units. Full checks and immutable generations remain mandatory. Receipt schema 3 verifies the complete source-unit closure; existing modes and schemas remain supported.
 
 - Add opt-in `--profile dev --incremental` to reuse the generated Rust body as an immutable content-addressed Cargo library. Identical bodies reuse Cargo artifacts while each generation compiles its own entry shim. Keep full checks, Cargo validation and old executables; reject corrupt source caches. Adapters, additional Rust dependencies and managed runs retain monolithic builds. Receipt schema 2 verifies the body reference; schema 1 remains supported. Released 0.2.0 and default release builds are unchanged.
 

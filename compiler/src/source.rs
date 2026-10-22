@@ -14,6 +14,13 @@ struct SourceFile {
     tokens: Vec<crate::lexer::Token>,
     lowering: LoweringKind,
 }
+/// Successfully resolved source provenance; spans remain in the physical file.
+pub(crate) struct ResolvedImport {
+    pub file: PathBuf,
+    pub import: ModuleImport,
+    pub target: ModuleId,
+    pub target_file: Option<PathBuf>,
+}
 #[derive(Default)]
 pub struct Sources {
     pub program: Program,
@@ -21,6 +28,7 @@ pub struct Sources {
     files: Vec<SourceFile>,
     bytes: usize,
     identifiers: HashMap<String, String>,
+    imports: Vec<ResolvedImport>,
 }
 
 /// Emission lineage is separate from the original source location.
@@ -181,6 +189,9 @@ impl Sources {
             .iter()
             .map(|f| (f.path.as_path(), f.source.as_str(), f.start))
     }
+    pub(crate) fn resolved_imports(&self) -> impl Iterator<Item = &ResolvedImport> {
+        self.imports.iter()
+    }
     /// A serialized root can retain its logical ID in a new physical Low file.
     /// Foreign flattened identities do not become loaded source files.
     pub fn module_files(&self) -> impl Iterator<Item = (&ModuleId, &Path)> {
@@ -209,6 +220,7 @@ impl Sources {
             file.start += offset;
         }
         self.files.extend(other.files);
+        self.imports.extend(other.imports);
         self.identifiers.extend(other.identifiers);
         self.text.push_str(&other.text);
         self.bytes += other.bytes;
@@ -360,6 +372,19 @@ pub fn load(path: &Path, high: bool) -> Result<Sources, String> {
     load_with_overlays(path, high, &HashMap::new())
 }
 
+pub(crate) fn import_file(importer: &Path, file: &str, high: bool) -> Result<PathBuf, String> {
+    let dependency = Path::new(file);
+    let expected = if high { "nagi" } else { "low" };
+    if dependency.is_absolute() || dependency.extension().and_then(|s| s.to_str()) != Some(expected)
+    {
+        return Err(format!(
+            "importは相対パスの.{expected}ファイルを指定してください"
+        ));
+    }
+    let dependency = importer.parent().unwrap_or(Path::new(".")).join(dependency);
+    std::fs::canonicalize(&dependency).map_err(|e| format!("{}: {e}", dependency.display()))
+}
+
 fn source_after_read(
     path: &Path,
     source: Option<String>,
@@ -408,8 +433,8 @@ pub fn load_with_overlays(
             (source.text, source.bytes)
         };
         let source = source_after_read(&path, source, read_bytes, &mut out.bytes)?;
-        let mut program =
-            crate::parser::parse(&source, high).map_err(|e| diagnostic(&path, &source, &e))?;
+        let (mut program, tokens) = crate::parser::parse_with_tokens(&source, high)
+            .map_err(|e| diagnostic(&path, &source, &e))?;
         stack.insert(path.clone());
         let imports = if program.module_imports.is_empty() {
             program
@@ -441,27 +466,8 @@ pub fn load_with_overlays(
             }
             let file = &import.path;
             let line = &import.line;
-            let dependency = Path::new(file);
-            let expected = if high { "nagi" } else { "low" };
-            if dependency.is_absolute()
-                || dependency.extension().and_then(|s| s.to_str()) != Some(expected)
-            {
-                return Err(diagnostic(
-                    &path,
-                    &source,
-                    &format!(
-                        "line {line}: importは相対パスの.{expected}ファイルを指定してください"
-                    ),
-                ));
-            }
-            let dependency = path.parent().unwrap().join(dependency);
-            let canonical = std::fs::canonicalize(&dependency).map_err(|e| {
-                diagnostic(
-                    &path,
-                    &source,
-                    &format!("line {line}: {}: {e}", dependency.display()),
-                )
-            })?;
+            let canonical = import_file(&path, file, high)
+                .map_err(|e| diagnostic(&path, &source, &format!("line {line}: {e}")))?;
             visit(units, &canonical, high, out, stack, seen, overlays).map_err(|e| {
                 if e.starts_with("error:") {
                     e
@@ -471,6 +477,16 @@ pub fn load_with_overlays(
             })?;
             resolved_imports.push((import, ModuleId(canonical.display().to_string())));
         }
+        for (import, target) in &resolved_imports {
+            let target_file =
+                (import.source == ImportSource::File).then(|| PathBuf::from(&target.0));
+            out.imports.push(ResolvedImport {
+                file: path.clone(),
+                import: import.clone(),
+                target: target.clone(),
+                target_file,
+            });
+        }
         let offset = out.text.lines().count();
         shift(&mut program, offset);
         for (import, _) in &mut resolved_imports {
@@ -478,8 +494,6 @@ pub fn load_with_overlays(
         }
         program.imports.clear();
         program.module_imports.clear();
-        let tokens =
-            crate::lexer::lex(&source, high).map_err(|e| diagnostic(&path, &source, &e))?;
         let module = program
             .modules
             .root

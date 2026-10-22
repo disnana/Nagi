@@ -1,0 +1,150 @@
+{
+  "conditions": "dev opt-level=0; real runtime and existing measured configuration target; seven fresh process executions; no other local build/test/benchmark; constant loop bound retained by unoptimized dev code; startup included; not production throughput",
+  "source": "def step(n: i64) -> i64:\n    return (n * 31 + 7) % 1009\ndef calculate(n: i64) -> i64:\n    i = 0\n    checksum = 0\n    while i < n:\n        checksum = (checksum + step(i)) % 1000000007\n        i += 1\n    return checksum\ndef main():\n    print(calculate(50000000))\n",
+  "expected": "199995688",
+  "compiler_sha256": "606bfe39a284451c61a088c95936a390e5134fd6ea588cf54cbb415c74a5bfa0",
+  "modes": {
+    "body": {
+      "build": {
+        "elapsed_s": 0.18434118400182342,
+        "max_child_rss_kib": 137636,
+        "stats": {
+          "before_cargo_ms": 2.3356090000000003,
+          "cargo_always_invoked": true,
+          "cargo_compiled_artifacts": 2,
+          "cargo_fresh_artifacts": 197,
+          "cargo_ms": 161.628598,
+          "checks": "full",
+          "generated_body": {
+            "cargo_fresh": false,
+            "mode": "cargo_library",
+            "sha256": "4c2007553f5f8a6fa2b09ebaf3536289570b9bf092555d61332d97719ceec708",
+            "source_cache": "miss"
+          },
+          "native_reuse": "cargo_only",
+          "observed_change": "no_previous_analysis",
+          "profile": "dev",
+          "publish_ms": 18.155982,
+          "receipt": "/workspace/Nagi/local-only/function-delta-probe-20261021/nagi-incremental-u6yw70j8/baseline-body-dev/cpu-out/.nagi/apps/nagi-main-85bc23ff9c4e3307/generations/g-87924-18e08c759328ba48-0/build-receipt.json",
+          "rust_sha256": "231b24af9cec8fff00ae0e01c0814176ce1c6d75d8529e24d31560509f7224fd",
+          "schema_version": 1,
+          "semantic_sha256": "d044bbba4da2c0e9a7611abf68bfa1541cd0f1726537d315402014c26aca4069",
+          "total_ms": 182.138536
+        },
+        "native": "/workspace/Nagi/local-only/function-delta-probe-20261021/nagi-incremental-u6yw70j8/baseline-body-dev/cpu-out/.nagi/apps/nagi-main-85bc23ff9c4e3307/generations/g-87924-18e08c759328ba48-0/nagi-85bc23ff9c4e3307-g-87924-18e08c759328ba48-0"
+      },
+      "samples": [
+        {
+          "elapsed_s": 0.2020362010007375,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.19635554700653302,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.2018854720008676,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.19647475799865788,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.19800687300448772,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.19677873500040732,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.20702546300162794,
+          "max_child_rss_kib": 22352
+        }
+      ],
+      "median_s": 0.19800687300448772
+    },
+    "units": {
+      "build": {
+        "elapsed_s": 0.21882402500341414,
+        "max_child_rss_kib": 135600,
+        "stats": {
+          "before_cargo_ms": 2.929427,
+          "cargo_always_invoked": true,
+          "cargo_compiled_artifacts": 4,
+          "cargo_fresh_artifacts": 197,
+          "cargo_ms": 194.158187,
+          "checks": "full",
+          "generated_body": {
+            "cargo_fresh": false,
+            "mode": "cargo_units",
+            "sha256": "d9ed53428fb5231d90c00868b527594792a345f335eeb89cd18c3bdf13322f16",
+            "source_cache": "miss",
+            "units": [
+              {
+                "cargo_fresh": false,
+                "functions": [
+                  "/workspace/Nagi/local-only/function-delta-probe-20261021/nagi-incremental-u6yw70j8/cpu-project/main.nagi::step"
+                ],
+                "id": "c4cf6079b3003d4e",
+                "sha256": "4c28ac1cdc76f314ef80bfe2724fc7a0ad09ad7e1f39a2a1a2d0103110e7c112",
+                "source_cache": "miss"
+              },
+              {
+                "cargo_fresh": false,
+                "functions": [
+                  "/workspace/Nagi/local-only/function-delta-probe-20261021/nagi-incremental-u6yw70j8/cpu-project/main.nagi::calculate"
+                ],
+                "id": "41812c0c468fe49c",
+                "sha256": "356ace9869486f00d75d55584445bc00142f8688df3351f917c6ad485718c1d6",
+                "source_cache": "miss"
+              }
+            ]
+          },
+          "native_reuse": "cargo_only",
+          "observed_change": "no_previous_analysis",
+          "profile": "dev",
+          "publish_ms": 19.525582,
+          "receipt": "/workspace/Nagi/local-only/function-delta-probe-20261021/nagi-incremental-u6yw70j8/current-units-dev/cpu-out/.nagi/apps/nagi-main-beed92cb183a6f73/generations/g-87958-18e08c75f1a2b75d-0/build-receipt.json",
+          "rust_sha256": "14b42216c253eb1223ddf9ba1eaca295e583d811df7907e3f23352ccc6d4b182",
+          "schema_version": 1,
+          "semantic_sha256": "d044bbba4da2c0e9a7611abf68bfa1541cd0f1726537d315402014c26aca4069",
+          "total_ms": 216.635599
+        },
+        "native": "/workspace/Nagi/local-only/function-delta-probe-20261021/nagi-incremental-u6yw70j8/current-units-dev/cpu-out/.nagi/apps/nagi-main-beed92cb183a6f73/generations/g-87958-18e08c75f1a2b75d-0/nagi-beed92cb183a6f73-g-87958-18e08c75f1a2b75d-0"
+      },
+      "samples": [
+        {
+          "elapsed_s": 0.19601684500230476,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.19788467699981993,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.1960810520031373,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.199679470002593,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.19475214499834692,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.22054601699346676,
+          "max_child_rss_kib": 22352
+        },
+        {
+          "elapsed_s": 0.19479281600069953,
+          "max_child_rss_kib": 22352
+        }
+      ],
+      "median_s": 0.1960810520031373
+    }
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "cases": {
+    "before": {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagic",
+        "--test",
+        "frontend_contracts"
+      ],
+      "head": "e2d728006dbfe49eb8a382f88ce777f29284ed4c",
+      "before_cli_sha256": "713a1a1bf0352630c9c1e74de9a6570a0992e802753f8712b45e3faebf1a9635",
+      "external_native_target": null,
+      "started_utc": "2026-10-22T07:13:11Z",
+      "free_before_bytes": 3528552448,
+      "exit_code": 0,
+      "elapsed_s": 232.0924255449936,
+      "free_after_bytes": 5149855744,
+      "after_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+      "compiler_scope": "fixture cache before; rebuilt CLI includes parent P0 parser/source changes; not exact-main CLI",
+      "observed_native_fixture_pid": 696234,
+      "owned_fixture_paths_remaining": [],
+      "free_tmp_after_bytes": 8849027072,
+      "free_workspace_after_bytes": 5149839360,
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0,
+      "test_elapsed_s": 221.11
+    },
+    "after": {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagic",
+        "--test",
+        "frontend_contracts"
+      ],
+      "compiler_scope": "P0 compiler in both fixture before/after",
+      "before_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+      "external_native_target": null,
+      "started_utc": "2026-10-22T07:18:14Z",
+      "free_workspace_before_bytes": 5149839360,
+      "free_tmp_before_bytes": 8849027072,
+      "exit_code": 0,
+      "elapsed_s": 6.001279785996303,
+      "free_workspace_after_bytes": 5143281664,
+      "free_tmp_after_bytes": 8849027072,
+      "after_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+      "compiler_bytes_unchanged": true,
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0,
+      "test_elapsed_s": 4.38
+    },
+    "shared-cold": {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "nagic",
+        "--test",
+        "frontend_contracts"
+      ],
+      "compiler_scope": "same P0 CLI as fixture before/warm-after",
+      "before_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+      "external_native_target": "/tmp/nagi-frontend-shared-cold-ei_cm2h2/target",
+      "owned_directory": "/tmp/nagi-frontend-shared-cold-ei_cm2h2",
+      "target_initially_absent": true,
+      "cache_conditions": "fresh shared target; warm registry and OS caches; prior baseline used four fresh fixture-local targets",
+      "started_utc": "2026-10-22T07:20:05Z",
+      "free_workspace_before_bytes": 5141827584,
+      "free_tmp_before_bytes": 8849027072,
+      "exit_code": 0,
+      "elapsed_s": 78.02496883399726,
+      "max_child_rss_kib": 715048,
+      "after_cli_sha256": "7aca1206c5b15eb112b50896b594ee802aa8d3d772841b519e6d6fc9797f4eca",
+      "compiler_bytes_unchanged": true,
+      "target_bytes": 498368938,
+      "free_tmp_before_cleanup_bytes": 8369864704,
+      "owned_target_cleanup_complete": true,
+      "free_tmp_after_bytes": 8849027072,
+      "free_workspace_after_bytes": 5141819392,
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0,
+      "test_elapsed_s": 76.71
+    }
+  },
+  "conditions": "single trial each; before=4 fresh per-fixture native targets, after=existing warm workspace target, shared-cold=1 fresh shared target; registry/OS caches warm; same P0 compiler used by all native fixture runs (baseline cargo rebuilt CLI before tests)",
+  "ci_remote_measurement": false,
+  "all_existing_test_counts_maintained": true,
+  "policy_tests": {
+    "passed": 149,
+    "elapsed_s": 6.093
+  },
+  "free_workspace_bytes": 4961132544,
+  "free_tmp_bytes": 8848994304
+}

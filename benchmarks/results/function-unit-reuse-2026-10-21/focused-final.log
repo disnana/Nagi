@@ -1,0 +1,139 @@
+   Compiling nagic v0.2.0 (/workspace/Nagi/compiler)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.06s
+     Running tests/build_diagnostics.rs (target/debug/deps/build_diagnostics-e83418d373f525b8)
+
+running 33 tests
+test child_notes_cannot_relabel_an_unmapped_primary_or_dependency ... ok
+test child_notes_keep_module_locations_and_readable_definition_names ... ok
+test existing_path_aliases_match_only_the_generated_file ... ok
+test dependency_synthetic_and_incomplete_diagnostics_fall_back_without_guessing ... ok
+test a_successful_run_stays_quiet_and_passes_through_program_output ... ok
+test finite_f32_extremes_compile_and_run_after_lowering ... ok
+test function_unit_diagnostics_use_current_import_and_saved_low_provenance ... ok
+test high_build_points_to_nagi_and_keeps_rust_notes_and_failure_status ... ok
+test cli_maps_adapter_mismatch_without_repeating_generated_rust_by_default ... ok
+test imported_high_uses_the_dependency_path_and_local_line ... ok
+test imported_low_uses_its_own_file_instead_of_the_entry_file ... ok
+test imported_async_ffi_send_failure_maps_the_cause_note_in_high_and_saved_low ... ok
+test incremental_backend_errors_map_body_to_high_and_saved_low_sources ... ok
+test invalid_entrypoints_are_rejected_before_cargo_with_source_locations ... ok
+test library_mapping_never_attributes_shim_or_dependency_spans_to_nagi ... ok
+test lowering_restores_nested_statement_expression_arm_and_field_lines ... ok
+test invalid_operators_in_imports_report_nagi_lines_before_rust_or_cargo ... ok
+test iterator_mutation_fails_in_check_and_build_before_backend_generation ... ok
+test native_signature_errors_also_keep_the_native_low_location ... ok
+test overflowing_f32_is_rejected_at_the_source_before_backend_build ... ok
+test repeated_moves_fail_in_check_and_build_before_invoking_rust ... ok
+test repeated_moves_keep_imported_and_replacement_source_locations ... ok
+test native_rust_errors_are_not_relabelled_as_nagi ... ok
+test extern_argument_and_sync_async_mismatches_fail_at_the_declaration_in_high_and_low ... ok
+test replacement_adapter_errors_point_to_the_handwritten_low_file ... ok
+test standalone_low_uses_the_original_low_lines ... ok
+test safe_reinitialization_and_return_paths_check_build_and_run ... ok
+test unix_backslashes_do_not_turn_a_dependency_path_into_the_generated_file ... ok
+test try_result_reuse_reports_source_lines_before_invoking_cargo ... ok
+test windows_paths_and_canonical_prefixes_match_only_the_generated_target ... ok
+test unsupported_class_fields_and_async_reassignments_fail_before_backend_generation ... ok
+test run_preserves_json_stdout_with_and_without_a_cost_report_in_high_and_saved_low ... ok
+test source_names_with_spaces_and_dots_build_and_run ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.87s
+
+     Running tests/build_generations.rs (target/debug/deps/build_generations-b9ffd1b07f2b02ab)
+
+running 73 tests
+test async_native_entry_guard_runs_before_block_on_even_without_environment_opt_in ... ok
+test a_running_old_executable_is_not_replaced_by_a_new_build ... ok
+test cargo_cache_keeps_a_preexisting_default_package_binary_unchanged ... ok
+test another_output_root_preserves_an_exported_managed_generation ... ok
+test another_apps_successful_snapshot_keeps_a_referenced_generation_until_later_sweep ... ok
+test cargo_failure_retains_latest_and_inherited_lockfile ... ok
+test compatibility_outputs_cannot_alias_previous_latest_metadata ... ok
+test build_stats_keep_raw_source_paths_and_receipt_location_from_non_utf8_cwd ... ok
+test dev_cargo_and_receipt_failures_preserve_latest_and_do_not_run ... ok
+test corrupted_observation_does_not_skip_cargo_or_change_application_output ... ok
+test dev_profile_preserves_dynamic_overflow_and_trusted_native_boundary ... ok
+test direct_native_launch_without_retention_environment_is_pinned_until_exit ... ok
+test external_hardlink_input_identity_protects_its_run_lease_until_owner_is_collected ... ok
+test compatibility_writers_cannot_overwrite_any_retained_body_through_a_hardlink ... ok
+test function_units_handle_recursion_bucket_boundaries_imports_and_runtime_changes ... ok
+test function_units_keep_async_types_callbacks_and_open_dependencies_in_facade ... ok
+test dev_and_release_publish_distinct_immutable_artifacts_and_verified_observations ... ok
+test function_units_special_runtime_paths_and_child_projection_alias_are_safe ... ok
+test function_units_rebuild_only_affected_crates_and_keep_checked_snapshots ... ok
+test function_units_orphan_cargo_and_publication_failures_preserve_success ... ok
+test incremental_cache_corruption_is_not_repaired_or_published ... ok
+test function_units_reject_injected_child_inputs_and_fall_back_for_unknown_boundaries ... ok
+test incremental_async_result_and_empty_entries_preserve_exit_behavior ... ok
+test incremental_orphan_cargo_cannot_overwrite_newer_body_or_executable ... ok
+test incremental_cache_rejects_extra_cargo_inputs_before_execution ... ok
+test incremental_rejects_linked_cache_and_preserves_latest ... ok
+test incremental_publication_rechecks_retained_body_aliases_after_cargo ... ok
+test incremental_falls_back_for_native_adapters_extra_dependencies_and_managed_runs ... ok
+test incremental_runtime_aliases_share_one_cargo_identity_in_both_root_manifests ... ok
+test incremental_runtime_change_invalidates_native_code_without_changing_generated_body ... ok
+test invalid_input_does_not_create_output_or_its_lock ... ok
+test killed_parent_keeps_native_lease_through_tls_destructor_and_os_exit ... ok
+test latest_metadata_used_as_an_input_cannot_be_overwritten_by_rebuild ... ok
+test latest_temp_failure_keeps_old_metadata_and_does_not_run_new_generation ... ok
+test lock_is_permanent_and_input_protection_is_rechecked_after_waiting ... ok
+test long_basename_accepted_by_the_previous_cache_scheme_uses_a_short_generation_bin ... ok
+test managed_cleanup_preserves_native_inputs_inside_an_older_generation ... ok
+test managed_cleanup_preserves_unknown_or_oversized_retention_metadata ... ok
+test managed_cleanup_skips_links_and_does_not_touch_other_apps_or_staging ... ok
+test incremental_cargo_receipt_projection_and_latest_failures_preserve_last_success ... ok
+test managed_concurrent_run_keeps_an_older_executable_until_actual_exit ... ok
+test managed_kernel_lease_preserves_then_reclaims_without_pid_guessing ... ok
+test incremental_reuses_checked_body_but_publishes_unique_bins_and_valid_locked_manifests ... ok
+test managed_older_completion_preserves_newer_latest_native_inputs ... ok
+test managed_low_runs_and_failed_builds_keep_the_last_good_generation ... ok
+test managed_older_success_after_newer_failure_keeps_last_good ... ok
+test managed_oversized_record_does_not_stop_normal_reclamation ... ok
+test managed_parent_termination_does_not_claim_the_native_child_finished ... ok
+test managed_path_dependency_records_its_known_root_and_preserves_crate_sources ... ok
+test managed_dev_run_uses_default_native_cache_and_keeps_entry_guard ... ok
+test managed_program_failure_does_not_retire_old_successes ... ok
+test managed_saved_low_runs_use_the_same_retention_contract ... ok
+test managed_successful_runs_retire_old_generations_but_default_builds_keep_theirs ... ok
+test native_entry_waiter_observes_tombstone_before_running_user_code ... ok
+test nonwriting_low_check_and_lower_do_not_wait_for_the_output_writer_lock ... ok
+test missing_inputs_metadata_on_ready_managed_generation_stops_reclamation ... ok
+test orphan_cargo_uses_an_immutable_snapshot_and_cannot_replace_next_generation ... ok
+test parallel_latest_readers_observe_only_complete_published_generations ... ok
+test nonlatest_active_run_keeps_its_native_input_after_a_newer_latest_succeeds ... ok
+test published_manifest_runtime_reference_resolves_from_the_published_location ... ok
+test projection_failure_keeps_old_latest_and_reports_partial_projection ... ok
+test rebuild_publishes_new_generation_and_preserves_old_executable_and_snapshot ... ok
+test run_releases_output_lock_before_waiting_for_the_selected_executable ... ok
+test source_snapshot_retains_raw_non_utf8_canonical_path_without_rejecting_old_accepted_input ... ok
+test synthetic_no_main_native_entry_still_rejects_a_retired_generation ... ok
+test user_low_snapshot_comes_from_this_input_instead_of_a_stale_high_projection ... ok
+test same_and_different_apps_with_equivalent_output_paths_wait_for_one_output_writer ... ok
+test writing_cost_report_cannot_alias_previous_latest ... ok
+test tombstone_journal_recovers_partial_and_already_removed_generation_trees ... ok
+test writing_high_check_cannot_alias_previous_latest ... ok
+test writing_high_lower_cannot_alias_previous_latest ... ok
+test writing_check_lower_and_cost_wait_while_build_owns_the_output_lock ... ok
+test incremental_runtime_paths_with_newlines_and_quotes_use_one_line_root_manifests ... ok
+
+test result: ok. 73 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 55.22s
+
+     Running tests/project.rs (target/debug/deps/project-1ea744b72876a0d0)
+
+running 13 tests
+test actual_cli_manifest_and_import_errors_point_to_original_files ... ok
+test cli_overrides_scalars_and_dependency_versions_and_adds_native_files ... ok
+test dependency_alias_collision_across_manifest_and_cli_is_rejected ... ok
+test actual_cli_checks_entry_with_low_support_from_a_subdirectory ... ok
+test explicit_source_keeps_legacy_behavior_even_next_to_a_broken_manifest ... ok
+test invalid_commands_and_flags_fail_before_loading_sources ... ok
+test manifest_typos_wrong_types_duplicates_and_empty_paths_are_rejected ... ok
+test native_profiles_and_stats_are_additive_and_validated_before_writing ... ok
+test nearest_project_uses_manifest_relative_paths_from_any_subdirectory ... ok
+test rust_diagnostic_details_are_an_explicit_build_or_run_option ... ok
+test escaped_record_and_route_names_preserve_json_sqlite_and_rust_bridges ... ok
+test a_borrowed_record_field_does_not_block_moving_a_disjoint_field ... ok
+test actual_run_uses_rust_dependencies_and_a_stable_project_working_directory has been running for over 60 seconds
+test actual_run_uses_rust_dependencies_and_a_stable_project_working_directory ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 79.89s

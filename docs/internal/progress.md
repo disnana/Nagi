@@ -1,5 +1,28 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-22 JST: PyCharm編集補助の調査とNagi入力補正
+
+main `5d3e58e`を基準にPython実装・登録を固定commitで調査し、[対応表と実装順](jetbrains-python-editing-plan.md)を作成した。Highの手動dedentを維持し、Nagi独自の連続Enter退出、else/caseのコロン補正、High/Lowの独立した閉じ括弧の整列を追加した。上限付きの既知文脈だけでleading whitespaceを変更し、Python専用構文やfull formatter/renameを推測実装しない。#141の名前付きimportは別作業として維持する。実IDE操作とcompiler連携を含む188件/0skip、Java 21、候補ZIP生成・descriptor/hash検証を確認した。[raw/観測条件/RED-GREEN](../../editors/jetbrains-nagi/benchmarks/python-editing-2026-10-22/README.md)。独立監査・exact-headのIDEA/PyCharm stable/EAP CIはPR本文で追跡し、ローカル成功やPython source比較をGUI/IME受入・完全同等性の証拠にしない。
+
+## 2026-10-22: #147 BrowserLogin失敗counterの観測欠落
+
+CI run `39747673107` / Linux packageで、BrowserLogin strict JSON public testの最後のvalid requestが504になった。保存済み診断はHandler phase16 / Pending / HandlerTimer / Expired、claim消費・restore commit ackを示す。phase16はbefore_handler・handler・issue・mapperを含むため、SQLite issueの停滞と断定しない。1000msのタイムアウト原因は未解決。親の同cfg通常suite1回と、事前に各3回と決めたstock/diagnostic交互比較の全6runは各10件成功し、再現しなかった。compile時間を含む試行を速度比較に使わず、成功までの盲目retryとは扱わない。
+
+確定した問題は、testが既に出す `sf03_browser_failure_counters_v1` をSession診断が認識せずraw削除時に捨てること。Sol 6.1 Highの事前設計と親の採用後、Pythonのfailure-only console補助行だけを追加した。既存SF07 parserのgrammar・secret拒否・64KiB制限を再利用し、source pin・完全な失敗inventory・正確なfailed stdout ownerと全出現を照合する。各ownerはcounter直後のassertで終了するため1件だけ、全体2ownerまで。未知/重複/外側marker・taint等は固定unavailableだけとしrawを再表示しない。callbackのissue_committed flagは観測済み位置を示し、falseからnative commit不在を推定しない。
+
+合成CLI回帰は修正前にcounter0件でRED、修正後に既存counterを保持してGREEN。JSON v2のbytes・exit・marker_countは不変。runtime/fixture/workflow、期限/assert/parallelismは変更しない。wire両iterationが同じfailed ownerから出る到達不能形も別RED→GREENで拒否した。最終Python検査はSession診断65件、SF07 summary37件、native-finish20件、browser source/projection guard16件、CI policy160件が成功。原ログは `local-only/release-0.2.1/browser-counter-*.log`、比較条件と全結果は同所の `session-probe.json` / `session-paired-probe.json` に保持。独立最終auditと新HEAD CIはPR #147で追跡し、この補助観測をタイムアウト自体の修正とは報告しない。
+
+
+## 2026-10-22 JST: Tokioタイマー修正の独立対応
+
+main `5d3e58e`から#145に依存しない緊急差分。公式[Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692)と[1.54.1 release](https://github.com/tokio-rs/tokio/releases/tag/tokio-1.54.1)を確認した。報告は1.54.0のTimerEntry破棄とdriverの並行アクセスであり、Nagiへのremote exploitは未確認。提示GHSA番号のglobal GitHub APIは404のため、その識別子の正しさは未確認とする。追跡済みlockは1.53.1×8、1.53.2×17で1.54.0なし。履歴のbenchmark証拠は改変しない。
+
+root lockだけでは独立した生成app lockに効かないため、runtime normal/devの最低Tokioを1.54.1へ上げ、root lockとstandalone SF08 fixtureのexact要求/lockを整合した。両lockの差分はTokio版とchecksumだけ。registry checksum `b52fd3255258d26fac7264ab5a76b53c13367136dc011d3d6ad4f8ed070396a3`、MIT、宣言Rust1.85（以前1.53.1は1.71）。runtime全graph/既存CIの最低版契約を新設・緩和しない。feature、cache、timer実装、公開Nagi APIは変更しない。
+
+ローカル: `cargo test --locked -p nagi-runtime --lib`は862成功/失敗0、既存の計測専用1 ignored。`cargo fmt --all -- --check`、`cargo check --locked --manifest-path tools/sf08-fixture-runtime/Cargo.toml --target-dir target`、`cargo test --locked -p nagic --test build_generations cargo_failure_retains_latest_and_inherited_lockfile`成功。実`nagic build --profile dev --incremental --build-stats`でsleep(1)をawaitするHighを生成し、新規lock、同じ出力lockのTokio packageを公式registry checksum付き1.54.0、次いで1.53.1へseedした各通常再buildが全て1.54.1へ解決し、`timer-ok`を実行した。全回で同じnative targetを使い、以前の成功exeのhashと出力を保持した。再現は非決定的なUAF自体ではなく、修正版へのversion-selection境界を実行検証したもの。既に配備済みの古いexeや公開0.2.0を自動で修正したとは扱わない。日英[利用者手順](../security.md)を更新した。
+
+全workspace検査・独立最終監査・exact-head CIとReady判断は対応PR本文に記録する。
+
 ## 2026-10-10 JST: #104へ最新mainを統合する候補
 
 ユーザーが#105/#106/#107をマージし、mainは`8c926e09`へ進んだ。#104のIDE assistance/標準Run/世代回収を維持し、SF05 Query・bounded source reader・共通HTTP修正と4 OS対象テストを統合する。過去段落のCI/未完状態は当時のsnapshotであり、今回の統合後HEADのCI・GUI受入成功を意味しない。rootはPRのmerge/Draft変更・版更新・tag/releaseを実行しない。
@@ -505,3 +528,25 @@ baseは公開0.2.0後のmain `2c703b89645b164f586a926e473d08395be65c90`。既存
 この記録時点で、対象generation/dependency/shared-target/output-safety/diagnosticの回帰、cache破損・link・hardlink projection aliasとCargo後の再検査、孤児Cargo、失敗時latest保持、High/Low診断、sync/async/Result entry、fmt/Clippy、receipt 18件、release 154件、CI policy 149件を確認した。実Linux archiveをcheckout外へ展開し、schema 1/2と4 exe、生成本体miss/hitを同梱toolで検証済み。全workspaceと最終HEADの4 OS CI・独立auditは別gateであり、[PR #140](https://github.com/disnana/Nagi/pull/140)の本文・Checksに最終結果を集約する。作成時はDraftで、merge・版更新・tag・正式公開は行っていない。
 
 追記: Rust実装`5a90083`の全workspaceはexit0（1004.912秒、並走検証あり）を取得した。Sol Highの独立auditで発見したroot runtime pathの改行・DELを修正し、実build・Python receipt検証・native実行を再reviewして未解決のsource指摘なし。Windowsのseparator/literal stringも修正した。CIの初回L3は既存release testの`.git`後片付けで失敗したため、fixtureだけで自動maintenance/GCとdetachを禁止し、強い継承設定下でも元のlicense拒否を確認した。背景writerの発生源は原ログだけでは確定していない。最終HEADの必須CIはPRで別途読み戻し、古い成功・失敗を代用しない。
+
+## 2026-10-21: 関数依存単位で生成Rustを再利用する第3差分
+
+ユーザーの「改善してほしい」に従い、main `0e9a575`（#139/#140反映）から[関数依存単位の再利用](function-unit-reuse.md)を実装した。core commitは`39dc51d`。単なる手書きRustのCargo試作で終えず、実Nagi CLI `--profile dev --incremental=units`、sealed plan由来の候補/閉包/SCC、最大8 Cargo unitsと混在facade、source CAS、schema 3検証、診断と保存provenance、実配布gateへ接続した。未知call/型/asyncのcallerをfacadeへ保守的に残し、完全High/Low/Policy/ownership検査・Cargo・旧exe・世代公開契約を維持する。既定・裸のincremental・公開0.2.0・release生成は変更しない。
+
+[実測](../../benchmarks/results/function-unit-reuse-2026-10-21/README.md)では、同compiler/body対unitsの1,000関数aggregateで内部編集0.713→0.662秒、署名編集0.722→0.675秒（各5回中央値）。print-eachは内部編集0.883→0.843秒だが、署名編集0.880→0.905秒、変更なし0.404→0.421秒へ増加した。独立unitのCargo Freshは6/8または7/8。cold依存コンパイルはほぼ同じで、source/output容量は増える。dev native loopは0.198→0.196秒で有意な性能向上を主張しない。CI全体の時間・課金はこの結果から推測しない。
+
+対象generation 73・diagnostic 33・project 13、receipt 36（LinuxでWindows固有1 skip）、release tools 154、fmt/Clippy、日英Docs 102ページの整合を確認した。mixed async/型/関数値/未知callee逆依存、primitive名のlegacy shadowとcanonical module、High/保存Low、子CAS注入、hardlink、孤児Cargo、公開各段階の失敗と旧exe保持を含む。実runtime HTTPの200/400とSIGINT終了、同梱compiler/runtime/toolsを使う実Linux archive（schema 1/2/3・新unit3build・全旧exe保持）も成功した。全workspaceと独立audit、最新HEADの4 OS/配布CIは作成時点で別gateとして追跡し、最終状態をPRへ集約する。merge・版更新・tag・公開は行わない。
+
+追記: core `39dc51d`の全workspace `cargo test --locked`はexit 0（831.467秒、配布等の検証並走あり）。fuzz、10 app/19 native、canonical shadow追加test、final fmt/Clippyも成功。全体suite時間をbefore/afterの性能差として扱わない。最新HEADのCIと独立auditは引き続き別gate。
+
+CI追記: PR #144初回HEAD `c9c923d`のproject toolingはLinux成功、macOS/Windowsでreceipt alias fixtureが失敗。fixtureのunit依存pathがcompilerのcanonical出力と異なっていたため、fixtureだけをcanonical化し、Linuxで同じ二重aliasを再現するtestを追加した。検証器・compiler・受入assert・期限は変更しない。修正前の同じValueErrorと、修正後37件（LinuxではWindows固有1 skip）の成功を保存し、独立再reviewと新HEADのCIを確認する。
+
+別のCI観測: 初回headのWindows prelogin issuerはPR/manualの2jobで同じowner bootstrap位置に失敗し、Linux manualはCSRF初期TokenReply504を3件観測した。runtime/lock差分はなく、分割flagもruntime testで使っていないが、原因を断定しない。High設計review後、既存FAILED envelopeと完全一致するPreLoginFailureの固定enum分類だけをCIの失敗時に追加する。秘密・一般panic/causeを表示せず、rc=1・期限・assertを維持する。新HEADの1回は分類probeとして実施し、分類不能/Unknown等で判断が残ればArchitectへ引き継ぐ。
+
+## 2026-10-22: 0.2.1準備の重複処理削減
+
+base `e2d7280`から、physical moduleを2回lexする経路をparser所有tokenの受渡しへ変更した。High→生成Lowの独立parse/check、型・所有権・Policy検査、Cargo、世代・旧exe保護は維持する。既存unitsの対象範囲と既定releaseは変えない。repository CIは未使用release compiler buildだけを除去し、frontend native fixtureはinput/outを独立させたままCargo cacheを共有する。公開版・plugin #145のGUI受入とは分離する。
+
+[設計](release-0.2.1-build-stability.md)と[raw計測](../../benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md)を追加。release compilerの完全検査は最大約3%短縮、小規模入力は差が小さく遅いsampleも残した。生成Low/Rust一致、release loopの全checksumと旧exe不変を確認し、実行速度向上は主張しない。frontend23件は4個別cold targetで221.11秒、1共有cold76.71秒、warm共有4.38秒（各1回、registry/OS warm）。cold/warmやCI全体の改善率を混同しない。
+
+fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inventory37、利用者CI generator7、network許可下の全workspace `cargo test --locked --quiet`が成功した。全workspace670.09秒は同条件の速度比較ではない。最初のsocket権限拒否の失敗logも保持した。ordinary devとunitsの8ケースを各3回測定し、48成功exe・6回の不正lock拒否/回復を確認した。100関数では変更なしが約16%速い一方、編集は約9–21%遅いためopt-inを維持する。全構成の専有targetは完了後に整理した。独立最終audit、exact-head CIとリリース工程は別gateとして追跡する。query cache・一般async/type分割・自動最適化は未実装で、将来案を今回の成果に数えない。
