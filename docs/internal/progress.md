@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-23: #148 SF08 installの有限status観測
+
+[設計と実証](sf08-install-status-diagnostic.md)。update成功・install実spawn後236秒timeoutという新CI事実を受け、原240秒/transport/TLS/署名/source pin/3packages/browser検査を維持して、固定2名だけのbounded captureへAPT Status-Fdを接続した。閉鎖＋actual ECHILD後に有限phase/record数だけを公開し、未知・不正・truncation等はunknown、成功時のcapture異常もfailclosed。実pinned APT2.8.3で原trustの1回の導入30.362秒/29752bytes/516recordsを確認、専有container/image整理済み。Python70/Node148/sourceguard16/policy160成功、旧実装の観測欠落をRED→GREENで確認。timeout根因の修復・安定化済みとは扱わず、別High監査と新HEAD実3engine CIを必須で残す。
+
 ## 2026-10-23 JST: #148へ0.2.1 mainを統合
 
 main `9fe5e07`（#149）を取り込み、CHANGELOG・agent-routing・本記録の追記競合を解消した。0.2.1本体と0.1.4プラグインの記録を両方保持し、重複した未リリース編集補助項目を0.1.4欄へ集約する。プラグインのsource/test/resourceは既存CI成功HEAD `da80a79`と同一、runtime・lock・SF08修正はmainと同一である。統合HEADのCIは別gateとして確認し、新候補のWindows Run描画・Stop/再実行の利用者確認は引き続き保留する。

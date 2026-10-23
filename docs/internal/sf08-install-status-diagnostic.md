@@ -1,0 +1,37 @@
+# SF08 install status: bounded observation
+
+2026-10-23. Base `d06dae92ed88804e357bf694184dea2b7e02d995`, PR #148 follow-up. This is an observation change; it does **not** establish or fix the external prerequisite timeout's root cause.
+
+## Evidence and adopted boundary
+
+Run `39890751829`, job `120209957942`: update completed in 3959 ms; install actually spawned with 236040 ms remaining, then hit the original shared 240-second deadline. Closed ownership and actual ECHILD were observed; accepted browser executions were zero. The previous repository selection fix remains intact. The record does not distinguish acquisition, unpack/configuration, or triggers. Main's separate SF08 run succeeded; that does not explain this failed run.
+
+`apt-get install` now receives only the additional documented `-o APT::Status-Fd=2` option, with stderr retained in the existing nonblocking bounded pipe. stdout remains discarded. The capsule allows capture for exactly `build` and `prerequisite_apt_install`; the existing leader ledger rejects duplicates. Each capture retains at most 64 KiB and reads at most 1 MiB before refusal. Across the two fixed leaders this is at most 128 KiB retained / 2 MiB read, and each drain call performs at most 16 reads / 64 KiB. No generic capture API, background thread, new retry, consuming wait, or blocking EOF wait was added. Admission, cancellation priority, WNOWAIT PID reservation, group stop, adopted-child cleanup, and final actual ECHILD remain unchanged.
+
+Only failed `apt_install` records after closed ownership **and** actual ECHILD may add `prerequisite_install_status`, containing exactly:
+
+- `last_observed_phase`: `unknown`, `acquiring`, or `package_operation`;
+- `status_records`: integer 0..1024, counting recognized progress records, **not packages**.
+
+The parser accepts bounded complete `dlstatus` / `pmstatus` records with canonical subjects and finite percentages 0..100. Human descriptions and package subjects are validated only to recognize the record, then discarded. Only fixed ordinary warning prefixes (`E: `, `W: `, `N: `, `debconf: `) may be ignored; embedded status markers, unknown status forms, invalid UTF-8/control bytes, incomplete lines, excessive line/record/sample size, phase reversal, missing EOF, retention truncation, and capture errors produce the fixed unknown result. No raw stderr, descriptions, package names, URLs, host facts, or paths are published. This reports the last **observed** progress, not a present-time phase or a root cause. APT data is never passed to the Cargo classifier.
+
+A late capture error detected by final cleanup also rejects an otherwise successful run. Mere retention truncation does not change a successful child exit into failure; on failure it removes status facts. The original three prerequisite scalars, their strict validator, their clamping/budget semantics, and existing failure/exit behavior remain. Signature and TLS validation, pinned Ubuntu source bytes, transport timeouts of 30 seconds, retries zero, required three packages, and the shared 240-second budget are unchanged. All subsequent build/TLS/business checks remain required.
+
+## Exact grammar and actual native proof
+
+The pinned image is `mcr.microsoft.com/playwright@sha256:bdfda2a8fdf48707c5e50a49bd3e06d8d0c759153dc8ee057d8a81c3450bb3e9`. Reading its installed dpkg metadata established **APT 2.8.3**. The initially consulted 2.7.14 document is historical reference, not the installed version.
+
+The actual 2.8.3 source archive was fetched over HTTPS from `https://archive.ubuntu.com/ubuntu/pool/main/a/apt/apt_2.8.3.tar.xz` (2354680 bytes, SHA-256 `088522b3613b28fdbcfa61f1f7e476bf6dc6b0120a8f74409e9527580c9f9d3b`) for read-only grammar inspection; it was not built or executed. Its `doc/progress-reporting.md` is 2355 bytes, SHA-256 `b1219382abc25b40f51884c6389984ec3bab2ac9d2a76f4fa888ab6cbd93c11e`. `apt-pkg/install-progress.cc` confirms four-place fixed percentages, the initial `dpkg-exec` record, and removal of architecture suffixes from package records. Selected source hashes and URLs are retained in `grammar-provenance.json`.
+
+One fresh owned container used the pinned image, the read-only checkout, original trust (no host CA or managed CA override), required three packages, and the production 240-second prerequisite function. It passed in **30.362 seconds**, with closed ownership and actual ECHILD. Its bounded private capture was **29752 bytes**, EOF observed, no truncation or capture error: **182 download records + 334 package records = 516**, classified `package_operation`. Package installation success is not a reproduced timeout and is not browser acceptance. No full Cargo/browser rerun or trust relaxation was performed in this task. Both the owned container and the task-pulled image were removed after preserving evidence; source, existing CLI/cache/evidence, and unrelated containers were untouched.
+
+## Regression and handoff
+
+Private evidence directory: `local-only/sf08-install-diagnostic/` in the original workspace; excluded from Git. `native-private.raw` / `native-private.json` are private and must not be uploaded or copied to PR logs. The public-safe `native-result.json`, provenance, test logs, and `evidence-manifest.json` identify the proof.
+
+- RED: replaying the unchanged timeout against the base entrypoint retains timeout/ECHILD/browser0 but fails the new missing-install-observation assertion (`observation-red.log`). GREEN: the new failure-only output appears without changing failure facts or exposing the synthetic secret.
+- Python integration/ownership suites: **70 passed**, including all existing 64 and six new tests. Native pipe subcases cover split writes, a descendant retaining the writer, independent subsequent build capture, flood refusal, cancellation, and deadline cleanup. Other new cases cover exact two-name admission, per-poll/total/retained bounds, malformed/unknown/tainted status, EOF/truncation, independent closure/ECHILD denial, APT/Cargo separation, and late capture fault rejection.
+- Node protocol/TLS-proof: **148 passed**; source/projection guards: **16 passed**; CI policy: **160 passed**. A separate discovery under `context/` found no test files and is not counted as validation; ownership tests reside in `test_integration`.
+- The first post-change Python run identified old fake `spawn` signatures lacking the new keyword; their accepted keyword contract was updated and asserted, with every original expectation retained. A wrong guessed source URL returned 404; the exact Ubuntu source archive above resolved provenance without another native probe. Original logs remain private.
+
+Production/tests are frozen for a different High's independent audit. Exact-head CI must execute the real three-engine TLS/business suite; local prerequisite success does not waive that gate. The cause and recurrence of the observed 236-second install timeout remain unresolved.

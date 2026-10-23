@@ -447,7 +447,8 @@ class IntegrationTests(unittest.TestCase):
                     class AptOwner:
                         cancelled = False
                         def __init__(self): self.started = []
-                        def spawn(self, name, argv):
+                        def spawn(self, name, argv, **kwargs):
+                            self_test.assertEqual(kwargs, {'capture_stderr': True} if name == 'prerequisite_apt_install' else {})
                             self.started.append((name, argv))
                             return NS(name=name)
                         def peek(self, leader):
@@ -461,6 +462,7 @@ class IntegrationTests(unittest.TestCase):
                                 return None
                             return NS(si_code=os.CLD_EXITED if cause == 'exit' else os.CLD_KILLED,
                                       si_status=100 if cause == 'exit' else 9)
+                    self_test = self
                     owner = AptOwner()
                     with patch.object(ci.time, 'monotonic', side_effect=lambda: clock[0]), \
                          patch.object(ci.time, 'sleep'):
@@ -484,7 +486,8 @@ class IntegrationTests(unittest.TestCase):
                 class AptOwner:
                     cancelled = transition == 'already_cancelled'
                     def __init__(self): self.started = []
-                    def spawn(self, name, argv):
+                    def spawn(self, name, argv, **kwargs):
+                        self_test.assertEqual(kwargs, {'capture_stderr': True} if name == 'prerequisite_apt_install' else {})
                         self.started.append(name)
                         return NS(name=name)
                     def peek(self, leader):
@@ -494,6 +497,7 @@ class IntegrationTests(unittest.TestCase):
                             return NS(si_code=os.CLD_EXITED, si_status=0)
                         clock[0] = 240.01
                         return None
+                self_test = self
                 owner = AptOwner()
                 with patch.object(ci.time, 'monotonic', side_effect=lambda: clock[0]), \
                      patch.object(ci.time, 'sleep'):
@@ -525,6 +529,10 @@ class IntegrationTests(unittest.TestCase):
             self.assertNotIn('/bin/bash', command)
         self.assertEqual(update[-3:], ['APT::Update::Error-Mode=any', 'update', '-qq'])
         self.assertEqual(install[:2], ['env', 'DEBIAN_FRONTEND=noninteractive'])
+        self.assertEqual(install.count('APT::Status-Fd=2'), 1)
+        self.assertNotIn('APT::Status-Fd=2', update)
+        self.assertEqual(calls[0].kwargs, {})
+        self.assertEqual(calls[1].kwargs, {'capture_stderr': True})
         self.assertEqual(install[-6:], ['install', '-y', '--no-install-recommends',
                                       'libnss3-tools', 'build-essential', 'pkg-config'])
 
@@ -632,6 +640,127 @@ class IntegrationTests(unittest.TestCase):
                     self.assertEqual((record['browser_executions_accepted'], record['resets_accepted']), (0, 0))
                     for secret in ('/private/path', 'unit.invalid', 'secret-sentinel'):
                         self.assertNotIn(secret, raw)
+
+    def test_apt_status_grammar_is_bounded_and_never_projects_descriptions(self):
+        secret = 'https://private.invalid/token=PRIVATE_SENTINEL 日本語'
+        download = ('dlstatus:1:9.0565:' + secret + '\n').encode()
+        package = ('pmstatus:dpkg-exec:0.0000:' + secret + '\n'
+                   'pmstatus:unit-package:100.0000:Installed unit-package\n').encode()
+        for sample, phase, count in ((download, 'acquiring', 1), (package, 'package_operation', 2),
+                                     (download + b'debconf: delaying configuration\n' + package, 'package_operation', 3)):
+            result = ci.apt_install_status(sample, False, True, False)
+            self.assertEqual(result, {'last_observed_phase': phase, 'status_records': count})
+            self.assertNotIn('PRIVATE_SENTINEL', json.dumps(result))
+            self.assertNotIn('unit-package', json.dumps(result))
+        unknown = {'last_observed_phase': 'unknown', 'status_records': 0}
+        bad = [b'', b'plain private warning\n', download[:-1], download + b'\xff\n',
+               download + b'\x1b[0m\n', download.replace(b'9.0565', b'009.0565'),
+               download.replace(b'9.0565', b'100.0001'), download.replace(b'9.0565', b'nan'),
+               download.replace(b'dlstatus:1:', b'dlstatus:01:'),
+               download.replace(b'9.0565', b'9.1234567'), package + download,
+               package + b'pmerror:unit:99.0000:PRIVATE_SENTINEL\n',
+               package + b'pmstatus:unit:broken:PRIVATE_SENTINEL\n',
+               package + b'future-status:unit:99.0000:PRIVATE_SENTINEL\n',
+               package + b'E: pmstatus:unit:99.0000:embedded\n',
+               b'dlstatus:1:1.0000:' + b'x'*4096 + b'\n',
+               b'dlstatus:1:1.0000:x\n' * (ci.MAX_APT_STATUS_RECORDS + 1),
+               b'x' * (ci.MAX_CARGO_DIAGNOSTIC_BYTES + 1)]
+        for sample in bad:
+            with self.subTest(sample=sample[:80]):
+                self.assertEqual(ci.apt_install_status(sample, False, True, False), unknown)
+        for flags in ((True, True, False), (False, False, False), (False, True, True),
+                      (1, True, False), (False, 1, False), (False, True, 0)):
+            self.assertEqual(ci.apt_install_status(download, *flags), unknown)
+        for value in (None, 'dlstatus:1:1.0000:private\n', {}):
+            self.assertEqual(ci.apt_install_status(value, False, True, False), unknown)
+
+    def _ci_install_capture_fixture(self, sample, *, child_failure=None, capture_error=False,
+                                    truncated=False, closed=True, echild=True, read_raises=False):
+        root = self.work / ('ci-status-' + str(len(list(self.work.iterdir()))))
+        root.mkdir(mode=0o700)
+        class CaptureOwner:
+            cancelled = False
+            def __init__(self): self.started, self.closes, self.did_close = [], [], False
+            def spawn(self, name, _argv, **kwargs):
+                self.started.append(name)
+                if name == 'build':
+                    binary = root/'target/debug/nagi-sf08-fixture-runtime'
+                    binary.parent.mkdir(parents=True)
+                    binary.write_bytes(b'unit-only'); binary.chmod(0o700)
+                return NS(name=name, capture_stderr=kwargs.get('capture_stderr', False))
+            def peek(self, leader):
+                if leader.name == 'prerequisite_apt_install' and child_failure:
+                    raise ci.ChildWaitFailure(child_failure, leader)
+                return NS(si_code=os.CLD_EXITED, si_status=0)
+            def drain_captured_stderr(self): return None
+            def stderr_capture(self, leader):
+                if not self.did_close: raise AssertionError('capture before closed boundary')
+                if leader.name == 'prerequisite_apt_install':
+                    if read_raises: raise OSError('PRIVATE_SENTINEL')
+                    return sample, truncated, True, capture_error
+                return b'', False, True, False
+            def close_all(self, **kwargs):
+                self.closes.append(kwargs); self.did_close = True
+                return NS(closed=closed, echild_observed=echild)
+        owner = CaptureOwner()
+        before = {'unit': 'fixed'}
+        def project(_checkout, target): target.mkdir(mode=0o700); return before
+        def load(name, _path):
+            if name == 'owned_processes': return NS(LinuxProcessOwner=NS(activate_in_dedicated_cli=lambda: owner))
+            raise FileNotFoundError
+        with patch.object(ci.provision, 'check_scope'), \
+             patch.object(ci.tempfile, 'mkdtemp', return_value=str(root)), \
+             patch.object(ci, 'projection', side_effect=project), \
+             patch.object(ci.co, 'tree', return_value=before), \
+             patch.object(ci, 'binding', return_value=before), \
+             patch.object(ci.co, 'check_bindings', return_value=before), \
+             patch.object(ci.co, 'load', side_effect=load), patch('builtins.print') as emitted:
+            exit_code = ci.run(self.work)
+        raw = emitted.call_args.args[0]
+        self.assertEqual(owner.closes, [{'timeout': 20, 'grace': .05}])
+        self.assertNotIn('PRIVATE_SENTINEL', raw)
+        return exit_code, json.loads(raw), owner
+
+    def test_install_timeout_publishes_only_status_facts_after_closed_echild(self):
+        sample = b'dlstatus:1:25.0000:https://private.invalid/PRIVATE_SENTINEL\n'
+        for failure in ({'class': 'timeout'}, {'class': 'child_exit', 'status': 100}, {'class': 'cancelled'}):
+            for closed, echild in ((True, True), (True, False), (False, True), (False, False)):
+                with self.subTest(failure=failure, closed=closed, echild=echild):
+                    exit_code, record, owner = self._ci_install_capture_fixture(
+                        sample, child_failure=failure, closed=closed, echild=echild)
+                    self.assertEqual(exit_code, 1)
+                    self.assertEqual(record['failure'], failure)  # Never Cargo diagnostics for APT.
+                    self.assertEqual((record['browser_executions_accepted'], record['resets_accepted']), (0, 0))
+                    self.assertNotIn('build', owner.started)
+                    if closed and echild:
+                        self.assertEqual(record['prerequisite_install_status'],
+                                         {'last_observed_phase': 'acquiring', 'status_records': 1})
+                        self.assertTrue(record['prerequisite_diagnostic']['install_spawned'])
+                    else:
+                        self.assertNotIn('prerequisite_install_status', record)
+
+    def test_failed_install_bad_capture_never_projects_partial_status(self):
+        sample = b'pmstatus:unit:50.0000:PRIVATE_SENTINEL\n'
+        for options in ({'truncated': True}, {'capture_error': True}, {'read_raises': True}):
+            exit_code, record, _owner = self._ci_install_capture_fixture(sample, child_failure={'class': 'timeout'}, **options)
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(record['failure'], {'class': 'timeout'})
+            self.assertEqual(record['prerequisite_install_status'], {'last_observed_phase': 'unknown', 'status_records': 0})
+
+    def test_successful_install_late_capture_error_refuses_success_but_retention_alone_does_not(self):
+        for options in ({}, {'truncated': True}, {'capture_error': True}, {'read_raises': True}):
+            exit_code, record, owner = self._ci_install_capture_fixture(b'pmstatus:unit:100.0000:done\n', **options)
+            self.assertIn('coordinator', owner.started)
+            if options.get('capture_error') or options.get('read_raises'):
+                self.assertEqual(exit_code, 1)
+                self.assertEqual(record['code'], 'prerequisites')
+                self.assertEqual(record['failure'], {'class': 'capture_refused'})
+                self.assertEqual(record['prerequisite_install_status'], {'last_observed_phase': 'unknown', 'status_records': 0})
+                self.assertEqual(record['browser_executions_accepted'], 0)
+            else:
+                self.assertEqual(exit_code, 0)
+                self.assertEqual(record['browser_executions_accepted'], 12)
+                self.assertNotIn('prerequisite_install_status', record)
 
     def test_ci_wait_failure_keeps_only_closed_waitid_facts(self):
         class WaitOwner:
@@ -789,6 +918,87 @@ class IntegrationTests(unittest.TestCase):
             self.assertIs(post.leaders['build'],tracked)
             post._close_stderr()
         self.assertIsNone(tracked._stderr_writer)
+
+    def test_capture_allowlist_has_exactly_two_independently_bounded_leaders(self):
+        ops = loaded['owned_processes']
+        self.assertEqual(ops.STDERR_CAPTURE_NAMES, frozenset(('build', 'prerequisite_apt_install')))
+        owner = object.__new__(ops.LinuxProcessOwner)
+        owner.pid=os.getpid(); owner.leaders={}; owner._pending_stderr=[]
+        owner.closing=False; owner.cancelled=False; owner.fault=''
+        def popen(_argv, **kwargs):
+            self.assertIs(kwargs['stdout'], ops.subprocess.DEVNULL)
+            kwargs['stderr'].write(b'dlstatus:1:0.0000:PRIVATE_SENTINEL\n')
+            return NS(pid=123, returncode=None)
+        try:
+            with patch.object(ops.subprocess, 'Popen', side_effect=popen):
+                apt = owner.spawn('prerequisite_apt_install', ['/unit/apt'], capture_stderr=True)
+                build = owner.spawn('build', ['/unit/cargo'], capture_stderr=True)
+                for name in ('prerequisite_apt_update', 'npm', 'coordinator', 'build-extra', 'private'):
+                    with self.assertRaisesRegex(ops.OwnershipError, '^diagnostic_capture_scope$'):
+                        owner.spawn(name, ['/unit/refused'], capture_stderr=True)
+                with self.assertRaises(ops.OwnershipError):
+                    owner.spawn('prerequisite_apt_install', ['/unit/duplicate'], capture_stderr=True)
+            self.assertIsNone(owner.drain_captured_stderr())
+            self.assertTrue(owner.stderr_capture(apt)[2] and owner.stderr_capture(build)[2])
+            # Per-poll limits apply to each of the two fixed readers, never an unbounded list.
+            for leader in (apt, build):
+                leader._stderr_eof = False
+                leader._stderr_reader.close()
+                leader._stderr_reader = NS(fileno=lambda: 99, close=lambda: None)
+            with patch.object(ops.os, 'read', side_effect=lambda _fd, count: b'x' * count) as read:
+                self.assertIsNone(owner.drain_captured_stderr())
+                self.assertEqual(read.call_count, 2 * ops.STDERR_READS_PER_POLL)
+                self.assertEqual(sum(call.args[1] for call in read.call_args_list), 2 * ops.STDERR_BYTES_PER_POLL)
+                while owner.drain_captured_stderr() is None: pass
+            self.assertLessEqual(sum(len(leader._stderr_sample) for leader in (apt, build)), 2 * ops.STDERR_CAPTURE_BYTES)
+            self.assertLessEqual(sum(leader._stderr_total for leader in (apt, build)), 2 * ops.STDERR_TOTAL_BYTES)
+        finally:
+            # Fake readers above do not own descriptors; original EOF readers were closed before replacement.
+            for leader in owner.leaders.values():
+                if isinstance(leader._stderr_reader, NS): leader._stderr_reader = None
+            owner._close_stderr()
+
+    def test_native_install_status_pipe_cancel_deadline_flood_and_inherited_writer(self):
+        import sys
+        script = r'''
+import json,os,sys,time
+sys.path.insert(0,sys.argv[1]);sys.path.insert(0,sys.argv[1]+'/context')
+import ci_entrypoint as ci
+from owned_processes import LinuxProcessOwner
+mode=sys.argv[2]; owner=LinuxProcessOwner.activate_in_dedicated_cli()
+producer="import os,sys,time;os.write(2,b'dlstatus:1:25.0000:PRIVATE_SENTINEL');time.sleep(.01);os.write(2,b'\\n');"
+if mode=='inherited': producer += "pid=os.fork();time.sleep(30) if pid==0 else None;"
+if mode=='flood': producer="import os,time;os.write(2,b'x'*1100000);time.sleep(30)"
+if mode in ('cancel','timeout'): producer="import time;time.sleep(30)"
+apt=build=None;failure=None;before_eof=None
+try:
+ apt=owner.spawn('prerequisite_apt_install',[sys.executable,'-B','-c',producer],capture_stderr=True)
+ if mode=='cancel':owner.cancelled=True
+ ci.await_zero(owner,apt,0 if mode=='timeout' else 5)
+ owner.drain_captured_stderr();before_eof=owner.stderr_capture(apt)[2]
+ build=owner.spawn('build',[sys.executable,'-B','-c',"import os;os.write(2,b'error[E0432]: PRIVATE_SENTINEL')"],capture_stderr=True)
+ ci.await_zero(owner,build,5)
+except ci.ChildWaitFailure as error:failure=error.detail
+finally:closure=owner.close_all(timeout=5,grace=.01)
+status=ci.apt_install_status(*owner.stderr_capture(apt))
+cargo=ci.cargo_diagnostic(*owner.stderr_capture(build)) if build is not None else None
+print(json.dumps({'closed':closure.closed,'echild':closure.echild_observed,'failure':failure,'status':status,'before_eof':before_eof,'cargo':cargo}))
+'''
+        for mode in ('normal', 'inherited', 'flood', 'cancel', 'timeout'):
+            with self.subTest(mode=mode):
+                result = subprocess.run([sys.executable, '-B', '-c', script, str(ci.HERE), mode],
+                                        capture_output=True, check=True, timeout=15, text=True)
+                self.assertNotIn('PRIVATE_SENTINEL', result.stdout)
+                record = json.loads(result.stdout)
+                self.assertTrue(record['closed'] and record['echild'])
+                if mode in ('normal', 'inherited'):
+                    self.assertIsNone(record['failure'])
+                    self.assertEqual(record['status'], {'last_observed_phase': 'acquiring', 'status_records': 1})
+                    self.assertEqual(record['cargo'], {'class': 'rustc_error', 'rust_codes': ['E0432']})
+                    if mode == 'inherited': self.assertFalse(record['before_eof'])
+                else:
+                    self.assertEqual(record['failure'], {'class': {'flood': 'capture_refused', 'cancel': 'cancelled', 'timeout': 'timeout'}[mode]})
+                    self.assertEqual(record['status'], {'last_observed_phase': 'unknown', 'status_records': 0})
 
     def test_failed_capture_setup_retains_bounded_stream_cleanup_ownership(self):
         ops=loaded['owned_processes']

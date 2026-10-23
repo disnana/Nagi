@@ -150,3 +150,6 @@ cold最終guard後の全243件77秒・ZIP21秒・IC251 Verifier11秒Compatible�
 
 
 2026-10-22、#149 SF08 prerequisitesをSol 6.1 Highが限定調査。親がsource pin・両APT argv限定・閉鎖後scalar公開の事前設計を承認し、同Highが実装とRED→GREEN/Python64/Node148/source guard16/policy160を実行した。managed transport設定差と不要NodeSource依存をprivate診断で分離し、GitHub240秒失敗の原因同一性は未確認とした。原trustのfresh fullはAPT通過後build101/unknown・browser0、受入成功とは扱わない。所有container/imageのみ区切りで整理し、private証拠と原ログを保持する。新HEAD CI・別High最終auditへ引継ぐ。追加spawn/commit/pushなし、model時間・費用は未測定。詳細は[sf08-prerequisite-repositories.md](sf08-prerequisite-repositories.md)。
+
+
+2026-10-23、#148 d06のSF08 install236秒timeoutをSol 6.1 Highがread-only調査。親承認後、専有worktreeで固定2名bounded captureとfailure-only status enum/数値だけを実装した。pinned image内APT2.8.3を実測し、当初2.7.14参照を訂正して正確なUbuntu source archiveも確認。native1回30.362秒/閉鎖ECHILD、Python70/Node148/guard16/policy160、RED→GREENを実行し、原trustと240秒/security/browser gateを維持した。証拠保存後に専有Docker objectsだけ整理。根因未解決・観測追加として凍結し、親が別High最終監査とexact-head CIへ進める。追加spawn/commit/pushなし、model時間/費用は未計測。[詳細](sf08-install-status-diagnostic.md)。
