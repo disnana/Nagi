@@ -2263,6 +2263,30 @@ fn run_releases_output_lock_before_waiting_for_the_selected_executable() {
 // std-only wrapper works on Windows and Unix. All held children have a deadline
 // and a release-on-drop signal, including the deliberately orphaned Cargo.
 const CARGO_WRAPPER: &str = r#"use std::{env, fs, path::PathBuf, process::{Command, exit}, thread, time::{Duration, Instant}};
+use std::io::Write;
+fn publish_done(signals: &std::path::Path, value: &str) {
+    publish_done_at(signals, value, || {}, || {}).unwrap();
+}
+fn require_absent(path: &std::path::Path) -> std::io::Result<()> {
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
+        Ok(_) => Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "completion path already exists")),
+    }
+}
+fn publish_done_at(signals: &std::path::Path, value: &str, created: impl FnOnce(), ready: impl FnOnce()) -> std::io::Result<()> {
+    // The fixture owns this directory; all cooperating publishers use this exclusive temporary path.
+    let done = signals.join("done");
+    let temp = signals.join("done.tmp");
+    require_absent(&done)?;
+    let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
+    created();
+    file.write_all(value.as_bytes())?;
+    drop(file);
+    ready();
+    require_absent(&done)?;
+    fs::rename(temp, done)
+}
 fn barrier(signals: &std::path::Path) {
     let until = Instant::now() + Duration::from_secs(60);
     while !signals.join("release").exists() {
@@ -2281,7 +2305,7 @@ fn main() {
     fs::write(signals.join("args.json"), format!("[{}]", encoded.join(","))).unwrap();
     fs::write(signals.join("entered"), "").unwrap();
     if mode == "before" { barrier(&signals); }
-    if mode == "fail" { fs::write(signals.join("done"), "42").unwrap(); exit(42); }
+    if mode == "fail" { publish_done(&signals, "42"); exit(42); }
     let mut command = Command::new(env::var_os("NAGI_TEST_REAL_CARGO").unwrap());
     command.args(&args);
     // An orphan Cargo must not write JSON to its dead Nagi parent's pipe.
@@ -2295,7 +2319,7 @@ fn main() {
         if let Some(status) = cargo.try_wait().unwrap() { break status; }
         if Instant::now() > until {
             let _ = cargo.kill(); let _ = cargo.wait();
-            fs::write(signals.join("done"), "timeout").unwrap(); exit(98);
+            publish_done(&signals, "timeout"); exit(98);
         }
         thread::sleep(Duration::from_millis(10));
     };
@@ -2318,9 +2342,123 @@ fn main() {
             fs::create_dir(app.join(format!(".latest-{generation}.tmp"))).unwrap();
         }
     }
-    fs::write(signals.join("done"), status.code().unwrap_or(1).to_string()).unwrap();
+    publish_done(&signals, &status.code().unwrap_or(1).to_string());
     exit(status.code().unwrap_or(1));
+}
+#[cfg(test)]
+mod completion_tests {
+    use super::*;
+    use std::sync::mpsc;
+    struct OwnedDir(PathBuf);
+    impl OwnedDir {
+        fn new(name: &str) -> Self {
+            let path = PathBuf::from(env::var_os("NAGI_TEST_COMPLETION_ROOT").unwrap()).join(name);
+            fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+    impl Drop for OwnedDir { fn drop(&mut self) { fs::remove_dir_all(&self.0).unwrap(); } }
+    fn absence(path: &std::path::Path) -> bool {
+        matches!(fs::symlink_metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+    }
+    #[test]
+    fn completion_is_absent_until_closed_and_published() {
+        for (index, value) in ["0", "42", "timeout"].into_iter().enumerate() {
+            let owned = OwnedDir::new(&format!("publication-{index}"));
+            let signals = owned.0.clone();
+            let until = Instant::now() + Duration::from_secs(60);
+            let (created_tx, created_rx) = mpsc::channel();
+            let (write_tx, write_rx) = mpsc::channel();
+            let (ready_tx, ready_rx) = mpsc::channel();
+            let (publish_tx, publish_rx) = mpsc::channel();
+            let writer = thread::spawn(move || publish_done_at(&signals, value,
+                || { created_tx.send(()).unwrap(); write_rx.recv_timeout(until.saturating_duration_since(Instant::now())).unwrap(); },
+                || { ready_tx.send(()).unwrap(); publish_rx.recv_timeout(until.saturating_duration_since(Instant::now())).unwrap(); }));
+            let created = created_rx.recv_timeout(until.saturating_duration_since(Instant::now()));
+            let at_creation = fs::read_to_string(owned.0.join("done")).ok();
+            let _ = write_tx.send(());
+            let ready = ready_rx.recv_timeout(until.saturating_duration_since(Instant::now()));
+            let before_publication = absence(&owned.0.join("done"));
+            let complete_temp = fs::read_to_string(owned.0.join("done.tmp")).ok();
+            let _ = publish_tx.send(());
+            let result = writer.join();
+            let published = fs::read_to_string(owned.0.join("done")).ok();
+            let temp_absent = absence(&owned.0.join("done.tmp"));
+            drop(owned); // Always release/join/clean before any RED or GREEN assertion.
+            assert_eq!(at_creation, None, "completion was exposed before its bytes were written");
+            assert!(created.is_ok() && ready.is_ok());
+            assert!(before_publication, "completion was exposed before publication");
+            assert_eq!(complete_temp.as_deref(), Some(value));
+            assert!(result.unwrap().is_ok());
+            assert_eq!(published.as_deref(), Some(value));
+            assert!(temp_absent);
+        }
+    }
+    #[test]
+    fn existing_completion_and_temporary_paths_fail_closed() {
+        for kind in ["done-file", "done-empty", "done-dir", "temp-file", "temp-dir", "late-done"] {
+            let owned = OwnedDir::new(kind);
+            let done = owned.0.join("done");
+            let temp = owned.0.join("done.tmp");
+            match kind {
+                "done-file" => fs::write(&done, "caller").unwrap(),
+                "done-empty" => fs::write(&done, "").unwrap(),
+                "done-dir" => fs::create_dir(&done).unwrap(),
+                "temp-file" => fs::write(&temp, "caller-temp").unwrap(),
+                "temp-dir" => fs::create_dir(&temp).unwrap(),
+                _ => (),
+            }
+            let result = publish_done_at(&owned.0, "0", || {}, || {
+                if kind == "late-done" { fs::write(&done, "late-caller").unwrap(); }
+            });
+            let done_bytes = fs::read_to_string(&done).ok();
+            let temp_bytes = fs::read_to_string(&temp).ok();
+            let done_dir = done.is_dir();
+            let temp_dir = temp.is_dir();
+            drop(owned);
+            assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::AlreadyExists);
+            match kind {
+                "done-file" => assert_eq!(done_bytes.as_deref(), Some("caller")),
+                "done-empty" => assert_eq!(done_bytes.as_deref(), Some("")),
+                "done-dir" => assert!(done_dir),
+                "temp-file" => { assert_eq!(temp_bytes.as_deref(), Some("caller-temp")); assert_eq!(done_bytes, None); },
+                "temp-dir" => { assert!(temp_dir); assert_eq!(done_bytes, None); },
+                "late-done" => { assert_eq!(done_bytes.as_deref(), Some("late-caller")); assert_eq!(temp_bytes.as_deref(), Some("0")); },
+                _ => unreachable!(),
+            }
+        }
+        #[cfg(unix)] {
+            let owned = OwnedDir::new("dangling-done");
+            std::os::unix::fs::symlink("missing", owned.0.join("done")).unwrap();
+            let result = publish_done_at(&owned.0, "0", || {}, || {});
+            let still_symlink = fs::symlink_metadata(owned.0.join("done")).unwrap().file_type().is_symlink();
+            drop(owned);
+            assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::AlreadyExists);
+            assert!(still_symlink);
+        }
+    }
 }"#;
+
+#[test]
+fn cargo_wrapper_completion_publication_is_atomic_and_conflicts_fail_closed() {
+    let f = Fixture::new();
+    f.write("completion-wrapper.rs", CARGO_WRAPPER);
+    let binary =
+        f.0.join(format!("completion-tests{}", std::env::consts::EXE_SUFFIX));
+    let mut compile = Command::new(std::env::var_os("RUSTC").unwrap_or_else(|| "rustc".into()));
+    compile
+        .arg(f.0.join("completion-wrapper.rs"))
+        .args(["--edition=2021", "--test", "-o"])
+        .arg(&binary);
+    success(&bounded_output(compile));
+    let signals = f.0.join("completion-signals");
+    fs::create_dir(&signals).unwrap();
+    let mut test = Command::new(binary);
+    test.env("NAGI_TEST_COMPLETION_ROOT", signals);
+    let output = bounded_output(test);
+    success(&output);
+    assert!(String::from_utf8_lossy(&output.stdout).contains("2 passed"));
+}
 
 fn stats(output: &Output) -> serde_json::Value {
     let text = String::from_utf8_lossy(&output.stderr);
