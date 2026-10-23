@@ -169,6 +169,34 @@ public final class NagiAssistProtocolTest {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
+    @Test public void retainsOptionalDocumentationFactsAndRejectsMalformedOrOversizedFacts() {
+        var root = com.google.gson.JsonParser.parseString(VALID).getAsJsonObject();
+        var symbols = root.getAsJsonObject("symbols");
+        symbols.add("definitions", com.google.gson.JsonParser.parseString("""
+                [{"name":"add","kind":"function","location":{"file":"__TEST_PATH__","line":1,"column":5,"length":3},
+                  "signature":"async def add(x: i64) -> i64","parameters":[{"name":"x","type":"i64"}],
+                  "return_type":"i64","asynchronous":true,"fields":[{"name":"value","type":"list[str?]"}]}]
+                """.replace("__TEST_PATH__", JSON_TEST_PATH)));
+        var value = NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8)).definitions().getFirst();
+        assertEquals("i64", value.returnType());
+        assertTrue(value.asynchronous());
+        assertEquals(List.of(new NagiAssistProtocol.Parameter("value", "list[str?]")), value.fields());
+        var definition = symbols.getAsJsonArray("definitions").get(0).getAsJsonObject();
+        definition.addProperty("asynchronous", "true");
+        assertThrows(IllegalArgumentException.class, () -> NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8)));
+        definition.remove("asynchronous");
+        definition.addProperty("return_type", "x".repeat(2049));
+        assertThrows(IllegalArgumentException.class, () -> NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8)));
+        definition.remove("return_type");
+        definition.getAsJsonArray("fields").get(0).getAsJsonObject().addProperty("type", "x".repeat(2049));
+        assertThrows(IllegalArgumentException.class, () -> NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8)));
+        definition.remove("fields");
+        value = NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8)).definitions().getFirst();
+        assertNull(value.returnType());
+        assertFalse(value.asynchronous());
+        assertTrue(value.fields().isEmpty());
+    }
+
     private static com.google.gson.JsonObject withImportContext(String kind, int line, int column,
                                                                  int length, List<String> directories,
                                                                  boolean incomplete) {

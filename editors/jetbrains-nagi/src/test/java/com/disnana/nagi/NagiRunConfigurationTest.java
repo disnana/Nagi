@@ -81,6 +81,18 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
         runWithHeldBarrier(Preparation.SUCCESS);
     }
 
+    public void testLegacyCompilerFallbackUsesReleaseAndShowsActualProfileInConsole() throws Exception {
+        runWithHeldBarrier(Preparation.LEGACY_SUCCESS);
+    }
+
+    public void testAcceptedDescriptorSurvivesEnvironmentDisposalDuringSuccessCallback() throws Exception {
+        runWithHeldBarrier(Preparation.ACCEPTED_HANDOFF);
+    }
+
+    public void testProjectDisposalDuringSuccessCallbackStillStopsTheHandoffProcess() throws Exception {
+        runWithHeldBarrier(Preparation.HANDOFF_PROJECT_DISPOSE);
+    }
+
     public void testSelectedRunnerIsNagiOnlyAndRunOnly() {
         var runner = ProgramRunner.getRunner(DefaultRunExecutor.EXECUTOR_ID, newConfiguration());
         assertTrue("The registered Nagi async runner must precede the default runner", runner instanceof NagiProgramRunner);
@@ -92,6 +104,10 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
                     Executor executor, ExecutionEnvironment environment) { return null; }
         }));
     }
+
+    public void testCompilerSettingChangeDuringPreparationDoesNotStartCompiler() throws Exception { runWithHeldBarrier(Preparation.SETTINGS_CHANGE); }
+    public void testProfileChangeDuringPreparationDoesNotStartCompiler() throws Exception { runWithHeldBarrier(Preparation.PROFILE_CHANGE); }
+    public void testCompilerReplacementDuringPreparationDoesNotStartCompiler() throws Exception { runWithHeldBarrier(Preparation.COMPILER_SWAP); }
 
     public void testSaveIOExceptionDoesNotStartCompiler() throws Exception { runWithHeldBarrier(Preparation.IO_FAILURE); }
     public void testSaveCancellationDoesNotStartCompiler() throws Exception { runWithHeldBarrier(Preparation.PCE); }
@@ -106,7 +122,7 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
     public void testConsoleAttachmentFailureStopsTheCreatedProcessAndDisposesConsole() throws Exception { runWithHeldBarrier(Preparation.CONSOLE_ATTACHMENT_FAILURE); }
     public void testCancellationAfterProcessCreationStopsTheCreatedProcess() throws Exception { runWithHeldBarrier(Preparation.CANCEL_AFTER_PROCESS); }
 
-    private enum Preparation { SUCCESS, IO_FAILURE, PCE, TRUST_LOSS, CANCEL, DISPOSE_ENVIRONMENT, CLOSE_PROJECT, DISPOSE_PROJECT, EDIT,
+    private enum Preparation { SUCCESS, LEGACY_SUCCESS, ACCEPTED_HANDOFF, HANDOFF_PROJECT_DISPOSE, SETTINGS_CHANGE, PROFILE_CHANGE, COMPILER_SWAP, IO_FAILURE, PCE, TRUST_LOSS, CANCEL, DISPOSE_ENVIRONMENT, CLOSE_PROJECT, DISPOSE_PROJECT, EDIT,
         CONSOLE_FAILURE, CONSOLE_ATTACHMENT_FAILURE, CANCEL_AFTER_PROCESS }
 
     private void runWithHeldBarrier(Preparation preparation) throws Exception {
@@ -115,7 +131,7 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
         var settings = NagiSettings.getInstance().getState();
         String previousCompiler = settings.compilerPath;
         var project = getProject();
-        boolean ownedProject = preparation == Preparation.DISPOSE_PROJECT || preparation == Preparation.CLOSE_PROJECT;
+        boolean ownedProject = preparation == Preparation.DISPOSE_PROJECT || preparation == Preparation.CLOSE_PROJECT || preparation == Preparation.HANDOFF_PROJECT_DISPOSE;
         boolean createdOwnedProject = false;
         Path ownedProjectPath = root.resolve("ide-project");
         boolean previousOwnedPathTrust = preparation == Preparation.CLOSE_PROJECT
@@ -154,7 +170,7 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
             Path capturedSource = root.resolve("startup-source.nagi");
             Path compiler = root.resolve("nagic");
             // The first recorder action captures the input, then atomically publishes the observation.
-            Files.writeString(compiler, "#!/bin/sh\ncat '" + shellQuote(source) + "' > '"
+            Files.writeString(compiler, "#!/bin/sh\n" + NagiRunTestCompiler.helpScript(preparation != Preparation.LEGACY_SUCCESS) + "cat '" + shellQuote(source) + "' > '"
                     + shellQuote(root.resolve("startup-source.tmp")) + "' && mv '"
                     + shellQuote(root.resolve("startup-source.tmp")) + "' '" + shellQuote(capturedSource)
                     + "' || exit 91\nprintf '%s\\n' \"$@\" > '" + shellQuote(capturedArguments)
@@ -194,12 +210,28 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
             assertEquals(org.jetbrains.concurrency.Promise.State.PENDING, startupResult.getState());
             var noContentCompletion = new java.util.concurrent.atomic.AtomicBoolean();
             var completedDescriptor = new java.util.concurrent.atomic.AtomicReference<com.intellij.execution.ui.RunContentDescriptor>();
+            RunAttempt ownedAttempt = attempt;
             startupResult.onSuccess(descriptor -> {
+                ownedAttempt.acceptedDescriptor = descriptor;
                 completedDescriptor.set(descriptor);
                 noContentCompletion.set(descriptor == null);
             });
 
+            if (preparation == Preparation.HANDOFF_PROJECT_DISPOSE) startupResult.onSuccess(descriptor -> {
+                assertNotNull(descriptor);
+                com.intellij.openapi.application.WriteAction.run(() -> com.intellij.openapi.util.Disposer.dispose(context.environment().getProject()));
+            });
+            if (preparation == Preparation.ACCEPTED_HANDOFF) startupResult.onSuccess(descriptor -> {
+                assertNotNull(descriptor);
+                // SDK Run-content reuse can dispose the previous descriptor's child environment
+                // synchronously while the new descriptor is being accepted by this promise.
+                com.intellij.openapi.util.Disposer.dispose(context.environment());
+            });
+
             switch (preparation) {
+                case SETTINGS_CHANGE -> NagiSettings.update("different-compiler", settings.checkTimeoutSeconds);
+                case PROFILE_CHANGE -> configuration.setBuildProfile(NagiBuildProfile.RELEASE);
+                case COMPILER_SWAP -> Files.writeString(compiler, "#!/bin/sh\nprintf unknown\n");
                 case TRUST_LOSS -> TrustedProjects.setProjectTrusted(project, false);
                 case CANCEL -> barrier.indicator.cancel();
                 case DISPOSE_ENVIRONMENT -> com.intellij.openapi.util.Disposer.dispose(context.environment());
@@ -233,7 +265,16 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
             PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();
             PlatformTestUtil.dispatchAllEventsInIdeEventQueue();
 
-            if (preparation != Preparation.SUCCESS) {
+            if (preparation == Preparation.HANDOFF_PROJECT_DISPOSE) {
+                assertNotNull("Handoff must own a real process", attempt.createdHandler);
+                PlatformTestUtil.waitWithEventsDispatching("Project disposal orphaned the handoff process", attempt.createdHandler::isProcessTerminated, 5);
+                assertFalse(attempt.createdHandler.getProcess().isAlive());
+                assertTrue(context.environment().getProject().isDisposed());
+                assertEquals(org.jetbrains.concurrency.Promise.State.SUCCEEDED, startupResult.getState());
+                assertFalse("No failure may be published to the disposed project bus", attempt.notStarted);
+                return;
+            }
+            if (preparation != Preparation.SUCCESS && preparation != Preparation.ACCEPTED_HANDOFF && preparation != Preparation.LEGACY_SUCCESS) {
                 assertNull("Failed/canceled startup published a handler", attempt.handler);
                 if (preparation == Preparation.CONSOLE_FAILURE || preparation == Preparation.CONSOLE_ATTACHMENT_FAILURE || preparation == Preparation.CANCEL_AFTER_PROCESS) {
                     assertNotNull("The failure must happen after an actual process was created", attempt.createdHandler);
@@ -278,13 +319,26 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
                     && Files.exists(capturedArguments) && Files.exists(capturedDirectory) && Files.exists(root.resolve("retention")), 5);
             var handler = (OSProcessHandler) attempt.handler;
             assertSame(attempt.createdHandler, handler);
-            var descriptor = context.environment().getContentToReuse();
+            var descriptor = preparation == Preparation.ACCEPTED_HANDOFF ? completedDescriptor.get() : context.environment().getContentToReuse();
             assertNotNull("Standard Run content must own the actual handler", descriptor);
+            assertFalse("An accepted descriptor must stay alive during environment handoff",
+                    com.intellij.openapi.util.Disposer.isDisposed(descriptor));
             assertSame(handler, descriptor.getProcessHandler());
             assertTrue("Nagi compiler did not start", handler.getProcess().isAlive());
             assertEquals("Compiler must read the saved snapshot as its first action", startupSource, Files.readString(capturedSource));
             List<String> arguments = Files.readAllLines(capturedArguments);
-            assertEquals(List.of("run", "--project", manifest.toString(), "--out", arguments.get(4)), arguments);
+            assertEquals(preparation == Preparation.LEGACY_SUCCESS
+                    ? List.of("run", "--project", manifest.toString(), "--out", arguments.get(4))
+                    : List.of("run", "--project", manifest.toString(), "--out", arguments.get(4), "--profile", "dev"), arguments);
+            if (preparation == Preparation.LEGACY_SUCCESS) {
+                var console = (com.intellij.execution.impl.ConsoleViewImpl) descriptor.getExecutionConsole();
+                assertNotNull(console);
+                console.getComponent();
+                console.flushDeferredText();
+                assertNotNull(console.getEditor());
+                assertTrue("Fallback must identify the actual Release profile in Run output",
+                        console.getEditor().getDocument().getText().contains("actual profile is Release"));
+            }
             Path expectedOutputRoot = Path.of(com.intellij.openapi.application.PathManager.getSystemPath(), "nagi", "run");
             assertTrue(Path.of(arguments.get(4)).startsWith(expectedOutputRoot));
             assertEquals(root.toString(), Files.readString(capturedDirectory).strip());
@@ -364,6 +418,7 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
         private final com.intellij.util.messages.MessageBusConnection connection;
         private volatile com.intellij.execution.process.ProcessHandler handler;
         private volatile OSProcessHandler createdHandler;
+        private volatile com.intellij.execution.ui.RunContentDescriptor acceptedDescriptor;
         private volatile boolean consoleDisposed;
         private volatile boolean notStarted;
         private volatile boolean notStartedWhileProjectAlive;
@@ -418,7 +473,7 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
                 com.intellij.execution.actions.StopProcessAction.stopProcess(createdHandler);
                 PlatformTestUtil.waitWithEventsDispatching("Recorder process did not terminate during cleanup", createdHandler::isProcessTerminated, 5);
             }
-            var descriptor = context.environment().getContentToReuse();
+            var descriptor = acceptedDescriptor != null ? acceptedDescriptor : context.environment().getContentToReuse();
             if (descriptor != null && !com.intellij.openapi.util.Disposer.isDisposed(descriptor))
                 com.intellij.openapi.util.Disposer.dispose(descriptor);
             connection.disconnect();

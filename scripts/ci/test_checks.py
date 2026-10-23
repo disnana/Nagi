@@ -395,7 +395,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn("gradlePluginPortal()", plugin_repositories.group("body"))
         self.assertIn("mavenCentral()", plugin_repositories.group("body"))
         self.assertIn('id("org.jetbrains.intellij.platform") version "2.19.0"', build)
-        self.assertIn('version = "0.1.3"', build)
+        self.assertIn('version = "0.1.4"', build)
         self.assertIn('name.set("Nagi")', build)
         self.assertIn("<id>com.disnana.nagi</id>", plugin_xml)
         self.assertIn("<name>Nagi</name>", plugin_xml)

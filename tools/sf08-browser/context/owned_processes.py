@@ -23,6 +23,8 @@ STDERR_READS_PER_POLL = 8
 STDERR_BYTES_PER_POLL = 32 * 1024
 STDERR_CAPTURE_BYTES = 64 * 1024
 STDERR_TOTAL_BYTES = 1024 * 1024
+# Only these two fixed leaders may retain bounded diagnostics (128 KiB / 2 MiB total).
+STDERR_CAPTURE_NAMES = frozenset(('build', 'prerequisite_apt_install'))
 
 
 def _close_capture_stream(stream: io.FileIO) -> bool:
@@ -234,7 +236,7 @@ class LinuxProcessOwner:
             raise ValueError("capture_stderr")
         if capture_stderr and self._pending_stderr:
             raise OwnershipError("diagnostic_capture_cleanup_pending")
-        if capture_stderr and (name != 'build' or any(item.capture_stderr for item in self.leaders.values())):
+        if capture_stderr and name not in STDERR_CAPTURE_NAMES:
             raise OwnershipError("diagnostic_capture_scope")
         # Keep every Popen strongly referenced. Never context-manage, poll, or
         # communicate with these objects: those operations may reap the PID.

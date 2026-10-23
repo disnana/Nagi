@@ -26,6 +26,10 @@ CANONICAL_FILES = {'tools/sf08-fixture-runtime/Cargo.toml', 'tools/sf08-fixture-
            'runtime/tests/support/browser_login.rs', 'runtime/tests/support/cors.rs'}
 MAX_CARGO_DIAGNOSTIC_BYTES = 64 * 1024
 MAX_RUST_ERROR_CODES = 8
+MAX_APT_STATUS_RECORDS = 1024
+APT_PERCENT = r'(?:0|[1-9][0-9]?|100)(?:\.[0-9]{1,6})?'
+APT_DOWNLOAD_RECORD = re.compile(r'dlstatus:(?:0|[1-9][0-9]{0,5}):(' + APT_PERCENT + r'):.+')
+APT_PACKAGE_RECORD = re.compile(r'pmstatus:[a-z0-9][a-z0-9+.-]{0,127}:(' + APT_PERCENT + r'):.+')
 PREREQUISITE_SOURCE = Path('/etc/apt/sources.list.d/ubuntu.sources')
 # Exact public source configuration in provision.IMAGE; never fall back to other repositories.
 PREREQUISITE_SOURCE_SHA = '0af89eff53f98803ea0d7088c5a1dd39a606c5e892e732ce60d6512e4e99a420'
@@ -203,9 +207,45 @@ def prerequisite_diagnostic(value):
     return dict(value)
 
 
+def apt_install_status(sample, truncated, eof, capture_error):
+    """Last recognized APT progress, never a cause or a package/URL projection."""
+    unknown = {'last_observed_phase': 'unknown', 'status_records': 0}
+    if (type(sample) is not bytes or len(sample) > MAX_CARGO_DIAGNOSTIC_BYTES
+            or type(truncated) is not bool or truncated or type(eof) is not bool or not eof
+            or type(capture_error) is not bool or capture_error):
+        return unknown
+    try:
+        text = sample.decode('utf-8')
+    except UnicodeDecodeError:
+        return unknown
+    if (not text.endswith('\n') or any((ord(char) < 32 and char not in '\n\t') or ord(char) == 127 for char in text)):
+        return unknown
+    phase, records = 'unknown', 0
+    for line in text.splitlines():
+        if len(line) > 4096:
+            return unknown
+        download = APT_DOWNLOAD_RECORD.fullmatch(line)
+        package = APT_PACKAGE_RECORD.fullmatch(line)
+        match = download or package
+        if match is not None:
+            if float(match.group(1)) > 100 or (download and phase == 'package_operation'):
+                return unknown
+            phase = 'acquiring' if download else 'package_operation'
+            records += 1
+            if records > MAX_APT_STATUS_RECORDS:
+                return unknown
+        elif line:
+            # stderr also carries ordinary warnings. Only their fixed prefixes
+            # may be ignored; unknown/malformed status records invalidate facts.
+            if (not line.startswith(('E: ', 'W: ', 'N: ', 'debconf: '))
+                    or any(marker in line for marker in ('dlstatus', 'pmstatus', 'pmerror', 'pmconffile', 'media-change'))):
+                return unknown
+    return {'last_observed_phase': phase, 'status_records': records}
+
+
 def run_prerequisites(owner):
     # A single budget covers both apt commands, including admission/spawn time.
-    # Keep all output private and keep the ownership capsule unchanged.
+    # Keep all output private and preserve the capsule's ownership/cleanup guarantees.
     started = time.monotonic()
     deadline = started + 240
     diagnostic = {'update_elapsed_ms': 0, 'install_spawned': False, 'install_admission_remaining_ms': 0}
@@ -214,7 +254,7 @@ def run_prerequisites(owner):
                '-o', 'Dir::Etc::sourceparts=-']
     commands = (
         ('apt_update', ['apt-get', *options, '-o', 'APT::Update::Error-Mode=any', 'update', '-qq']),
-        ('apt_install', ['env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', *options,
+        ('apt_install', ['env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', *options, '-o', 'APT::Status-Fd=2',
                          'install', '-y', '--no-install-recommends',
                          'libnss3-tools', 'build-essential', 'pkg-config']),
     )
@@ -234,7 +274,7 @@ def run_prerequisites(owner):
                 raise ChildWaitFailure({'class': 'timeout'})
             if stage == 'apt_install':
                 diagnostic['install_admission_remaining_ms'] = min(240000, int(remaining * 1000))
-            leader = owner.spawn('prerequisite_' + stage, argv)
+            leader = owner.spawn('prerequisite_' + stage, argv, **({'capture_stderr': True} if stage == 'apt_install' else {}))
             if stage == 'apt_install':
                 diagnostic['install_spawned'] = True
             await_zero_until(owner, leader, deadline)
@@ -244,6 +284,7 @@ def run_prerequisites(owner):
         finally:
             if stage == 'apt_update':
                 diagnostic['update_elapsed_ms'] = max(0, min(240000, int((time.monotonic() - started) * 1000)))
+    return leader
 
 
 def browser_report_diagnostic(failure, phase, closure, outer_diagnostic, work):
@@ -286,7 +327,7 @@ def run(checkout):
     owner = closure = work = None
     diagnostic = None
     failure = None
-    failure_leader = build_leader = None
+    failure_leader = build_leader = install_leader = None
     prerequisite_stage = None
     prerequisite_observation = None
     passed = False
@@ -304,7 +345,7 @@ def run(checkout):
         owned = co.load('owned_processes', HERE/'context/owned_processes.py')
         owner = owned.LinuxProcessOwner.activate_in_dedicated_cli()
         phase = 'prerequisites'
-        run_prerequisites(owner)
+        install_leader = run_prerequisites(owner)
         # Owned container HOME/cache only; no runner HOME or shared Cargo/npm cache.
         home = work/'home'
         home.mkdir(mode=0o700)
@@ -361,6 +402,8 @@ def run(checkout):
             if isinstance(error, PrerequisiteFailure):
                 prerequisite_stage = error.prerequisite_stage
                 prerequisite_observation = error.prerequisite_diagnostic
+                if prerequisite_stage == 'apt_install':
+                    install_leader = error.leader
     finally:
         if owner is not None:
             try:
@@ -369,16 +412,22 @@ def run(checkout):
                 passed, phase = False, 'ownership'
         if closure is None or not closure.closed or not closure.echild_observed:
             passed, phase = False, 'ownership'
-    if passed and build_leader is not None:
+    # A capture fault detected in the final bounded drain still rejects success.
+    for capture_phase, leader in (('prerequisites', install_leader), ('build', build_leader)):
+        if not passed or leader is None or not getattr(leader, 'capture_stderr', False):
+            continue
         try:
-            _sample, _truncated, _eof, capture_error = owner.stderr_capture(build_leader)
+            _sample, _truncated, _eof, capture_error = owner.stderr_capture(leader)
         except BaseException:
             capture_error = True
         if capture_error:
-            passed, phase = False, 'build'
+            passed, phase = False, capture_phase
             failure = {'class': 'capture_refused'}
-            failure_leader = build_leader
-    if failure is not None and failure_leader is not None and getattr(failure_leader, 'capture_stderr', False):
+            failure_leader = leader
+            if capture_phase == 'prerequisites':
+                prerequisite_stage = 'apt_install'
+    if (failure is not None and failure_leader is not None and getattr(failure_leader, 'capture_stderr', False)
+            and getattr(failure_leader, 'name', None) == 'build'):
         try:
             sample, truncated, eof, capture_error = owner.stderr_capture(failure_leader)
             cargo = cargo_diagnostic(sample, truncated, eof, capture_error)
@@ -412,6 +461,12 @@ def run(checkout):
             observation = prerequisite_diagnostic(prerequisite_observation)
             if observation is not None and closure.closed is True and closure.echild_observed is True:
                 summary['prerequisite_diagnostic'] = observation
+            if prerequisite_stage == 'apt_install' and closure.closed is True and closure.echild_observed is True:
+                try:
+                    status = apt_install_status(*owner.stderr_capture(install_leader))
+                except BaseException:
+                    status = {'last_observed_phase': 'unknown', 'status_records': 0}
+                summary['prerequisite_install_status'] = status
         if business_diagnostic is not None:
             summary['browser_report_diagnostic'] = business_diagnostic
     print(json.dumps(summary, separators=(',', ':')))

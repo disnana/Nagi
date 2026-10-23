@@ -62,8 +62,15 @@ public final class NagiAssistProtocol {
     public record Reference(Location location, Location target) {}
     public record Parameter(String name, String type) {}
     public record Definition(String name, String kind, Location location, String signature,
-                             List<Parameter> parameters) {
-        public Definition { parameters = List.copyOf(parameters); }
+                             List<Parameter> parameters, String returnType, boolean asynchronous,
+                             List<Parameter> fields) {
+        public Definition {
+            parameters = List.copyOf(parameters);
+            fields = List.copyOf(fields);
+        }
+        public Definition(String name, String kind, Location location, String signature, List<Parameter> parameters) {
+            this(name, kind, location, signature, parameters, null, false, List.of());
+        }
     }
     public record Local(String name, String type, Location location, String kind) {}
     public record SymbolRole(String kind, Location location) {}
@@ -272,15 +279,14 @@ public final class NagiAssistProtocol {
                     if (!Set.of("function", "class", "resource", "enum").contains(kind)) {
                         throw new IllegalArgumentException("invalid definition kind");
                     }
-                    List<Parameter> parameters = new ArrayList<>();
-                    JsonArray parameterArray = array(item, "parameters");
-                    if (parameterArray.size() > 1024) throw new IllegalArgumentException("too many function parameters");
-                    for (JsonElement parameter : parameterArray) {
-                        JsonObject member = object(parameter, "parameter");
-                        parameters.add(new Parameter(boundedString(member, "name", 256), boundedString(member, "type", 2048)));
+                    List<Parameter> parameters = members(array(item, "parameters"));
+                    String returnType = optionalString(item, "return_type");
+                    if (returnType != null && (returnType.length() > 2048 || returnType.indexOf('\0') >= 0)) {
+                        throw new IllegalArgumentException("return type exceeds bound");
                     }
                     definitions.add(new Definition(boundedString(item, "name", 256), kind,
-                            requiredLocation(item, "location"), boundedString(item, "signature", 8192), parameters));
+                            requiredLocation(item, "location"), boundedString(item, "signature", 8192), parameters,
+                            returnType, optionalBoolean(item, "asynchronous"), members(optionalArray(item, "fields"))));
                 }
                 for (JsonElement element : optionalArray(symbols, "locals")) {
                     JsonObject item = object(element, "local");
@@ -326,6 +332,16 @@ public final class NagiAssistProtocol {
         if (result.size() > MAX_SYMBOLS) throw new IllegalArgumentException("too many semantic symbols");
         return result;
     }
+    private static List<Parameter> members(JsonArray values) {
+        if (values.size() > 1024) throw new IllegalArgumentException("too many definition members");
+        List<Parameter> members = new ArrayList<>();
+        for (JsonElement value : values) {
+            JsonObject member = object(value, "definition member");
+            members.add(new Parameter(boundedString(member, "name", 256), boundedString(member, "type", 2048)));
+        }
+        return members;
+    }
+
     private static String boundedString(JsonObject object, String name, int maximum) {
         String result = string(object, name);
         if (result.length() > maximum || result.indexOf('\0') >= 0) throw new IllegalArgumentException("invalid " + name);
