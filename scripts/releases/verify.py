@@ -331,10 +331,34 @@ def verify_development_builds(exe: Path, folder: Path, environment: dict) -> Non
     assert generated.returncode == 0, generated.stderr
     content = workflow.read_bytes()
     assert b"nagic check" in content and b"nagic build" in content, content
-    assert b"--build-stats" not in content and b"--profile" not in content, content
+    assert b"--build-stats" not in content, content
+    assert content.count(b"nagic build --profile release\n") == 2, content
+    assert b"key: nagi-project-v2-0.2.1-release-" in content, content
     repeated = subprocess.run(generate, cwd=project, env=isolated, capture_output=True,
                               text=True, encoding="utf-8", timeout=15)
     assert repeated.returncode != 0 and workflow.read_bytes() == content, "Workflow was overwritten"
+    for profile in ("release", "dev"):
+        selected = subprocess.run(
+            [sys.executable, str(generator), "--build-profile", profile],
+            cwd=project, env=isolated, capture_output=True, text=True, encoding="utf-8", timeout=15)
+        assert selected.returncode == 0, selected.stderr
+        assert selected.stdout.count(f"nagic build --profile {profile}\n") == 2, selected.stdout
+        assert f"key: nagi-project-v2-0.2.1-{profile}-" in selected.stdout, selected.stdout
+        assert "--build-stats" not in selected.stdout, selected.stdout
+        if profile == "release":
+            assert selected.stdout.encode("utf-8") == content, "Default profile differs from release"
+    legacy = subprocess.run(
+        [sys.executable, str(generator), "--nagi-version", "0.2.0"],
+        cwd=project, env=isolated, capture_output=True, text=True, encoding="utf-8", timeout=15)
+    assert legacy.returncode == 0, legacy.stderr
+    assert legacy.stdout.count("nagic build\n") == 2, legacy.stdout
+    assert "--profile" not in legacy.stdout and "--build-stats" not in legacy.stdout, legacy.stdout
+    assert "key: nagi-project-v2-0.2.0-release-" in legacy.stdout, legacy.stdout
+    unsupported = subprocess.run(
+        [*generate, "--force", "--nagi-version", "0.2.0", "--build-profile", "dev"],
+        cwd=project, env=isolated, capture_output=True, text=True, encoding="utf-8", timeout=15)
+    assert unsupported.returncode != 0 and not unsupported.stdout, "Unsupported dev profile was accepted"
+    assert workflow.read_bytes() == content, "Unsupported profile changed the existing workflow"
     print("Verified development builds: native-free check, dev/release, incremental source miss/hit, full-check stats, schema 2 receipts, immutable executables, bundled tools, receipt corruption rejection")
 
 

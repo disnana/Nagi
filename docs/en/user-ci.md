@@ -28,8 +28,9 @@ The default output can also be reviewed before saving:
 python /path/to/Nagi/scripts/generate_project_ci.py
 ```
 
-The generator defaults to Nagi `0.2.0`. The commands above explicitly pin
-published `0.2.1` with `--nagi-version 0.2.1`; native builds use stable Rust.
+The generator in this source checkout defaults to Nagi `0.2.1`. The generator
+bundled in published 0.2.1 archives still defaults to `0.2.0`, so the examples
+explicitly pin `--nagi-version 0.2.1` for both. Native builds use stable Rust.
 Change these settings when generating the file:
 
 ```bash
@@ -38,9 +39,34 @@ python /path/to/Nagi/scripts/generate_project_ci.py \
   --output .github/workflows/nagi.yml
 ```
 
-The version must be a complete `X.Y.Z` release version. `nagic build` uses the
-released CLI's default release profile. Use `--os-matrix` to build on Ubuntu,
+The version must be a complete `X.Y.Z` release version. Builds use the release
+profile by default. Use `--os-matrix` to build on Ubuntu,
 macOS, and Windows; without it, the workflow builds on Ubuntu only.
+
+The generator in this source checkout accepts `--build-profile dev` for
+development CI. This is a next-version generator feature; the
+`tools/generate_project_ci.py` bundled in published 0.2.1 archives does not
+accept it. The generated workflow requires a released Nagi CLI version of
+0.2.1 or later:
+
+```bash
+python /path/to/Nagi/scripts/generate_project_ci.py \
+  --nagi-version 0.2.1 --build-profile dev --os-matrix \
+  --output .github/workflows/nagi.yml
+```
+
+The selected profile applies to both Windows and Unix on every event in the
+generated workflow. Dev retains `nagic check`, complete checks during the
+build, and Cargo dependency validation. Dev and release differ in behavior,
+including overflow checks; see [development builds](development-builds.md).
+Keep production release builds and application tests in your validation
+process. If you create a separate release workflow, give it a different
+`concurrency.group` so the workflows do not cancel each other on the same event.
+
+Explicit `--build-profile release` produces the default workflow. For Nagi
+0.2.1 or later, the generator emits `nagic build --profile release|dev`; for
+0.2.0, it retains the existing `nagic build` command. Selecting dev with 0.2.0
+fails before any output file is changed.
 
 The workflow runs `nagic check` in a separate job before the native build. That
 check job does not install Rust or use Cargo, so type and project errors surface
@@ -58,9 +84,11 @@ The generated file has a comment marking this extension point. Do not label
 the compiler check or build as application tests.
 
 The build job caches Cargo's registry and Git downloads plus the directory
-selected by `NAGI_NATIVE_TARGET_DIR`. The exact cache key includes Nagi,
+selected by `NAGI_NATIVE_TARGET_DIR`. The exact cache key includes Nagi, build profile,
 operating system, CPU architecture, Rust toolchain, Cargo lockfiles and
-manifests, and `nagi.toml`; there are no broad fallback keys. Pull requests,
+manifests, and `nagi.toml`; there are no broad fallback keys. This source
+checkout's generator uses profile-specific `v2` keys, so existing `v1` caches
+are not restored and the first run after migration creates a new cache. Pull requests,
 including forked pull requests, may restore an exact matching cache, but the
 workflow saves cache entries only after a successful push to the repository's
 default branch. This keeps untrusted pull-request builds from writing cache

@@ -3,6 +3,8 @@
 ## 未リリース / Unreleased
 
 - Keep changes limited to discoverable root-level website tests on the existing documentation CI path. Preserve full validation for unknown files and mixed compiler, runtime, security or dependency changes. This optimizes Nagi's repository CI; application build behavior is unchanged.
+- 利用者向けCI generatorに`--build-profile dev|release`を追加。既定releaseと完全検査を維持し、Nagi 0.2.1以上の開発用buildをWindows/Unixで選択できます。profile別cacheと0.2.0向けrelease互換を維持し、未対応の組合せは出力前に拒否します。
+- Add explicit development/release profile selection to the next user-project CI generator, defaulting to release and targeting published Nagi 0.2.1 by default. Keep full checks, trusted-branch cache writes and older CLI release compatibility; separate profile caches under a new key namespace. Published 0.2.1 archives are unchanged.
 
 ## Nagi 0.2.1
 

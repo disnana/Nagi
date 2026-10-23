@@ -21,7 +21,7 @@ generatorはPython標準ライブラリだけを使います。指定先へworkf
 python /path/to/Nagi/scripts/generate_project_ci.py
 ```
 
-generatorの既定値はNagi `0.2.0`です。上のコマンドは`--nagi-version 0.2.1`で公開済み0.2.1へ固定します。native buildにはstable Rustを使います。生成時に設定を変更できます。
+このソースcheckoutのgeneratorはNagi `0.2.1`を既定値にします。公開済み0.2.1配布物に同梱されたgeneratorの既定値は`0.2.0`なので、上の例ではどちらも`--nagi-version 0.2.1`を明示しています。native buildにはstable Rustを使います。生成時に設定を変更できます。
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
@@ -29,13 +29,25 @@ python /path/to/Nagi/scripts/generate_project_ci.py \
   --output .github/workflows/nagi.yml
 ```
 
-Nagiのversionは完全な`X.Y.Z`形式で指定します。`nagic build`は公開版の既定release profileを使います。`--os-matrix`を付けるとUbuntu・macOS・Windowsでbuildします。省略時はUbuntuだけです。
+Nagiのversionは完全な`X.Y.Z`形式で指定します。buildは既定でrelease profileを使います。`--os-matrix`を付けるとUbuntu・macOS・Windowsでbuildします。省略時はUbuntuだけです。
+
+このソースcheckoutのgeneratorでは、開発用CI向けに`--build-profile dev`を選べます。これは次版generatorの機能で、公開済み0.2.1配布物の`tools/generate_project_ci.py`にはありません。生成先のNagi CLIは公開0.2.1以上が必要です。
+
+```bash
+python /path/to/Nagi/scripts/generate_project_ci.py \
+  --nagi-version 0.2.1 --build-profile dev --os-matrix \
+  --output .github/workflows/nagi.yml
+```
+
+指定したprofileはWindowsとUnixの両方で、生成したworkflowのすべてのイベントに適用します。devでも`nagic check`とbuild内の完全検査、Cargoの依存判定は維持します。devにはoverflow検査などreleaseとの動作差があるため、[開発用ビルド](development-builds.md)を確認してください。本番向けのrelease buildやアプリのtestをdev buildで置き換えないでください。release用のworkflowを別に設ける場合は、同じイベントで互いを取り消さないよう`concurrency.group`も分けます。
+
+`--build-profile release`を明示すると既定と同じworkflowになります。Nagi 0.2.1以上では`nagic build --profile release|dev`を生成し、0.2.0を指定した場合は従来の`nagic build`を維持します。0.2.0とdevの組合せは、出力fileを書き換える前にエラーになります。
 
 workflowはnative buildの前に、別jobで`nagic check`を実行します。このjobはRustをinstallせずCargoも使わないため、型やprojectのエラーをnative compileより先に確認できます。次のbuild jobでは公式installerを使って固定したNagiのreleaseをinstallし、指定したRust toolchainをinstallしてから、公開版CLIが対応する`nagic build`を実行します。step summaryにはcheckまたはbuildにかかった実測時間とexit codeを記録します。この時間はrunner上での実行時間であり、サンプルやbenchmarkの測定値ではありません。
 
 Nagiに全アプリ共通の`test` commandはありません。buildの後へ、生成した実行fileをfixtureで起動する、既存のtest harnessを使う、生成APIの出力を検査するなど、アプリ固有のcheckを追加してください。生成fileの先頭に追加位置のコメントがあります。compilerのcheckやbuildをアプリのtestとして記載しないでください。
 
-build jobはCargoのregistry・Git downloadと、`NAGI_NATIVE_TARGET_DIR`で指定したdirectoryをcacheします。完全一致するcache keyにはNagi version、OS、CPU architecture、Rust toolchain、Cargo lockfileとmanifest、`nagi.toml`が含まれ、広いfallback keyはありません。forkからのpull requestを含め、pull requestは一致するcacheをrestoreできますが、cacheを保存するのは成功したdefault branchへのpushだけです。これにより、信頼できないpull request buildが、後から信頼済みbuildでrestoreするcacheを書き換えることを防ぎます。workflowのpermissionは`contents: read`のみで、checkout credentialの永続化を無効にし、secretを使わず、`pull_request_target`も使いません。
+build jobはCargoのregistry・Git downloadと、`NAGI_NATIVE_TARGET_DIR`で指定したdirectoryをcacheします。完全一致するcache keyにはNagi version、build profile、OS、CPU architecture、Rust toolchain、Cargo lockfileとmanifest、`nagi.toml`が含まれ、広いfallback keyはありません。このソースcheckoutのgeneratorはprofile別の`v2` keyを使うため、従来の`v1` cacheは復元せず、移行後の初回はcacheを作り直します。forkからのpull requestを含め、pull requestは一致するcacheをrestoreできますが、cacheを保存するのは成功したdefault branchへのpushだけです。これにより、信頼できないpull request buildが、後から信頼済みbuildでrestoreするcacheを書き換えることを防ぎます。workflowのpermissionは`contents: read`のみで、checkout credentialの永続化を無効にし、secretを使わず、`pull_request_target`も使いません。
 
 既定workflowはPython、`uv`、`sccache`をinstallしません。アプリ固有testが宣言済みのPython dependencyを使う場合は、Pythonのsetupと既存requirementsまたはlockfileからのinstallを追加してください。`uv`はprojectが既に使っている場合だけ追加します。`sccache`はnative buildの規模とcache運用に見合う場合に追加できる任意の調整項目です。動作に必須ではありません。
 
