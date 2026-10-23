@@ -209,6 +209,29 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         assertEquals(2, calls.get());
     }
 
+    public void testLateQuerylessResultCannotExtendTheOriginalOperationDeadline() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    value = True\n");
+        NagiSettings.update(NagiSettings.getInstance().getState().compilerPath, 1);
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<NagiAssistProcess.Cancellation> token = new AtomicReference<>();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            token.set(cancellation);
+            Thread.sleep(800);
+            return calls.incrementAndGet() == 1 ? omittedIndex(true, false)
+                    : retryIndex(file.getVirtualFile().getPath(), "too-late");
+        });
+        service.requestBaseline(file, myFixture.getEditor());
+        waitUntil(() -> service.state() == NagiAssistService.State.FAILED || service.fresh(file) != null);
+        assertEquals("deadline exhaustion is a failure, never READY or an editing cancellation",
+                NagiAssistService.State.FAILED, service.state());
+        assertNull(service.fresh(file));
+        assertEquals(2, calls.get());
+        assertFalse("expiry must not masquerade as user cancellation", token.get().isCancelled());
+        service.requestBaseline(file, myFixture.getEditor());
+        assertEquals("the expired snapshot must not automatically retry", 2, calls.get());
+    }
+
+
     public void testEditCancelsQuerylessRetryBeforeItsIndexCanPublish() throws Exception {
         PsiFile file = source("main.nagi", "def main():\n    old = True\n");
         var editor = myFixture.getEditor();

@@ -41,6 +41,17 @@ unsaved overlay. A second omitted index ends the retry. Stable verdict/diagnosti
 disagreement is a protocol failure and uses the existing failed-request cache;
 actual snapshot changes follow the existing stale-result retry path.
 
+Both requests share one absolute monotonic deadline held by their cancellation
+token. The session waits for the response using the remaining nanoseconds; it
+does not round a fractional remainder up to another second. Expiry stops and
+reaps the session through its existing transport cleanup, then reports an I/O
+failure (`FAILED`), distinct from editing cancellation or stale-result retry.
+The service also checks the budget after each response, after merging facts and
+immediately before making the cache current. Fractional time that remains may
+still produce a valid response. The one-shot transport uses the same budget for
+its existing waits and output collection; its existing synchronous stdin write
+and process cleanup are unchanged and are not claimed to be deadline bounded.
+
 ## Focused coverage
 
 `compiler/tests/editor_assistance.rs` covers High/Low final empty lines, original

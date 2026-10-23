@@ -689,7 +689,8 @@ public final class NagiAssistService implements Disposable {
                 setStateForActive(key, State.STALE, "The Nagi source snapshot changed before compiler analysis.");
                 return;
             }
-            NagiAssistProcess.Cancellation cancellation = new NagiAssistProcess.Cancellation();
+            NagiAssistProcess.Cancellation cancellation = new NagiAssistProcess.Cancellation(
+                    System.nanoTime() + TimeUnit.SECONDS.toNanos(Math.max(1, Math.min(300, snapshot.timeout))));
             synchronized (lock) {
                 if (disposed || !key.equals(activeKey)) return;
                 activeCancellation = cancellation;
@@ -699,10 +700,11 @@ public final class NagiAssistService implements Disposable {
                 setStateForActive(key, State.STALE, "The configured Nagi compiler changed before it could run.");
                 return;
             }
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Math.max(1, Math.min(300, snapshot.timeout)));
+            cancellation.checkDeadline();
             NagiAssistProtocol.Response response = runner.run(snapshot.plan, snapshot.input, snapshot.timeout,
                     cancellation, () -> !cancellation.isCancelled() && trustedForCompiler()
                             && snapshotCurrent(snapshot) && executableIdentityCurrent(snapshot));
+            cancellation.checkDeadline();
             if (cancellation.isCancelled() || !snapshotCurrent(snapshot) || !executableIdentityCurrent(snapshot)
                     || !diskSnapshotCurrent(snapshot)) {
                 setStateForActive(key, State.STALE, "The Nagi compiler response belongs to an outdated editor snapshot and was discarded.");
@@ -716,14 +718,13 @@ public final class NagiAssistService implements Disposable {
             if (snapshot.query != null && response.frontendChecked() && !response.hasSymbolIndex()
                     && response.importContext() == null && response.completions().isEmpty()
                     && response.semanticStatus().equals("none")) {
-                long remaining = deadline - System.nanoTime();
-                if (remaining <= 0) throw new IOException("Nagi editor assistance timed out before source facts were available.");
-                int timeout = (int) Math.max(1, TimeUnit.NANOSECONDS.toSeconds(remaining)
-                        + (remaining % TimeUnit.SECONDS.toNanos(1) == 0 ? 0 : 1));
+                byte[] baselineInput = NagiAssistProtocol.withoutQuery(snapshot.input);
+                cancellation.checkDeadline();
                 NagiAssistProtocol.Response baseline = runner.run(snapshot.plan,
-                        NagiAssistProtocol.withoutQuery(snapshot.input), timeout, cancellation,
+                        baselineInput, snapshot.timeout, cancellation,
                         () -> !cancellation.isCancelled() && trustedForCompiler()
                                 && snapshotCurrent(snapshot) && executableIdentityCurrent(snapshot));
+                cancellation.checkDeadline();
                 if (cancellation.isCancelled() || !snapshotCurrent(snapshot) || !executableIdentityCurrent(snapshot)
                         || !diskSnapshotCurrent(snapshot)) {
                     setStateForActive(key, State.STALE, "The queryless Nagi source facts belong to an outdated editor snapshot and were discarded.");
@@ -739,7 +740,9 @@ public final class NagiAssistService implements Disposable {
                 }
                 if (baseline.hasSymbolIndex()) response = response.withSymbolIndex(baseline);
             }
+            cancellation.checkDeadline();
             Snapshot responseSnapshot = withCompilerSources(withCompilerDirectories(snapshot, response), response, attempt);
+            cancellation.checkDeadline();
             if (!snapshotCurrent(responseSnapshot)) {
                 setStateForActive(key, State.STALE, "A Nagi source changed during compiler analysis; the response was discarded.");
                 restartOpenSourcesLater();
@@ -750,6 +753,7 @@ public final class NagiAssistService implements Disposable {
             synchronized (lock) {
                 if (!key.equals(activeKey) || responseSnapshot.epoch() != epoch.get()
                         || disposed || project.isDisposed()) return;
+                cancellation.checkDeadline();
                 cached = result;
                 presentation.published(result.presentationIdentity, responseSnapshot.focusDocument());
                 knownSourcePaths = knownPaths(snapshot, response);
