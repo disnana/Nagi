@@ -46,6 +46,12 @@ def is_docs_path(path: str) -> bool:
         return True
     if path.startswith("test-nagi-code/") and value.name in ("README.md", "README.en.md"):
         return True
+    # Pages runs root-level website tests through unittest discovery. Keep
+    # arbitrary website Python files and nested test helpers fail-closed.
+    if value.parent == PurePosixPath("website") and re.fullmatch(
+        r"test_[A-Za-z0-9_]*\.py", value.name, re.ASCII
+    ):
+        return True
     if path.startswith("website/templates/") and value.suffix == ".html":
         return True
     return path.startswith("website/assets/") and value.suffix in ASSET_SUFFIXES

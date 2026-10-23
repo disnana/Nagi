@@ -78,6 +78,7 @@ class ChangeTests(unittest.TestCase):
                      "ai/skills/nagi-development/SKILL.md",
                      "docs/http.md", "docs/en/http.md", "docs/guide/setup.md",
                      "website/README.md", "website/build.py", "website/requirements.txt",
+                     "website/test_discovery.py", "website/test_future_case2.py",
                      "website/CNAME", ".github/workflows/pages.yml",
                      "website/assets/site.js", "website/assets/site.css", "website/assets/plot.svg",
                      "website/assets/img/photo.png", "website/templates/page.html",
@@ -104,6 +105,8 @@ class ChangeTests(unittest.TestCase):
                      "test-nagi-code/application-examples/stock-report/smoke.py",
                      "test-nagi-code/application-examples/stock-report/nagi.toml",
                      "website/examples/double.nagi", "website/assets/helper.rs",
+                     "website/helper.py", "website/tests/test_nested.py", "website/test_data.txt",
+                     "website/test_future-case.py", "website/test_future.case.py",
                      "website/templates/helper.py", "website/new-config.toml", "new-feature/README.md"):
             with self.subTest(path=path):
                 base = self.run_git("rev-parse", "HEAD")
@@ -114,6 +117,20 @@ class ChangeTests(unittest.TestCase):
         self.write("docs/start.md", "# New docs\n")
         self.write("runtime/src/lib.rs", "// changed runtime\n")
         self.assertEqual(self.full(self.commit()), "true")
+
+    def test_root_website_tests_cannot_hide_compiler_runtime_api_security_or_lock_changes(self):
+        protected_paths = (
+            "compiler/src/check/security.rs",
+            "runtime/src/auth/session.rs",
+            "runtime/src/http_server.rs",
+            "Cargo.lock",
+        )
+        for path in protected_paths:
+            with self.subTest(path=path):
+                self.run_git("reset", "--hard", self.first)
+                self.write("website/test_discovery.py", "# website test update\n")
+                self.write(path, "protected source update\n")
+                self.assertEqual(self.full(self.commit(), self.first), "true")
 
     def test_jetbrains_plugin_only_ranges_use_the_independent_checks(self):
         for path in ("editors/jetbrains-nagi/src/main/java/com/disnana/nagi/NagiLexer.java",
