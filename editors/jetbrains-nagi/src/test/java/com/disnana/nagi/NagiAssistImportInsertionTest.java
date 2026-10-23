@@ -59,10 +59,15 @@ public final class NagiAssistImportInsertionTest extends BasePlatformTestCase {
             if (service != null) com.intellij.openapi.util.Disposer.dispose(service);
             NagiSettings.update(originalCompiler, originalTimeout);
             TrustedProjects.setProjectTrusted(getProject(), originalTrust);
+            NagiSaveBarrier.awaitDiskWrites();
             if (root != null) try (var files = Files.walk(root)) {
                 for (Path file : files.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(file);
             }
-        } finally { super.tearDown(); }
+        } catch (Throwable failure) {
+            addSuppressedException(failure);
+        } finally {
+            super.tearDown();
+        }
     }
 
     private void open(String name, String text, int caret, int replacementStart, int replacementEnd,
@@ -129,6 +134,7 @@ public final class NagiAssistImportInsertionTest extends BasePlatformTestCase {
         accept("std.fs", Lookup.NORMAL_SELECT_CHAR);
         assertEquals("import std.fs\n", myFixture.getEditor().getDocument().getText());
         FileDocumentManager.getInstance().saveDocument(myFixture.getEditor().getDocument());
+        NagiSaveBarrier.awaitDiskWrites();
         assertEquals("import std.fs\r\n", Files.readString(root.resolve("qualified.nagi")));
     }
 

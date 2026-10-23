@@ -2,6 +2,8 @@
 
 [Agent entry point](README.md) · [High reference](language.md)
 
+This guide describes application integration supported by the published Nagi compiler 0.2.1. Confirm the installed compiler with `nagic --version`; editor extension versions are separate.
+
 Keep typed business decisions, records, and validation in Nagi. Let a Rust adapter own a crate's transport, resource management, and Rust-specific types. The independent crate can retain its API; only the adapter needs generated Nagi names.
 
 ## A complete borrowed call
@@ -35,7 +37,7 @@ entry = "main.nagi"
 file = "native.rs"
 ```
 
-From this project folder, run `nagic check`, `nagic build`, then `nagic run`. Output is `4` and `Nagi`. The extern has no body or trailing colon. Its Rust path must begin with `native::`; the implementation is `pub`. An extern cannot return a view, so return owned data when a crate result borrows temporary adapter data.
+From this project folder, run `nagic check --project .` and then `nagic run --project . --profile dev`. Output is `4` and `Nagi`. The extern has no body or trailing colon. Its Rust path must begin with `native::`; the implementation is `pub`. An extern cannot return a view, so return owned data when a crate result borrows temporary adapter data.
 
 ## Match the generated types
 
@@ -89,7 +91,7 @@ pub fn apply(callback: fn(i64) -> i64, value: i64) -> i64 {
 }
 ```
 
-`nagic run` prints `42`. `fn[input types..., output type]` describes synchronous functions; it does not enable arbitrary async callback parameters.
+`nagic run --profile dev` prints `42`. `fn[input types..., output type]` describes synchronous functions; it does not enable arbitrary async callback parameters.
 
 ## Async and HTTP choices
 
@@ -101,6 +103,6 @@ For a new service using Nagi's standard APIs, start from the [Quote API](../test
 
 ## Validate the boundary you changed
 
-Check and build the configured project, then exercise one successful call and a meaningful failure. For JSON, test malformed input and a wrong field type; for numeric operations, test the accepted limits; for file operations, test existing-file behavior using temporary storage. Run external effects with the scope the task authorizes: `run` executes the app, and a Rust adapter can access files, networks, and processes.
+Check the configured project, then run it with `nagic run --project . --profile dev` to exercise one successful call and a meaningful failure. For JSON, test malformed input and a wrong field type; for numeric operations, test the accepted limits; for file operations, test existing-file behavior using temporary storage. Use `nagic build --project . --profile release` when a release build is part of the requested validation. Run external effects with the scope the task authorizes: `run` executes the app, and a Rust adapter can access files, networks, and processes.
 
 Use the [local Rust library](../test-nagi-code/rust-library/README.en.md), [Rust JSON](../test-nagi-code/library-examples/rust-json/README.en.md), and [Axum source](../test-nagi-code/application-examples/axum-service/native.rs) as executable evidence. Declaration/configuration tests are in [`compiler/tests/rust_dependencies.rs`](../compiler/tests/rust_dependencies.rs), and standard server behavior is implemented in [`runtime/src/http_server.rs`](../runtime/src/http_server.rs). A successful `check` is the first validation step; a successful Rust build and the relevant behavior check finish it.

@@ -6,6 +6,10 @@
 
 親の全workspace検査はexit0（122 result blocks、1921 passed、0 failed、既存ignored 3）。独立High監査でfallback残時間の秒切上げによるtimeout超過を検出し、同じ絶対monotonic deadlineをtransportのnanosecond待機とcache公開直前まで共有するよう補正した。期限超過はFAILEDで、編集取消・STALE再試行と区別する。実Sessionの2要求と遅いfake応答で旧RED→GREEN、残時間内の有効応答と既存stop/reap、公開0.2.1連携を確認。最終plugin全282件（failure/error/skip 0）とZIP生成が成功し、更新差分の再監査・最新CI・Windows GUI受入へ渡す。Rust差分は変えていないため全workspace結果は維持する。
 
+## 2026-10-23: 0.2.2候補のeditor定義位置探索
+
+[設計・実測](../../benchmarks/results/editor-line-search-2026-10-23/README.md)。main `9fe5e079`基準で、symbolsの定義位置検索だけを既存lexerの物理line順に限定した。High/Lowの検査・位置・protocol・Cargo経路を維持。16 case×15 sampleでJSON全体が一致し、大caseの中央値はおおむね1〜2%短縮したが、ばらつきと遅いcaseも記録した。先行token再利用案は通常assistの約6%悪化が再現したため棄却し、実装を戻して証拠を保存した。対象65 tests、全workspace `cargo test --locked`、all-target Clippy、fmt、Python構文が成功。独立最終auditとexact-head CIは未確認。Windows/macOSでの速度、Rust/Cargo buildやアプリ速度の改善は主張しない。
+
 ## 2026-10-23: #148 SF08 installの有限status観測
 
 [設計と実証](sf08-install-status-diagnostic.md)。update成功・install実spawn後236秒timeoutという新CI事実を受け、原240秒/transport/TLS/署名/source pin/3packages/browser検査を維持して、固定2名だけのbounded captureへAPT Status-Fdを接続した。閉鎖＋actual ECHILD後に有限phase/record数だけを公開し、未知・不正・truncation等はunknown、成功時のcapture異常もfailclosed。実pinned APT2.8.3で原trustの1回の導入30.362秒/29752bytes/516recordsを確認、専有container/image整理済み。Python70/Node148/sourceguard16/policy160成功、旧実装の観測欠落をRED→GREENで確認。timeout根因の修復・安定化済みとは扱わず、別High監査と新HEAD実3engine CIを必須で残す。
@@ -603,3 +607,7 @@ fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inv
 Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが失敗したが、実数が未保存のため根因断定を避けて調査した。別に、最初のrequest_stopがstop/abort後・SHUTDOWN送信前で停止すると、drainerがcleanup完了からchannel closeへ先行するraceをinstance限定finite gateで決定的RED（SHUTDOWN0/STOPPED1）再現した。採用済み設計に従い、SHUTDOWN後のRelease publication flagとterminal条件のAcquireを追加し、取消・cleanup・join・STOPPED・既存lock orderは維持する。
 
 同回帰GREEN、既存actor45件、全runtime923 passed/3既存ignored（failure0、33.06秒）、all-targets clippy -D warningsとfmtが成功。supervised-workerのHighと独立saved Lowは既存12項目（STOPPED3/SHUTDOWN1を含む）を維持してnative成功した。source/testを凍結し、独立High audit・改訂0.2.1の4OS CIへ渡す。Windowsの元失敗と同根とは未断定。[設計・証拠](supervisor-shutdown-publication.md)。
+
+### 2026-10-23: PR #150のauth-stage診断行境界
+
+#150のLinux通常検査は成功したが、補助診断gateがbroadのslot 1欠落で失敗した。rawが削除済みのため根因は未確定。改行のないlibtest出力にheaderが連結される可能な失敗を再現し、test-only producerの既存有限buffer内へ先頭改行を追加した。strict parser、必要slot、loss拒否、認証処理、期限、並列度を維持する。実encoderのRED/GREENとPython41件、workflowと同じ実採集で両slot・閉鎖46 records、runtime909成功/既存1 ignored、native coverage17件を確認。独立最終auditと新HEAD CIは別gateとしてPRへ集約する。[設計・限界](auth-stage-producer-framing.md)。

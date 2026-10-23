@@ -151,7 +151,11 @@ cold最終guard後の全243件77秒・ZIP21秒・IC251 Verifier11秒Compatible�
 
 2026-10-22、#149 SF08 prerequisitesをSol 6.1 Highが限定調査。親がsource pin・両APT argv限定・閉鎖後scalar公開の事前設計を承認し、同Highが実装とRED→GREEN/Python64/Node148/source guard16/policy160を実行した。managed transport設定差と不要NodeSource依存をprivate診断で分離し、GitHub240秒失敗の原因同一性は未確認とした。原trustのfresh fullはAPT通過後build101/unknown・browser0、受入成功とは扱わない。所有container/imageのみ区切りで整理し、private証拠と原ログを保持する。新HEAD CI・別High最終auditへ引継ぐ。追加spawn/commit/pushなし、model時間・費用は未測定。詳細は[sf08-prerequisite-repositories.md](sf08-prerequisite-repositories.md)。
 
+2026-10-23、0.2.2候補のeditor探索をSol 6.1 Highが設計・実装・実測した。token再利用候補は対象testと同値比較が成功しても通常assist悪化の実測により棄却。別案の物理line限定検索は同一release toolchain、交互順15 sample、whole JSON比較で検証した。親が全workspace回帰を追加実行して成功。独立High監査とexact-head CIは次のgateで、実装者の報告と区別する。主な制約は計測分散・Linuxのみ・小さい効果。model時間・使用量・費用は未測定。[設計・証拠](../../benchmarks/results/editor-line-search-2026-10-23/README.md)。
+
 
 2026-10-23、#148 d06のSF08 install236秒timeoutをSol 6.1 Highがread-only調査。親承認後、専有worktreeで固定2名bounded captureとfailure-only status enum/数値だけを実装した。pinned image内APT2.8.3を実測し、当初2.7.14参照を訂正して正確なUbuntu source archiveも確認。native1回30.362秒/閉鎖ECHILD、Python70/Node148/guard16/policy160、RED→GREENを実行し、原trustと240秒/security/browser gateを維持した。証拠保存後に専有Docker objectsだけ整理。根因未解決・観測追加として凍結し、親が別High最終監査とexact-head CIへ進める。追加spawn/commit/pushなし、model時間/費用は未計測。[詳細](sf08-install-status-diagnostic.md)。
 
 2026-10-23、#148 merge後のPoint例・末尾空行での補助消失をSol 6.1 Highが実CLIから再現した。親がoriginal facts/query recovery分離と公開0.2.1条件付きfallbackを採用し、同Highがcompiler/pluginを実装。旧RED→新GREEN、公開CLIの実editor統合、fullplugin278件とpackage成功まで担当した。timeout予算・同snapshot・cancel/世代/実行ファイル/依存identity、明示emptyと欠落の区別を維持。Low fixtureの誤ったcommentとread-only XDGによるpackaging環境失敗は証拠に分離し、source変更で隠していない。親の全workspace成功後、別Highが最終auditで秒丸めによる予算超過P2を検出した。著者Highへ順次戻し、絶対deadlineと実transportの旧RED→GREEN、公開0.2.1連携、全plugin282件・ZIPを検証した。更新差分は同じ独立Highへ再監査する。同model/effortの子の並行実行・子spawnなし。model時間/費用は未計測。[設計と境界](jetbrains-empty-line-assistance.md)。
+
+2026-10-23、#150のLinux診断gate失敗をLuna Maxが読み取り調査し、通常検査成功・broad slot欠落・原raw未保存をHighへ引き継いだ。Sol 6.1 Highが可能な行境界欠落を合成再現し、親採用の有限buffer内改行と実encoder共通化を実装。厳格parser・CI workflow・期限・認証意味論を変えず、RED/GREENと実並列採集を検証した。必要検証後に別Highの最終auditを行う。同tierの並行実行・子spawnなし、原ログは非公開で保持。transport一時切断は既存sessionへ再接続し、重複実行しなかった。model時間・費用は未計測。[詳細](auth-stage-producer-framing.md)。

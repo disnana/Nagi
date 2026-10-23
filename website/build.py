@@ -53,6 +53,7 @@ def site_defaults(repository: str) -> tuple[str, str]:
 
 
 GROUPS = [
+    ("目的から探す", [("developer-workflow", "開発・デバッグの早見表"), ("comparison", "特徴と他言語との比較"), ("development-builds", "開発ビルドと差分"), ("user-ci", "アプリのCI")]),
     ("入門", [("getting-started", "準備と最初の実行"), ("language-guide", "コードを書きながら学ぶ"), ("first-app", "最初のCLIアプリ"), ("editor", "エディターの操作例")]),
     ("言語リファレンス", [("syntax", "文法の早見表"), ("builtins", "組み込み関数"), ("types", "型と推論"), ("classes", "class"), ("ownership", "所有権"), ("view-and-zero-copy", "viewとコピー"), ("error-handling", "エラー処理")]),
     ("アプリを作る", [("http", "使い方"), ("http-server", "APIリファレンス"), ("http-stdlib-performance", "性能測定"), ("security", "認証・認可"), ("migration-0.2.0", "0.2.0移行"), ("http-legacy", "旧APIの移行"), ("json", "JSON"), ("database", "SQLite"), ("sqlite-pool", "SQLite PoolとTransaction"), ("sql-check", "SQLの事前検査"), ("modules-and-rust", "importとRust連携"), ("libraries", "自作ライブラリとRustの資産"), ("projects", "プロジェクト設定"), ("async", "asyncとscope"), ("task-handles", "Task結果handle"), ("concurrency", "並行処理"), ("actor", "actorの書き方"), ("supervisor", "再起動と停止"), ("actor-reference", "APIリファレンス"), ("actor-performance", "性能測定")]),
@@ -71,6 +72,7 @@ for _, entries in GROUPS:
         SOURCES[EXTRA.get(slug, ROOT / f"docs/{slug}.md")] = f"docs/{slug}/"
 
 ENGLISH_GROUPS = [
+    ("Find by task", [("developer-workflow", "Development and debugging"), ("comparison", "Strengths and comparisons"), ("development-builds", "Development builds"), ("user-ci", "Application CI")]),
     ("First steps", [("getting-started", "Setup and first run"), ("language-guide", "Learn by writing code"), ("first-app", "First CLI app"), ("editor", "Editor walkthrough")]),
     ("Language reference", [("syntax", "Syntax reference"), ("builtins", "Built-in functions"), ("types", "Types and inference"), ("classes", "Classes"), ("ownership", "Ownership"), ("view-and-zero-copy", "Views and copying"), ("error-handling", "Error handling")]),
     ("Build an application", [("http", "Guide"), ("http-server", "API reference"), ("http-stdlib-performance", "Measurements"), ("security", "Authentication"), ("migration-0.2.0", "0.2.0 migration"), ("http-legacy", "Retired API migration"), ("json", "JSON"), ("database", "SQLite"), ("sqlite-pool", "SQLite Pools and Transactions"), ("sql-check", "SQL checks"), ("modules-and-rust", "Imports and Rust"), ("libraries", "Libraries and Rust assets"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("task-handles", "Task result handles"), ("concurrency", "Concurrency"), ("actor", "Writing actors"), ("supervisor", "Restart and shutdown"), ("actor-reference", "API reference"), ("actor-performance", "Measurements")]),
@@ -95,18 +97,18 @@ NAV_TOPIC_LABELS = {
 
 LABELS = {
     "ja": dict(skip_label="本文へ移動", home_label="Nagi ホーム", menu_label="サイトのメニュー",
-               start_label="はじめる", status_label="Nagi 0.2.0 · 開発中", footer_label="フッター",
+               start_label="はじめる", status_label="Nagi 0.2.1 · 0.2.2開発中", footer_label="フッター",
                other_language="en", other_label="English", switch_label="Read this page in English",
                docs_contents="Docsの目次", page_contents="このページの目次", on_page="このページ",
-               source_label="このページのソース", docs_version="Nagi 0.2.0 · Docs",
+               source_label="このページのソース", docs_version="Nagi 0.2.1 · Docs",
                copy_label="コピー", copy_aria="このコードをコピー", code_aria="コード",
                table_aria="表（横にスクロールできます）", theme_label="外観",
                theme_system="システム", theme_light="ライト", theme_dark="ダーク"),
     "en": dict(skip_label="Skip to content", home_label="Nagi home", menu_label="Site navigation",
-               start_label="Get started", status_label="Nagi 0.2.0 · In development", footer_label="Footer",
+               start_label="Get started", status_label="Nagi 0.2.1 · 0.2.2 in development", footer_label="Footer",
                other_language="ja", other_label="日本語", switch_label="このページを日本語で読む",
                docs_contents="Docs contents", page_contents="On this page", on_page="On this page",
-               source_label="Page source", docs_version="Nagi 0.2.0 · Docs",
+               source_label="Page source", docs_version="Nagi 0.2.1 · Docs",
                copy_label="Copy", copy_aria="Copy this code", code_aria="Code",
                table_aria="Table (scroll horizontally)", theme_label="Appearance",
                theme_system="System", theme_light="Light", theme_dark="Dark"),
@@ -199,6 +201,56 @@ def check_links(output: Path, base: str) -> int:
     if errors:
         raise ValueError("\n".join(errors))
     return len(pages)
+
+
+def discovery_files(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
+    """Publish a small, explicit index; never crawl internal documents or logs."""
+    entries = [
+        ("Application agent guide", "ai/README.md"),
+        ("Application development and debugging skill", "ai/skills/nagi-development/SKILL.md"),
+        ("Debugging by failing stage", "ai/debugging.md"),
+        ("Supported language", "ai/language.md"),
+        ("Rust adapter boundary", "ai/rust-interop.md"),
+    ]
+    lines = [
+        "# Nagi",
+        "",
+        "> A backend language with Python-style syntax, explicit types and ownership, "
+        "and native executables compiled through Rust/Cargo.",
+        "",
+        "Published compiler baseline: 0.2.1. Version 0.2.2 is in development. "
+        "Editor plugins have independent versions. The site follows repository source; "
+        "roadmap proposals are not shipped APIs.",
+        "",
+        "Standard APIs include HTTP, JSON, SQLite, async and actors. Rust crates use "
+        "explicit adapters. Python packages, class methods/inheritance and a standard "
+        "PostgreSQL API are not supported. Initial native builds require Rust/Cargo "
+        "and platform build tools; check does not compile Rust.",
+        "",
+        "## Start here",
+        "",
+        f"- [Japanese documentation]({origin}{base}docs/)",
+        f"- [English documentation]({origin}{base}en/docs/)",
+        f"- [Source revision]({repo}/tree/{quote(ref, safe='')})",
+        f"- [Published releases]({repo}/releases)",
+        "",
+        "## Coding agents (Markdown)",
+        "",
+    ]
+    for title, path in entries:
+        if not (ROOT / path).is_file():
+            raise ValueError(f"Missing agent documentation: {path}")
+        lines.append(f"- [{title}]({repo}/raw/{quote(ref, safe='')}/{path})")
+    for title, pages in ENGLISH_GROUPS:
+        lines.extend(["", f"## {title}", ""])
+        for slug, label in pages:
+            route = f"docs/{slug}/"
+            if route not in ENGLISH_SOURCES.values():
+                raise ValueError(f"Missing discovery route: {route}")
+            lines.append(f"- [{label}]({origin}{base}en/{route})")
+    (output / "llms.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (output / "robots.txt").write_text(
+        f"User-agent: *\nAllow: /\n\nSitemap: {origin}{base}sitemap.xml\n", encoding="utf-8")
 
 
 def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
@@ -384,6 +436,7 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
     locations = [origin + base + prefix + route for prefix in ("", "en/") for route in ["", *SOURCES.values()]]
     sitemap = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{escape(url)}</loc></url>" for url in locations) + "</urlset>"
     (output / "sitemap.xml").write_text(sitemap, encoding="utf-8")
+    discovery_files(output, base, origin, repo, ref)
     pages = check_links(output, base)
     print(f"Built {pages} pages; all local links, anchors and assets verified: {output}")
 

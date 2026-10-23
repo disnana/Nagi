@@ -1,0 +1,169 @@
+diff --git a/compiler/src/source.rs b/compiler/src/source.rs
+index ce70c3d..b8f9774 100644
+--- a/compiler/src/source.rs
++++ b/compiler/src/source.rs
+@@ -1,0 +2 @@ use crate::ast::*;
++use std::borrow::Cow;
+@@ -14,0 +16 @@ struct SourceFile {
++    high: bool,
+@@ -16,0 +19,22 @@ struct SourceFile {
++
++/// Request-local presentation data from the same text that produced AST spans.
++pub(crate) struct SourceFileView<'a> {
++    pub path: &'a Path,
++    pub text: &'a str,
++    pub start: usize,
++    tokens: &'a [crate::lexer::Token],
++    high: bool,
++}
++impl<'a> SourceFileView<'a> {
++    pub(crate) fn editor_tokens(&self) -> Result<Cow<'a, [crate::lexer::Token]>, String> {
++        let high = self.path.extension().is_none_or(|x| x != "low");
++        if self.high == high {
++            Ok(Cow::Borrowed(self.tokens))
++        } else {
++            // Public source::load accepts an explicit mode, and native files
++            // need not end in .low. Preserve presentation consumers' previous
++            // extension-based lexing for those unusual inputs.
++            crate::lexer::lex(self.text, high).map(Cow::Owned)
++        }
++    }
++}
+@@ -191,0 +216,9 @@ impl Sources {
++    pub(crate) fn file_views(&self) -> impl Iterator<Item = SourceFileView<'_>> {
++        self.files.iter().map(|file| SourceFileView {
++            path: &file.path,
++            text: &file.source,
++            start: file.start,
++            tokens: &file.tokens,
++            high: file.high,
++        })
++    }
+@@ -519,0 +553 @@ pub fn load_with_overlays(
++            high,
+@@ -734,0 +769,33 @@ mod disk_budget_tests {
++
++#[cfg(test)]
++mod editor_token_tests {
++    use super::*;
++
++    #[test]
++    fn presentation_tokens_borrow_only_the_matching_parse_mode() {
++        let text = "fn main() {\n    let value = 1;\n}\n";
++        let (_, tokens) = crate::parser::parse_with_tokens(text, false).unwrap();
++        let low = SourceFileView {
++            path: Path::new("main.low"),
++            text,
++            start: 23,
++            tokens: &tokens,
++            high: false,
++        };
++        let borrowed = low.editor_tokens().unwrap();
++        assert!(matches!(borrowed, Cow::Borrowed(_)));
++        assert!(std::ptr::eq(borrowed.as_ptr(), tokens.as_ptr()));
++        let high_filename = SourceFileView {
++            path: Path::new("native.nagi"),
++            ..low
++        };
++        let owned = high_filename.editor_tokens().unwrap();
++        assert!(matches!(owned, Cow::Owned(_)));
++        assert!(owned
++            .iter()
++            .any(|token| token.kind == crate::lexer::K::Indent));
++        assert!(!tokens
++            .iter()
++            .any(|token| token.kind == crate::lexer::K::Indent));
++    }
++}
+diff --git a/compiler/src/symbols.rs b/compiler/src/symbols.rs
+index 25aa8f1..3d9778f 100644
+--- a/compiler/src/symbols.rs
++++ b/compiler/src/symbols.rs
+@@ -4 +4 @@ use crate::{
+-    lexer::{lex, Token, K},
++    lexer::{Token, K},
+@@ -146 +146 @@ struct File<'a> {
+-    tokens: Vec<Token>,
++    tokens: &'a [Token],
+@@ -921,10 +921,5 @@ pub(crate) fn import_exports(
+-    let files = sources
+-        .files()
+-        .map(|(path, text, start)| {
+-            Ok(File {
+-                path,
+-                module: module.clone(),
+-                lines: text.lines().collect(),
+-                start,
+-                tokens: lex(text, path.extension().is_none_or(|x| x != "low"))?,
+-            })
++    let token_files = sources
++        .file_views()
++        .map(|file| {
++            let tokens = file.editor_tokens()?;
++            Ok((file, tokens))
+@@ -932,0 +928,10 @@ pub(crate) fn import_exports(
++    let files = token_files
++        .iter()
++        .map(|(file, tokens)| File {
++            path: file.path,
++            module: module.clone(),
++            lines: file.text.lines().collect(),
++            start: file.start,
++            tokens,
++        })
++        .collect::<Vec<_>>();
+@@ -992,14 +997,5 @@ fn index_impl(
+-    let files = sources
+-        .files()
+-        .map(|(path, text, start)| {
+-            Ok(File {
+-                path,
+-                module: module_files
+-                    .iter()
+-                    .find(|(_, file)| **file == path)
+-                    .map(|(module, _)| (*module).clone())
+-                    .unwrap_or_else(|| ModuleId(path.display().to_string())),
+-                lines: text.lines().collect(),
+-                start,
+-                tokens: lex(text, path.extension().is_none_or(|x| x != "low"))?,
+-            })
++    let token_files = sources
++        .file_views()
++        .map(|file| {
++            let tokens = file.editor_tokens()?;
++            Ok((file, tokens))
+@@ -1007,0 +1004,14 @@ fn index_impl(
++    let files = token_files
++        .iter()
++        .map(|(file, tokens)| File {
++            path: file.path,
++            module: module_files
++                .iter()
++                .find(|(_, path)| **path == file.path)
++                .map(|(module, _)| (*module).clone())
++                .unwrap_or_else(|| ModuleId(file.path.display().to_string())),
++            lines: file.text.lines().collect(),
++            start: file.start,
++            tokens,
++        })
++        .collect::<Vec<_>>();
+diff --git a/compiler/tests/symbols.rs b/compiler/tests/symbols.rs
+index 470629d..094e4d5 100644
+--- a/compiler/tests/symbols.rs
++++ b/compiler/tests/symbols.rs
+@@ -82,0 +83,15 @@ fn reference_at<'a>(
++#[test]
++fn explicit_low_load_with_high_filename_preserves_editor_lex_failure() {
++    let f = Fixture::new();
++    // The public loader accepts an explicit syntax mode. Presentation indexing
++    // historically lexes by filename; reusing Low tokens must not hide its
++    // existing High-indentation error on this unusual input.
++    f.write(
++        "main.nagi",
++        "fn main() {\n    let fresh = 1;\n  print(fresh);\n}\n",
++    );
++    let loaded = source::load(&f.0.join("main.nagi"), false).unwrap();
++    let error = symbols::index(&loaded, &[&loaded.program]).unwrap_err();
++    assert_eq!(error, "line 3: 字下げが外側のブロックと一致しません");
++}
++

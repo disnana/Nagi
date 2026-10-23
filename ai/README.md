@@ -1,101 +1,76 @@
-# Nagi for coding agents
+# Nagi guidance for coding agents
 
-This directory contains agent documentation and a reusable development skill. Human tutorials remain in [`docs/`](../docs/README.md). Start here when generating, changing, or reviewing a Nagi application.
+Use this directory for agents building or debugging Nagi applications. The guides target the published Nagi compiler **0.2.1**. Check `nagic --version` for the compiler actually in use; editor extensions have independent versions and release schedules. Repository development may contain unreleased work. Do not describe 0.2.2 or an editor plugin release as published unless its release record confirms it.
 
-For changes to the Nagi compiler, runtime, editors, or repository itself, read the root [AGENTS.md](../AGENTS.md) instead. These application guides do not define compiler invariants.
+For work on the compiler, runtime, editor implementation, or this repository, follow the root [AGENTS.md](../AGENTS.md). These application guides do not set compiler contracts or contributor workflow.
 
-Nagi is useful for typed application logic with concise, indented High code (`.nagi`), existing Rust libraries behind small adapters, and handwritten Low (`.low`) where needed. High lowers to Low, then Rust builds the executable. This guide targets the Nagi **0.1.11** compiler release; the VS Code extension has its own **0.1.13** version. Check the official release record and installed compiler before relying on a feature; a repository version alone does not establish publication.
+## Route by task
 
-## Load only what the task needs
+| Task | Start here |
+|---|---|
+| Create, change, or review a Nagi application | Use the [nagi-development skill](skills/nagi-development/SKILL.md). It covers `.nagi`, `.low`, `nagi.toml`, Rust adapters, and checking behavior. |
+| Diagnose a parse, check, build, run, generated-code, or IDE problem | Follow the [debugging guide](debugging.md), then return to the skill to implement and verify the fix. |
+| Set up a repeatable build and development workflow | Read the [developer workflow](../docs/en/developer-workflow.md). |
+| Compare Nagi with other implementation choices | Read the [language comparison](../docs/en/comparison.md). |
+| Look up High syntax, types, ownership, Result, async, or supported imports | [High language guide](language.md), with links to the published [language reference](../docs/en/README.md). |
+| Call a Rust crate or existing Rust service | [Rust adapter guide](rust-interop.md), then inspect a matching example. |
+| Find a working application shape | Choose an example from the table below and read its README, source, and `nagi.toml`. |
 
-| Task | Read |
-| --- | --- |
-| Write or fix High code | [Language and error handling](language.md) |
-| Call a crate or reuse a Rust service | [Rust adapter boundary](rust-interop.md) |
-| Follow a repeatable implementation workflow | [nagi-development skill](skills/nagi-development/SKILL.md) |
-| Find a working starting point | The examples below, including their source and `nagi.toml` |
+The skill can be installed by pointing a skill loader at `ai/skills/nagi-development/` or copying that directory into the loader's skill location. It works without the repository guides; when working in this checkout, also read the guides linked above. Installing the skill does not install Nagi, Rust, or Cargo.
 
-The skill has a self-contained workflow. Point a skill loader at `ai/skills/nagi-development/`, or copy that directory into the loader's skill location. Its references to this repository's `ai/` guides are optional when used elsewhere. Installing this skill does not install the compiler.
+## Prepare and verify an application
 
-## Check the environment, then work in a project
+Check the available tools and compiler before changing code:
 
 ```sh
 nagic --version
 nagic --help
-cargo --version
 ```
 
-`check`, `lower`, and `symbols` work without invoking Cargo. `build` and `run` require Rust/Cargo, platform C build tools, and the compiler's bundled `runtime/`. Initial dependency resolution may need network access. See [installation](../docs/en/getting-started.md) if the compiler or build tools are missing.
+`check`, `lower`, and `symbols` do not invoke Cargo. Check `cargo --version` when preparing to build or run; those commands invoke Rust/Cargo and need the compiler's bundled `runtime/` and platform C build tools. Dependency resolution may need network access. See the [installation guide](../docs/en/getting-started.md) if a required tool is missing.
 
-For a new application, create `my-app/nagi.toml` with:
-
-```toml
-entry = "main.nagi"
-```
-
-Save this as `my-app/main.nagi`:
-
-```nagi
-def main():
-    print("Hello, Nagi!")
-```
-
-From the directory containing `my-app`:
+For a project with `nagi.toml` containing `entry = "main.nagi"`, run from the project directory:
 
 ```sh
-nagic check --project my-app
-nagic build --project my-app
-nagic run --project my-app
+nagic check --project .
+nagic run --project . --profile dev
 ```
 
-`check` checks saved source syntax, declared types, ownership, and borrowing, and writes `my-app/build/main/generated.low`. `build` adds Rust type/borrow checking and produces an executable. `run` builds and executes the app with the project directory as its working directory. Both build diagnostics and the actual executable path appear on stderr; application output goes to stdout.
+`check` checks Nagi syntax, declared types, ownership, and borrowing, and writes generated Low. `run` then builds and executes the program in one command. A successful `check` does not establish that native generation, Rust/Cargo build, publication of the executable, or runtime behavior succeeds. Report the failing stage from its actual diagnostic.
 
-When validating generated Low separately, keep project settings and use a separate output directory:
+The default native profile is `release`; use `--profile dev` for the normal edit/run loop. For an explicit release build or pre-release validation, run `nagic build --project . --profile release` when needed; do not also run `nagic run` unless you need a separate execution, since `run` builds again. The published 0.2.1 CLI accepts `--profile dev|release` and `--build-stats` on `build` and `run`; `--incremental` or `--incremental=units` requires `build`/`run --profile dev` and is opt-in. See the [development build guide](../docs/en/development-builds.md) for limits.
 
-```sh
-nagic check my-app/build/main/generated.low --project my-app --out my-app/build/from-low
-nagic build my-app/build/main/generated.low --project my-app --out my-app/build/from-low
-```
+## Tested starting points
 
-Omitting SOURCE searches upward for `nagi.toml`. An explicit source such as `nagic check my-app/main.nagi` does **not** load nearby project configuration. Use `--project` whenever the application depends on a Rust adapter, Cargo dependencies, or native Low. Paths passed on the command line are relative to the current terminal directory; paths inside `nagi.toml` are relative to that file.
+Run from the repository root. Inspect the selected sample's source and configuration before adapting it.
 
-Do not edit generated Low/Rust to repair High source. Inspect `generated.low`, generated `src/main.rs`, and backend diagnostics to identify the source or adapter change. In the compiler targeted for Nagi 0.1.11, stable application identity is separate from each successful build generation. Cooperating writers to the same output directory use an OS lock; successful executables remain side by side and old ones are not overwritten. Read the emitted `native:` path instead of constructing a filename from the entry stem. [`NAGI_NATIVE_TARGET_DIR`](../docs/en/projects.md) selects a shared dependency cache, not a successful generation. See [ADR 007](../docs/internal/adr/007-build-generations.md) and [CHANGELOG](../CHANGELOG.md) for scope and release status.
+| Need | Example |
+|---|---|
+| JSON input, validation, and aggregation | [Stock report](../test-nagi-code/application-examples/stock-report/README.en.md), a High CLI with typed errors |
+| HTTP with shared config and no database | [Quote API](../test-nagi-code/application-examples/quote-api/README.en.md), using `std.http.server` and explicit error responses |
+| Existing Axum HTTP stack | [Axum service](../test-nagi-code/application-examples/axum-service/README.en.md), where Rust routes call a named Nagi async function |
+| Typed JSON and Rust file access | [File JSON](../test-nagi-code/application-examples/file-json/README.en.md), with file operations behind an adapter |
+| SQLite storage | [Device settings](../test-nagi-code/application-examples/device-settings/README.en.md), with typed rows and nullable fields |
+| Workers and business errors | [Seat reservations](../test-nagi-code/application-examples/seat-reservations/README.en.md), using supervised actors |
+| Local Rust crate | [Rust library](../test-nagi-code/rust-library/README.en.md), keeping crate types behind an adapter |
+| Module identities and aliases | [Module imports](../test-nagi-code/library-examples/module-imports/README.en.md) |
+| Handwritten Low | [Order quote](../test-nagi-code/low-examples/order-quote/README.en.md) |
 
-## Reuse tested applications and assets
-
-Run the following commands from the repository root. Read the chosen example's source before adapting its API.
-
-| Need | Working project and boundary |
-| --- | --- |
-| JSON input, validation, aggregation | [Stock report](../test-nagi-code/application-examples/stock-report/README.en.md): High CLI with typed errors |
-| HTTP with shared config, no database | [Quote API](../test-nagi-code/application-examples/quote-api/README.en.md): `std.http.server` and explicit error responses |
-| Existing Axum HTTP stack | [Axum service](../test-nagi-code/application-examples/axum-service/README.en.md): Rust routes call a named Nagi async function and map its Result |
-| Typed JSON and Rust file access | [File JSON](../test-nagi-code/application-examples/file-json/README.en.md): adapter owns file operations |
-| SQLite storage | [Device settings](../test-nagi-code/application-examples/device-settings/README.en.md): typed rows, NULL, booleans, floats, BLOBs |
-| Workers and business errors | [Seat reservations](../test-nagi-code/application-examples/seat-reservations/README.en.md): supervised actors |
-| Independent local Rust crate | [Rust library](../test-nagi-code/rust-library/README.en.md): crate types remain behind an adapter |
-| Module identities and aliases | [Module imports](../test-nagi-code/library-examples/module-imports/README.en.md): same-named classes in separate files |
-| Handwritten Low | [Order quote](../test-nagi-code/low-examples/order-quote/README.en.md): Low imports, JSON, validation |
-
-For example:
+For example, these commands check and run the configured Axum sample:
 
 ```sh
 nagic check --project test-nagi-code/application-examples/axum-service
-nagic run --project test-nagi-code/application-examples/axum-service
+nagic run --project test-nagi-code/application-examples/axum-service --profile dev
 ```
 
-The server listens on loopback port 8097 by default and stops with Ctrl+C. To check the existing application's real HTTP behavior from both High and saved Low:
+The server listens on loopback port 8097 by default and stops with Ctrl+C. To exercise this sample from both High and saved Low, run:
 
 ```sh
 python scripts/verify_application_examples.py --compiler /path/to/nagic --only axum-service
 ```
 
-The runner checks, builds, starts, and stops the sample, then writes results to `build/application-example-verification/`. It includes successful requests and rejected input. Select a sample relevant to the change; there is no need to run every application for a documentation edit.
+The runner checks, builds, starts, and stops the sample and writes results under `build/application-example-verification/`. Use a relevant sample for application behavior; documentation changes do not need the application suite.
 
-A useful starting request names the inputs, behavior, and proof of completion:
+## Check the contract
 
-> Use the nagi-development skill to create a JSON stock-report CLI. Start from the stock-report example, keep typed validation and totals in High, reject negative quantities, and preserve Japanese item names. Check and build the configured project, then verify one valid input and one rejected input. Report the commands and results.
-
-## Find the exact contract
-
-Use [`docs/en/builtins.md`](../docs/en/builtins.md) for builtin signatures, [`docs/en/http-server.md`](../docs/en/http-server.md) for standard HTTP APIs, and [`docs/en/actor-reference.md`](../docs/en/actor-reference.md) for actors. For uncertain behavior, inspect [`compiler/tests/`](../compiler/tests/) and the relevant runtime source, then check a small saved program with the installed compiler. The [roadmap](../docs/en/roadmap.md) and [library design](../docs/en/library-design.md) contain proposals; they are not an API reference for shipped support.
+Use the [built-in reference](../docs/en/builtins.md) for signatures, [HTTP API reference](../docs/en/http-server.md) for standard HTTP APIs, and [actor reference](../docs/en/actor-reference.md) for actor types. For uncertain behavior, inspect the matching example and compiler tests, then check a small saved program with the installed compiler. The [roadmap](../docs/en/roadmap.md) and [library design](../docs/en/library-design.md) contain proposals, not shipped API guarantees.

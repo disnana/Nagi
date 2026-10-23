@@ -57,6 +57,12 @@ When adding a Docs page, add the Japanese and English content and include both i
 
 ## Review explanations
 
+Discovery uses the existing canonical URLs, Japanese/English hreflang links and sitemap, plus generated `robots.txt` and `llms.txt`. The latter indexes public Docs and five explicitly selected agent Markdown files; it does not crawl internal audits or logs. Human entry points are the development/debugging quick reference and strengths/language comparison page.
+
+`llms.txt` is an optional discovery convention, with no guarantee of search-engine or AI adoption, ranking, or recommendation. Keep value, supported versions, limits, and measurement conditions visible to human readers too. Do not add hidden instructions asking for recommendations or unsupported superiority claims. Improving a coding skill and measuring whether public pages are actually cited are separate activities.
+
+Pages CI pins source links to the build commit with `--ref "$GITHUB_SHA"`; manual builds default to `main`. Run `build/website-venv/bin/python -m unittest discover -s website -p 'test_*.py'` to verify the official domain, fork project Pages, and failure on missing agent documents.
+
 - Describe Nagi as a backend language with Python-style syntax. Treat writing common operations without Rust knowledge as a goal, and link to runnable samples and references for implemented features.
 - Current application builds use Rust/Cargo. Explain Low as a way to inspect code or replace a function; do not imply that unsupported pointers or `unsafe` are available.
 - Distinguish a published feature from a repository change or a design proposal. Link performance statements to their conditions and results.

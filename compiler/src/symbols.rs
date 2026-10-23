@@ -1074,9 +1074,11 @@ fn index_impl(
                 "class" => "record",
                 _ => keyword,
             };
-            let Some(pair) = file.tokens.windows(2).find(|pair| {
-                pair[0].line == local
-                    && matches!(&pair[0].kind, K::Id(n) if n == keyword || n == low_keyword)
+            // Lexer tokens are ordered by physical line, including indentation
+            // and EOF tokens. Preserve first-match order within this line.
+            let start = file.tokens.partition_point(|token| token.line < local);
+            let Some(pair) = file.tokens[start..].windows(2).take_while(|pair| pair[0].line == local).find(|pair| {
+                matches!(&pair[0].kind, K::Id(n) if n == keyword || n == low_keyword)
                     && matches!(&pair[1].kind, K::Id(n) if n == display_name || n == name || canonical_name.as_ref() == Some(n))
             }) else {
                 continue;

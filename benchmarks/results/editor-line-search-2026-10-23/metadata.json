@@ -1,0 +1,37 @@
+{
+  "baseline_revision": "9fe5e079eb23ed4aef515fabd19ed86dc67958f7",
+  "candidate_source_base_revision": "99c3fc5a4fadad17d30fc76e56d29dd0c0730de8",
+  "candidate_description": "uncommitted symbol definition physical-line search only",
+  "source_sha256": {
+    "compiler/src/symbols.rs": "9fdcc9c8fe7c8edcdcb29ed3df5961a02a267a94e0b60b90d6651696b5953bf7",
+    "compiler/tests/symbols.rs": "6b54419a048518f04c8592787522939694cfb923688ffa4d0f6a9c7db662d609",
+    "scripts/benchmark_editor_queries.py": "ae86043fa47e2f87ec087171920e65f51ff4b6090e396b44d47bb0392599676f",
+    "Cargo.toml": "3424f44161198bc2a1f1724b09b4b1daf8b2d6cef8b043e2f59317d5acb38b10",
+    "Cargo.lock": "81b18888aa0aae65d3536a8b522fccfb2950cc23aa30714ad1c9aab69b79ba60"
+  },
+  "binary_sha256": {
+    "baseline": "bb2ec4aeec0f1c17e26cb249874d9cb05c0da26f4dc786a872274713b05c560a",
+    "current": "17f53488bfc7b347776e3f340f175f1d85288377f4b548328782fc8597ad5168"
+  },
+  "build": {
+    "command": "cargo build --release --locked -p nagic --bin nagic",
+    "jobs": 2,
+    "profile": "repository default release unchanged",
+    "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13), LLVM 23.1.1, x86_64-unknown-linux-gnu"
+  },
+  "environment": {
+    "CARGO_HOME": "/workspace/toolchains/cargo",
+    "RUSTUP_HOME": "/workspace/toolchains/rustup",
+    "CARGO_NET_OFFLINE": "true",
+    "CARGO_TARGET_DIR": "/workspace/Nagi/local-only/022-token-target"
+  },
+  "validation": {
+    "target_tests": "editor_assistance34/module_symbols6/symbols25 passed",
+    "clippy": "cargo clippy --locked --all-targets -- -D warnings passed",
+    "fmt": "cargo fmt --all -- --check passed",
+    "python": "python3 -m py_compile scripts/benchmark_editor_queries.py passed",
+    "full_workspace": "cargo test --locked passed; Linux x86_64, offline Cargo, socket permission, jobs2/testthreads4/dev+test debug-info0; debug assertions unchanged",
+    "independent_audit": "parent-owned separate gate"
+  },
+  "delivery_base_revision": "9fe5e079eb23ed4aef515fabd19ed86dc67958f7"
+}

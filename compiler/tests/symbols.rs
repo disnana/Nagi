@@ -81,6 +81,43 @@ fn reference_at<'a>(
 }
 
 #[test]
+fn definition_locations_keep_physical_lines_at_indentation_and_eof_boundaries() {
+    for (high, file, text, class_keyword, function_keyword) in [
+        (true, "main.nagi", "\r\n# def phantom\r\nclass Box:\r\n    value: i64\r\nenum State:\r\n    Empty\r\ndef first(value: i64) -> i64:\r\n    return value\r\n\r\ndef last() -> i64:\r\n    text = \"🦀 def first enum State class Box\"\r\n    return first(7)", "class", "def"),
+        (false, "main.low", "\r\n# fn phantom\r\nrecord Box { value: i64; } enum State { Empty; } fn first(value: i64) -> i64 { return value; } fn last() -> i64 { let text = \"🦀 fn first enum State record Box\"; return first(7); }", "record", "fn"),
+    ] {
+        let f = Fixture::new();
+        f.write("nagi.toml", &format!("entry = '{file}'\n"));
+        f.write(file, text);
+        let tokens = nagic::lexer::lex(text, high).unwrap();
+        assert!(tokens.windows(2).all(|pair| pair[0].line <= pair[1].line));
+        assert!(matches!(tokens.last().unwrap().kind, nagic::lexer::K::Eof));
+        if high {
+            assert!(tokens.iter().any(|t| matches!(t.kind, nagic::lexer::K::Indent)));
+            assert!(tokens.iter().any(|t| matches!(t.kind, nagic::lexer::K::Dedent)));
+        }
+        let index = f.symbols(serde_json::json!([]));
+        for (name, kind, keyword) in [
+            ("Box", "class", class_keyword),
+            ("State", "enum", "enum"),
+            ("first", "function", function_keyword),
+            ("last", "function", function_keyword),
+        ] {
+            let offset = text.find(&format!("{keyword} {name}")).unwrap() + keyword.len() + 1;
+            let prefix = &text[..offset];
+            let definitions = index["definitions"].as_array().unwrap().iter()
+                .filter(|d| d["name"] == name && d["kind"] == kind).collect::<Vec<_>>();
+            assert_eq!(definitions.len(), 1, "{file}: {name}");
+            let location = &definitions[0]["location"];
+            assert!(location["file"].as_str().unwrap().ends_with(file));
+            assert_eq!(location["line"], prefix.bytes().filter(|b| *b == b'\n').count() + 1);
+            assert_eq!(location["column"], prefix.rsplit('\n').next().unwrap().encode_utf16().count() + 1);
+            assert_eq!(location["length"], name.len());
+        }
+    }
+}
+
+#[test]
 fn compiler_symbol_roles_use_typed_fields_and_exact_high_low_positions() {
     for (high, file, text) in [
         (true, "main.nagi", "def value() -> i64:\n    return 2\nclass Point:\n    value: i64\ndef read(value: Point) -> i64:\n    return value.value\ndef main():\n    local = Point(value=1)\n    print(read(local))\n"),

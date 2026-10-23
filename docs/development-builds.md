@@ -1,8 +1,8 @@
-# 開発ビルドと変更の観測（未リリース）
+# 開発ビルドと変更の観測
 
 [English](en/development-builds.md)
 
-このページの `--profile` / `--build-stats` は0.2.0公開後の開発ソースの機能です。公開0.2.0には含まれません。ソースから同じrevisionのcompilerをビルドして使ってください。既定の `build` / `run` は従来どおりreleaseです。
+このページの `--profile` / `--build-stats` と差分ビルドは公開済み0.2.1の機能です。公開0.2.0には含まれません。`nagic --version`を確認し、[インストール手順](getting-started.md)で更新できます。既定の `build` / `run` は従来どおりreleaseです。
 
 ```sh
 nagic check --project my-app
@@ -14,7 +14,7 @@ nagic build --project my-app --profile release --build-stats
 
 `dev` はCargoの開発profile、`release` は既存の最適化profileを使います。依存runtimeの開発用コンパイルを再利用でき、最適化待ちを減らせます。整数の加減乗算などのoverflowは通常devでpanic、releaseでwrapします。既存の言語契約です。Cargo設定や環境でprofileを上書きした場合はその設定にも従います。本番性能の測定と配布はreleaseで行ってください。
 
-## 生成本体の差分再利用（未リリース）
+## 生成本体の差分再利用
 
 ```sh
 nagic run --project my-app --profile dev --incremental --build-stats
@@ -30,7 +30,7 @@ statsの`generated_body`は`mode`、生成ソースの`source_cache`（`hit` / `
 
 本体は出力内の`.nagi/apps/<app>/code/<sha256>/`に保持し、自動削除しません。内容キーのcheckout間の移植可能性や共有cacheの認証は保証しません。協調しない別processによるディレクトリの同時差し替えやCargo cacheの改変は保証範囲外です。
 
-## 関数の依存関係によるRust分割（未リリース）
+## 関数の依存関係によるRust分割
 
 ```sh
 nagic run --project my-app --profile dev --incremental=units --build-stats
@@ -61,7 +61,7 @@ receipt schema 3は本体から参照する全単位を検査します。対応�
 python3 scripts/verify_build_receipt.py path/to/generations/g-.../build-receipt.json --compiler path/to/nagic
 ```
 
-配布候補には同じ検証器を`tools/verify_build_receipt.py`として同梱します。Python 3.10以上で実行でき、ソースcheckoutは不要です。検証対象は通常ファイルに限定し、成果物のsymlink・Windows reparse point・FIFO等を拒否します。compiler引数にはinstallerが作る実行ファイルへのlinkも使えます。同時に悪意ある別processがdirectoryを差し替える環境の安全性は保証しません。
+0.2.1配布物には同じ検証器を`tools/verify_build_receipt.py`として同梱します。Python 3.10以上で実行でき、ソースcheckoutは不要です。検証対象は通常ファイルに限定し、成果物のsymlink・Windows reparse point・FIFO等を拒否します。compiler引数にはinstallerが作る実行ファイルへのlinkも使えます。同時に悪意ある別processがdirectoryを差し替える環境の安全性は保証しません。
 
 全検査・コード生成・Cargoを毎回実行し、新しい成功世代へ公開します。記録が壊れても検査は省略しません。receipt作成に失敗したbuildは旧latestを保持し、新しいアプリを実行しません。
 
@@ -71,7 +71,7 @@ SHA-256の照合は破損を検出しますが、記録ごと改変できる攻�
 
 ## ローカルとCI
 
-公開0.2.0用のCI generatorは、この未リリースflagを自動では有効にしません。同じrevisionからビルドしたcompilerをCIに固定する場合に限り、開発用jobで明示指定してください。マージ前の完全検査と本番向けrelease buildは引き続き必要です。
+CI generatorはこれらのflagを自動では有効にしません。0.2.1以降のcompilerをCIに固定して、必要な開発用jobで明示指定してください。マージ前の完全検査と本番向けrelease buildは引き続き必要です。
 
 既存の `NAGI_NATIVE_TARGET_DIR` で依存cacheを選べます。同じcacheでもアプリIDと成功世代は分離し、devの `debug/` とreleaseの `release/` を使い分けます。通常の成功世代は自動削除しないため、容量を監視してください。IDE内部の保持設定を一般CLIのGCとして使わないでください。
 

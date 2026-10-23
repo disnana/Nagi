@@ -2,9 +2,15 @@
 
 Follow [installation](getting-started.md) with [your first CLI app](first-app.md). Use the [language feature index](#language-feature-index) for a path through the language, or open the [syntax reference](syntax.md) and [built-in functions](builtins.md) for lookup.
 
-These Docs target Nagi 0.2.0, [released on 2026-10-20](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0). Editor extensions have separate versions; see the [editor guide](editor.md). The official site is normally built from main and may include later changes. See the [Changelog](../../CHANGELOG.md) and [0.2.0 migration guide](migration-0.2.0.md).
+These Docs target Nagi 0.2.1, [released on 2026-10-23](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.1). Editor extensions have separate versions; see the [editor guide](editor.md). The official site is normally built from main and may include later changes. See the [Changelog](../../CHANGELOG.md) and [0.2.0 migration guide](migration-0.2.0.md).
 
 See [About Nagi](introduction.md) for its purpose and current scope. The references below describe implemented APIs and their limits. Unimplemented proposals are kept in [design](library-design.md) and the [roadmap](roadmap.md).
+
+## Find it quickly
+
+[Development and debugging](developer-workflow.md) · [Strengths and comparisons](comparison.md) · [Dev builds](development-builds.md) · [Application CI](user-ci.md) · [Agent docs and skill](../../ai/README.md)
+
+The quick reference routes everyday commands, symptoms, and API questions to the relevant guide. Version 0.2.2 improvements are still in development.
 
 ## First steps
 
@@ -61,7 +67,7 @@ Each detail page describes current behavior and release scope, then provides or 
 | Split code into files or call Rust | [Imports and Rust](modules-and-rust.md) |
 | Share your own libraries or use Rust crates | [Libraries and Rust assets](libraries.md) |
 | Save an entry file and build settings | [nagi.toml](projects.md) |
-| Generate app CI and measure development builds | [CI generation](user-ci.md) · [Development builds (unreleased)](development-builds.md) |
+| Generate app CI and measure development builds | [CI generation](user-ci.md) · [Development builds](development-builds.md) |
 | Use your own Rust crate from an application | [Local library example](../../test-nagi-code/rust-library/README.en.md) |
 | Wait for async work or start child operations | [Async and scopes](async.md), [concurrency](concurrency.md) |
 | Send messages to stateful tasks and manage restart and shutdown | [Actors](actor.md), [Supervisors](supervisor.md), [API reference](actor-reference.md) |
@@ -82,6 +88,6 @@ Follow the [first contribution walkthrough](contributing.md) to locate a source 
 
 `std.actor` is a standard library available from Nagi 0.1.8. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) covers registration, calls, and shutdown. The older actor/Supervisor built-ins and [queues](queue.md) remain test APIs. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
 
-These pages cover Nagi 0.2.0 and the current source. See the [change log](../../CHANGELOG.md) for changes by version. Unsupported features are listed on each page.
+These pages cover Nagi 0.2.1 and the current source. See the [change log](../../CHANGELOG.md) for changes by version. Unsupported features are listed on each page.
 
 - [Authentication/authorization](security.md) and [0.2.0 migration](migration-0.2.0.md)

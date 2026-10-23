@@ -1,4 +1,4 @@
-# Nagi 0.2.0 — 開発中のバックエンド向け言語
+# Nagi 0.2.1 — 開発中のバックエンド向け言語
 
 [English](README.en.md)
 
@@ -41,7 +41,7 @@ nagic --help
 
 [VS Code拡張](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)はMarketplaceまたは[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。IntelliJ IDEA・PyCharm向けの[Nagi](editors/jetbrains-nagi/README.md)は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)または[GitHub Releases](https://github.com/disnana/Nagi/releases)から入手できます。Marketplaceから入れる場合は、一覧のVersionsで利用可能な版とIDE対応を確認してください。GitHubの公開済み0.1.2 Releaseには、両IDE共通の`nagi-jetbrains-0.1.2.zip`と`.sha256`があります。このZIPの最低対応はIntelliJ IDEA 2025.1.1 build 251.25410.109、PyCharm 2025.1.1 build 251.25410.122です。Marketplaceからは対応IDEへ直接インストールでき、Release ZIPは手動インストールします。plugin 0.1.3の補完・診断・定義移動には公開compiler 0.2.0が必要です。利用可能なplugin ZIPはGitHub Releasesで確認してください。操作は[エディターの案内](docs/editor.md)を参照してください。
 
-Nagi 0.2.0は[2026-10-20に公開しました](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0)。インストールスクリプトは最新の公開Releaseを選びます。以下のHTTP・SQLite API例には0.2.0が必要で、公開0.1.11には含まれません。`nagic --version`で導入版を確認し、更新前に[0.2.0移行ガイド](docs/migration-0.2.0.md)を参照してください。
+Nagi 0.2.1は[2026-10-23に公開しました](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.1)。開発時は`nagic run --project . --profile dev`を使えます。[開発の早見表](docs/developer-workflow.md)と[他言語との比較](docs/comparison.md)から目的に合う情報を探せます。インストールスクリプトは最新の公開Releaseを選びます。以下のHTTP・SQLite API例には0.2.0が必要で、公開0.1.11には含まれません。`nagic --version`で導入版を確認し、更新前に[0.2.0移行ガイド](docs/migration-0.2.0.md)を参照してください。
 
 ### アンインストール
 
@@ -118,7 +118,7 @@ SVG・PNGには別途D2が必要です。絞り込み、推論できない関係
 
 Lowの互換性を保ちながら、当面はHighとRust連携を優先します。使い方は[HighとLow](docs/low-language.md)、Rustの資産を呼ぶ方法は[Rust連携](docs/modules-and-rust.md)へ。
 
-## 現在の範囲（0.2.0）
+## 現在の範囲（0.2.1）
 
 | このsourceで使えるもの | 主な制限 |
 |---|---|
