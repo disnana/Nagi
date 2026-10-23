@@ -406,6 +406,7 @@ jobs:
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
       - name: Check SF07 charged native wire checkpoint
+        id: sf07_checkpoint
         shell: bash
         run: |
           set -euo pipefail
@@ -416,6 +417,7 @@ jobs:
           fi
           export NAGI_TEST_BASH
           python -B scripts/tests/test_sf07_owned_state_summary.py
+          python -B scripts/tests/test_sf07_prelogin_owner_diagnostic.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
           cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
@@ -428,6 +430,19 @@ jobs:
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send
+      - name: Capture bounded SF07 prelogin owner stages after checkpoint failure
+        if: failure() && steps.sf07_checkpoint.outcome == 'failure' && !cancelled()
+        shell: bash
+        run: |
+          python -B scripts/ci/sf07_prelogin_owner_diagnostic.py "$RUNNER_TEMP/sf07-prelogin-owner"
+      - name: Preserve bounded SF07 prelogin owner stages
+        if: always() && steps.sf07_checkpoint.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: sf07-prelogin-owner-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/sf07-prelogin-owner/auth-stage-prelogin.trace
+          if-no-files-found: ignore
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -1691,6 +1706,7 @@ jobs:
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
       - name: Check SF07 charged native wire checkpoint
+        id: sf07_checkpoint
         shell: bash
         run: |
           set -euo pipefail
@@ -1701,6 +1717,7 @@ jobs:
           fi
           export NAGI_TEST_BASH
           python -B scripts/tests/test_sf07_owned_state_summary.py
+          python -B scripts/tests/test_sf07_prelogin_owner_diagnostic.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
           cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
@@ -1713,6 +1730,19 @@ jobs:
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send
+      - name: Capture bounded SF07 prelogin owner stages after checkpoint failure
+        if: failure() && steps.sf07_checkpoint.outcome == 'failure' && !cancelled()
+        shell: bash
+        run: |
+          python -B scripts/ci/sf07_prelogin_owner_diagnostic.py "$RUNNER_TEMP/sf07-prelogin-owner"
+      - name: Preserve bounded SF07 prelogin owner stages
+        if: always() && steps.sf07_checkpoint.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: sf07-prelogin-owner-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/sf07-prelogin-owner/auth-stage-prelogin.trace
+          if-no-files-found: ignore
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |

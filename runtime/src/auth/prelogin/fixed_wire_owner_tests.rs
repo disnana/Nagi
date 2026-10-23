@@ -3,6 +3,12 @@ use super::*;
 
 #[tokio::test]
 async fn actual_prelogin_wire_fixed_owner_outlives_issuer_until_last_bytes_clone() {
+    // Slot 2 also belongs to the ordinary prelogin diagnostic. Enable this
+    // witness only in its own exact-test process, never in the broad suite.
+    #[cfg(nagi_auth_stage_diag)]
+    let observer = (std::env::var_os("NAGI_PRELOGIN_WIRE_STAGE_DIAG").as_deref()
+        == Some(std::ffi::OsStr::new("1")))
+    .then(|| crate::auth::stage_observer::Guard::new(2));
     let f = Fixture::new().await;
     let result = f.open(2, 3, 144).await;
     if !cfg!(any(unix, windows)) {
@@ -11,6 +17,10 @@ async fn actual_prelogin_wire_fixed_owner_outlives_issuer_until_last_bytes_clone
         return;
     }
     let p = result.unwrap();
+    #[cfg(nagi_auth_stage_diag)]
+    if let Some(observer) = &observer {
+        observer.attach(&p.stage_slot);
+    }
     let o = owner();
     p.bootstrap(&o, None).await.unwrap();
     let seal = o.seal().unwrap();

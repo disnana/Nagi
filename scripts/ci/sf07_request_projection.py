@@ -320,6 +320,10 @@ CI_BROWSER_STEP_RESTORED = """      - name: Check owned BrowserLogin business st
 
 
 def inverse_source_guard_dedup(source):
+    return _inverse_source_guard_dedup_base(inverse_prelogin_owner_diagnostic(source))
+
+
+def _inverse_source_guard_dedup_base(source):
     # Direct callers use this intermediate inverse as well as inverse_workflow.
     # Validate and remove the reviewed tier/infrastructure layer before checking
     # the historical source-guard placement; no native command is normalized.
@@ -362,12 +366,62 @@ def inverse_source_guard_dedup(source):
     return source
 
 
+# This failure-only supplement is removed exactly before historical projection.
+# The primary SF07 commands and frozen workflow contract remain unchanged.
+PRELOGIN_OWNER_DIAGNOSTIC_STEP = """      - name: Capture bounded SF07 prelogin owner stages after checkpoint failure
+        if: failure() && steps.sf07_checkpoint.outcome == 'failure' && !cancelled()
+        shell: bash
+        run: |
+          python -B scripts/ci/sf07_prelogin_owner_diagnostic.py "$RUNNER_TEMP/sf07-prelogin-owner"
+      - name: Preserve bounded SF07 prelogin owner stages
+        if: always() && steps.sf07_checkpoint.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: sf07-prelogin-owner-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/sf07-prelogin-owner/auth-stage-prelogin.trace
+          if-no-files-found: ignore
+"""
+PRELOGIN_OWNER_PRIMARY_ID = "        id: sf07_checkpoint\n"
+PRELOGIN_OWNER_UNIT_LINE = "          python -B scripts/tests/test_sf07_prelogin_owner_diagnostic.py\n"
+PRELOGIN_OWNER_INHERITED_STEP = PRELOGIN_OWNER_DIAGNOSTIC_STEP.replace(
+    "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4",
+    "actions/upload-artifact@v4",
+).replace("          retention-days: 7 # ci-retention\n", "")
+
+
+def inverse_prelogin_owner_diagnostic(source):
+    # Existing callers also supply the exact historical infrastructure profile
+    # after levels.inverse_workflow. Never accept that profile in raw CI input.
+    step = (PRELOGIN_OWNER_DIAGNOSTIC_STEP if "\n  ci-plan:\n" in source
+            else PRELOGIN_OWNER_INHERITED_STEP)
+    primary = "      - name: Check SF07 charged native wire checkpoint\n"
+    preceding = ("          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib "
+                 "http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B "
+                 "scripts/ci/sf07_owned_state_summary.py send\n")
+    following = "      - name: Check SF02 public Session runtime and one-use delivery before other checks\n"
+    unit = "          python -B scripts/tests/test_sf07_owned_state_summary.py\n"
+    if (source.count(primary + PRELOGIN_OWNER_PRIMARY_ID) != 2
+            or source.count(preceding + step + following) != 2
+            or source.count(unit + PRELOGIN_OWNER_UNIT_LINE) != 2):
+        raise ValueError("prelogin owner diagnostic placement mismatch")
+    for added in (step, PRELOGIN_OWNER_PRIMARY_ID,
+                  PRELOGIN_OWNER_UNIT_LINE):
+        if source.count(added) != 2:
+            raise ValueError("prelogin owner diagnostic registration mismatch")
+        source = source.replace(added, "")
+    return source
+
+
 def inverse_workflow(source):
+    # Validate the new pinned artifact step before the infrastructure inverse
+    # restores historical action spellings and retention fields.
+    source = inverse_prelogin_owner_diagnostic(source)
     if "\n  ci-plan:\n" in source:
         source = _LEVELS.inverse_workflow(source)
     source = _B1.inverse_failure_diagnostic(source)
     source = _PARALLEL.inverse_workflow(source)
-    source = inverse_source_guard_dedup(source)
+    source = _inverse_source_guard_dedup_base(source)
     for added, inherited, label in (
         (SF08_BROWSER_JOB, '', 'SF08 browser reusable job'),
         (READY_NEEDS_WITH_SF08, READY_NEEDS_WITHOUT_SF08, 'ready dependencies'),
