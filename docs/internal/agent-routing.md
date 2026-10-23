@@ -130,3 +130,5 @@ Session65/SF07 summary37/native-finish20/source guard16/CI policy160件が成功
 
 
 2026-10-22、#149 SF08 prerequisitesをSol 6.1 Highが限定調査。親がsource pin・両APT argv限定・閉鎖後scalar公開の事前設計を承認し、同Highが実装とRED→GREEN/Python64/Node148/source guard16/policy160を実行した。managed transport設定差と不要NodeSource依存をprivate診断で分離し、GitHub240秒失敗の原因同一性は未確認とした。原trustのfresh fullはAPT通過後build101/unknown・browser0、受入成功とは扱わない。所有container/imageのみ区切りで整理し、private証拠と原ログを保持する。新HEAD CI・別High最終auditへ引継ぐ。追加spawn/commit/pushなし、model時間・費用は未測定。詳細は[sf08-prerequisite-repositories.md](sf08-prerequisite-repositories.md)。
+
+2026-10-23、#148 SF08 APT status診断をsource commit `1797bb9`からmain base `9fe5e079`へ独立切出しした。元source commitでは独立High監査・CI成功済みだが、新しい切出しheadのthree-engine CIは未確認。#151 CIでもupdate 6821ms/install残233178ms後に同じ240秒timeout、closed ECHILD/browser0を観測し、根因を未解決のまま記録する。切出し後はPython70/Node148/CI列挙source/projection87/CI policy160件が成功。Nodeのsandbox socket拒否は、CI相当のpermissionで同commandを再実行して通過した。native再現と新exact-head CIは未実施。model時間・使用量・費用は未計測。[設計・証拠](sf08-install-status-diagnostic.md)。

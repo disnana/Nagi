@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-23: #148 SF08 install status診断の独立切出し
+
+[設計・証拠](sf08-install-status-diagnostic.md)。source commit `1797bb9`のAPT bounded status診断を、main `9fe5e079`ベースの独立差分として切り出した。source commitでは独立High監査とCIが成功済みだが、その結果は切出し後のexact headを検証しない。#151 CI `39924958112` / job `120319148103`でもupdate 6821ms後、残り233178msでinstallがspawnして240秒期限に達し、closed ownership・actual ECHILD・browser0だった。これは同型の観測で、原因は未解決。切出し後のPython70・Node148・source/projection 87（既存CI列挙6本、うちBrowserLogin guard16）・CI policy160は成功。local socket制限で失敗したNode初回は、CI相当のnetwork permissionで同じcommandを再実行して成功した。native APT再現と切出し後のexact-head three-engine CIは未実行で、成功扱いしない。期限240秒、retry0、TLS/署名、固定source、3 package、ECHILD、全browser checksは維持する。
+
 ## 2026-10-22: #149 SF08 prerequisitesの不要repository依存
 
 [限定修正と実行証拠](sf08-prerequisite-repositories.md)。固定imageの公式Ubuntu sourceをregular-file/有限bytes/SHAで検証し、APT update/install双方へ同じsource選択を指定した。不要なNodeSource結合を除き、失敗時の厳密な3scalarをclosed＋actual ECHILD後だけ公開する。240秒/署名/TLS/required packages/capsule/browser検査は不変。Python64・Node148・source/projection16・CI policy160成功。原trustのfresh全実行はAPT通過後build101/unknown、browser0で未受入。GitHubの期限失敗と同根とは断定せず、新HEADの実3engine CIと別High最終監査を必須で残す。
