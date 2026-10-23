@@ -112,6 +112,12 @@ Enter補助の独立Sol 6.1 High監査で、SDK `DocumentEx.getModificationSeque
 
 2026-10-22 Tokio #8692対応では、親がupstream PR/release・tracked locks・生成Cargo境界を調査し、独立Sol 6.1 Highのread-only事前調査がruntime最低版/standalone fixture整合と必須failure casesを確認した。実装はmanifest/lockと日英文書に限定し、cache codeや履歴benchmarkを変えない。focused runtime862成功/計測1ignored、生成appのfresh/1.54.0/1.53.1 lock更新と旧exe保持を実行した。実装後の別のfresh Sol 6.1 High最終監査とexact-head CIはPRで追跡する。model時間/使用量/料金は未計測。ローカルSDK cache削除は初回自動reviewが拒否した後、ユーザーの明示許可により前taskで取得した再download可能なIDE SDK約2.9GBだけを削除し、ZIP/raw logとNagi app cacheは保持した。
 
+
+## 2026-10-22: JetBrains documentationの独立差分
+
+base `765f0b0`。Sol 6.1 High担当がread-onlyでhover/diagnostic/compiler JSONとsnapshot境界を調査し、親の設計採用後、専用worktreeでplugin実装・意味のあるnegative/実compiler/JVM表示testsを担当した。compiler/CIは変更せず、子の追加spawnなし。親はSDK bootstrapと別PRのQA・後続PR操作を担当し、Gradleは同じcacheを使うため単独実行した。必要な検証後の独立最終auditは別担当へ渡す。
+
+全214件と追加HTML renderer1件を確認し、原文保持・HTML表示・exact location接続を実fixtureで検証した。SDK準備中に編集開始したbootstrapは厳密なmain baselineと数えない。packagingのread-only data pathとVerifierのread-only home/remote接続失敗をsource不具合と分け、原ログを保持して専有設定だけを修正する。Verifier/他IDE CI/実GUIの未完gateはPRに残す。[詳細記録](jetbrains-documentation-plan.md)。モデル別時間・使用量・料金・service-tierは未計測で、テスト時間をmodel速度の比較には使わない。
 ## 2026-10-22: 0.2.1の重複処理と計測基盤
 
 base `e2d7280`。Sol 6.1 Highの事前調査でparser token再利用、既存unitsの境界と将来のasync段階案を確認し、親がparser/sourceと回帰・実計測を担当した。CI担当Luna Maxの再開はcapacityエラーで実行できず、同じ証拠と限定file範囲を既存High担当へ渡した。モデル品質の失敗とは扱わず、同じ探索は繰り返さない。HighがCIの未使用release build除去・fixture cache共有・exact inverse検査を実装し、その後に独立fileの8ケースmatrix harnessとpure safety testsを担当した。親を含め最大3体、子spawnと同じfileの並行編集はなし。実行後の最終auditは実装者と別のfresh Highへ分離する。
@@ -126,9 +132,26 @@ Sol 6.1 High担当がread-onlyで保存済みCI事実とbrowser Handler境界、
 Session65/SF07 summary37/native-finish20/source guard16/CI policy160件が成功。実装後の最終auditは別のSol 6.1 Highへ分離し、子の追加spawnなし。新HEAD CIと1000ms原因の継続調査はPRへ残す。model時間・使用量・費用・service tierは未計測。Python検査時間やcompile込み比較時間をmodel性能の根拠には使わない。
 
 
+2026-10-22、#148候補の入力時色消失をSol 6.1 Highが事前承認済みpresentation-only設計で実装。実ExternalToolPassのRED→GREEN、debounce起動/取消数、marker上限/取消cleanup、trust復帰の初回full失敗と修正を記録した。modernDocumentationTarget testのJob context不足はSDK bridgeをArchitect xhighがread-only確認し、正規indicator/coroutine/blocking/read contextでwarm成功。全225件71秒成功。病的な同位置20,000marker fixtureは停止し、製品上限を維持したtest-only境界注入へ変更。compiler/CI/run profile/coldasyncの製品変更は行わず、別Highの最終auditと4IDE CI/実GUIを残す。親と担当のGradle共有cacheを直列使用し、workspace空き4.4GiB/tmp7.9GiBを維持。利用量・モデル単体時間は未測定。
+
+
+2026-10-22、Sol 6.1 Highが#148のcold hover/localsを、前段colorの別High audit後に実装。Architect xhighはscalar通知・timer所有・read→lock順・限定recapture責任移譲を事前/境界発見時にread-only確認した。取消testの同assert2失敗で停止し、SDK ApplicationImplのPCE→null wrapperを根拠にtest executorを是正、assertを維持してactual SDK Deferred取消を検証。公開0.2.0と開発版のimport文法差、CRLF/Low commentのfixture不備を製品bugと区別。14ticket検査/公開CLI連携と全243件84秒成功、dispose後trust eventのRED→guard→targeted16秒成功後に最終全体/ZIP/Verifierを実行する。新run profile/compiler変更なし。別High最終audit/4IDE CI/実GUI受入は別gate、model単体時間と利用量は未測定。
+
+
+cold最終guard後の全243件77秒・ZIP21秒・IC251 Verifier11秒Compatible（deprecated3/experimental12）を実行し、source/test/docsを凍結。API警告を隠さず最新4IDE CIへ渡し、別Highの独立最終auditと実GUIを未完gateとして維持する。
+
+
+2026-10-22、Sol 6.1 Highが1792138から専有worktreeでJetBrains Development/Release Runを実装。事前read-only designを親が採用し、in-flight共有を省いて各Runの独立bounded probeと完了cacheへ限定した。Luna Medium/親のconsoleログ・SDK262調査で同期callback中のenvironment破棄を絞り、Highが実registered runnerでRED、Architect xhighが単一CAS＋project-only temporary process fallbackを事前確認してGREENにした。全266件83秒後、割込みcleanupの対象回帰18秒を経て最終267件84秒成功。正式CI候補0.2.1のnativeはcold条件非対称を明記し、harness誤期待と正規管理run拒否を製品不具合と区別した。probe実行数・cache再利用・独立同時miss・取消/trust/settings/dispose/identity交換を検証し、native所有targetだけ整理。別High auditは実行完了後、model単体時間・利用量・費用は未測定。子の追加spawnなし、他worktree/本体CLI/CIは変更しない。
+
+
+上記Run候補は最終267件/ZIP21秒/保持ZIPのVerifier10秒Compatible（deprecated3/experimental17）/CI policy160件まで実行。専有native targetは証拠保護後に削除し、全実行終了・source/test/docs凍結後に親へ所有権を返す。別High audit・最新HEAD CI・Windows GUIは未実施gateとして分離する。
+
 2026-10-22、Sol 6.1 Highが専有worktree（base f75300a）でSupervisor terminal eventのP1修正を担当。親/Architect xhighが停止intentとpublicationのrace、Release/Acquire barrier、cleanup後のpollを固定するfinite gateを事前承認した。Highはhookだけの旧実装でSHUTDOWN0/STOPPED1のREDを再現し、gate解除・thread join・drainを済ませた最後のassertで観測。製品4行＋説明2行を追加しGREEN、actor45件・全runtime923 passed/3既存ignored・clippy/fmt・High/saved Lowの実nativeを実行した。1回のWindows複合assert失敗（実数なし）との根因同一性は主張しない。test期限/assert/並列度を維持、追加spawn/commit/pushなし。source/test凍結後に別Highが最終auditを行い、その後改訂4OS CIへ進む。専有targetのCargo再利用とaudit後整理は親へ引き継ぎ、元cache/CLI/evidenceは保護する。model単体時間・使用量・費用は未測定。
 
 
 2026-10-22、#149 SF08 prerequisitesをSol 6.1 Highが限定調査。親がsource pin・両APT argv限定・閉鎖後scalar公開の事前設計を承認し、同Highが実装とRED→GREEN/Python64/Node148/source guard16/policy160を実行した。managed transport設定差と不要NodeSource依存をprivate診断で分離し、GitHub240秒失敗の原因同一性は未確認とした。原trustのfresh fullはAPT通過後build101/unknown・browser0、受入成功とは扱わない。所有container/imageのみ区切りで整理し、private証拠と原ログを保持する。新HEAD CI・別High最終auditへ引継ぐ。追加spawn/commit/pushなし、model時間・費用は未測定。詳細は[sf08-prerequisite-repositories.md](sf08-prerequisite-repositories.md)。
 
 2026-10-23、0.2.2候補のeditor探索をSol 6.1 Highが設計・実装・実測した。token再利用候補は対象testと同値比較が成功しても通常assist悪化の実測により棄却。別案の物理line限定検索は同一release toolchain、交互順15 sample、whole JSON比較で検証した。親が全workspace回帰を追加実行して成功。独立High監査とexact-head CIは次のgateで、実装者の報告と区別する。主な制約は計測分散・Linuxのみ・小さい効果。model時間・使用量・費用は未測定。[設計・証拠](../../benchmarks/results/editor-line-search-2026-10-23/README.md)。
+
+
+2026-10-23、#148 d06のSF08 install236秒timeoutをSol 6.1 Highがread-only調査。親承認後、専有worktreeで固定2名bounded captureとfailure-only status enum/数値だけを実装した。pinned image内APT2.8.3を実測し、当初2.7.14参照を訂正して正確なUbuntu source archiveも確認。native1回30.362秒/閉鎖ECHILD、Python70/Node148/guard16/policy160、RED→GREENを実行し、原trustと240秒/security/browser gateを維持した。証拠保存後に専有Docker objectsだけ整理。根因未解決・観測追加として凍結し、親が別High最終監査とexact-head CIへ進める。追加spawn/commit/pushなし、model時間/費用は未計測。[詳細](sf08-install-status-diagnostic.md)。

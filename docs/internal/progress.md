@@ -4,6 +4,20 @@
 
 [設計・実測](../../benchmarks/results/editor-line-search-2026-10-23/README.md)。main `9fe5e079`基準で、symbolsの定義位置検索だけを既存lexerの物理line順に限定した。High/Lowの検査・位置・protocol・Cargo経路を維持。16 case×15 sampleでJSON全体が一致し、大caseの中央値はおおむね1〜2%短縮したが、ばらつきと遅いcaseも記録した。先行token再利用案は通常assistの約6%悪化が再現したため棄却し、実装を戻して証拠を保存した。対象65 tests、全workspace `cargo test --locked`、all-target Clippy、fmt、Python構文が成功。独立最終auditとexact-head CIは未確認。Windows/macOSでの速度、Rust/Cargo buildやアプリ速度の改善は主張しない。
 
+## 2026-10-23: #148 SF08 installの有限status観測
+
+[設計と実証](sf08-install-status-diagnostic.md)。update成功・install実spawn後236秒timeoutという新CI事実を受け、原240秒/transport/TLS/署名/source pin/3packages/browser検査を維持して、固定2名だけのbounded captureへAPT Status-Fdを接続した。閉鎖＋actual ECHILD後に有限phase/record数だけを公開し、未知・不正・truncation等はunknown、成功時のcapture異常もfailclosed。実pinned APT2.8.3で原trustの1回の導入30.362秒/29752bytes/516recordsを確認、専有container/image整理済み。Python70/Node148/sourceguard16/policy160成功、旧実装の観測欠落をRED→GREENで確認。timeout根因の修復・安定化済みとは扱わず、別High監査と新HEAD実3engine CIを必須で残す。
+
+## 2026-10-23 JST: #148へ0.2.1 mainを統合
+
+main `9fe5e07`（#149）を取り込み、CHANGELOG・agent-routing・本記録の追記競合を解消した。0.2.1本体と0.1.4プラグインの記録を両方保持し、重複した未リリース編集補助項目を0.1.4欄へ集約する。プラグインのsource/test/resourceは既存CI成功HEAD `da80a79`と同一、runtime・lock・SF08修正はmainと同一である。統合HEADのCIは別gateとして確認し、新候補のWindows Run描画・Stop/再実行の利用者確認は引き続き保留する。
+
+## 2026-10-22: JetBrainsのhover / Quick Documentation
+
+main `765f0b0`からcompiler/CIと独立したplugin差分を実装した。既存hoverのCLI診断装飾とparser token Debug到達を調査し、診断原文とdescriptionを保持したままtooltipをescapeして整形する。関数・classの説明はcompilerの正確な位置graphと既存JSONの引数・戻り値・async・fieldだけを使い、同名local・衝突・cold/stale/untrustedでは推測表示しない。coldは背景解析後の再hover/再実行が必要。[設計・表示範囲・検証記録](jetbrains-documentation-plan.md)を参照。
+
+ローカルIC251で全214件failure/error/skip 0、追加HTML renderer1件も成功し合計215件を検証。High/Low・import alias・class/function/asyncは実compiler JSONから登録Providerまで確認した。最初のpackagingはread-onlyなIDE共通data pathで失敗し、HOMEを維持した専有tmp/XDG再実行は成功。ZIPのdescriptorとhashも確認した。Plugin Verifierはhome設定の解決後、remote依存のConnection refusedでproxy引継ぎ調査中。Verifier・他IDE/版のCI・独立最終audit・実GUI受入は未完で、公開成功と混同しない。版更新・release・Marketplace公開は行っていない。
+
 ## 2026-10-22: #149 SF08 prerequisitesの不要repository依存
 
 [限定修正と実行証拠](sf08-prerequisite-repositories.md)。固定imageの公式Ubuntu sourceをregular-file/有限bytes/SHAで検証し、APT update/install双方へ同じsource選択を指定した。不要なNodeSource結合を除き、失敗時の厳密な3scalarをclosed＋actual ECHILD後だけ公開する。240秒/署名/TLS/required packages/capsule/browser検査は不変。Python64・Node148・source/projection16・CI policy160成功。原trustのfresh全実行はAPT通過後build101/unknown、browser0で未受入。GitHubの期限失敗と同根とは断定せず、新HEADの実3engine CIと別High最終監査を必須で残す。
@@ -559,6 +573,28 @@ base `e2d7280`から、physical moduleを2回lexする経路をparser所有token
 
 fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inventory37、利用者CI generator7、network許可下の全workspace `cargo test --locked --quiet`が成功した。全workspace670.09秒は同条件の速度比較ではない。最初のsocket権限拒否の失敗logも保持した。ordinary devとunitsの8ケースを各3回測定し、48成功exe・6回の不正lock拒否/回復を確認した。100関数では変更なしが約16%速い一方、編集は約9–21%遅いためopt-inを維持する。全構成の専有targetは完了後に整理した。独立最終audit、exact-head CIとリリース工程は別gateとして追跡する。query cache・一般async/type分割・自動最適化は未実装で、将来案を今回の成果に数えない。
 
+
+### 2026-10-22 JetBrains候補の入力中role色維持（未リリース）
+
+候補ZIPの利用者報告から実ExternalToolPassの空結果による色消失をRED再現し、色属性だけをbounded RangeMarker storeへ保存する修正を追加。接触token・dependency/config/compiler/trust/VFS/close/dispose/fresh失敗は破棄し、古い型・診断・参照を再利用しない。既存350/80ms debounce・取消契約は維持。標準DocumentationTargetのwarm経路を実compiler/actual offset/worker read actionで検証したが、cold同hover更新とbuiltin署名情報の不足、実GUIの無表示報告は未解決として分離した。全plugin225件成功（71秒、skip0）。packaging/Verifier/4IDE CI/独立audit/GUI gateは別検証。[設計・失敗と検査記録](jetbrains-documentation-plan.md)。
+
+
+### 2026-10-22 JetBrains cold documentationとexact locals（未リリース）
+
+色保持の独立audit後、標準DocumentationTargetProvider＋SDK async supplierで同じcold hover要求を既存worker完了へ接続。Boolean通知ticketは8件、独立deadline・epoch/stamp/trust/pointer再検証・lock外通知・取消/失効/終了時解放を実装した。新dependencyの既存precapture再予約だけをattempt tokenで引き継ぎ、旧factsを採用せず期限も延長しない。localsの型は既存exact compiler locationsだけを表示し、衝突とbuiltin署名推測を拒否する。公開0.2.0の実配布CLIでもHigh/Low function/class/locals/asyncを確認、bare import文法差は正式quoted path fixtureで分離した。全243件84秒成功後、dispose済みtrust eventの追加RED→1行guard→targeted GREENを確認し、最終全体/ZIP/Verifier・独立audit・最新HEAD CIへ進める。実GUI受入は未完。[設計・検証記録](jetbrains-documentation-plan.md)。
+
+
+同cold sourceの最終全243件77秒成功、ZIP21秒成功、IC251 Plugin Verifier Compatible（11秒、deprecated3/experimental12）。source/test/docsを凍結し、別High audit・最新HEADの4IDE CI・実GUI受入を残す。ZIPとログ/実験失敗は作業環境の `local-only/pr148-stability/` に保持する。
+
+
+### 2026-10-22 JetBrains Development Runと受理時content寿命（未リリース）
+
+標準RunへDevelopment既定/Release保存選択を追加し、legacy Nagi: Runも共通worker preparerを使う。Checkと明示Releaseはprobe/新flagなし。semverだけで能力を判断せず、bounded helpと実行体identityに基づく8件cacheを使い、既知公開0.2.0/0.1.11は実際のReleaseをconsoleへ表示してfallbackする。初回同時missは独立probeの所有と取消を保つ。ユーザーRun UI異常の別調査ではSDK262の同期callbackとenvironment破棄をRED再現し、単一terminal CASで受理済みdescriptorを維持、project終了時は一時process fallbackで停止する。ANSI/GPU/reuse無効化は加えない。
+
+全266件83秒成功後の割込みcleanup補強を対象検査し、最終全267件84秒成功（failure/error/skip0）。実公開0.2.0 fallbackと正式CI候補0.2.1のDev/Release/native出力42、warm Dev単発0.301秒/197 Fresh/1 compiledを確認した。cold/warm非対称のため速度比較にはしない。receiptと旧exe bytesを確認し、所有native targetのみ整理。ZIP/Verifierの確定結果、独立最終High audit、最新4IDE CI、Windows GUI受入は別gate。[設計・証拠](jetbrains-dev-run-plan.md)。
+
+
+同sourceのZIP21秒成功、保持ZIPに対するIC251 Verifier10秒Compatible（deprecated3/experimental17）、CI policy160件成功。最終source/test/docsを凍結し、独立High audit・最新HEAD CIと新候補Windows GUI受入へ渡す。rawlog/ZIP/hash/267件XML/native証拠は `local-only/pr148-dev-run/` に保持。
 
 ### 2026-10-22 SupervisorのSHUTDOWN publicationとterminal完了（未リリース）
 

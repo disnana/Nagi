@@ -48,5 +48,11 @@ public final class NagiParameterInfoTest extends BasePlatformTestCase {
         assertEquals("add(a: i64, b: str)", shown.get()[0]);
         String text = (String) shown.get()[0];
         assertEquals("b: str", text.substring((Integer) shown.get()[1], (Integer) shown.get()[2]));
+        var withReturn = new NagiAssistProtocol.Definition(definition.name(), definition.kind(), definition.location(),
+                definition.signature(), definition.parameters(), "list[str?]", false, List.of());
+        new NagiParameterInfoHandler().updateUI(withReturn, ui);
+        assertEquals("add(a: i64, b: str) -> list[str?]", shown.get()[0]);
+        text = (String) shown.get()[0];
+        assertEquals("b: str", text.substring((Integer) shown.get()[1], (Integer) shown.get()[2]));
     }
 }

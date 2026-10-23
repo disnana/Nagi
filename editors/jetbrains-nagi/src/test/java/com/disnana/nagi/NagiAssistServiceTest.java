@@ -942,6 +942,235 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         assertNull("an imported target overlay edit invalidates its completion response", service.fresh(main, editor));
     }
 
+    public void testRegisteredDocumentationUsesHoveredOffsetAndRejectsShadowedOrStaleFacts() throws Exception {
+        PsiFile file = source("documentation.nagi", "# 😀\r\nclass Point:\r\n    value: i64\r\n"
+                + "def value(x: i64) -> i64:\r\n    return x\r\ndef main():\r\n"
+                + "    print(value(1))\r\n    value = 2\r\n    print(value)\r\n    ready()\r\n");
+        String path = file.getVirtualFile().getPath();
+        var point = new NagiAssistProtocol.Definition("Point", "class", new NagiAssistProtocol.Location(path, 2, 7, 5),
+                "class Point\n    value: i64", List.of(), null, false,
+                List.of(new NagiAssistProtocol.Parameter("value", "i64")));
+        var function = new NagiAssistProtocol.Definition("value", "function", new NagiAssistProtocol.Location(path, 4, 5, 5),
+                "def value(x: i64) -> i64", List.of(new NagiAssistProtocol.Parameter("x", "i64")), "i64", false, List.of());
+        var standard = new NagiAssistProtocol.Definition("ready", "function", new NagiAssistProtocol.Location("stdlib:async", 1, 1, 5),
+                "async def ready() -> unit", List.of(), "unit", true, List.of());
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            assertFalse("documentation analysis never runs on the EDT", javax.swing.SwingUtilities.isEventDispatchThread());
+            calls.incrementAndGet();
+            return new NagiAssistProtocol.Response("none", true, true, false, "names", List.of(), List.of(), List.of(
+                    new NagiAssistProtocol.Reference(new NagiAssistProtocol.Location(path, 7, 11, 5), function.location()),
+                    new NagiAssistProtocol.Reference(new NagiAssistProtocol.Location(path, 9, 11, 5), new NagiAssistProtocol.Location(path, 8, 5, 5)),
+                    new NagiAssistProtocol.Reference(new NagiAssistProtocol.Location(path, 10, 5, 5), standard.location())),
+                    List.of(path), List.of(point, function, standard), List.of());
+        });
+        installService();
+        var provider = com.intellij.codeInsight.documentation.DocumentationManager.getProviderFromElement(file);
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(0);
+        int offset = file.getText().indexOf("value(1)");
+        var hovered = provider.getCustomDocumentationElement(editor, file, file.findElementAt(0), offset + 2);
+        assertNotNull("the registered provider must use the hovered token, not the caret", hovered);
+        assertEquals("value", hovered.getText());
+        assertNull("cold documentation only requests worker warmup", provider.generateDoc(hovered, hovered));
+        waitUntil(() -> service.fresh(file) != null);
+        String html = provider.generateDoc(hovered, hovered);
+        assertNotNull(html);
+        assertTrue(html.contains("Returns:</b> <code>i64"));
+        assertEquals(1, calls.get());
+        var declaration = file.findElementAt(file.getText().indexOf("def value") + 4);
+        assertNotNull(provider.generateDoc(declaration, declaration));
+        var className = file.findElementAt(file.getText().indexOf("Point"));
+        assertTrue(provider.generateDoc(className, className).contains("Fields (use named arguments"));
+        var shadow = file.findElementAt(file.getText().lastIndexOf("print(value)") + 6);
+        assertNull("same spelling is not a semantic target", provider.generateDoc(shadow, shadow));
+        var virtual = file.findElementAt(file.getText().indexOf("ready()"));
+        assertTrue("virtual stdlib documentation needs no navigable source PSI", provider.generateDoc(virtual, virtual).contains("Async function"));
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> editor.getDocument().insertString(0, "# changed\n"));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        var changed = file.findElementAt(file.getText().indexOf("value(1)"));
+        assertNull("an edited snapshot cannot display an old return type", provider.generateDoc(changed, changed));
+        TrustedProjects.setProjectTrusted(getProject(), false);
+        assertNull(provider.generateDoc(changed, changed));
+    }
+
+    public void testDiagnosticDescriptionsKeepOriginalTextWhileAllTooltipRangesAreEscaped() throws Exception {
+        PsiFile file = source("tooltips.nagi", "def main():\n    print(1)\n\n");
+        String path = file.getVirtualFile().getPath();
+        String raw = "error: line 2: bad <tag>&lt; (found Id(\"value\"))\n --> " + path + ":2\n 2 |     print(1)\nhint: keep";
+        var diagnostics = List.of(
+                new NagiAssistProtocol.Diagnostic(raw, path, 2, new NagiAssistProtocol.Location(path, 2, 5, 5)),
+                new NagiAssistProtocol.Diagnostic(raw + " range-zero", path, 2, new NagiAssistProtocol.Location(path, 2, 5, 0)),
+                new NagiAssistProtocol.Diagnostic(raw + " end", path, 2, new NagiAssistProtocol.Location(path, 2, 13, 0)),
+                new NagiAssistProtocol.Diagnostic(raw + " line", path, 2, null),
+                new NagiAssistProtocol.Diagnostic("empty <tag>&lt;", path, 3, null),
+                new NagiAssistProtocol.Diagnostic("file <tag>&lt;", path, null, null),
+                new NagiAssistProtocol.Diagnostic("unknown origin <tag>&lt;", "stdlib:missing", null, null));
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) ->
+                new NagiAssistProtocol.Response("none", true, false, false, "names", diagnostics, List.of(), List.of(), List.of(path)));
+        installService();
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        var highlighted = myFixture.doHighlighting();
+        for (var diagnostic : diagnostics) {
+            var info = highlighted.stream().filter(value -> diagnostic.message().equals(value.getDescription())).findFirst();
+            assertTrue("original diagnostic description must survive every annotation range: " + diagnostic.message(), info.isPresent());
+            assertTrue(info.get().getToolTip().contains("&lt;tag&gt;&amp;lt;"));
+            assertFalse(info.get().getToolTip().contains("<tag>"));
+        }
+    }
+
+    private boolean functionRoleAt(int offset, int length) {
+        var editor = myFixture.getEditor();
+        var expected = editor.getColorsScheme().getAttributes(
+                com.intellij.openapi.editor.DefaultLanguageHighlighterColors.FUNCTION_DECLARATION);
+        return java.util.Arrays.stream(com.intellij.openapi.editor.impl.DocumentMarkupModel.forDocument(
+                editor.getDocument(), getProject(), true).getAllHighlighters()).anyMatch(highlighter ->
+                highlighter.getStartOffset() == offset && highlighter.getEndOffset() == offset + length
+                        && java.util.Objects.equals(expected, highlighter.getTextAttributes(editor.getColorsScheme())));
+    }
+
+    private NagiAssistProtocol.Response roleFacts(PsiFile file, boolean diagnostic) {
+        String path = file.getVirtualFile().getPath();
+        var location = new NagiAssistProtocol.Location(path, 1, 5, 3);
+        return new NagiAssistProtocol.Response("editor-partial", true, false, false, "names",
+                diagnostic ? List.of(new NagiAssistProtocol.Diagnostic("old diagnostic", path, 5,
+                        new NagiAssistProtocol.Location(path, 5, 15, 1))) : List.of(), List.of(),
+                List.of(new NagiAssistProtocol.Reference(new NagiAssistProtocol.Location(path, 5, 11, 3), location)),
+                List.of(path), List.of(new NagiAssistProtocol.Definition("add", "function", location,
+                        "def add(value: i64) -> i64", List.of(new NagiAssistProtocol.Parameter("value", "i64")),
+                        "i64", false, List.of())), List.of());
+    }
+
+    public void testPendingAnalysisKeepsOnlyUntouchedRolePresentation() throws Exception {
+        PsiFile file = source("steady.nagi", "def add(value: i64) -> i64:\n    return value\n\ndef main():\n    print(add(1))\n");
+        CountDownLatch finish = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            if (calls.incrementAndGet() > 1) finish.await();
+            return roleFacts(file, true);
+        });
+        installService();
+        try {
+            service.requestBaseline(file);
+            waitUntil(() -> service.fresh(file) != null);
+            myFixture.doHighlighting();
+            assertTrue("the real external annotation pass initially paints the declaration", functionRoleAt(4, 3));
+            var document = myFixture.getEditor().getDocument();
+            int literal = document.getText().lastIndexOf('1');
+            WriteCommandAction.runWriteCommandAction(getProject(), () -> document.replaceString(literal, literal + 1, "2"));
+            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+            assertNull(service.fresh(file));
+            assertNull("presentation never authorizes old function types", service.documentedDefinition(file, file.findElementAt(4)));
+            var pendingHighlights = myFixture.doHighlighting();
+            assertTrue("pending analysis must not erase an untouched role color", functionRoleAt(4, 3));
+            assertFalse("old diagnostic positions must not survive an edit", pendingHighlights.stream()
+                    .anyMatch(info -> "old diagnostic".equals(info.getDescription())));
+        } finally { finish.countDown(); }
+    }
+
+    public void testRapidEditsKeepDebounceAndCancelOnlyTheActiveAnalysis() throws Exception {
+        PsiFile file = source("burst.nagi", "def add(value: i64) -> i64:\n    return value\n\ndef main():\n    print(add(1))\n");
+        AtomicInteger starts = new AtomicInteger();
+        AtomicReference<NagiAssistProcess.Cancellation> second = new AtomicReference<>();
+        CountDownLatch finish = new CountDownLatch(1);
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            if (starts.incrementAndGet() == 2) {
+                second.set(cancellation);
+                while (finish.getCount() > 0) try { finish.await(); } catch (InterruptedException ignored) { }
+            }
+            return roleFacts(file, false);
+        });
+        installService();
+        try {
+            service.requestBaseline(file);
+            waitUntil(() -> service.fresh(file) != null);
+            var document = myFixture.getEditor().getDocument();
+            service.rolePresentation(file, document, service.fresh(file));
+            int literal = document.getText().lastIndexOf('1');
+            WriteCommandAction.runWriteCommandAction(getProject(), () -> {
+                for (int i = 0; i < 20; i++) {
+                    document.replaceString(literal, literal + 1, i % 2 == 0 ? "2" : "1");
+                    service.requestBaseline(file);
+                }
+            });
+            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+            assertEquals("a typing burst must not start a process per edit", 1, starts.get());
+            assertFalse(service.rolePresentation(file, document, null).isEmpty());
+            waitUntil(() -> second.get() != null);
+            WriteCommandAction.runWriteCommandAction(getProject(), () -> document.replaceString(literal, literal + 1, "3"));
+            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+            assertTrue("editing cancels the one active worker", second.get().isCancelled());
+            assertNull(service.fresh(file));
+            service.requestBaseline(file);
+            finish.countDown();
+            waitUntil(() -> service.fresh(file) != null);
+            assertEquals("initial, one coalesced burst and one replacement analysis", 3, starts.get());
+        } finally { finish.countDown(); }
+    }
+
+    public void testFreshFailureAndSettingsChangesDiscardPresentation() throws Exception {
+        PsiFile file = source("failure.nagi", "def add(value: i64) -> i64:\n    return value\n\ndef main():\n    print(add(1))\n");
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            if (calls.incrementAndGet() == 2) throw new java.io.IOException("controlled analysis failure");
+            return roleFacts(file, false);
+        });
+        installService();
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        var document = myFixture.getEditor().getDocument();
+        assertFalse(service.rolePresentation(file, document, service.fresh(file)).isEmpty());
+        int literal = document.getText().lastIndexOf('1');
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> document.replaceString(literal, literal + 1, "2"));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        assertFalse(service.rolePresentation(file, document, null).isEmpty());
+        service.requestBaseline(file);
+        waitUntil(() -> service.state() == NagiAssistService.State.FAILED);
+        assertTrue("transport failure removes every retained role", service.rolePresentation(file, document, null).isEmpty());
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> document.replaceString(literal, literal + 1, "3"));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        assertFalse(service.rolePresentation(file, document, service.fresh(file)).isEmpty());
+        NagiSettings.update(NagiSettings.getInstance().getState().compilerPath, 6);
+        assertTrue("configuration changes are hard invalidations", service.rolePresentation(file, document, null).isEmpty());
+        assertNull(service.fresh(file));
+    }
+
+    private NagiSemanticPresentation presentationStore() throws Exception {
+        var field = NagiAssistService.class.getDeclaredField("presentation");
+        field.setAccessible(true);
+        return (NagiSemanticPresentation) field.get(service);
+    }
+
+    private void paintCurrentRoles(PsiFile file) throws Exception {
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        var document = PsiDocumentManager.getInstance(getProject()).getDocument(file);
+        assertFalse(service.rolePresentation(file, document, service.fresh(file)).isEmpty());
+        assertTrue(presentationStore().retainedRoleCount() > 0);
+    }
+
+    public void testTrustFileCloseAndDisposalReleaseAllRoleMarkers() throws Exception {
+        PsiFile file = source("lifecycle.nagi", "def add(value: i64) -> i64:\n    return value\n\ndef main():\n    print(add(1))\n");
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> roleFacts(file, false));
+        installService();
+        paintCurrentRoles(file);
+        TrustedProjects.setProjectTrusted(getProject(), false);
+        assertTrue(service.rolePresentation(file, myFixture.getEditor().getDocument(), null).isEmpty());
+        assertEquals(0, presentationStore().retainedRoleCount());
+        TrustedProjects.setProjectTrusted(getProject(), true);
+        paintCurrentRoles(file);
+        com.intellij.openapi.fileEditor.FileEditorManager.getInstance(getProject()).closeFile(file.getVirtualFile());
+        assertEquals("closing a source releases all owned markers", 0, presentationStore().retainedRoleCount());
+        myFixture.configureFromExistingVirtualFile(file.getVirtualFile());
+        paintCurrentRoles(myFixture.getFile());
+        service.dispose();
+        assertEquals(0, presentationStore().retainedRoleCount());
+        assertNull(service.fresh(myFixture.getFile()));
+    }
+
     private void installService() {
         serviceReplacement = com.intellij.openapi.util.Disposer.newDisposable("Nagi import assistance service replacement");
         ServiceContainerUtil.replaceService(getProject(), NagiAssistService.class, service, serviceReplacement);

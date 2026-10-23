@@ -1,0 +1,46 @@
+Nagi compiler 0.2.0
+
+Usage:
+  nagic <check|lower|build|run|symbols|assist> [SOURCE] [OPTIONS]
+  nagic map [types|modules|calls] [SOURCE] [OPTIONS]
+  nagic version
+
+Commands:
+  check    Check syntax, types, and ownership
+  lower    Check and write generated Low
+  build    Build a native executable
+  run      Build and run a program
+  symbols  Print type and definition information as JSON
+  assist   Print compiler-authoritative editor assistance as JSON (internal)
+  map      Map checked source types, modules, or calls (default: types)
+  version  Print the compiler version
+
+Options:
+  --project DIR|nagi.toml  Select a project
+  --no-project            Disable project discovery
+  --native FILE.low       Add handwritten Low
+  --rust FILE.rs          Add a Rust adapter
+  --rust-dep NAME=VERSION  Add a Rust dependency
+  --out DIR               Select the generated-source directory
+  --cost-report           Write an allocation/copy cost report
+  --rust-diagnostics      Include generated Rust diagnostic details (build/run)
+  --profile dev|release   Native build profile (default: release; build/run)
+  --build-stats           Print build timings and Cargo reuse as JSON on stderr
+  --incremental[=units]   Reuse body or bounded function units (build/run; --profile dev)
+  --editor-input          Read editor buffers from stdin (check/symbols/assist)
+  --serve                 Reuse assist process (one JSON request/response per line)
+  --sql-schema FILE       Check literal SQL against an offline DDL snapshot (check)
+  --sql-dialect sqlite    Required with --sql-schema; SQLite only
+  --format FORMAT         Map output: mermaid (default), d2, json, html, svg, png
+  --module NAME           Select a map module
+  --focus NAME            Focus a map definition
+  --depth N               Limit relationships from the focused definition
+  --output FILE           Write the map to FILE instead of stdout
+  --layout elk|dagre|tala  SVG/PNG layout (default: elk; requires local D2)
+  -h, --help              Show this help
+  -V, --version           Print the compiler version
+
+Map notes:
+  SVG/PNG require --output with a matching .svg/.png extension and local D2.
+  Available layouts depend on the installed D2 version.
+  architecture, dataflow, trace, cost, and map --serve are not implemented.
