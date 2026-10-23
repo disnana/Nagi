@@ -1,10 +1,18 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-23 JST: #148へ0.2.1 mainを統合
+
+main `9fe5e07`（#149）を取り込み、CHANGELOG・agent-routing・本記録の追記競合を解消した。0.2.1本体と0.1.4プラグインの記録を両方保持し、重複した未リリース編集補助項目を0.1.4欄へ集約する。プラグインのsource/test/resourceは既存CI成功HEAD `da80a79`と同一、runtime・lock・SF08修正はmainと同一である。統合HEADのCIは別gateとして確認し、新候補のWindows Run描画・Stop/再実行の利用者確認は引き続き保留する。
+
 ## 2026-10-22: JetBrainsのhover / Quick Documentation
 
 main `765f0b0`からcompiler/CIと独立したplugin差分を実装した。既存hoverのCLI診断装飾とparser token Debug到達を調査し、診断原文とdescriptionを保持したままtooltipをescapeして整形する。関数・classの説明はcompilerの正確な位置graphと既存JSONの引数・戻り値・async・fieldだけを使い、同名local・衝突・cold/stale/untrustedでは推測表示しない。coldは背景解析後の再hover/再実行が必要。[設計・表示範囲・検証記録](jetbrains-documentation-plan.md)を参照。
 
 ローカルIC251で全214件failure/error/skip 0、追加HTML renderer1件も成功し合計215件を検証。High/Low・import alias・class/function/asyncは実compiler JSONから登録Providerまで確認した。最初のpackagingはread-onlyなIDE共通data pathで失敗し、HOMEを維持した専有tmp/XDG再実行は成功。ZIPのdescriptorとhashも確認した。Plugin Verifierはhome設定の解決後、remote依存のConnection refusedでproxy引継ぎ調査中。Verifier・他IDE/版のCI・独立最終audit・実GUI受入は未完で、公開成功と混同しない。版更新・release・Marketplace公開は行っていない。
+
+## 2026-10-22: #149 SF08 prerequisitesの不要repository依存
+
+[限定修正と実行証拠](sf08-prerequisite-repositories.md)。固定imageの公式Ubuntu sourceをregular-file/有限bytes/SHAで検証し、APT update/install双方へ同じsource選択を指定した。不要なNodeSource結合を除き、失敗時の厳密な3scalarをclosed＋actual ECHILD後だけ公開する。240秒/署名/TLS/required packages/capsule/browser検査は不変。Python64・Node148・source/projection16・CI policy160成功。原trustのfresh全実行はAPT通過後build101/unknown、browser0で未受入。GitHubの期限失敗と同根とは断定せず、新HEADの実3engine CIと別High最終監査を必須で残す。
 
 ## 2026-10-22 JST: PyCharm編集補助の調査とNagi入力補正
 
@@ -579,3 +587,9 @@ fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inv
 
 
 同sourceのZIP21秒成功、保持ZIPに対するIC251 Verifier10秒Compatible（deprecated3/experimental17）、CI policy160件成功。最終source/test/docsを凍結し、独立High audit・最新HEAD CIと新候補Windows GUI受入へ渡す。rawlog/ZIP/hash/267件XML/native証拠は `local-only/pr148-dev-run/` に保持。
+
+### 2026-10-22 SupervisorのSHUTDOWN publicationとterminal完了（未リリース）
+
+Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが失敗したが、実数が未保存のため根因断定を避けて調査した。別に、最初のrequest_stopがstop/abort後・SHUTDOWN送信前で停止すると、drainerがcleanup完了からchannel closeへ先行するraceをinstance限定finite gateで決定的RED（SHUTDOWN0/STOPPED1）再現した。採用済み設計に従い、SHUTDOWN後のRelease publication flagとterminal条件のAcquireを追加し、取消・cleanup・join・STOPPED・既存lock orderは維持する。
+
+同回帰GREEN、既存actor45件、全runtime923 passed/3既存ignored（failure0、33.06秒）、all-targets clippy -D warningsとfmtが成功。supervised-workerのHighと独立saved Lowは既存12項目（STOPPED3/SHUTDOWN1を含む）を維持してnative成功した。source/testを凍結し、独立High audit・改訂0.2.1の4OS CIへ渡す。Windowsの元失敗と同根とは未断定。[設計・証拠](supervisor-shutdown-publication.md)。

@@ -145,3 +145,8 @@ cold最終guard後の全243件77秒・ZIP21秒・IC251 Verifier11秒Compatible�
 
 
 上記Run候補は最終267件/ZIP21秒/保持ZIPのVerifier10秒Compatible（deprecated3/experimental17）/CI policy160件まで実行。専有native targetは証拠保護後に削除し、全実行終了・source/test/docs凍結後に親へ所有権を返す。別High audit・最新HEAD CI・Windows GUIは未実施gateとして分離する。
+
+2026-10-22、Sol 6.1 Highが専有worktree（base f75300a）でSupervisor terminal eventのP1修正を担当。親/Architect xhighが停止intentとpublicationのrace、Release/Acquire barrier、cleanup後のpollを固定するfinite gateを事前承認した。Highはhookだけの旧実装でSHUTDOWN0/STOPPED1のREDを再現し、gate解除・thread join・drainを済ませた最後のassertで観測。製品4行＋説明2行を追加しGREEN、actor45件・全runtime923 passed/3既存ignored・clippy/fmt・High/saved Lowの実nativeを実行した。1回のWindows複合assert失敗（実数なし）との根因同一性は主張しない。test期限/assert/並列度を維持、追加spawn/commit/pushなし。source/test凍結後に別Highが最終auditを行い、その後改訂4OS CIへ進む。専有targetのCargo再利用とaudit後整理は親へ引き継ぎ、元cache/CLI/evidenceは保護する。model単体時間・使用量・費用は未測定。
+
+
+2026-10-22、#149 SF08 prerequisitesをSol 6.1 Highが限定調査。親がsource pin・両APT argv限定・閉鎖後scalar公開の事前設計を承認し、同Highが実装とRED→GREEN/Python64/Node148/source guard16/policy160を実行した。managed transport設定差と不要NodeSource依存をprivate診断で分離し、GitHub240秒失敗の原因同一性は未確認とした。原trustのfresh fullはAPT通過後build101/unknown・browser0、受入成功とは扱わない。所有container/imageのみ区切りで整理し、private証拠と原ログを保持する。新HEAD CI・別High最終auditへ引継ぐ。追加spawn/commit/pushなし、model時間・費用は未測定。詳細は[sf08-prerequisite-repositories.md](sf08-prerequisite-repositories.md)。

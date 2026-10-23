@@ -77,6 +77,11 @@ pub(super) struct Group {
     pub started: AtomicBool,
     pub spawning_done: AtomicBool,
     pub stop: AtomicBool,
+    // Cancellation intent can precede publication by the first stop requester.
+    // Terminal completion must retain the sender until that publication ends.
+    shutdown_published: AtomicBool,
+    #[cfg(test)]
+    pub(super) before_shutdown_publish: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     pub owner_present: AtomicBool,
     owner_released: AtomicBool,
     active: AtomicUsize,
@@ -106,6 +111,9 @@ impl Group {
             started: AtomicBool::new(false),
             spawning_done: AtomicBool::new(false),
             stop: AtomicBool::new(false),
+            shutdown_published: AtomicBool::new(false),
+            #[cfg(test)]
+            before_shutdown_publish: Mutex::new(None),
             owner_present: AtomicBool::new(true),
             owner_released: AtomicBool::new(false),
             active: AtomicUsize::new(0),
@@ -358,7 +366,15 @@ impl Group {
             }
         }
         if first {
+            #[cfg(test)]
+            {
+                let before_publish = self.before_shutdown_publish.lock().unwrap().take();
+                if let Some(before_publish) = before_publish {
+                    before_publish();
+                }
+            }
             self.publish(Event::new(0, "", 0, EventKind::SHUTDOWN, ""));
+            self.shutdown_published.store(true, Ordering::Release);
         }
         self.changed.notify_waiters();
         self.maybe_cleanup();
@@ -473,6 +489,7 @@ impl Group {
                     return Poll::Ready(None::<(usize, Result<Outcome, tokio::task::JoinError>)>);
                 }
                 if self.stop.load(Ordering::Acquire)
+                    && self.shutdown_published.load(Ordering::Acquire)
                     && ledger.slots.iter().all(|slot| slot.record.is_none() && !slot.inserting)
                     && ledger.cleanup.is_none()
                     && !ledger.cleanup_inserting

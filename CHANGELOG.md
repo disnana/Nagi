@@ -2,11 +2,22 @@
 
 ## 未リリース / Unreleased
 
+## Nagi 0.2.1
+
+- Publish the backward-compatible build and stability improvements below. For faster application development, opt into `nagic run app.nagi --profile dev`; ordinary CLI builds retain the release default. Initial native builds still compile Rust dependencies. Incremental modes are optional and do not skip type, ownership or capability checks.
+- 0.2.0互換のビルド・検査・安定性改善を公開。開発用profile、差分ビルド、利用者向けCI生成、読み取り専用cache調査を追加し、既定release設定と旧成功成果物の保護を維持します。IDEプラグインの版と公開は別です。
+
 ### Runtime dependency maintenance
 
-- Require Tokio 1.54.1 or newer for the runtime and update the active workspace/fixture locks to 1.54.1, incorporating the timer-driver synchronization fix in [Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692). The previous tracked locks used 1.53.1/1.53.2, not the reported affected 1.54.0. Generated applications have independent locks: rebuild them with the updated runtime; updating Nagi's root lock alone does not update existing binaries. This change is unreleased.
+- Require Tokio 1.54.1 or newer for the runtime and update the active workspace/fixture locks to 1.54.1, incorporating the timer-driver synchronization fix in [Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692). The previous tracked locks used 1.53.1/1.53.2, not the reported affected 1.54.0. Generated applications have independent locks: rebuild them with the updated runtime; updating Nagi's root lock alone does not update existing binaries.
+
+### Supervisor shutdown stability
+
+- Keep the Supervisor event stream open until the first stop request has published SHUTDOWN. Prevent a concurrent completed cleanup from closing the stream before that notification; preserve child joins, cancellation, STOPPED events and shutdown deadlines. Add a deterministic regression and retain the supervised-worker sample's exact event counts.
 
 ### Nagi application development tools
+
+- Add bounded, read-only `nagic cache inspect` for explicitly selected generation and Cargo-cache roots. Report logical sizes, incomplete scans and lossless OS paths; do not delete caches, claim reclaimable space or use observations to authorize native artifact reuse.
 
 - Reuse the parser's original physical-module tokens during source loading, avoiding a second lex while preserving full High/Low checks and diagnostics. Share Cargo dependency targets across frontend regression fixtures and remove an unused duplicate CI release-compiler build; keep all tests and distribution builds.
 - Add repeatable full-check and eight-case ordinary-versus-units build benchmarks, including runtime edits, corrupt-lock rejection and old-executable preservation. Report slow cases and cache conditions separately; do not change the default release profile.
@@ -17,8 +28,8 @@
 
 - Add opt-in `build/run --profile dev|release`, preserving release as the default and the existing debug/release overflow behavior. Keep complete Nagi checks, Cargo dependency validation, generation isolation and immutable successful executables.
 - Add opt-in `--build-stats` with typed declaration/function change observations, dependency graphs, Cargo artifact counts and phase timings. Record and verify published artifact hashes; semantic observations do not authorize native reuse or skipped checks/tests.
-- Bundle standard-library-only Python CI-generation and receipt-verification tools in future distributions. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.
-- Document the existing security API guarantees, unsupported transports and staged build roadmap, with measured application build results and their limits. These features are unreleased; published 0.2.0 remains unchanged.
+- Bundle standard-library-only Python CI-generation and receipt-verification tools. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.
+- Document the existing security API guarantees, unsupported transports and staged build roadmap, with measured application build results and their limits. Previously distributed 0.2.0 binaries remain unchanged. Function-unit partitioning improved unchanged rebuilds in the measured fixture but slowed edited cases, so it remains opt-in; see the [measurements](benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md).
 
 ## JetBrains 0.1.4
 
