@@ -551,7 +551,7 @@ pub(crate) fn analyze(
     if imports::complete(&mut response, &original, &request)? {
         return Ok(response);
     }
-    let cursor = request.query.as_ref().and_then(|q| {
+    let mut cursor = request.query.as_ref().and_then(|q| {
         let text = request
             .files
             .get(&q.file)
@@ -563,7 +563,22 @@ pub(crate) fn analyze(
         if let Some(text) = &c.recovered {
             request.files.insert(c.file.clone(), text.clone());
             response["recovered"] = json!(true);
-            load(path, natives, &request.files)
+            match load(path, natives, &request.files) {
+                Ok(loaded) => Ok(loaded),
+                Err(error) => match original {
+                    Ok(loaded) => {
+                        // Query recovery may introduce an expression where the
+                        // grammar permits only declarations (e.g. a final empty
+                        // top-level line). Keep facts from this request's real
+                        // source, never from a failed recovery or an older buffer.
+                        // Its synthetic cursor cannot approve completions.
+                        cursor = None;
+                        response["recovered"] = json!(false);
+                        Ok(loaded)
+                    }
+                    Err(_) => Err(error),
+                },
+            }
         } else {
             original
         }

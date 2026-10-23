@@ -442,6 +442,83 @@ fn control_flow_moves_and_empty_cursor_lines_use_checker_state() {
     assert!(!names(&v).contains(&"value"));
     assert_eq!(v["frontend_accepted"], false);
 }
+
+#[test]
+fn failed_blank_line_recovery_preserves_current_source_symbols() {
+    let f = Fixture::new();
+    for (entry, text, accepted) in [
+        ("main.nagi", "# 日本語 😀\nclass Point:\n    x: f64\n    y: f64\n\ndef main():\n    p = Point(x=1.5, y=2.5)\n    print(p.x + p.y)\n", true),
+        ("main.low", "# 日本語 😀\nfn main() { let value = 1; print(value); }\n", true),
+        ("main.nagi", "def main():\n    value = missing\n", false),
+        ("main.low", "fn main() { let value = missing; }\n", false),
+    ] {
+        f.write(entry, text);
+        let baseline = f.request_entry(entry, serde_json::json!({"files":[]}));
+        assert_eq!(baseline["frontend_checked"], true, "{entry}: {baseline}");
+        assert_eq!(baseline["frontend_accepted"], accepted);
+        assert!(baseline.get("symbols").is_some(), "{entry}: {baseline}");
+        for overlays in [serde_json::json!([]), serde_json::json!([{"file":entry,"text":text}])] {
+            let v = f.request_entry(entry, serde_json::json!({
+                "files":overlays,
+                "query":{"file":entry,"line":text.lines().count() + 1,"column":1}
+            }));
+            assert!(v["symbols"] == baseline["symbols"], "{entry}: query must preserve the original index");
+            assert_eq!(v["frontend_accepted"], baseline["frontend_accepted"]);
+            assert_eq!(v["diagnostics"], baseline["diagnostics"]);
+            assert_eq!(v["recovered"], false);
+            assert!(names(&v).is_empty());
+        }
+        let no_newline = text.trim_end_matches('\n');
+        let v = f.request_entry(entry, serde_json::json!({
+            "files":[{"file":entry,"text":no_newline}],
+            "query":{"file":entry,"line":no_newline.lines().count(),
+                "column":no_newline.lines().last().unwrap().encode_utf16().count()+1}
+        }));
+        assert!(v.get("symbols").is_some(), "EOF on the final token retains facts");
+        assert_eq!(v["frontend_accepted"], accepted);
+    }
+}
+
+#[test]
+fn failed_recovery_in_imported_file_retains_the_project_graph() {
+    let f = Fixture::new();
+    f.write("nagi.toml", "entry = 'main.nagi'\n");
+    f.write(
+        "main.nagi",
+        "from helper import value\ndef main():\n    print(value())\n",
+    );
+    f.write("helper.nagi", "def value() -> i64:\n    return 1\n");
+    let baseline = f.request(serde_json::json!({"files":[]}));
+    let v = f.request(serde_json::json!({"files":[],
+        "query":{"file":"helper.nagi","line":3,"column":1}}));
+    assert_eq!(v["frontend_accepted"], true);
+    assert!(
+        v["symbols"] == baseline["symbols"],
+        "the complete current graph survives"
+    );
+    assert!(names(&v).is_empty());
+}
+
+#[test]
+fn blank_line_fallback_does_not_hide_original_parse_errors() {
+    let f = Fixture::new();
+    for (entry, text) in [("main.nagi", "def main(:\n"), ("main.low", "fn main( {\n")] {
+        f.write(entry, text);
+        let baseline = f.request_entry(entry, serde_json::json!({"files":[]}));
+        let v = f.request_entry(
+            entry,
+            serde_json::json!({
+                "files":[],"query":{"file":entry,"line":2,"column":1}
+            }),
+        );
+        assert_eq!(v["frontend_checked"], false);
+        assert_eq!(v["frontend_accepted"], false);
+        assert_eq!(v["diagnostics"], baseline["diagnostics"]);
+        assert!(!v["diagnostics"].as_array().unwrap().is_empty());
+        assert!(v.get("symbols").is_none());
+        assert!(names(&v).is_empty());
+    }
+}
 #[test]
 fn low_and_native_replacement_queries_retain_types_and_original_positions() {
     let f = Fixture::new();

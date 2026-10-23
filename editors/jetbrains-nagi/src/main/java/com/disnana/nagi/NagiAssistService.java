@@ -689,7 +689,8 @@ public final class NagiAssistService implements Disposable {
                 setStateForActive(key, State.STALE, "The Nagi source snapshot changed before compiler analysis.");
                 return;
             }
-            NagiAssistProcess.Cancellation cancellation = new NagiAssistProcess.Cancellation();
+            NagiAssistProcess.Cancellation cancellation = new NagiAssistProcess.Cancellation(
+                    System.nanoTime() + TimeUnit.SECONDS.toNanos(Math.max(1, Math.min(300, snapshot.timeout))));
             synchronized (lock) {
                 if (disposed || !key.equals(activeKey)) return;
                 activeCancellation = cancellation;
@@ -699,16 +700,49 @@ public final class NagiAssistService implements Disposable {
                 setStateForActive(key, State.STALE, "The configured Nagi compiler changed before it could run.");
                 return;
             }
+            cancellation.checkDeadline();
             NagiAssistProtocol.Response response = runner.run(snapshot.plan, snapshot.input, snapshot.timeout,
                     cancellation, () -> !cancellation.isCancelled() && trustedForCompiler()
                             && snapshotCurrent(snapshot) && executableIdentityCurrent(snapshot));
+            cancellation.checkDeadline();
             if (cancellation.isCancelled() || !snapshotCurrent(snapshot) || !executableIdentityCurrent(snapshot)
                     || !diskSnapshotCurrent(snapshot)) {
                 setStateForActive(key, State.STALE, "The Nagi compiler response belongs to an outdated editor snapshot and was discarded.");
                 retrySnapshotLater(snapshot);
                 return;
             }
+            // Published 0.2.1 can parse the real source but lose its entire index
+            // when caret-only recovery inserts an illegal top-level expression.
+            // Retry only this missing-index case, on the same immutable snapshot.
+            // A present-but-empty index and an original parse failure are final.
+            if (snapshot.query != null && response.frontendChecked() && !response.hasSymbolIndex()
+                    && response.importContext() == null && response.completions().isEmpty()
+                    && response.semanticStatus().equals("none")) {
+                byte[] baselineInput = NagiAssistProtocol.withoutQuery(snapshot.input);
+                cancellation.checkDeadline();
+                NagiAssistProtocol.Response baseline = runner.run(snapshot.plan,
+                        baselineInput, snapshot.timeout, cancellation,
+                        () -> !cancellation.isCancelled() && trustedForCompiler()
+                                && snapshotCurrent(snapshot) && executableIdentityCurrent(snapshot));
+                cancellation.checkDeadline();
+                if (cancellation.isCancelled() || !snapshotCurrent(snapshot) || !executableIdentityCurrent(snapshot)
+                        || !diskSnapshotCurrent(snapshot)) {
+                    setStateForActive(key, State.STALE, "The queryless Nagi source facts belong to an outdated editor snapshot and were discarded.");
+                    retrySnapshotLater(snapshot);
+                    return;
+                }
+                if (response.frontendChecked() != baseline.frontendChecked()
+                        || response.frontendAccepted() != baseline.frontendAccepted()
+                        || !response.diagnostics().equals(baseline.diagnostics())) {
+                    // Identity checks passed, so repeated disagreement is a
+                    // protocol failure, not permission to retry indefinitely.
+                    throw new IOException("Nagi query and queryless source facts disagree for the same editor snapshot.");
+                }
+                if (baseline.hasSymbolIndex()) response = response.withSymbolIndex(baseline);
+            }
+            cancellation.checkDeadline();
             Snapshot responseSnapshot = withCompilerSources(withCompilerDirectories(snapshot, response), response, attempt);
+            cancellation.checkDeadline();
             if (!snapshotCurrent(responseSnapshot)) {
                 setStateForActive(key, State.STALE, "A Nagi source changed during compiler analysis; the response was discarded.");
                 restartOpenSourcesLater();
@@ -719,6 +753,7 @@ public final class NagiAssistService implements Disposable {
             synchronized (lock) {
                 if (!key.equals(activeKey) || responseSnapshot.epoch() != epoch.get()
                         || disposed || project.isDisposed()) return;
+                cancellation.checkDeadline();
                 cached = result;
                 presentation.published(result.presentationIdentity, responseSnapshot.focusDocument());
                 knownSourcePaths = knownPaths(snapshot, response);

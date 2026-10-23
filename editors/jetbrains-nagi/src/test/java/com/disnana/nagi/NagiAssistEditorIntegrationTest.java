@@ -89,6 +89,67 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
         assertTrue(myFixture.doHighlighting().stream().anyMatch(info ->
                 info.getDescription() != null && info.getDescription().contains(diagnostic.message())));
     }
+
+    /** Run against both the matching compiler and published 0.2.1 (NAGI_TEST_COMPILER). */
+    public void testPointFactsReturnAfterMalformedTypingAtTheFinalUnindentedBlankLine() throws Exception {
+        open("point.nagi", "def main():\n    print(1)\n");
+        var file = myFixture.getFile();
+        var editor = myFixture.getEditor();
+        var document = editor.getDocument();
+        var service = getProject().getService(NagiAssistService.class);
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> document.setText("def main(:\n"));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        editor.getCaretModel().moveToOffset(document.getTextLength());
+        service.requestBaseline(file, editor);
+        waitFor(() -> service.fresh(file, editor) != null);
+        assertFalse(service.fresh(file).response().frontendChecked());
+        assertFalse(service.fresh(file).response().diagnostics().isEmpty());
+
+        String text = "# 固定型の値 😀\nclass Point:\n    x: f64\n    y: f64\n\ndef main():\n"
+                + "    print(\"Hello, Nagi!\")\n    p = Point(x=1.5, y=2.5)\n    print(p.x + p.y)\n";
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> document.setText(text));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        editor.getCaretModel().moveToOffset(document.getTextLength()); // zero-based column zero
+        service.requestBaseline(file, editor);
+        waitFor(() -> service.fresh(file, editor) != null);
+        var result = service.fresh(file, editor);
+        assertTrue(result.response().frontendAccepted());
+        assertTrue(result.response().hasSymbolIndex());
+        assertTrue(result.response().diagnostics().isEmpty());
+        assertFalse(service.semanticColors(file, result).isEmpty());
+        myFixture.doHighlighting();
+        int declaration = text.indexOf("Point");
+        var expected = editor.getColorsScheme().getAttributes(
+                com.intellij.openapi.editor.DefaultLanguageHighlighterColors.CLASS_NAME);
+        assertTrue("the registered external annotator paints the class after recovery",
+                java.util.Arrays.stream(com.intellij.openapi.editor.impl.DocumentMarkupModel.forDocument(
+                        document, getProject(), true).getAllHighlighters()).anyMatch(highlighter ->
+                        highlighter.getStartOffset() == declaration && highlighter.getEndOffset() == declaration + 5
+                                && java.util.Objects.equals(expected, highlighter.getTextAttributes(editor.getColorsScheme()))));
+        var documentation = com.intellij.codeInsight.documentation.DocumentationManager.getProviderFromElement(file);
+        var hovered = documentation.getCustomDocumentationElement(editor, file, file.findElementAt(0), declaration);
+        assertNotNull(hovered);
+        String html = documentation.generateDoc(hovered, hovered);
+        assertNotNull(html);
+        assertTrue(html.contains("Point"));
+        assertTrue(html.contains("f64"));
+        var reference = file.findReferenceAt(text.indexOf("Point(x"));
+        assertNotNull(reference);
+        assertNotNull(reference.resolve());
+        assertEquals(declaration, reference.resolve().getTextOffset());
+
+        String member = text.replace("print(p.x + p.y)", "print(p.)");
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> document.setText(member));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        editor.getCaretModel().moveToOffset(member.lastIndexOf("p.") + 2);
+        service.requestCompletion(file, editor);
+        waitFor(() -> service.fresh(file, editor) != null);
+        var variants = myFixture.completeBasic();
+        assertNotNull(variants);
+        assertTrue(java.util.Arrays.stream(variants).anyMatch(item -> item.getLookupString().equals("x")));
+        assertTrue(java.util.Arrays.stream(variants).anyMatch(item -> item.getLookupString().equals("y")));
+        assertTrue(FileDocumentManager.getInstance().isDocumentUnsaved(document));
+    }
     public void testRegisteredReferencesNavigateHighLowAndImportedFiles() throws Exception {
         for (boolean low : new boolean[]{false, true}) {
             String name = low ? "main.low" : "main.nagi";

@@ -95,6 +95,98 @@ public final class NagiAssistProcessTest {
         }
     }
 
+    /** Warmable peer with delayed replies; the marker distinguishes timeout from a late-result-only check. */
+    public static final class BudgetPeer {
+        public static void main(String[] args) throws Exception {
+            Path marker = Path.of(args[1]);
+            java.nio.file.Files.writeString(marker, Long.toString(ProcessHandle.current().pid()));
+            var input = new java.io.BufferedReader(new java.io.InputStreamReader(System.in));
+            int request = 0;
+            while (input.readLine() != null) {
+                if (request > 0 || args.length > 2 && args[2].equals("delay-first")) Thread.sleep(Long.parseLong(args[0]));
+                if (request == 2) java.nio.file.Files.writeString(marker.resolveSibling("second-reply"), "sent");
+                System.out.println("{\"format\":\"nagi-assist-v1\",\"semantic_status\":\"none\","
+                        + "\"frontend_checked\":true,\"frontend_accepted\":true,\"full_compile_checked\":false,"
+                        + "\"recovered\":false,\"diagnostics\":[],\"completion\":{\"kind\":\"names\",\"access\":\"read\",\"items\":[]},"
+                        + "\"symbols\":{\"format\":\"nagi-symbols-v1\",\"files\":[],\"references\":[]}}");
+                System.out.flush();
+                request++;
+            }
+        }
+    }
+
+    private static NagiAssistCommandPlan budgetPeer(Path directory, long delayMillis) throws Exception {
+        var resource = BudgetPeer.class.getResource("NagiAssistProcessTest$BudgetPeer.class");
+        org.junit.Assert.assertNotNull(resource);
+        Path classes = Path.of(resource.toURI());
+        for (int part = 0; part < BudgetPeer.class.getName().split("\\.").length; part++) classes = classes.getParent();
+        return new NagiAssistCommandPlan(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                List.of("-cp", classes.toString(), BudgetPeer.class.getName(), Long.toString(delayMillis),
+                        directory.resolve("peer.pid").toString()), directory);
+    }
+
+    @Test public void sharedDeadlineBoundsTheFractionalSecondReplyWaitAndReapsThePeer() throws Exception {
+        Path directory = java.nio.file.Files.createTempDirectory("nagi assistance budget ");
+        var session = new NagiAssistProcess.Session();
+        try {
+            var plan = budgetPeer(directory, 650);
+            session.run(plan, "{}".getBytes(), 5, new NagiAssistProcess.Cancellation(), () -> true);
+            var budget = new NagiAssistProcess.Cancellation(System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(1));
+            assertTrue(session.run(plan, "{}".getBytes(), 5, budget, () -> true).frontendAccepted());
+            IOException failure = assertThrows(IOException.class, () -> session.run(plan, "{}".getBytes(), 5, budget, () -> true));
+            assertTrue(failure.getMessage(), failure.getMessage().contains("timed out"));
+            assertFalse("the wait must end before a late reply, not merely reject it afterwards",
+                    java.nio.file.Files.exists(directory.resolve("second-reply")));
+            assertFalse("deadline exhaustion is not editing cancellation", budget.isCancelled());
+            long pid = Long.parseLong(java.nio.file.Files.readString(directory.resolve("peer.pid")));
+            assertFalse("timeout must stop and reap the session", ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false));
+        } finally {
+            session.close();
+            try (var paths = java.nio.file.Files.walk(directory)) {
+                for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) java.nio.file.Files.deleteIfExists(path);
+            }
+        }
+    }
+
+    @Test public void aValidReplyCanUseTheRemainingFractionalSecond() throws Exception {
+        Path directory = java.nio.file.Files.createTempDirectory("nagi assistance fractional success ");
+        var session = new NagiAssistProcess.Session();
+        try {
+            var plan = budgetPeer(directory, 150);
+            session.run(plan, "{}".getBytes(), 5, new NagiAssistProcess.Cancellation(), () -> true);
+            var budget = new NagiAssistProcess.Cancellation(System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(900));
+            assertTrue(session.run(plan, "{}".getBytes(), 5, budget, () -> true).frontendAccepted());
+            assertFalse(budget.isCancelled());
+            org.junit.Assert.assertEquals(1, session.launches());
+        } finally {
+            session.close();
+            try (var paths = java.nio.file.Files.walk(directory)) {
+                for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) java.nio.file.Files.deleteIfExists(path);
+            }
+        }
+    }
+
+    @Test public void oneShotWaitHonorsTheFractionalBudgetAndReapsThePeer() throws Exception {
+        Path directory = java.nio.file.Files.createTempDirectory("nagi assistance one-shot budget ");
+        try {
+            var peer = budgetPeer(directory, 1500);
+            var arguments = new java.util.ArrayList<>(peer.arguments());
+            arguments.add("delay-first");
+            var plan = new NagiAssistCommandPlan(peer.executable(), arguments, directory);
+            var budget = new NagiAssistProcess.Cancellation(System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(700));
+            IOException failure = assertThrows(IOException.class,
+                    () -> NagiAssistProcess.run(plan, "{}\n".getBytes(), 5, budget, () -> true));
+            assertTrue(failure.getMessage(), failure.getMessage().contains("timed out"));
+            assertFalse(budget.isCancelled());
+            long pid = Long.parseLong(java.nio.file.Files.readString(directory.resolve("peer.pid")));
+            assertFalse("one-shot timeout retains synchronous cleanup ownership", ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false));
+        } finally {
+            try (var paths = java.nio.file.Files.walk(directory)) {
+                for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) java.nio.file.Files.deleteIfExists(path);
+            }
+        }
+    }
+
     @Test public void eofBeforeResponseExplainsProtocolPossibilityAndMatchingCompiler() throws Exception {
         Path directory = java.nio.file.Files.createTempDirectory("nagi eof assistance ");
         String javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java").toString();
