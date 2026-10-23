@@ -289,10 +289,14 @@ impl Guard {
         let Some(collector) = collector(self.slot) else {
             return;
         };
+        let output = self.encode(collector);
+        let _ = std::io::stderr().write_all(&output.buf[..output.len]);
+    }
+    fn encode(&self, collector: &Collector) -> FixedWriter {
         let mut output = FixedWriter::new();
         let _ = writeln!(
             output,
-            "auth-stage slot={} (test-only; scheduling perturbed)",
+            "\nauth-stage slot={} (test-only; scheduling perturbed)",
             self.slot
         );
         match collector.store.try_lock() {
@@ -312,7 +316,7 @@ impl Guard {
         }
         let lost = collector.lost.load(Ordering::Relaxed);
         output.footer(if lost { "lost=true\n" } else { "lost=false\n" });
-        let _ = std::io::stderr().write_all(&output.buf[..output.len]);
+        output
     }
 }
 impl Drop for Guard {
@@ -359,6 +363,77 @@ impl fmt::Write for FixedWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn encoded_guard_starts_after_unterminated_libtest_output() {
+        for slot in [1, 2] {
+            let collector = Collector::new();
+            collector.merge(&[EMPTY], false);
+            // Only the production encoder is exercised; Drop must not touch
+            // either global slot or publish an additional diagnostic frame.
+            let guard = Guard {
+                slot,
+                emitted: true,
+            };
+            let output = guard.encode(&collector);
+            let prefix = "test runtime::fixed_case ... ";
+            let mut stream = prefix.as_bytes().to_vec();
+            stream.extend_from_slice(&output.buf[..output.len]);
+            let lines = std::str::from_utf8(&stream)
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>();
+            assert_eq!(lines[0], prefix);
+            assert_eq!(
+                lines[1],
+                format!("auth-stage slot={slot} (test-only; scheduling perturbed)")
+            );
+            assert!(lines[2].starts_with("op=CsrfIssue stage=Entry event=Seen "));
+            assert_eq!(lines.last(), Some(&"lost=false"));
+            assert!(!output.truncated && output.len <= OUTPUT);
+        }
+    }
+
+    #[test]
+    fn encoded_guard_keeps_bounded_footer_and_loss() {
+        let guard = Guard {
+            slot: 1,
+            emitted: true,
+        };
+        let local_loss = Collector::new();
+        local_loss.merge(&[EMPTY], true);
+        let output = guard.encode(&local_loss);
+        assert!(output.buf[..output.len].ends_with(b"lost=true\n"));
+        assert!(!output.truncated && output.len <= OUTPUT);
+
+        let full = Collector::new();
+        let wide = Record {
+            elapsed_us: Some(u64::MAX),
+            utc_remaining_ms: Some(i128::MIN),
+            mono: Some(Mono::After(u64::MAX)),
+            kind: Some(FailureKind::Unavailable),
+            outcome: Some(Outcome::RolledBack),
+            ..EMPTY
+        };
+        full.merge(&[wide; GLOBAL], false);
+        let output = guard.encode(&full);
+        assert!(output.truncated && output.len <= OUTPUT);
+        assert!(output.buf[..output.len].ends_with(b"lost=true\n"));
+
+        let contended = Collector::new();
+        let _hold = contended.store.lock().unwrap();
+        let output = guard.encode(&contended);
+        assert!(output.buf[..output.len].ends_with(b"lost=true\n"));
+        assert!(output.len <= OUTPUT);
+
+        let mut boundary = FixedWriter::new();
+        boundary.write_str("\n").unwrap();
+        boundary.write_str(&"x".repeat(OUTPUT - 65)).unwrap();
+        assert_eq!(boundary.len, OUTPUT - 64);
+        assert!(boundary.write_str("x").is_err());
+        boundary.footer("lost=true\n");
+        assert!(boundary.truncated && boundary.len <= OUTPUT);
+    }
+
     #[test]
     fn finite_storage_loss_and_bounded_output() {
         let slot = AtomicU8::new(1);

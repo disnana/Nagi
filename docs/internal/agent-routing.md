@@ -153,3 +153,5 @@ cold最終guard後の全243件77秒・ZIP21秒・IC251 Verifier11秒Compatible�
 
 
 2026-10-23、#148 d06のSF08 install236秒timeoutをSol 6.1 Highがread-only調査。親承認後、専有worktreeで固定2名bounded captureとfailure-only status enum/数値だけを実装した。pinned image内APT2.8.3を実測し、当初2.7.14参照を訂正して正確なUbuntu source archiveも確認。native1回30.362秒/閉鎖ECHILD、Python70/Node148/guard16/policy160、RED→GREENを実行し、原trustと240秒/security/browser gateを維持した。証拠保存後に専有Docker objectsだけ整理。根因未解決・観測追加として凍結し、親が別High最終監査とexact-head CIへ進める。追加spawn/commit/pushなし、model時間/費用は未計測。[詳細](sf08-install-status-diagnostic.md)。
+
+2026-10-23、#150のLinux診断gate失敗をLuna Maxが読み取り調査し、通常検査成功・broad slot欠落・原raw未保存をHighへ引き継いだ。Sol 6.1 Highが可能な行境界欠落を合成再現し、親採用の有限buffer内改行と実encoder共通化を実装。厳格parser・CI workflow・期限・認証意味論を変えず、RED/GREENと実並列採集を検証した。必要検証後に別Highの最終auditを行う。同tierの並行実行・子spawnなし、原ログは非公開で保持。transport一時切断は既存sessionへ再接続し、重複実行しなかった。model時間・費用は未計測。[詳細](auth-stage-producer-framing.md)。

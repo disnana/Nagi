@@ -597,3 +597,7 @@ fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inv
 Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが失敗したが、実数が未保存のため根因断定を避けて調査した。別に、最初のrequest_stopがstop/abort後・SHUTDOWN送信前で停止すると、drainerがcleanup完了からchannel closeへ先行するraceをinstance限定finite gateで決定的RED（SHUTDOWN0/STOPPED1）再現した。採用済み設計に従い、SHUTDOWN後のRelease publication flagとterminal条件のAcquireを追加し、取消・cleanup・join・STOPPED・既存lock orderは維持する。
 
 同回帰GREEN、既存actor45件、全runtime923 passed/3既存ignored（failure0、33.06秒）、all-targets clippy -D warningsとfmtが成功。supervised-workerのHighと独立saved Lowは既存12項目（STOPPED3/SHUTDOWN1を含む）を維持してnative成功した。source/testを凍結し、独立High audit・改訂0.2.1の4OS CIへ渡す。Windowsの元失敗と同根とは未断定。[設計・証拠](supervisor-shutdown-publication.md)。
+
+### 2026-10-23: PR #150のauth-stage診断行境界
+
+#150のLinux通常検査は成功したが、補助診断gateがbroadのslot 1欠落で失敗した。rawが削除済みのため根因は未確定。改行のないlibtest出力にheaderが連結される可能な失敗を再現し、test-only producerの既存有限buffer内へ先頭改行を追加した。strict parser、必要slot、loss拒否、認証処理、期限、並列度を維持する。実encoderのRED/GREENとPython41件、workflowと同じ実採集で両slot・閉鎖46 records、runtime909成功/既存1 ignored、native coverage17件を確認。独立最終auditと新HEAD CIは別gateとしてPRへ集約する。[設計・限界](auth-stage-producer-framing.md)。
