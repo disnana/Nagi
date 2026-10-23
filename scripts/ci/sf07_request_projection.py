@@ -375,12 +375,13 @@ def _inverse_source_guard_dedup_base(source):
 # This failure-only supplement is removed exactly before historical projection.
 # The primary SF07 commands and frozen workflow contract remain unchanged.
 PRELOGIN_OWNER_DIAGNOSTIC_STEP = """      - name: Capture bounded SF07 prelogin owner stages after checkpoint failure
+        id: sf07_prelogin_owner_diag
         if: failure() && steps.sf07_checkpoint.outcome == 'failure' && !cancelled()
         shell: bash
         run: |
           python -B scripts/ci/sf07_prelogin_owner_diagnostic.py "$RUNNER_TEMP/sf07-prelogin-owner"
       - name: Preserve bounded SF07 prelogin owner stages
-        if: always() && steps.sf07_checkpoint.outcome == 'failure'
+        if: always() && steps.sf07_checkpoint.outcome == 'failure' && steps.sf07_prelogin_owner_diag.outputs.sanitized == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
           retention-days: 7 # ci-retention
