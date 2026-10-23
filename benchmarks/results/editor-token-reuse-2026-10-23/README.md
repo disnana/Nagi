@@ -86,7 +86,10 @@ python3 scripts/benchmark_editor_queries.py --baseline /path/to/baseline --compi
 ```
 
 C probeはLinux用の任意memory観測で、compiler/runtimeの依存ではない。計測harness自体は`wait4`非対応環境で
-CPU/RSSをnullにする。候補patch SHA-256: `53eef1128f87ecf6443d95f16d2fb94696c7f8134b7733f49addcf9ba6a67271`。
+CPU/RSSをnullにする。候補patch SHA-256: `7517935102c0a62ad8043c3299b854c2cdeca6567d10e3467ab951637b59ae82`。
 候補段階のsource token unit・editor_assistance・module_symbols・symbolsは成功したが、このtoken再利用変更は
 最終成果物に含めない。後続の[定義line検索の限定](../editor-line-search-2026-10-23/README.md)とは別の変更である。
 採用しない本候補のため全workspace/native速度・4 OSの高速化検証は行っていない。
+
+棄却patchは空白だけのcontext行を避けるzero-context形式で保存した。baselineへ適用する場合は
+`git apply --unidiff-zero rejected-candidate.patch`を使う。元の通常context patchと適用後treeが同一であることを確認済み。

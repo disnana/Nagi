@@ -2,19 +2,11 @@ diff --git a/compiler/src/source.rs b/compiler/src/source.rs
 index ce70c3d..b8f9774 100644
 --- a/compiler/src/source.rs
 +++ b/compiler/src/source.rs
-@@ -1,4 +1,5 @@
- use crate::ast::*;
+@@ -1,0 +2 @@ use crate::ast::*;
 +use std::borrow::Cow;
- use std::collections::{HashMap, HashSet};
- use std::path::Path;
- use std::path::PathBuf;
-@@ -12,8 +13,31 @@ struct SourceFile {
-     start: usize,
-     lines: usize,
-     tokens: Vec<crate::lexer::Token>,
+@@ -14,0 +16 @@ struct SourceFile {
 +    high: bool,
-     lowering: LoweringKind,
- }
+@@ -16,0 +19,22 @@ struct SourceFile {
 +
 +/// Request-local presentation data from the same text that produced AST spans.
 +pub(crate) struct SourceFileView<'a> {
@@ -37,13 +29,7 @@ index ce70c3d..b8f9774 100644
 +        }
 +    }
 +}
- /// Successfully resolved source provenance; spans remain in the physical file.
- pub(crate) struct ResolvedImport {
-     pub file: PathBuf,
-@@ -189,6 +213,15 @@ impl Sources {
-             .iter()
-             .map(|f| (f.path.as_path(), f.source.as_str(), f.start))
-     }
+@@ -191,0 +216,9 @@ impl Sources {
 +    pub(crate) fn file_views(&self) -> impl Iterator<Item = SourceFileView<'_>> {
 +        self.files.iter().map(|file| SourceFileView {
 +            path: &file.path,
@@ -53,21 +39,9 @@ index ce70c3d..b8f9774 100644
 +            high: file.high,
 +        })
 +    }
-     pub(crate) fn resolved_imports(&self) -> impl Iterator<Item = &ResolvedImport> {
-         self.imports.iter()
-     }
-@@ -517,6 +550,7 @@ pub fn load_with_overlays(
-             start: offset + 1,
-             source,
-             tokens: units.last().expect("source unit pushed").tokens.clone(),
+@@ -519,0 +553 @@ pub fn load_with_overlays(
 +            high,
-             lowering: if high {
-                 LoweringKind::GeneratedLow
-             } else {
-@@ -732,3 +766,36 @@ mod disk_budget_tests {
-         assert_eq!(total, 8_000_000);
-     }
- }
+@@ -734,0 +769,33 @@ mod disk_budget_tests {
 +
 +#[cfg(test)]
 +mod editor_token_tests {
@@ -105,28 +79,13 @@ diff --git a/compiler/src/symbols.rs b/compiler/src/symbols.rs
 index 25aa8f1..3d9778f 100644
 --- a/compiler/src/symbols.rs
 +++ b/compiler/src/symbols.rs
-@@ -1,7 +1,7 @@
- //! Definition locations for the files and AST actually loaded by the compiler.
- use crate::{
-     ast::*,
+@@ -4 +4 @@ use crate::{
 -    lexer::{lex, Token, K},
 +    lexer::{Token, K},
-     source::Sources,
- };
- use serde::{Deserialize, Serialize};
-@@ -143,7 +143,7 @@ struct File<'a> {
-     module: ModuleId,
-     lines: Vec<&'a str>,
-     start: usize,
+@@ -146 +146 @@ struct File<'a> {
 -    tokens: Vec<Token>,
 +    tokens: &'a [Token],
- }
- impl File<'_> {
-     fn token_length(&self, token: &Token) -> usize {
-@@ -918,18 +918,23 @@ pub(crate) fn import_exports(
-     module: &ModuleId,
-     prefix: &str,
- ) -> Result<Vec<serde_json::Value>, String> {
+@@ -921,10 +921,5 @@ pub(crate) fn import_exports(
 -    let files = sources
 -        .files()
 -        .map(|(path, text, start)| {
@@ -142,8 +101,7 @@ index 25aa8f1..3d9778f 100644
 +        .map(|file| {
 +            let tokens = file.editor_tokens()?;
 +            Ok((file, tokens))
-         })
-         .collect::<Result<Vec<_>, String>>()?;
+@@ -932,0 +928,10 @@ pub(crate) fn import_exports(
 +    let files = token_files
 +        .iter()
 +        .map(|(file, tokens)| File {
@@ -154,13 +112,7 @@ index 25aa8f1..3d9778f 100644
 +            tokens,
 +        })
 +        .collect::<Vec<_>>();
-     let mut declarations = HashMap::new();
-     for (file_index, file) in files.iter().enumerate() {
-         for (token_index, pair) in file.tokens.windows(2).enumerate() {
-@@ -989,22 +994,27 @@ fn index_impl(
-     typed: Option<&Program>,
- ) -> Result<serde_json::Value, String> {
-     let module_files = sources.module_files().collect::<HashMap<_, _>>();
+@@ -992,14 +997,5 @@ fn index_impl(
 -    let files = sources
 -        .files()
 -        .map(|(path, text, start)| {
@@ -180,8 +132,7 @@ index 25aa8f1..3d9778f 100644
 +        .map(|file| {
 +            let tokens = file.editor_tokens()?;
 +            Ok((file, tokens))
-         })
-         .collect::<Result<Vec<_>, String>>()?;
+@@ -1007,0 +1004,14 @@ fn index_impl(
 +    let files = token_files
 +        .iter()
 +        .map(|(file, tokens)| File {
@@ -196,17 +147,11 @@ index 25aa8f1..3d9778f 100644
 +            tokens,
 +        })
 +        .collect::<Vec<_>>();
-     let mut metadata = ModuleMetadata::default();
-     for p in programs {
-         metadata.modules.extend(p.modules.modules.clone());
 diff --git a/compiler/tests/symbols.rs b/compiler/tests/symbols.rs
 index 470629d..094e4d5 100644
 --- a/compiler/tests/symbols.rs
 +++ b/compiler/tests/symbols.rs
-@@ -80,6 +80,21 @@ fn reference_at<'a>(
-     })
- }
- 
+@@ -82,0 +83,15 @@ fn reference_at<'a>(
 +#[test]
 +fn explicit_low_load_with_high_filename_preserves_editor_lex_failure() {
 +    let f = Fixture::new();
@@ -222,6 +167,3 @@ index 470629d..094e4d5 100644
 +    assert_eq!(error, "line 3: 字下げが外側のブロックと一致しません");
 +}
 +
- #[test]
- fn compiler_symbol_roles_use_typed_fields_and_exact_high_low_positions() {
-     for (high, file, text) in [
