@@ -19,6 +19,11 @@ _B1_SPEC = importlib.util.spec_from_file_location(
 _B1 = importlib.util.module_from_spec(_B1_SPEC)
 _B1_SPEC.loader.exec_module(_B1)
 
+_STREAM_SPEC = importlib.util.spec_from_file_location(
+    "auth_stage_stream_projection", Path(__file__).with_name("auth_stage_stream_projection.py"))
+_STREAM = importlib.util.module_from_spec(_STREAM_SPEC)
+_STREAM_SPEC.loader.exec_module(_STREAM)
+
 
 def norm(source):
     tokens = re.findall(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|[^\s]', source, re.S)
@@ -320,6 +325,7 @@ CI_BROWSER_STEP_RESTORED = """      - name: Check owned BrowserLogin business st
 
 
 def inverse_source_guard_dedup(source):
+    source = _STREAM.inverse(source)
     return _inverse_source_guard_dedup_base(inverse_prelogin_owner_diagnostic(source))
 
 
@@ -414,6 +420,7 @@ def inverse_prelogin_owner_diagnostic(source):
 
 
 def inverse_workflow(source):
+    source = _STREAM.inverse(source)
     # Validate the new pinned artifact step before the infrastructure inverse
     # restores historical action spellings and retention fields.
     source = inverse_prelogin_owner_diagnostic(source)
