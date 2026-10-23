@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import sys
 import tempfile
 import time
@@ -25,6 +26,10 @@ CANONICAL_FILES = {'tools/sf08-fixture-runtime/Cargo.toml', 'tools/sf08-fixture-
            'runtime/tests/support/browser_login.rs', 'runtime/tests/support/cors.rs'}
 MAX_CARGO_DIAGNOSTIC_BYTES = 64 * 1024
 MAX_RUST_ERROR_CODES = 8
+PREREQUISITE_SOURCE = Path('/etc/apt/sources.list.d/ubuntu.sources')
+# Exact public source configuration in provision.IMAGE; never fall back to other repositories.
+PREREQUISITE_SOURCE_SHA = '0af89eff53f98803ea0d7088c5a1dd39a606c5e892e732ce60d6512e4e99a420'
+PREREQUISITE_SOURCE_MAX_BYTES = 16 * 1024
 RUST_ERROR_PREFIX = re.compile(rb'error\[E')
 RUST_ERROR_CODE = re.compile(rb'error\[E([0-9]{4})\]')
 CARGO_CAUSE_MARKERS = {
@@ -166,17 +171,47 @@ def await_zero_until(owner, leader, deadline):
 
 
 class PrerequisiteFailure(ChildWaitFailure):
-    def __init__(self, detail, leader, stage):
+    def __init__(self, detail, leader, stage, diagnostic=None):
         self.prerequisite_stage = stage
+        self.prerequisite_diagnostic = diagnostic
         super().__init__(detail, leader)
+
+
+def check_prerequisite_source():
+    # Nonblocking open avoids waiting on special files; reject final-component symlinks.
+    # Parent directories belong to the fixed disposable image.
+    fd = os.open(PREREQUISITE_SOURCE, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        metadata = os.fstat(fd)
+        co.require(stat.S_ISREG(metadata.st_mode) and metadata.st_size <= PREREQUISITE_SOURCE_MAX_BYTES)
+        with os.fdopen(fd, 'rb', closefd=False) as source:
+            data = source.read(PREREQUISITE_SOURCE_MAX_BYTES + 1)
+        co.require(len(data) <= PREREQUISITE_SOURCE_MAX_BYTES
+                   and hashlib.sha256(data).hexdigest() == PREREQUISITE_SOURCE_SHA)
+    finally:
+        os.close(fd)
+
+
+def prerequisite_diagnostic(value):
+    """Only these bounded scalars can cross the private prerequisite boundary."""
+    keys = {'update_elapsed_ms', 'install_spawned', 'install_admission_remaining_ms'}
+    if type(value) is not dict or set(value) != keys or type(value['install_spawned']) is not bool:
+        return None
+    for key in ('update_elapsed_ms', 'install_admission_remaining_ms'):
+        if type(value[key]) is not int or not 0 <= value[key] <= 240000:
+            return None
+    return dict(value)
 
 
 def run_prerequisites(owner):
     # A single budget covers both apt commands, including admission/spawn time.
     # Keep all output private and keep the ownership capsule unchanged.
-    deadline = time.monotonic() + 240
+    started = time.monotonic()
+    deadline = started + 240
+    diagnostic = {'update_elapsed_ms': 0, 'install_spawned': False, 'install_admission_remaining_ms': 0}
     options = ['-o', 'Acquire::http::Timeout=30', '-o', 'Acquire::https::Timeout=30',
-               '-o', 'Acquire::Retries=0']
+               '-o', 'Acquire::Retries=0', '-o', 'Dir::Etc::sourcelist=' + str(PREREQUISITE_SOURCE),
+               '-o', 'Dir::Etc::sourceparts=-']
     commands = (
         ('apt_update', ['apt-get', *options, '-o', 'APT::Update::Error-Mode=any', 'update', '-qq']),
         ('apt_install', ['env', 'DEBIAN_FRONTEND=noninteractive', 'apt-get', *options,
@@ -190,11 +225,25 @@ def run_prerequisites(owner):
                 raise ChildWaitFailure({'class': 'cancelled'})
             if time.monotonic() >= deadline:
                 raise ChildWaitFailure({'class': 'timeout'})
+            check_prerequisite_source()
+            # Source verification is part of the same budget, not another allowance.
+            if owner.cancelled:
+                raise ChildWaitFailure({'class': 'cancelled'})
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ChildWaitFailure({'class': 'timeout'})
+            if stage == 'apt_install':
+                diagnostic['install_admission_remaining_ms'] = min(240000, int(remaining * 1000))
             leader = owner.spawn('prerequisite_' + stage, argv)
+            if stage == 'apt_install':
+                diagnostic['install_spawned'] = True
             await_zero_until(owner, leader, deadline)
         except BaseException as error:
             detail = error.detail if isinstance(error, ChildWaitFailure) else {'class': 'unknown'}
-            raise PrerequisiteFailure(detail, leader, stage) from error
+            raise PrerequisiteFailure(detail, leader, stage, diagnostic) from error
+        finally:
+            if stage == 'apt_update':
+                diagnostic['update_elapsed_ms'] = max(0, min(240000, int((time.monotonic() - started) * 1000)))
 
 
 def browser_report_diagnostic(failure, phase, closure, outer_diagnostic, work):
@@ -239,6 +288,7 @@ def run(checkout):
     failure = None
     failure_leader = build_leader = None
     prerequisite_stage = None
+    prerequisite_observation = None
     passed = False
     phase = 'scope'
     try:
@@ -310,6 +360,7 @@ def run(checkout):
             failure_leader = error.leader
             if isinstance(error, PrerequisiteFailure):
                 prerequisite_stage = error.prerequisite_stage
+                prerequisite_observation = error.prerequisite_diagnostic
     finally:
         if owner is not None:
             try:
@@ -358,6 +409,9 @@ def run(checkout):
         if (phase == 'prerequisites' and closure and closure.closed and closure.echild_observed
                 and prerequisite_stage in ('apt_update', 'apt_install')):
             summary['prerequisite_stage'] = prerequisite_stage
+            observation = prerequisite_diagnostic(prerequisite_observation)
+            if observation is not None and closure.closed is True and closure.echild_observed is True:
+                summary['prerequisite_diagnostic'] = observation
         if business_diagnostic is not None:
             summary['browser_report_diagnostic'] = business_diagnostic
     print(json.dumps(summary, separators=(',', ':')))

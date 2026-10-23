@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-22: #149 SF08 prerequisitesの不要repository依存
+
+[限定修正と実行証拠](sf08-prerequisite-repositories.md)。固定imageの公式Ubuntu sourceをregular-file/有限bytes/SHAで検証し、APT update/install双方へ同じsource選択を指定した。不要なNodeSource結合を除き、失敗時の厳密な3scalarをclosed＋actual ECHILD後だけ公開する。240秒/署名/TLS/required packages/capsule/browser検査は不変。Python64・Node148・source/projection16・CI policy160成功。原trustのfresh全実行はAPT通過後build101/unknown、browser0で未受入。GitHubの期限失敗と同根とは断定せず、新HEADの実3engine CIと別High最終監査を必須で残す。
+
 ## 2026-10-22 JST: PyCharm編集補助の調査とNagi入力補正
 
 main `5d3e58e`を基準にPython実装・登録を固定commitで調査し、[対応表と実装順](jetbrains-python-editing-plan.md)を作成した。Highの手動dedentを維持し、Nagi独自の連続Enter退出、else/caseのコロン補正、High/Lowの独立した閉じ括弧の整列を追加した。上限付きの既知文脈だけでleading whitespaceを変更し、Python専用構文やfull formatter/renameを推測実装しない。#141の名前付きimportは別作業として維持する。実IDE操作とcompiler連携を含む188件/0skip、Java 21、候補ZIP生成・descriptor/hash検証を確認した。[raw/観測条件/RED-GREEN](../../editors/jetbrains-nagi/benchmarks/python-editing-2026-10-22/README.md)。独立監査・exact-headのIDEA/PyCharm stable/EAP CIはPR本文で追跡し、ローカル成功やPython source比較をGUI/IME受入・完全同等性の証拠にしない。
@@ -550,3 +554,10 @@ base `e2d7280`から、physical moduleを2回lexする経路をparser所有token
 [設計](release-0.2.1-build-stability.md)と[raw計測](../../benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md)を追加。release compilerの完全検査は最大約3%短縮、小規模入力は差が小さく遅いsampleも残した。生成Low/Rust一致、release loopの全checksumと旧exe不変を確認し、実行速度向上は主張しない。frontend23件は4個別cold targetで221.11秒、1共有cold76.71秒、warm共有4.38秒（各1回、registry/OS warm）。cold/warmやCI全体の改善率を混同しない。
 
 fmt/clippy、対象parser/module/source回帰、CI policy160、CSRF deadline inventory37、利用者CI generator7、network許可下の全workspace `cargo test --locked --quiet`が成功した。全workspace670.09秒は同条件の速度比較ではない。最初のsocket権限拒否の失敗logも保持した。ordinary devとunitsの8ケースを各3回測定し、48成功exe・6回の不正lock拒否/回復を確認した。100関数では変更なしが約16%速い一方、編集は約9–21%遅いためopt-inを維持する。全構成の専有targetは完了後に整理した。独立最終audit、exact-head CIとリリース工程は別gateとして追跡する。query cache・一般async/type分割・自動最適化は未実装で、将来案を今回の成果に数えない。
+
+
+### 2026-10-22 SupervisorのSHUTDOWN publicationとterminal完了（未リリース）
+
+Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが失敗したが、実数が未保存のため根因断定を避けて調査した。別に、最初のrequest_stopがstop/abort後・SHUTDOWN送信前で停止すると、drainerがcleanup完了からchannel closeへ先行するraceをinstance限定finite gateで決定的RED（SHUTDOWN0/STOPPED1）再現した。採用済み設計に従い、SHUTDOWN後のRelease publication flagとterminal条件のAcquireを追加し、取消・cleanup・join・STOPPED・既存lock orderは維持する。
+
+同回帰GREEN、既存actor45件、全runtime923 passed/3既存ignored（failure0、33.06秒）、all-targets clippy -D warningsとfmtが成功。supervised-workerのHighと独立saved Lowは既存12項目（STOPPED3/SHUTDOWN1を含む）を維持してnative成功した。source/testを凍結し、独立High audit・改訂0.2.1の4OS CIへ渡す。Windowsの元失敗と同根とは未断定。[設計・証拠](supervisor-shutdown-publication.md)。
