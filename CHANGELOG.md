@@ -2,6 +2,9 @@
 
 ## 未リリース / Unreleased
 
+- 利用者向けCI generatorに`--build-profile dev|release`を追加。既定releaseと完全検査を維持し、Nagi 0.2.1以上の開発用buildをWindows/Unixで選択できます。profile別cacheと0.2.0向けrelease互換を維持し、未対応の組合せは出力前に拒否します。
+- Add explicit development/release profile selection to the next user-project CI generator, defaulting to release and targeting published Nagi 0.2.1 by default. Keep full checks, trusted-branch cache writes and older CLI release compatibility; separate profile caches under a new key namespace. Published 0.2.1 archives are unchanged.
+
 ## Nagi 0.2.1
 
 - Publish the backward-compatible build and stability improvements below. For faster application development, opt into `nagic run app.nagi --profile dev`; ordinary CLI builds retain the release default. Initial native builds still compile Rust dependencies. Incremental modes are optional and do not skip type, ownership or capability checks.
