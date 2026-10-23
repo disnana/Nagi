@@ -80,6 +80,182 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
                 List.of(), List.of(file));
     }
 
+    private static NagiAssistProtocol.Response omittedIndex(boolean checked, boolean accepted) {
+        return NagiAssistProtocol.decode(("""
+                {"format":"nagi-assist-v1","semantic_status":"none",
+                 "frontend_checked":%s,"frontend_accepted":%s,"full_compile_checked":false,
+                 "recovered":true,"completion":{"kind":"names","access":"read","items":[]},
+                 "diagnostics":%s}
+                """).formatted(checked, accepted, accepted ? "[]" :
+                        "[{\"severity\":\"error\",\"stage\":\"check\",\"message\":\"original rejection\"}]")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private NagiAssistProtocol.Response retryIndex(String file, String name) {
+        var facts = response(file, name);
+        return new NagiAssistProtocol.Response("editor-partial", true, false, false, "names",
+                omittedIndex(true, false).diagnostics(), facts.completions(), facts.references(), facts.sourceFiles());
+    }
+
+    public void testParsedQueryWithoutIndexRetriesOnceWithTheSameUnsavedOverlay() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    saved = True\n");
+        var editor = myFixture.getEditor();
+        String text = "# 日本語 😀\ndef main():\n    live = True\n";
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> editor.getDocument().setText(text));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        editor.getCaretModel().moveToOffset(text.length());
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<com.google.gson.JsonElement> overlays = new AtomicReference<>();
+        AtomicReference<NagiAssistProcess.Cancellation> firstCancellation = new AtomicReference<>();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            assertFalse("both requests belong to the worker", ApplicationManager.getApplication().isDispatchThread());
+            assertTrue(guard.getAsBoolean());
+            var request = com.google.gson.JsonParser.parseString(new String(input, java.nio.charset.StandardCharsets.UTF_8)).getAsJsonObject();
+            if (calls.incrementAndGet() == 1) {
+                firstCancellation.set(cancellation);
+                assertTrue(request.has("query"));
+                assertEquals(4, request.getAsJsonObject("query").get("line").getAsInt());
+                assertEquals(1, request.getAsJsonObject("query").get("column").getAsInt());
+                overlays.set(request.get("files"));
+                return omittedIndex(true, false);
+            }
+            assertFalse("fallback changes only the query", request.has("query"));
+            assertSame("the worker owns one cancellation token across both requests", firstCancellation.get(), cancellation);
+            assertEquals(overlays.get(), request.get("files"));
+            assertEquals(text, request.getAsJsonArray("files").get(0).getAsJsonObject().get("text").getAsString());
+            return retryIndex(file.getVirtualFile().getPath(), "never-copy-baseline-candidates");
+        });
+        service.requestBaseline(file, editor);
+        waitUntil(() -> service.fresh(file, editor) != null);
+        var result = service.fresh(file, editor).response();
+        assertEquals(2, calls.get());
+        assertFalse("a type rejection cannot become acceptance", result.frontendAccepted());
+        assertTrue(result.recovered());
+        assertEquals(omittedIndex(true, false).diagnostics(), result.diagnostics());
+        assertEquals("none", result.semanticStatus());
+        assertTrue("queryless candidates must not replace original empty completion", result.completions().isEmpty());
+        assertEquals(List.of(file.getVirtualFile().getPath()), result.sourceFiles());
+        service.requestBaseline(file, editor);
+        assertEquals("the combined current result must not loop", 2, calls.get());
+        assertTrue(FileDocumentManager.getInstance().isDocumentUnsaved(editor.getDocument()));
+    }
+
+    public void testPresentIndexKeepsTheSingleRequestFastPath() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    value = True\n");
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            calls.incrementAndGet();
+            // An explicitly present index may legitimately have no declarations or files.
+            return new NagiAssistProtocol.Response("none", true, true, false, "names", List.of(),
+                    List.of(), List.of(), List.of());
+        });
+        service.requestBaseline(file, myFixture.getEditor());
+        waitUntil(() -> service.fresh(file) != null);
+        assertEquals(1, calls.get());
+    }
+
+    public void testOriginalParseFailureDoesNotRequestAQuerylessRetry() throws Exception {
+        PsiFile file = source("main.nagi", "def main(:\n");
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            calls.incrementAndGet();
+            return omittedIndex(false, false);
+        });
+        service.requestBaseline(file, myFixture.getEditor());
+        waitUntil(() -> service.fresh(file) != null);
+        assertEquals(1, calls.get());
+        assertFalse(service.fresh(file).response().frontendAccepted());
+    }
+
+    public void testQuerylessRetryWithoutAnIndexDoesNotLoop() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    value = True\n");
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            calls.incrementAndGet();
+            return omittedIndex(true, false);
+        });
+        service.requestBaseline(file, myFixture.getEditor());
+        waitUntil(() -> service.fresh(file) != null);
+        assertEquals(2, calls.get());
+        assertFalse(service.fresh(file).response().frontendAccepted());
+        assertTrue(service.fresh(file).response().sourceFiles().isEmpty());
+        assertEquals(omittedIndex(true, false).diagnostics(), service.fresh(file).response().diagnostics());
+    }
+
+    public void testQuerylessBaselineDoesNotRetryAnOmittedIndex() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    value = True\n");
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            calls.incrementAndGet();
+            return omittedIndex(true, false);
+        });
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        assertEquals(1, calls.get());
+    }
+
+    public void testQuerylessTransportFailureDoesNotPublishAnIntermediateResult() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    value = True\n");
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            if (calls.incrementAndGet() == 1) return omittedIndex(true, true);
+            throw new java.io.IOException("synthetic queryless failure");
+        });
+        service.requestBaseline(file, myFixture.getEditor());
+        waitUntil(() -> service.state() == NagiAssistService.State.FAILED);
+        assertNull(service.fresh(file));
+        assertEquals(2, calls.get());
+        service.requestBaseline(file, myFixture.getEditor());
+        assertEquals(2, calls.get());
+    }
+
+    public void testEditCancelsQuerylessRetryBeforeItsIndexCanPublish() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    old = True\n");
+        var editor = myFixture.getEditor();
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        AtomicReference<NagiAssistProcess.Cancellation> retryCancellation = new AtomicReference<>();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            int call = calls.incrementAndGet();
+            if (call == 1) return omittedIndex(true, false);
+            if (call == 2) {
+                retryCancellation.set(cancellation);
+                entered.countDown();
+                while (release.getCount() != 0) {
+                    try { release.await(); } catch (InterruptedException ignored) { }
+                }
+                return retryIndex(file.getVirtualFile().getPath(), "obsolete");
+            }
+            return response(file.getVirtualFile().getPath(), "current");
+        });
+        service.requestBaseline(file, editor);
+        try {
+            waitUntil(() -> entered.getCount() == 0);
+            assertNull("the first no-index response must never publish early", service.fresh(file));
+            WriteCommandAction.runWriteCommandAction(getProject(), () -> editor.getDocument().setText("def main():\n    current = True\n"));
+            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+            assertTrue(retryCancellation.get().isCancelled());
+            service.requestBaseline(file, editor);
+        } finally { release.countDown(); }
+        waitUntil(() -> service.fresh(file) != null);
+        assertEquals("current", service.fresh(file).response().completions().getFirst().name());
+        assertEquals(3, calls.get());
+    }
+
+    public void testDisagreeingQuerylessVerdictFailsClosedWithoutRepeatedRequests() throws Exception {
+        PsiFile file = source("main.nagi", "def main():\n    value = True\n");
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) ->
+                calls.incrementAndGet() == 1 ? omittedIndex(true, false) : omittedIndex(true, true));
+        service.requestBaseline(file, myFixture.getEditor());
+        waitUntil(() -> service.state() == NagiAssistService.State.FAILED);
+        assertNull(service.fresh(file));
+        assertEquals(2, calls.get());
+        service.requestBaseline(file, myFixture.getEditor());
+        assertEquals(2, calls.get());
+    }
+
     public void testRustVerbatimWindowsSourcePathsHaveTheSameIdeIdentity() {
         assertEquals(NagiAssistService.normalizePath("C:\\work\\main.nagi"),
                 NagiAssistService.normalizePath("\\\\?\\C:\\work\\main.nagi"));

@@ -699,6 +699,7 @@ public final class NagiAssistService implements Disposable {
                 setStateForActive(key, State.STALE, "The configured Nagi compiler changed before it could run.");
                 return;
             }
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(Math.max(1, Math.min(300, snapshot.timeout)));
             NagiAssistProtocol.Response response = runner.run(snapshot.plan, snapshot.input, snapshot.timeout,
                     cancellation, () -> !cancellation.isCancelled() && trustedForCompiler()
                             && snapshotCurrent(snapshot) && executableIdentityCurrent(snapshot));
@@ -707,6 +708,36 @@ public final class NagiAssistService implements Disposable {
                 setStateForActive(key, State.STALE, "The Nagi compiler response belongs to an outdated editor snapshot and was discarded.");
                 retrySnapshotLater(snapshot);
                 return;
+            }
+            // Published 0.2.1 can parse the real source but lose its entire index
+            // when caret-only recovery inserts an illegal top-level expression.
+            // Retry only this missing-index case, on the same immutable snapshot.
+            // A present-but-empty index and an original parse failure are final.
+            if (snapshot.query != null && response.frontendChecked() && !response.hasSymbolIndex()
+                    && response.importContext() == null && response.completions().isEmpty()
+                    && response.semanticStatus().equals("none")) {
+                long remaining = deadline - System.nanoTime();
+                if (remaining <= 0) throw new IOException("Nagi editor assistance timed out before source facts were available.");
+                int timeout = (int) Math.max(1, TimeUnit.NANOSECONDS.toSeconds(remaining)
+                        + (remaining % TimeUnit.SECONDS.toNanos(1) == 0 ? 0 : 1));
+                NagiAssistProtocol.Response baseline = runner.run(snapshot.plan,
+                        NagiAssistProtocol.withoutQuery(snapshot.input), timeout, cancellation,
+                        () -> !cancellation.isCancelled() && trustedForCompiler()
+                                && snapshotCurrent(snapshot) && executableIdentityCurrent(snapshot));
+                if (cancellation.isCancelled() || !snapshotCurrent(snapshot) || !executableIdentityCurrent(snapshot)
+                        || !diskSnapshotCurrent(snapshot)) {
+                    setStateForActive(key, State.STALE, "The queryless Nagi source facts belong to an outdated editor snapshot and were discarded.");
+                    retrySnapshotLater(snapshot);
+                    return;
+                }
+                if (response.frontendChecked() != baseline.frontendChecked()
+                        || response.frontendAccepted() != baseline.frontendAccepted()
+                        || !response.diagnostics().equals(baseline.diagnostics())) {
+                    // Identity checks passed, so repeated disagreement is a
+                    // protocol failure, not permission to retry indefinitely.
+                    throw new IOException("Nagi query and queryless source facts disagree for the same editor snapshot.");
+                }
+                if (baseline.hasSymbolIndex()) response = response.withSymbolIndex(baseline);
             }
             Snapshot responseSnapshot = withCompilerSources(withCompilerDirectories(snapshot, response), response, attempt);
             if (!snapshotCurrent(responseSnapshot)) {

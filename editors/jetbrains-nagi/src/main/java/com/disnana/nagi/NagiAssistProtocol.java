@@ -78,7 +78,15 @@ public final class NagiAssistProtocol {
                           boolean recovered, String completionKind, List<Diagnostic> diagnostics,
                           List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles,
                           List<Definition> definitions, List<Local> locals, List<SymbolRole> roles,
-                          ImportContext importContext) {
+                          ImportContext importContext, boolean hasSymbolIndex) {
+        public Response(String semanticStatus, boolean frontendChecked, boolean frontendAccepted,
+                        boolean recovered, String completionKind, List<Diagnostic> diagnostics,
+                        List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles,
+                        List<Definition> definitions, List<Local> locals, List<SymbolRole> roles,
+                        ImportContext importContext) {
+            this(semanticStatus, frontendChecked, frontendAccepted, recovered, completionKind,
+                    diagnostics, completions, references, sourceFiles, definitions, locals, roles, importContext, true);
+        }
         public Response(String semanticStatus, boolean frontendChecked, boolean frontendAccepted,
                         boolean recovered, String completionKind, List<Diagnostic> diagnostics,
                         List<CompletionItem> completions, List<Reference> references, List<String> sourceFiles,
@@ -108,6 +116,23 @@ public final class NagiAssistProtocol {
             locals = List.copyOf(locals);
             roles = List.copyOf(roles);
         }
+
+        /** Only current source facts are replaced; query approval and diagnostics stay with the query response. */
+        Response withSymbolIndex(Response baseline) {
+            if (!baseline.hasSymbolIndex || frontendChecked != baseline.frontendChecked
+                    || frontendAccepted != baseline.frontendAccepted || !diagnostics.equals(baseline.diagnostics))
+                throw new IllegalArgumentException("queryless source facts disagree with the query verdict");
+            return new Response(semanticStatus, frontendChecked, frontendAccepted, recovered, completionKind,
+                    diagnostics, completions, baseline.references, baseline.sourceFiles,
+                    baseline.definitions, baseline.locals, baseline.roles, importContext, true);
+        }
+    }
+
+    /** Remove only the query from our own already-encoded immutable snapshot, preserving every overlay. */
+    static byte[] withoutQuery(byte[] encoded) {
+        JsonObject request = JsonParser.parseString(new String(encoded, StandardCharsets.UTF_8)).getAsJsonObject();
+        request.remove("query");
+        return request.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     public static byte[] encode(Request request) {
@@ -250,7 +275,8 @@ public final class NagiAssistProtocol {
             List<Local> locals = new ArrayList<>();
             List<SymbolRole> roles = new ArrayList<>();
             JsonElement symbolsElement = root.get("symbols");
-            if (symbolsElement != null && !symbolsElement.isJsonNull()) {
+            boolean hasSymbolIndex = symbolsElement != null && !symbolsElement.isJsonNull();
+            if (hasSymbolIndex) {
                 JsonObject symbols = object(symbolsElement, "symbols");
                 if (!"nagi-symbols-v1".equals(string(symbols, "format"))) throw new IllegalArgumentException("unsupported symbols format");
                 JsonArray sourceFileArray = array(symbols, "files");
@@ -305,7 +331,7 @@ public final class NagiAssistProtocol {
             }
             if (status.equals("none") && !completions.isEmpty()) throw new IllegalArgumentException("unverified candidates in empty semantic response");
             return new Response(status, frontendChecked, frontendAccepted, recovered, completionKind,
-                    diagnostics, completions, references, sourceFiles, definitions, locals, roles, importContext);
+                    diagnostics, completions, references, sourceFiles, definitions, locals, roles, importContext, hasSymbolIndex);
         } catch (IllegalStateException | NumberFormatException | ArithmeticException | CharacterCodingException | JsonParseException exception) {
             throw new IllegalArgumentException("malformed editor response", exception);
         }

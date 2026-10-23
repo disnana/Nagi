@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-23: 完成コードの末尾空行でeditor情報を失う不具合
+
+[設計](jetbrains-empty-line-assistance.md)。#148の利用者GUI確認・main `6214c5d6`へのmerge後、正常なPoint record例でも末尾空行の先頭へcaretを置くと色・説明が消える報告を受けた。公開0.2.1のHigh/Low・保存/overlay/serveで、original frontendは受理済みだがquery recoveryのload失敗によりsymbolsが省略される応答を再現した。compilerは元ASTへ戻してqueryなしindexを生成し、元diagnostic/verdictを維持する。pluginは公開0.2.1向けにsymbols省略と明示emptyを区別し、限定条件で同snapshotのqueryなし解析を1回だけ行い、source事実だけを合成してpublishする。通常の応答に追加解析はない。型・ownership・Policy・stale/cancel/identity検査は維持。compiler37件・Clippy・fmt、公開0.2.1実CLIを使うplugin43件、matching compilerのplugin全278件・ZIP build成功。環境はJDK25.0.4/IU263.7031.23で、Windows GUI/他SDK・全workspace・独立最終review・exact-head CIは別gateとして残す。
+
 ## 2026-10-23: #148 SF08 installの有限status観測
 
 [設計と実証](sf08-install-status-diagnostic.md)。update成功・install実spawn後236秒timeoutという新CI事実を受け、原240秒/transport/TLS/署名/source pin/3packages/browser検査を維持して、固定2名だけのbounded captureへAPT Status-Fdを接続した。閉鎖＋actual ECHILD後に有限phase/record数だけを公開し、未知・不正・truncation等はunknown、成功時のcapture異常もfailclosed。実pinned APT2.8.3で原trustの1回の導入30.362秒/29752bytes/516recordsを確認、専有container/image整理済み。Python70/Node148/sourceguard16/policy160成功、旧実装の観測欠落をRED→GREENで確認。timeout根因の修復・安定化済みとは扱わず、別High監査と新HEAD実3engine CIを必須で残す。

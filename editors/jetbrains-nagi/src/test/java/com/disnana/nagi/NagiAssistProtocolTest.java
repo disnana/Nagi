@@ -2,6 +2,7 @@ package com.disnana.nagi;
 
 import static org.junit.Assert.*;
 
+import com.google.gson.JsonParser;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
@@ -44,6 +45,38 @@ public final class NagiAssistProtocolTest {
         assertEquals(2, response.references().getFirst().target().line());
         assertEquals(List.of(TEST_PATH), response.sourceFiles());
         assertNull("legacy expression completion has no import context", response.importContext());
+    }
+
+    @Test public void distinguishesAnOmittedIndexFromAnExplicitlyEmptyIndex() {
+        var root = JsonParser.parseString(VALID).getAsJsonObject();
+        root.addProperty("semantic_status", "none");
+        root.getAsJsonObject("completion").add("items", new com.google.gson.JsonArray());
+        root.remove("symbols");
+        var omitted = NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8));
+        root.add("symbols", JsonParser.parseString("""
+                {"format":"nagi-symbols-v1","files":[],"references":[]}
+                """));
+        var empty = NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8));
+        assertNotEquals("absence must remain observable even when every decoded list is empty", omitted, empty);
+        assertFalse(omitted.hasSymbolIndex());
+        assertTrue(empty.hasSymbolIndex());
+    }
+
+    @Test public void sourceIndexMergePreservesTheOriginalQueryVerdictAndDiagnostic() {
+        var query = NagiAssistProtocol.decode(VALID.getBytes(StandardCharsets.UTF_8));
+        var root = JsonParser.parseString(VALID).getAsJsonObject();
+        root.getAsJsonObject("completion").getAsJsonArray("items").get(0).getAsJsonObject().addProperty("name", "different");
+        root.addProperty("recovered", true);
+        var baseline = NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8));
+        var merged = query.withSymbolIndex(baseline);
+        assertEquals(query.completions(), merged.completions());
+        assertEquals(query.diagnostics(), merged.diagnostics());
+        assertEquals(query.semanticStatus(), merged.semanticStatus());
+        assertEquals(query.recovered(), merged.recovered());
+        assertEquals(query.frontendAccepted(), merged.frontendAccepted());
+        root.addProperty("frontend_accepted", true);
+        var disagreeing = NagiAssistProtocol.decode(root.toString().getBytes(StandardCharsets.UTF_8));
+        assertThrows(IllegalArgumentException.class, () -> query.withSymbolIndex(disagreeing));
     }
 
     @Test public void decodesSourceAndSelectedNameImportContextsWithUtf16Locations() {
