@@ -2,6 +2,8 @@
 
 ## 未リリース / Unreleased
 
+- Keep changes limited to discoverable root-level website tests on the existing documentation CI path. Preserve full validation for unknown files and mixed compiler, runtime, security or dependency changes. This optimizes Nagi's repository CI; application build behavior is unchanged.
+
 ## Nagi 0.2.1
 
 - Publish the backward-compatible build and stability improvements below. For faster application development, opt into `nagic run app.nagi --profile dev`; ordinary CLI builds retain the release default. Initial native builds still compile Rust dependencies. Incremental modes are optional and do not skip type, ownership or capability checks.
