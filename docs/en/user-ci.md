@@ -1,22 +1,22 @@
 # GitHub Actions for a Nagi application
 
 Use the project CI generator to create an application workflow. Python 3.10 or
-later is required. Future distribution candidates include
+later is required. Published 0.2.1 distributions include
 `tools/generate_project_ci.py`; released 0.2.0 does not include this tool.
-Use the candidate archive or this source checkout for now. Run it from the
+Use a 0.2.1 archive or this source checkout. Run it from the
 application repository root, where `nagi.toml` is located:
 
 ```bash
-# Point to the extracted distribution candidate
+# Point to the extracted 0.2.1 distribution
 python /path/to/nagi/tools/generate_project_ci.py \
-  --output .github/workflows/nagi.yml
+  --nagi-version 0.2.1 --output .github/workflows/nagi.yml
 ```
 
 With a source checkout:
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --output .github/workflows/nagi.yml
+  --nagi-version 0.2.1 --output .github/workflows/nagi.yml
 ```
 
 The generator uses only Python's standard library. It writes the workflow at
@@ -28,12 +28,13 @@ The default output can also be reviewed before saving:
 python /path/to/Nagi/scripts/generate_project_ci.py
 ```
 
-The generated workflow pins the released Nagi version to `0.2.0` and uses
-stable Rust for native builds. Change these settings when generating the file:
+The generator defaults to Nagi `0.2.0`. The commands above explicitly pin
+published `0.2.1` with `--nagi-version 0.2.1`; native builds use stable Rust.
+Change these settings when generating the file:
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --nagi-version 0.2.0 --toolchain stable \
+  --nagi-version 0.2.1 --toolchain stable \
   --output .github/workflows/nagi.yml
 ```
 

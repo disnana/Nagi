@@ -123,7 +123,7 @@ Command-line relative paths use the terminal's working directory. Duplicate SOUR
 
 Generated Low, Rust, and Cargo.toml go to `build/<entry filename without extension>/`. The build cache remains in `build/native-target/`. The `native:` line that `build` and `run` print to stderr gives the executable's actual path.
 
-Development source checkouts provide `nagic cache inspect` to read explicitly supplied output and shared Cargo cache roots and print a versioned JSON observation. The command is `nagic cache inspect --out-root ABS --cargo-root ABS --max-entries N --max-depth N`. Specify both absolute roots and both per-root bounds exactly once: entries from 1 to 4096 and depth from 1 to 64. Each root is limited to 4096 OS-encoded path bytes. It does not discover roots from project settings or environment variables, create files or locks, or invoke Cargo.
+Nagi 0.2.1 provides `nagic cache inspect` to read explicitly supplied output and shared Cargo cache roots and print a versioned JSON observation. The command is `nagic cache inspect --out-root ABS --cargo-root ABS --max-entries N --max-depth N`. Specify both absolute roots and both per-root bounds exactly once: entries from 1 to 4096 and depth from 1 to 64. Each root is limited to 4096 OS-encoded path bytes. It does not discover roots from project settings or environment variables, create files or locks, or invoke Cargo.
 
 JSON reports each root's structural classes, logical file lengths, bounded samples, and reason counters for links, errors, and limit hits. Missing roots and incomplete traversals still produce JSON and exit with status 1. Syntax errors stop before scanning and produce no JSON. Classification is only a structural hint. Hardlinks are counted by path and can make logical byte counts overlap; physical allocation, free space, and bytes recoverable by deletion are not measured. Roots can point to aliased locations even when lexical overlap is false, so their results cannot be added as unique disk usage. Traversal, including skipped or rejected links/reparse points, is not an atomic snapshot and does not prevent path check/use races. Do not use the report to decide deletion. `root_os` and `relative_path_os` preserve OS path units for paths accepted by the current CLI string argument interface; the CLI does not accept arbitrary non-UTF-8 root arguments.
 
@@ -163,4 +163,4 @@ The JSON includes function parameters, return types, async status, and class fie
 
 ## Shortening development and CI feedback
 
-See [CI configuration generation](user-ci.md) for released 0.2.0 and [development profiles and build observations](development-builds.md) for unreleased compiler source.
+See [CI configuration generation](user-ci.md) in the 0.2.1 distribution and [development profiles and build observations](development-builds.md).

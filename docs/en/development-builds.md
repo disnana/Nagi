@@ -1,8 +1,8 @@
-# Development builds and change observations (unreleased)
+# Development builds and change observations
 
 [日本語](../development-builds.md)
 
-`--profile` and `--build-stats` belong to development source after the 0.2.0 release. They are absent from released 0.2.0. Build the compiler from the same source revision. Existing `build` and `run` still default to release.
+`--profile`, `--build-stats`, and the incremental modes on this page are available in published 0.2.1, but not 0.2.0. Check `nagic --version` and follow the [installation guide](getting-started.md) to update. Existing `build` and `run` still default to release.
 
 ```sh
 nagic check --project my-app
@@ -14,7 +14,7 @@ nagic build --project my-app --profile release --build-stats
 
 `dev` selects Cargo's development profile; `release` retains the existing optimized profile. Development compilation avoids optimization work and reuses development runtime dependencies. Ordinary integer arithmetic overflow normally panics in dev and wraps in release, as the existing language contract specifies. Cargo profile overrides and environment settings still apply. Measure production performance and distribute applications using release.
 
-## Reusing the generated body (unreleased)
+## Reusing the generated body
 
 ```sh
 nagic run --project my-app --profile dev --incremental --build-stats
@@ -30,7 +30,7 @@ Stats expose `generated_body.mode`, generated-source `source_cache` (`hit` / `mi
 
 Bodies remain in `.nagi/apps/<app>/code/<sha256>/` under the output and are not automatically pruned. Their identities are not guaranteed portable across checkouts and do not authenticate shared caches. Noncooperating processes concurrently replacing directories or modifying Cargo caches are outside this guarantee.
 
-## Rust units from function dependencies (unreleased)
+## Rust units from function dependencies
 
 ```sh
 nagic run --project my-app --profile dev --incremental=units --build-stats
@@ -61,7 +61,7 @@ The receipt hashes the published Low, Rust, manifest, lock, source/provenance sn
 python3 scripts/verify_build_receipt.py path/to/generations/g-.../build-receipt.json --compiler path/to/nagic
 ```
 
-Distribution candidates bundle the same verifier as `tools/verify_build_receipt.py`. It needs Python 3.10 or later, without a source checkout. Artifacts must be regular files; symlinks, Windows reparse points and FIFOs are rejected. The compiler argument may use the installer's executable link. This local verifier does not protect against another process maliciously replacing directories concurrently.
+The 0.2.1 distributions bundle the same verifier as `tools/verify_build_receipt.py`. It needs Python 3.10 or later, without a source checkout. Artifacts must be regular files; symlinks, Windows reparse points and FIFOs are rejected. The compiler argument may use the installer's executable link. This local verifier does not protect against another process maliciously replacing directories concurrently.
 
 Full checking, emission and Cargo always run; every successful build publishes a fresh immutable generation. Corrupt observations cannot authorize reuse. Receipt-writing failure preserves the previous latest generation and does not execute the new app.
 
@@ -71,7 +71,7 @@ Digest comparison detects corruption, not an attacker who can replace both files
 
 ## Local development and CI
 
-The CI generator for published 0.2.0 does not enable this unreleased flag automatically. Use it explicitly in development jobs only when CI pins a compiler built from the matching source revision. Full pre-merge checks and production release builds remain necessary.
+The CI generator does not enable these flags automatically. Pin compiler 0.2.1 or later in CI before explicitly enabling them in development jobs. Full pre-merge checks and production release builds remain necessary.
 
 `NAGI_NATIVE_TARGET_DIR` still chooses the shared dependency cache. App IDs and immutable success generations remain separate, with `debug/` for dev and `release/` for release. Ordinary generations are not automatically pruned; monitor disk usage. IDE-internal retention settings are not general CLI garbage collection.
 
