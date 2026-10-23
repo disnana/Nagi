@@ -2279,6 +2279,7 @@ fn publish_done_at(signals: &std::path::Path, value: &str, created: impl FnOnce(
     let done = signals.join("done");
     let temp = signals.join("done.tmp");
     require_absent(&done)?;
+    require_absent(&temp)?; // Normalize known existing paths before platform-specific create_new errors.
     let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&temp)?;
     created();
     file.write_all(value.as_bytes())?;
@@ -2439,6 +2440,15 @@ mod completion_tests {
     }
 }"#;
 
+fn completion_wrapper_failure(output: &Output) -> String {
+    format!(
+        "completion wrapper tests failed: status={}\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+}
+
 #[test]
 fn cargo_wrapper_completion_publication_is_atomic_and_conflicts_fail_closed() {
     let f = Fixture::new();
@@ -2453,11 +2463,39 @@ fn cargo_wrapper_completion_publication_is_atomic_and_conflicts_fail_closed() {
     success(&bounded_output(compile));
     let signals = f.0.join("completion-signals");
     fs::create_dir(&signals).unwrap();
-    let mut test = Command::new(binary);
+    let mut test = Command::new(&binary);
     test.env("NAGI_TEST_COMPLETION_ROOT", signals);
     let output = bounded_output(test);
-    success(&output);
+    assert!(
+        output.status.success(),
+        "{}",
+        completion_wrapper_failure(&output)
+    );
     assert!(String::from_utf8_lossy(&output.stdout).contains("2 passed"));
+
+    // Reproduce a nested libtest panic: its useful failure text is on stdout,
+    // exactly the channel the previous outer assertion discarded.
+    let mut failed_test = Command::new(binary);
+    failed_test
+        .env_remove("NAGI_TEST_COMPLETION_ROOT")
+        .env_remove("RUST_TEST_NOCAPTURE")
+        .args([
+            "--exact",
+            "completion_tests::completion_is_absent_until_closed_and_published",
+        ]);
+    let failed = bounded_output(failed_test);
+    assert!(!failed.status.success());
+    assert!(failed.stderr.is_empty());
+    assert!(String::from_utf8_lossy(&failed.stdout).contains("panicked at"));
+    let diagnostic = completion_wrapper_failure(&failed);
+    assert!(
+        diagnostic.contains("panicked at"),
+        "nested failure stdout was discarded"
+    );
+    assert!(
+        diagnostic.contains("completion_tests::completion_is_absent_until_closed_and_published")
+    );
+    assert!(diagnostic.contains(&failed.status.to_string()));
 }
 
 fn stats(output: &Output) -> serde_json::Value {
