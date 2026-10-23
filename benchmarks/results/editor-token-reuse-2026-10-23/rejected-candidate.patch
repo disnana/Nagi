@@ -1,0 +1,227 @@
+diff --git a/compiler/src/source.rs b/compiler/src/source.rs
+index ce70c3d..b8f9774 100644
+--- a/compiler/src/source.rs
++++ b/compiler/src/source.rs
+@@ -1,4 +1,5 @@
+ use crate::ast::*;
++use std::borrow::Cow;
+ use std::collections::{HashMap, HashSet};
+ use std::path::Path;
+ use std::path::PathBuf;
+@@ -12,8 +13,31 @@ struct SourceFile {
+     start: usize,
+     lines: usize,
+     tokens: Vec<crate::lexer::Token>,
++    high: bool,
+     lowering: LoweringKind,
+ }
++
++/// Request-local presentation data from the same text that produced AST spans.
++pub(crate) struct SourceFileView<'a> {
++    pub path: &'a Path,
++    pub text: &'a str,
++    pub start: usize,
++    tokens: &'a [crate::lexer::Token],
++    high: bool,
++}
++impl<'a> SourceFileView<'a> {
++    pub(crate) fn editor_tokens(&self) -> Result<Cow<'a, [crate::lexer::Token]>, String> {
++        let high = self.path.extension().is_none_or(|x| x != "low");
++        if self.high == high {
++            Ok(Cow::Borrowed(self.tokens))
++        } else {
++            // Public source::load accepts an explicit mode, and native files
++            // need not end in .low. Preserve presentation consumers' previous
++            // extension-based lexing for those unusual inputs.
++            crate::lexer::lex(self.text, high).map(Cow::Owned)
++        }
++    }
++}
+ /// Successfully resolved source provenance; spans remain in the physical file.
+ pub(crate) struct ResolvedImport {
+     pub file: PathBuf,
+@@ -189,6 +213,15 @@ impl Sources {
+             .iter()
+             .map(|f| (f.path.as_path(), f.source.as_str(), f.start))
+     }
++    pub(crate) fn file_views(&self) -> impl Iterator<Item = SourceFileView<'_>> {
++        self.files.iter().map(|file| SourceFileView {
++            path: &file.path,
++            text: &file.source,
++            start: file.start,
++            tokens: &file.tokens,
++            high: file.high,
++        })
++    }
+     pub(crate) fn resolved_imports(&self) -> impl Iterator<Item = &ResolvedImport> {
+         self.imports.iter()
+     }
+@@ -517,6 +550,7 @@ pub fn load_with_overlays(
+             start: offset + 1,
+             source,
+             tokens: units.last().expect("source unit pushed").tokens.clone(),
++            high,
+             lowering: if high {
+                 LoweringKind::GeneratedLow
+             } else {
+@@ -732,3 +766,36 @@ mod disk_budget_tests {
+         assert_eq!(total, 8_000_000);
+     }
+ }
++
++#[cfg(test)]
++mod editor_token_tests {
++    use super::*;
++
++    #[test]
++    fn presentation_tokens_borrow_only_the_matching_parse_mode() {
++        let text = "fn main() {\n    let value = 1;\n}\n";
++        let (_, tokens) = crate::parser::parse_with_tokens(text, false).unwrap();
++        let low = SourceFileView {
++            path: Path::new("main.low"),
++            text,
++            start: 23,
++            tokens: &tokens,
++            high: false,
++        };
++        let borrowed = low.editor_tokens().unwrap();
++        assert!(matches!(borrowed, Cow::Borrowed(_)));
++        assert!(std::ptr::eq(borrowed.as_ptr(), tokens.as_ptr()));
++        let high_filename = SourceFileView {
++            path: Path::new("native.nagi"),
++            ..low
++        };
++        let owned = high_filename.editor_tokens().unwrap();
++        assert!(matches!(owned, Cow::Owned(_)));
++        assert!(owned
++            .iter()
++            .any(|token| token.kind == crate::lexer::K::Indent));
++        assert!(!tokens
++            .iter()
++            .any(|token| token.kind == crate::lexer::K::Indent));
++    }
++}
+diff --git a/compiler/src/symbols.rs b/compiler/src/symbols.rs
+index 25aa8f1..3d9778f 100644
+--- a/compiler/src/symbols.rs
++++ b/compiler/src/symbols.rs
+@@ -1,7 +1,7 @@
+ //! Definition locations for the files and AST actually loaded by the compiler.
+ use crate::{
+     ast::*,
+-    lexer::{lex, Token, K},
++    lexer::{Token, K},
+     source::Sources,
+ };
+ use serde::{Deserialize, Serialize};
+@@ -143,7 +143,7 @@ struct File<'a> {
+     module: ModuleId,
+     lines: Vec<&'a str>,
+     start: usize,
+-    tokens: Vec<Token>,
++    tokens: &'a [Token],
+ }
+ impl File<'_> {
+     fn token_length(&self, token: &Token) -> usize {
+@@ -918,18 +918,23 @@ pub(crate) fn import_exports(
+     module: &ModuleId,
+     prefix: &str,
+ ) -> Result<Vec<serde_json::Value>, String> {
+-    let files = sources
+-        .files()
+-        .map(|(path, text, start)| {
+-            Ok(File {
+-                path,
+-                module: module.clone(),
+-                lines: text.lines().collect(),
+-                start,
+-                tokens: lex(text, path.extension().is_none_or(|x| x != "low"))?,
+-            })
++    let token_files = sources
++        .file_views()
++        .map(|file| {
++            let tokens = file.editor_tokens()?;
++            Ok((file, tokens))
+         })
+         .collect::<Result<Vec<_>, String>>()?;
++    let files = token_files
++        .iter()
++        .map(|(file, tokens)| File {
++            path: file.path,
++            module: module.clone(),
++            lines: file.text.lines().collect(),
++            start: file.start,
++            tokens,
++        })
++        .collect::<Vec<_>>();
+     let mut declarations = HashMap::new();
+     for (file_index, file) in files.iter().enumerate() {
+         for (token_index, pair) in file.tokens.windows(2).enumerate() {
+@@ -989,22 +994,27 @@ fn index_impl(
+     typed: Option<&Program>,
+ ) -> Result<serde_json::Value, String> {
+     let module_files = sources.module_files().collect::<HashMap<_, _>>();
+-    let files = sources
+-        .files()
+-        .map(|(path, text, start)| {
+-            Ok(File {
+-                path,
+-                module: module_files
+-                    .iter()
+-                    .find(|(_, file)| **file == path)
+-                    .map(|(module, _)| (*module).clone())
+-                    .unwrap_or_else(|| ModuleId(path.display().to_string())),
+-                lines: text.lines().collect(),
+-                start,
+-                tokens: lex(text, path.extension().is_none_or(|x| x != "low"))?,
+-            })
++    let token_files = sources
++        .file_views()
++        .map(|file| {
++            let tokens = file.editor_tokens()?;
++            Ok((file, tokens))
+         })
+         .collect::<Result<Vec<_>, String>>()?;
++    let files = token_files
++        .iter()
++        .map(|(file, tokens)| File {
++            path: file.path,
++            module: module_files
++                .iter()
++                .find(|(_, path)| **path == file.path)
++                .map(|(module, _)| (*module).clone())
++                .unwrap_or_else(|| ModuleId(file.path.display().to_string())),
++            lines: file.text.lines().collect(),
++            start: file.start,
++            tokens,
++        })
++        .collect::<Vec<_>>();
+     let mut metadata = ModuleMetadata::default();
+     for p in programs {
+         metadata.modules.extend(p.modules.modules.clone());
+diff --git a/compiler/tests/symbols.rs b/compiler/tests/symbols.rs
+index 470629d..094e4d5 100644
+--- a/compiler/tests/symbols.rs
++++ b/compiler/tests/symbols.rs
+@@ -80,6 +80,21 @@ fn reference_at<'a>(
+     })
+ }
+ 
++#[test]
++fn explicit_low_load_with_high_filename_preserves_editor_lex_failure() {
++    let f = Fixture::new();
++    // The public loader accepts an explicit syntax mode. Presentation indexing
++    // historically lexes by filename; reusing Low tokens must not hide its
++    // existing High-indentation error on this unusual input.
++    f.write(
++        "main.nagi",
++        "fn main() {\n    let fresh = 1;\n  print(fresh);\n}\n",
++    );
++    let loaded = source::load(&f.0.join("main.nagi"), false).unwrap();
++    let error = symbols::index(&loaded, &[&loaded.program]).unwrap_err();
++    assert_eq!(error, "line 3: 字下げが外側のブロックと一致しません");
++}
++
+ #[test]
+ fn compiler_symbol_roles_use_typed_fields_and_exact_high_low_positions() {
+     for (high, file, text) in [

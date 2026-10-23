@@ -130,3 +130,5 @@ Session65/SF07 summary37/native-finish20/source guard16/CI policy160件が成功
 
 
 2026-10-22、#149 SF08 prerequisitesをSol 6.1 Highが限定調査。親がsource pin・両APT argv限定・閉鎖後scalar公開の事前設計を承認し、同Highが実装とRED→GREEN/Python64/Node148/source guard16/policy160を実行した。managed transport設定差と不要NodeSource依存をprivate診断で分離し、GitHub240秒失敗の原因同一性は未確認とした。原trustのfresh fullはAPT通過後build101/unknown・browser0、受入成功とは扱わない。所有container/imageのみ区切りで整理し、private証拠と原ログを保持する。新HEAD CI・別High最終auditへ引継ぐ。追加spawn/commit/pushなし、model時間・費用は未測定。詳細は[sf08-prerequisite-repositories.md](sf08-prerequisite-repositories.md)。
+
+2026-10-23、0.2.2候補のeditor探索をSol 6.1 Highが設計・実装・実測した。token再利用候補は対象testと同値比較が成功しても通常assist悪化の実測により棄却。別案の物理line限定検索は同一release toolchain、交互順15 sample、whole JSON比較で検証した。親が全workspace回帰を追加実行して成功。独立High監査とexact-head CIは次のgateで、実装者の報告と区別する。主な制約は計測分散・Linuxのみ・小さい効果。model時間・使用量・費用は未測定。[設計・証拠](../../benchmarks/results/editor-line-search-2026-10-23/README.md)。

@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-23: 0.2.2候補のeditor定義位置探索
+
+[設計・実測](../../benchmarks/results/editor-line-search-2026-10-23/README.md)。main `9fe5e079`基準で、symbolsの定義位置検索だけを既存lexerの物理line順に限定した。High/Lowの検査・位置・protocol・Cargo経路を維持。16 case×15 sampleでJSON全体が一致し、大caseの中央値はおおむね1〜2%短縮したが、ばらつきと遅いcaseも記録した。先行token再利用案は通常assistの約6%悪化が再現したため棄却し、実装を戻して証拠を保存した。対象65 tests、全workspace `cargo test --locked`、all-target Clippy、fmt、Python構文が成功。独立最終auditとexact-head CIは未確認。Windows/macOSでの速度、Rust/Cargo buildやアプリ速度の改善は主張しない。
+
 ## 2026-10-22: #149 SF08 prerequisitesの不要repository依存
 
 [限定修正と実行証拠](sf08-prerequisite-repositories.md)。固定imageの公式Ubuntu sourceをregular-file/有限bytes/SHAで検証し、APT update/install双方へ同じsource選択を指定した。不要なNodeSource結合を除き、失敗時の厳密な3scalarをclosed＋actual ECHILD後だけ公開する。240秒/署名/TLS/required packages/capsule/browser検査は不変。Python64・Node148・source/projection16・CI policy160成功。原trustのfresh全実行はAPT通過後build101/unknown、browser0で未受入。GitHubの期限失敗と同根とは断定せず、新HEADの実3engine CIと別High最終監査を必須で残す。
