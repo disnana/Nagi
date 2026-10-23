@@ -171,7 +171,7 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
             System.setProperty(asyncProperty, "true");
             Path captured = temporary.resolve("started.txt");
             Path compiler = temporary.resolve("nagic");
-            Files.writeString(compiler, "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$$\" > "
+            Files.writeString(compiler, "#!/bin/sh\nset -eu\n" + NagiRunTestCompiler.developmentHelpScript() + "printf '%s\\n' \"$$\" > "
                     + shellQuote(temporary.resolve("started.tmp")) + "\nmv "
                     + shellQuote(temporary.resolve("started.tmp")) + " " + shellQuote(captured) + "\n");
             assertTrue(compiler.toFile().setExecutable(true));
@@ -271,7 +271,7 @@ public class NagiRunLineMarkerTest extends BasePlatformTestCase {
             String initial = low ? "fn main() { print(1); }\n" : "def main():\n    print(1)\n";
             String expected = initial + "# saved by gutter action\n";
             Files.writeString(source, initial);
-            Files.writeString(compiler, "#!/bin/sh\nset -eu\n"
+            Files.writeString(compiler, "#!/bin/sh\nset -eu\n" + NagiRunTestCompiler.developmentHelpScript()
                     + "printf '%s\\n' \"$@\" > " + shellQuote(temporary.resolve("arguments.tmp")) + "\n"
                     + "cat " + shellQuote(source) + " > " + shellQuote(temporary.resolve("source.tmp")) + "\n"
                     + "mv " + shellQuote(temporary.resolve("arguments.tmp")) + " " + shellQuote(captured) + "\n"

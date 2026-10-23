@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -49,6 +50,9 @@ public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConf
     public String getSourcePath() { return options().getSourcePath(); }
     public void setSourcePath(String path) { options().setSourcePath(path); }
 
+    public NagiBuildProfile getBuildProfile() { return NagiBuildProfile.valueOf(options().getBuildProfile()); }
+    public void setBuildProfile(NagiBuildProfile profile) { options().setBuildProfile(profile.name()); }
+
     private NagiRunConfigurationOptions options() {
         return (NagiRunConfigurationOptions) getOptions();
     }
@@ -60,40 +64,53 @@ public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConf
     @Override protected void doCopyOptionsFrom(RunConfigurationBase<NagiRunConfigurationOptions> other) {
         super.doCopyOptionsFrom(other);
         setSourcePath(((NagiRunConfiguration) other).getSourcePath());
+        options().setBuildProfile(((NagiRunConfiguration) other).options().getBuildProfile());
     }
 
     @Override public void readExternal(@NotNull Element element) throws InvalidDataException {
         super.readExternal(element);
         String sourcePath = element.getAttributeValue("sourcePath");
         setSourcePath(sourcePath == null ? "" : sourcePath);
+        options().setBuildProfile(element.getAttributeValue("buildProfile"));
     }
 
     @Override public void writeExternal(@NotNull Element element) {
         super.writeExternal(element);
+        element.setAttribute("buildProfile", options().getBuildProfile());
         if (getSourcePath().isBlank()) element.removeAttribute("sourcePath");
         else element.setAttribute("sourcePath", getSourcePath());
     }
 
     @Override public void checkConfiguration() throws RuntimeConfigurationException {
         sourceFile();
+        try { getBuildProfile(); }
+        catch (IllegalArgumentException failure) { throw new RuntimeConfigurationError("Select Development or Release as the Nagi build profile."); }
     }
 
     @Override public SettingsEditor<NagiRunConfiguration> getConfigurationEditor() {
         return new SettingsEditor<>() {
             private final JTextField sourcePath = new JTextField();
+            private final JComboBox<NagiBuildProfile> profile = new JComboBox<>(NagiBuildProfile.values());
 
             @Override protected void resetEditorFrom(@NotNull NagiRunConfiguration configuration) {
                 sourcePath.setText(configuration.getSourcePath());
+                try { profile.setSelectedItem(configuration.getBuildProfile()); }
+                catch (IllegalArgumentException failure) { profile.setSelectedIndex(-1); }
             }
 
             @Override protected void applyEditorTo(@NotNull NagiRunConfiguration configuration) {
                 configuration.setSourcePath(sourcePath.getText().strip());
+                if (profile.getSelectedItem() != null) configuration.setBuildProfile((NagiBuildProfile) profile.getSelectedItem());
             }
 
             @Override protected JComponent createEditor() {
                 var panel = new JPanel(new BorderLayout(8, 0));
                 panel.add(new JLabel("Nagi source file:"), BorderLayout.WEST);
                 panel.add(sourcePath, BorderLayout.CENTER);
+                var profilePanel = new JPanel(new BorderLayout(8, 0));
+                profilePanel.add(new JLabel("Build profile:"), BorderLayout.WEST);
+                profilePanel.add(profile, BorderLayout.CENTER);
+                panel.add(profilePanel, BorderLayout.SOUTH);
                 return panel;
             }
         };
@@ -123,7 +140,9 @@ public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConf
             Path output = outputDirectory(source);
             NagiCommandPlan plan = NagiCommandPlan.create(values.compilerPath, "run", source, workspace,
                     output, SystemInfo.isWindows);
-            return new NagiCommandLineState(environment, plan);
+            var preparation = NagiRunPreparation.getInstance(project);
+            return new NagiCommandLineState(environment, plan, getBuildProfile(), preparation,
+                    preparation.select(values.compilerPath, workspace), this, getSourcePath());
         } catch (InvalidPathException exception) {
             throw new ExecutionException("Invalid Nagi compiler path.\n\n" + exception.getMessage(), exception);
         } catch (IllegalArgumentException exception) {
@@ -159,15 +178,43 @@ public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConf
         }
     }
 
-    private static final class NagiCommandLineState extends CommandLineState {
-        private final NagiCommandPlan plan;
+    static final class NagiCommandLineState extends CommandLineState {
+        private NagiCommandPlan plan;
+        private final NagiBuildProfile profile;
+        private final NagiRunPreparation preparation;
+        private final NagiRunPreparation.Selection selection;
+        private final NagiRunConfiguration configuration;
+        private final String source;
+        private String notice = "";
+        private boolean prepared;
         private OSProcessHandler startedHandler;
         private com.intellij.execution.ui.ConsoleView startedConsole;
 
-        private NagiCommandLineState(ExecutionEnvironment environment, NagiCommandPlan plan) {
+        private NagiCommandLineState(ExecutionEnvironment environment, NagiCommandPlan plan, NagiBuildProfile profile,
+                NagiRunPreparation preparation, NagiRunPreparation.Selection selection, NagiRunConfiguration configuration, String source) {
             super(environment);
             this.plan = plan;
+            this.profile = profile;
+            this.preparation = preparation;
+            this.selection = selection;
+            this.configuration = configuration;
+            this.source = source;
             addConsoleFilters(new NagiDiagnosticFilter(environment.getProject(), plan.directory()));
+        }
+
+        void prepare(com.intellij.openapi.progress.ProgressIndicator indicator, java.util.function.BooleanSupplier mayLaunch)
+                throws ExecutionException {
+            checkSelection();
+            var result = preparation.prepare(plan, profile, selection, indicator, mayLaunch);
+            checkSelection();
+            plan = result.plan();
+            notice = result.notice();
+            prepared = true;
+        }
+        private void checkSelection() throws ExecutionException {
+            preparation.checkCurrent(selection);
+            if (!source.equals(configuration.getSourcePath()) || !profile.name().equals(configuration.options().getBuildProfile()))
+                throw new ExecutionException("Nagi Run configuration changed while preparing. Run again.");
         }
 
         @Override public @NotNull ExecutionResult execute(@NotNull Executor executor, @NotNull ProgramRunner<?> runner)
@@ -191,11 +238,15 @@ public final class NagiRunConfiguration extends RunConfigurationBase<NagiRunConf
         @Override protected com.intellij.execution.ui.ConsoleView createConsole(@NotNull Executor executor)
                 throws ExecutionException {
             startedConsole = super.createConsole(executor);
+            if (startedConsole != null && !notice.isEmpty()) startedConsole.print(notice,
+                    com.intellij.execution.ui.ConsoleViewContentType.SYSTEM_OUTPUT);
             return startedConsole;
         }
 
         @Override protected @NotNull ProcessHandler startProcess() throws ExecutionException {
             NagiProgramRunner.checkBeforeProcessStart(getEnvironment());
+            if (!prepared) throw new ExecutionException("Nagi Run preparation did not complete.");
+            checkSelection();
             var commandLine = new GeneralCommandLine(plan.executable())
                     .withParameters(plan.arguments())
                     .withWorkDirectory(plan.directory().toFile())
