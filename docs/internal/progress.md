@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-23: 0.2.2候補のeditor定義位置探索
+
+[設計・実測](../../benchmarks/results/editor-line-search-2026-10-23/README.md)。main `9fe5e079`基準で、symbolsの定義位置検索だけを既存lexerの物理line順に限定した。High/Lowの検査・位置・protocol・Cargo経路を維持。16 case×15 sampleでJSON全体が一致し、大caseの中央値はおおむね1〜2%短縮したが、ばらつきと遅いcaseも記録した。先行token再利用案は通常assistの約6%悪化が再現したため棄却し、実装を戻して証拠を保存した。対象65 tests、全workspace `cargo test --locked`、all-target Clippy、fmt、Python構文が成功。独立最終auditとexact-head CIは未確認。Windows/macOSでの速度、Rust/Cargo buildやアプリ速度の改善は主張しない。
+
 ## 2026-10-23: #148 SF08 installの有限status観測
 
 [設計と実証](sf08-install-status-diagnostic.md)。update成功・install実spawn後236秒timeoutという新CI事実を受け、原240秒/transport/TLS/署名/source pin/3packages/browser検査を維持して、固定2名だけのbounded captureへAPT Status-Fdを接続した。閉鎖＋actual ECHILD後に有限phase/record数だけを公開し、未知・不正・truncation等はunknown、成功時のcapture異常もfailclosed。実pinned APT2.8.3で原trustの1回の導入30.362秒/29752bytes/516recordsを確認、専有container/image整理済み。Python70/Node148/sourceguard16/policy160成功、旧実装の観測欠落をRED→GREENで確認。timeout根因の修復・安定化済みとは扱わず、別High監査と新HEAD実3engine CIを必須で残す。
