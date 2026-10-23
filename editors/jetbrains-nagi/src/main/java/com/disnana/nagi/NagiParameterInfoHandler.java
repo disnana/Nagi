@@ -127,6 +127,7 @@ public final class NagiParameterInfoHandler implements ParameterInfoHandler<PsiE
             if (index == context.getCurrentParameterIndex()) { start = currentStart; end = text.length(); }
         }
         text.append(')');
+        if (definition.returnType() != null) text.append(" -> ").append(definition.returnType());
         context.setupUIComponentPresentation(text.toString(), start, end, false, false, false, context.getDefaultParameterColor());
     }
 }

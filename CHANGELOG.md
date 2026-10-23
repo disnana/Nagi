@@ -2,12 +2,6 @@
 
 ## 未リリース / Unreleased
 
-### JetBrains editing assistance
-
-- Preserve manually chosen High indentation on Enter, and add a Nagi-specific consecutive-Enter gesture to leave one block at a time. Keep delimiter continuations, Low brace context, smart-indent settings and undo behavior.
-- Align supported High `else`/`case` headers on colon input and standalone High/Low closing delimiters with their known owner. Use bounded lexical context and leading-whitespace edits; preserve ordinary input when context is unknown.
-- Document the source-based comparison with PyCharm Python editing, applicable improvements and the compiler/formatter work needed for broader support. Do not claim full Python editor parity.
-
 ## Nagi 0.2.1
 
 - Publish the backward-compatible build and stability improvements below. For faster application development, opt into `nagic run app.nagi --profile dev`; ordinary CLI builds retain the release default. Initial native builds still compile Rust dependencies. Incremental modes are optional and do not skip type, ownership or capability checks.
@@ -36,6 +30,17 @@
 - Add opt-in `--build-stats` with typed declaration/function change observations, dependency graphs, Cargo artifact counts and phase timings. Record and verify published artifact hashes; semantic observations do not authorize native reuse or skipped checks/tests.
 - Bundle standard-library-only Python CI-generation and receipt-verification tools. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.
 - Document the existing security API guarantees, unsupported transports and staged build roadmap, with measured application build results and their limits. Previously distributed 0.2.0 binaries remain unchanged. Function-unit partitioning improved unchanged rebuilds in the measured fixture but slowed edited cases, so it remains opt-in; see the [measurements](benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md).
+
+## JetBrains 0.1.4
+
+- Add compiler-backed hover/Quick Documentation for exact function/class/variable targets, including available arguments, return types and fields. Complete the same initial documentation request after background analysis, without waiting on the UI thread or starting a Rust build. Keep bounded waits, cancellation, current-snapshot and trusted-project restrictions; do not invent missing builtin signatures.
+- Keep colors for untouched identifiers visible during background analysis, independently of invalidated types, diagnostics and navigation. Discard touched tokens and hard-invalidated presentation data with bounded ownership.
+- Render diagnostic tooltips with escaped readable framing while preserving original descriptions, unknown details and hints. Show compiler-provided return types in Parameter Info.
+- Preserve manually chosen High indentation on Enter, and add a consecutive-Enter gesture to leave one block at a time. Keep delimiter continuations, Low brace context, smart-indent settings and undo behavior. Align supported High `else`/`case` headers and standalone High/Low closing delimiters with their known owner; preserve ordinary input when context is unknown.
+- Default IDE Run to Development when the compiler advertises support; keep explicit Release available in Run Configuration. Validate bounded compiler capabilities off the UI thread. Known older compilers retain Release with an explanatory notice; unknown or failed probes do not silently run. CLI defaults and Check remain unchanged.
+- Fix a standard Run handoff race that could dispose an already accepted new Run descriptor when the old environment closes. Preserve cancellation before handoff and process cleanup when the project closes. The reported Windows green console still requires validation with the new candidate.
+- 関数・class・変数のホバー説明、初回解析待ち、入力中の色保持、診断表示と編集補助を改善。IDEの開発用Runと画面引き渡しの修正も追加し、既存plugin IDとIDEA/PyCharm共通ZIPを維持します。先行候補のホバー受入を追加修正のGUI確認へ流用しません。
+- Prepare version 0.1.4 for publication. The user confirmed the hover/color candidate works; this is not exhaustive GUI coverage. Publish only after the final version's required CI and four IDE test/Verifier paths succeed. GitHub Release and Marketplace submission/approval are separate; this entry does not claim either has already happened. Full PyCharm Python parity, whole-file formatting, Rename and automatic imports remain out of scope.
 
 ## JetBrains 0.1.3
 

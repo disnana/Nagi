@@ -59,6 +59,7 @@ public final class NagiProgramRunner extends AsyncProgramRunner<RunnerSettings> 
             startup.attach();
             new Task.Backgroundable(environment.getProject(), "Preparing Nagi Run", true) {
                 private IOException saveFailure;
+                private ExecutionException preparationFailure;
                 // Task.queue otherwise runs headless/unit-test tasks synchronously, including on EDT.
                 @Override public boolean isHeadless() { return false; }
 
@@ -75,11 +76,18 @@ public final class NagiProgramRunner extends AsyncProgramRunner<RunnerSettings> 
                         return;
                     }
                     startup.checkCanceled();
+                    try {
+                        if (!(state instanceof NagiRunConfiguration.NagiCommandLineState nagiState))
+                            throw new ExecutionException("Unexpected Nagi Run state.");
+                        nagiState.prepare(indicator, () -> { startup.checkCanceled(); return true; });
+                    } catch (ExecutionException failure) { preparationFailure = failure; }
+                    startup.checkCanceled();
                 }
 
                 @Override public void onSuccess() {
                     if (saveFailure != null) startup.fail(new ExecutionException(
                             "Could not save files to disk before running the Nagi compiler.", saveFailure));
+                    else if (preparationFailure != null) startup.fail(preparationFailure);
                     else startup.launch(state);
                 }
                 @Override public void onCancel() { startup.fail(new ProcessCanceledException()); }
@@ -132,13 +140,17 @@ public final class NagiProgramRunner extends AsyncProgramRunner<RunnerSettings> 
     private static final class Startup {
         private final ExecutionEnvironment environment;
         private final AsyncPromise<RunContentDescriptor> result = new AsyncPromise<>();
-        private final AtomicBoolean finished = new AtomicBoolean();
+        private enum Ownership { PREPARING, ABORTED, HANDED_OFF }
+        private final java.util.concurrent.atomic.AtomicReference<Ownership> ownership =
+                new java.util.concurrent.atomic.AtomicReference<>(Ownership.PREPARING);
+        private final AtomicBoolean retired = new AtomicBoolean();
+        private final java.util.concurrent.atomic.AtomicReference<ProcessHandler> handoffProcess = new java.util.concurrent.atomic.AtomicReference<>();
         private final AtomicBoolean canceled = new AtomicBoolean();
         // A disposal fallback prevents late launch, but a parent's beforeTreeDispose may already
         // mark the project disposed. The supported projectClosing notification below settles earlier.
         private final Disposable projectLifetime = new Disposable.Parent() {
-            @Override public void beforeTreeDispose() { cancel(); }
-            @Override public void dispose() { cancel(); }
+            @Override public void beforeTreeDispose() { projectClosing(); }
+            @Override public void dispose() { projectClosing(); }
         };
         private final Disposable environmentLifetime = new Disposable.Parent() {
             @Override public void beforeTreeDispose() { cancel(); }
@@ -151,10 +163,9 @@ public final class NagiProgramRunner extends AsyncProgramRunner<RunnerSettings> 
             // Keep failure ownership with ExecutionManager, including failures before it attaches its listener.
             result.onError(ignored -> {});
             result.onProcessed(ignored -> {
-                finished.set(true);
-                if (!Disposer.isDisposed(projectLifetime)) Disposer.dispose(projectLifetime);
-                if (!Disposer.isDisposed(environmentLifetime)) Disposer.dispose(environmentLifetime);
-                environment.putUserData(STARTUP, null);
+                // setResult runs SDK success callbacks inline on EDT. Keep the project-only
+                // process fallback until those callbacks return, regardless of callback order.
+                if (ownership.get() != Ownership.HANDED_OFF) retire();
             });
         }
 
@@ -164,20 +175,20 @@ public final class NagiProgramRunner extends AsyncProgramRunner<RunnerSettings> 
             ApplicationManager.getApplication().getMessageBus().connect(projectLifetime).subscribe(
                     ProjectManager.TOPIC, new ProjectManagerListener() {
                         @Override public void projectClosing(@NotNull Project project) {
-                            if (project == environment.getProject()) cancel();
+                            if (project == environment.getProject()) Startup.this.projectClosing();
                         }
                     });
         }
 
         private void cancel() {
-            if (finished.get()) return;
-            canceled.set(true);
-            ProgressIndicator current = indicator;
-            if (current != null) current.cancel();
             fail(new ProcessCanceledException());
         }
 
         private void fail(Throwable failure) {
+            if (!ownership.compareAndSet(Ownership.PREPARING, Ownership.ABORTED)) return;
+            canceled.set(true);
+            ProgressIndicator current = indicator;
+            if (current != null) current.cancel();
             if (environment.getProject().isDisposed()) {
                 // Abnormal/direct disposal can bypass projectClosing. A null descriptor is the
                 // platform's terminal no-content outcome: its success continuation expires with
@@ -188,6 +199,21 @@ public final class NagiProgramRunner extends AsyncProgramRunner<RunnerSettings> 
             } else {
                 result.setError(failure);
             }
+        }
+
+        private void projectClosing() {
+            cancel();
+            // Environment disposal during accepted Run-content reuse is benign. Project
+            // closure is different: SDK success dispatch may expire before it owns Stop.
+            ProcessHandler handler = handoffProcess.get();
+            if (handler != null) stopAfterFailedStartup(handler, new ProcessCanceledException());
+        }
+
+        private void retire() {
+            if (!retired.compareAndSet(false, true)) return;
+            if (!Disposer.isDisposed(projectLifetime)) Disposer.dispose(projectLifetime);
+            if (!Disposer.isDisposed(environmentLifetime)) Disposer.dispose(environmentLifetime);
+            if (environment.getUserData(STARTUP) == this) environment.putUserData(STARTUP, null);
         }
 
         private void checkCanceled() {
@@ -217,11 +243,23 @@ public final class NagiProgramRunner extends AsyncProgramRunner<RunnerSettings> 
                 builder = new RunContentBuilder(execution, environment);
                 descriptor = builder.showRunContent(environment.getContentToReuse());
                 checkBeforeLaunch();
-                result.setResult(descriptor);
-                // Cancellation can reject, or direct disposal can settle with no content, while
-                // this local descriptor is being built. Neither outcome transfers this process.
-                if (canceled.get() || result.getState() != Promise.State.SUCCEEDED) throw new ProcessCanceledException();
+                handoffProcess.set(execution.getProcessHandler());
+                if (!ownership.compareAndSet(Ownership.PREPARING, Ownership.HANDED_OFF)) throw new ProcessCanceledException();
+                // This CAS owns the only terminal success write. Reentrant disposal of the
+                // old content's environment cannot revoke the new descriptor's ownership.
+                try { result.setResult(descriptor); }
+                finally {
+                    if (environment.getProject().isDisposed()) projectClosing();
+                    handoffProcess.set(null);
+                    retire();
+                }
             } catch (ExecutionException | RuntimeException | Error failure) {
+                if (ownership.get() == Ownership.HANDED_OFF) {
+                    if (failure instanceof RuntimeException runtime) throw runtime;
+                    if (failure instanceof Error error) throw error;
+                    throw new IllegalStateException("Run-content acceptance failed after ownership transfer.", failure);
+                }
+                handoffProcess.set(null);
                 if (execution != null) stopAfterFailedStartup(execution.getProcessHandler(), failure);
                 try {
                     if (descriptor != null) Disposer.dispose(descriptor);

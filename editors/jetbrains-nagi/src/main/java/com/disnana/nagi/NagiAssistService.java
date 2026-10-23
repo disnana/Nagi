@@ -77,6 +77,7 @@ public final class NagiAssistService implements Disposable {
         private final Set<String> sourceFileKeys;
         private final Map<ReferenceKey, NagiAssistProtocol.Location> referenceTargets;
         private final NagiSemanticIndex semanticIndex;
+        private final Object presentationIdentity = new Object();
         private CachedResponse(Snapshot snapshot, NagiAssistProtocol.Response response) {
             this.snapshot = snapshot;
             this.response = response;
@@ -134,6 +135,16 @@ public final class NagiAssistService implements Disposable {
                            long focusFileStamp, Editor editor, long caretOffset) {
         private Snapshot { input = input.clone(); }
     }
+    private enum Admission { CURRENT, JOINED, SCHEDULED, REJECTED }
+    private record DocumentationTicket(Document document, long stamp, long epoch, String group,
+                                       java.util.concurrent.CompletableFuture<Boolean> signal,
+                                       java.util.concurrent.CompletableFuture<Boolean> deadline, Object owner) {
+        DocumentationTicket ownedBy(Object owner) { return new DocumentationTicket(document, stamp, epoch, group, signal, deadline, owner); }
+    }
+    private record DocumentationRecapture(Object attempt, VirtualFile file, Document document, long stamp, long epoch, String group) {}
+    private final List<DocumentationTicket> documentationTickets = new ArrayList<>();
+    static final int MAX_DOCUMENTATION_TICKETS = 8;
+
     private enum PopupKind { COMPLETION, PARAMETERS }
     private record PopupWaiter(Editor editor, Document document, VirtualFile file, long stamp, long offset,
                                PopupKind kind, boolean respectParameterSetting) {}
@@ -151,6 +162,7 @@ public final class NagiAssistService implements Disposable {
     private volatile State state = State.IDLE;
     private volatile String statusMessage = "";
     private volatile CachedResponse cached;
+    private final NagiSemanticPresentation presentation = new NagiSemanticPresentation();
     private volatile Set<String> knownSourcePaths = Set.of();
     private volatile Set<String> knownDependencies = Set.of();
     // Discovery hints only: candidate meaning remains entirely compiler-owned.
@@ -166,6 +178,7 @@ public final class NagiAssistService implements Disposable {
     private ScheduledFuture<?> activeFuture;
     private NagiAssistProcess.Cancellation activeCancellation;
     private String activeKey;
+    private Object activeAttempt;
     private String pendingKey;
     private String failedKey;
     private volatile CompilerSelection unavailableCompilerSelection;
@@ -204,6 +217,16 @@ public final class NagiAssistService implements Disposable {
             return thread;
         });
         worker.setRemoveOnCancelPolicy(true);
+        ApplicationManager.getApplication().getMessageBus().connect(this).subscribe(
+                com.intellij.ide.trustedProjects.TrustedProjectsListener.TOPIC,
+                new com.intellij.ide.trustedProjects.TrustedProjectsListener() {
+                    @Override public void onProjectUntrusted(@NotNull Project changed) {
+                        if (changed == project && !disposed && !project.isDisposed()) {
+                            invalidate(State.UNTRUSTED, "Project trust is required before the Nagi compiler can run.");
+                            restartOpenSourcesLater();
+                        }
+                    }
+                });
         MessageBusConnection projectConnection = project.getMessageBus().connect(this);
         projectConnection.subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, new FileEditorManagerListener() {
             @Override public void fileOpened(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
@@ -296,17 +319,103 @@ public final class NagiAssistService implements Disposable {
         request(file, editor, null, DIAGNOSTIC_DEBOUNCE_MS);
     }
 
-    public void requestNavigation(PsiFile file) {
-        if (fresh(file) != null) return;
+    public void requestNavigation(PsiFile file) { documentationAdmission(file); }
+
+    private Admission documentationAdmission(PsiFile file) {
+        if (fresh(file) != null) return Admission.CURRENT;
         String sourcePrefix;
         try { sourcePrefix = normalizePath(file.getVirtualFile().getPath()) + ":"; }
-        catch (RuntimeException exception) { return; }
+        catch (RuntimeException exception) { return Admission.REJECTED; }
         synchronized (lock) {
-            // Any in-flight cursor query for this file includes the same exact symbols graph.
             if ((activeKey != null && activeKey.startsWith(sourcePrefix))
-                    || (pendingKey != null && pendingKey.startsWith(sourcePrefix))) return;
+                    || (pendingKey != null && pendingKey.startsWith(sourcePrefix))) return Admission.JOINED;
         }
-        requestBaseline(file);
+        return request(file, null, null, DIAGNOSTIC_DEBOUNCE_MS);
+    }
+
+    long documentationEpoch() { return epoch.get(); }
+
+    /** Called in a short read action. Signals readiness only, never transports semantic facts. */
+    java.util.concurrent.CompletableFuture<Boolean> documentationTicket(PsiFile file, Document document,
+                                                                       long stamp, long generation) {
+        ApplicationManager.getApplication().assertReadAccessAllowed();
+        if (!documentationIdentityCurrent(file, document, stamp, generation))
+            return java.util.concurrent.CompletableFuture.completedFuture(false);
+        var signal = new java.util.concurrent.CompletableFuture<Boolean>();
+        var deadline = new java.util.concurrent.CompletableFuture<Boolean>();
+        String group = normalizePath(file.getVirtualFile().getPath()) + ":" + stamp + ":" + generation + ":";
+        synchronized (lock) {
+            if (!documentationIdentityCurrent(file, document, stamp, generation))
+                return java.util.concurrent.CompletableFuture.completedFuture(false);
+            // The read lock precedes the service lock; publication may have won
+            // since the caller's initial fresh check. No first read is acquired here.
+            if (fresh(file) != null) return java.util.concurrent.CompletableFuture.completedFuture(true);
+            if (documentationTickets.size() >= MAX_DOCUMENTATION_TICKETS)
+                return java.util.concurrent.CompletableFuture.completedFuture(false);
+            documentationTickets.add(new DocumentationTicket(document, stamp, generation, group, signal, deadline,
+                    activeKey != null && activeKey.startsWith(group) ? activeAttempt : null));
+        }
+        // Callbacks retain only the private deadline identity, never source
+        // facts, a Document, or the public signal itself.
+        signal.whenComplete((ready, failure) -> discardDocumentationDeadline(deadline));
+        long timeout = Math.max(1_350L, Math.min(300_350L,
+                1_000L * NagiSettings.getInstance().getState().checkTimeoutSeconds + DIAGNOSTIC_DEBOUNCE_MS));
+        // JDK's independent delayed executor also expires a stuck single worker.
+        deadline.thenRun(() -> finishDocumentation(deadline, false));
+        deadline.completeOnTimeout(false, timeout, TimeUnit.MILLISECONDS);
+        try {
+            if (!signal.isDone()) {
+                Admission admission = documentationAdmission(file);
+                if (admission == Admission.CURRENT || admission == Admission.REJECTED) {
+                    finishDocumentation(deadline, admission == Admission.CURRENT);
+                }
+            }
+        } catch (RuntimeException | Error failure) {
+            finishDocumentation(deadline, false);
+            throw failure;
+        }
+        return signal;
+    }
+
+    boolean documentationIdentityCurrent(PsiFile file, Document document, long stamp, long generation) {
+        return !disposed && !project.isDisposed() && trustedForCompiler() && file.isValid()
+                && generation == epoch.get() && document.getModificationStamp() == stamp
+                && PsiDocumentManager.getInstance(project).getDocument(file) == document;
+    }
+
+    void unregisterDocumentation(java.util.concurrent.CompletableFuture<Boolean> signal) {
+        List<DocumentationTicket> detached;
+        synchronized (lock) { detached = detachDocumentation(ticket -> ticket.signal() == signal); }
+        detached.forEach(ticket -> ticket.deadline().cancel(false));
+    }
+
+    private void discardDocumentationDeadline(java.util.concurrent.CompletableFuture<Boolean> deadline) {
+        synchronized (lock) { detachDocumentation(ticket -> ticket.deadline() == deadline); }
+        deadline.cancel(false);
+    }
+
+    private void finishDocumentation(java.util.concurrent.CompletableFuture<Boolean> deadline, boolean ready) {
+        List<DocumentationTicket> detached;
+        synchronized (lock) { detached = detachDocumentation(ticket -> ticket.deadline() == deadline); }
+        // Only the thread which detached this identity owns its terminal signal.
+        notifyDocumentation(detached, ready);
+    }
+
+    private List<DocumentationTicket> detachDocumentation(java.util.function.Predicate<DocumentationTicket> predicate) {
+        // All callers own lock. Complete the returned scalar signals after leaving it.
+        List<DocumentationTicket> detached = new ArrayList<>();
+        documentationTickets.removeIf(ticket -> {
+            if (!predicate.test(ticket)) return false;
+            detached.add(ticket); return true;
+        });
+        return detached;
+    }
+
+    private static void notifyDocumentation(List<DocumentationTicket> tickets, boolean ready) {
+        tickets.forEach(ticket -> {
+            ticket.deadline().cancel(false);
+            ticket.signal().complete(ready);
+        });
     }
 
     public void requestCompletion(PsiFile file, Editor editor) {
@@ -373,9 +482,57 @@ public final class NagiAssistService implements Disposable {
                 start - document.getLineStartOffset(line) + 1, end - start);
     }
 
+    /** Documentation uses exact compiler spans, including declaration names and virtual stdlib targets. */
+    public NagiAssistProtocol.Definition documentedDefinition(PsiFile file, PsiElement element) {
+        CachedResponse response = fresh(file);
+        if (response == null || element == null || !element.isValid() || element.getContainingFile() != file) return null;
+        Document document = PsiDocumentManager.getInstance(project).getDocument(file);
+        if (document == null) return null;
+        int start = element.getTextRange().getStartOffset();
+        int end = element.getTextRange().getEndOffset();
+        if (start < 0 || end <= start || end > document.getTextLength()) return null;
+        int line = document.getLineNumber(start);
+        if (end > document.getLineEndOffset(line)) return null;
+        String path = canonicalPathFor(response.snapshot, file.getVirtualFile());
+        return response.semanticIndex.definition(path, line + 1,
+                start - document.getLineStartOffset(line) + 1, end - start);
+    }
+
+    String documentationHtml(PsiFile file, PsiElement element) {
+        CachedResponse response = fresh(file);
+        if (response == null || element == null || !element.isValid() || element.getContainingFile() != file) return null;
+        var definition = documentedDefinition(file, element);
+        String html = definition == null ? null : NagiDocumentation.definition(definition);
+        if (html == null) {
+            Document document = PsiDocumentManager.getInstance(project).getDocument(file);
+            if (document == null) return null;
+            int start = element.getTextOffset(), length = element.getTextLength();
+            if (start < 0 || length < 1 || start + length > document.getTextLength()) return null;
+            int line = document.getLineNumber(start);
+            if (start + length > document.getLineEndOffset(line)) return null;
+            var local = response.semanticIndex.local(canonicalPathFor(response.snapshot, file.getVirtualFile()),
+                    line + 1, start - document.getLineStartOffset(line) + 1, length);
+            if (local != null && local.name().equals(element.getText())) html = NagiDocumentation.local(local);
+        }
+        return isCurrent(file, response) ? html : null;
+    }
+
     public List<NagiSemanticIndex.Color> semanticColors(PsiFile file, CachedResponse response) {
         if (!isCurrent(file, response)) return List.of();
         return response.semanticIndex.colors(canonicalPathFor(response.snapshot, file.getVirtualFile()));
+    }
+
+    List<NagiSemanticPresentation.Paint> rolePresentation(PsiFile file, Document document, CachedResponse response) {
+        if (disposed || project.isDisposed()) { presentation.clear(); return List.of(); }
+        if (!trustedForCompiler()) {
+            invalidate(State.UNTRUSTED, "Project trust is required before the Nagi compiler can run.");
+            return List.of();
+        }
+        if (response != null) {
+            if (!isCurrent(file, response)) return List.of();
+            return presentation.current(file, document, response.presentationIdentity, semanticColors(file, response));
+        }
+        return presentation.retained(file, document);
     }
 
     /** Resolve only a compiler-provided path and range in the same loaded source graph. */
@@ -424,47 +581,51 @@ public final class NagiAssistService implements Disposable {
         return element;
     }
 
-    private void request(PsiFile file, Editor queryEditor, Editor popupEditor, long delayMillis) {
-        request(file, queryEditor, popupEditor, delayMillis, PopupKind.COMPLETION);
+    private Admission request(PsiFile file, Editor queryEditor, Editor popupEditor, long delayMillis) {
+        return request(file, queryEditor, popupEditor, delayMillis, PopupKind.COMPLETION);
     }
 
-    private void request(PsiFile file, Editor queryEditor, Editor popupEditor, long delayMillis, PopupKind kind) {
-        if (disposed || project.isDisposed()) { setState(State.CLOSED, "Project is closed."); return; }
+    private Admission request(PsiFile file, Editor queryEditor, Editor popupEditor, long delayMillis, PopupKind kind) {
+        if (disposed || project.isDisposed()) { setState(State.CLOSED, "Project is closed."); return Admission.REJECTED; }
         if (file == null || !file.isValid() || !NagiCompilerAction.isSourceFile(file.getVirtualFile())) {
             setState(State.STALE, "Open an existing local .nagi or .low file for compiler assistance.");
-            return;
+            return Admission.REJECTED;
         }
         lastFocusFile = file.getVirtualFile();
         if (!trustedForCompiler()) {
             invalidate(State.UNTRUSTED, "Project trust is required before the Nagi compiler can run.");
-            return;
+            return Admission.REJECTED;
         }
-        if (compilerUnavailableForCurrentSelection()) return;
+        if (compilerUnavailableForCurrentSelection()) return Admission.REJECTED;
         Intent intent;
         try { intent = makeIntent(file, queryEditor); }
         catch (RuntimeException exception) {
             setState(State.FAILED, "Could not capture the current Nagi editor snapshot.");
-            return;
+            return Admission.REJECTED;
         }
         if (intent == null) {
             setState(State.STALE, "The current Nagi editor snapshot is unavailable.");
-            return;
+            return Admission.REJECTED;
         }
         CachedResponse current = cached;
-        if (current != null && snapshotCurrent(current.snapshot) && current.snapshot.requestKey.equals(intent.key())) return;
-        if (intent.position() == null && current != null && snapshotCurrent(current.snapshot) && appliesToFile(current, file)) return;
+        if (current != null && snapshotCurrent(current.snapshot) && current.snapshot.requestKey.equals(intent.key())) return Admission.CURRENT;
+        if (intent.position() == null && current != null && snapshotCurrent(current.snapshot) && appliesToFile(current, file)) return Admission.CURRENT;
+        List<DocumentationTicket> displaced;
+        Admission admission = Admission.SCHEDULED;
         synchronized (lock) {
-            if (disposed || project.isDisposed()) return;
-            if (intent.key().equals(failedKey)) return;
+            if (disposed || project.isDisposed()) return Admission.REJECTED;
+            if (intent.key().equals(failedKey)) return Admission.REJECTED;
             String sourcePrefix = normalizePath(intent.file().getPath()) + ":" + intent.documentStamp() + ":" + intent.epoch() + ":";
             if (intent.position() == null
                     && ((activeKey != null && activeKey.startsWith(sourcePrefix))
-                    || (pendingKey != null && pendingKey.startsWith(sourcePrefix)))) return;
+                    || (pendingKey != null && pendingKey.startsWith(sourcePrefix)))) return Admission.JOINED;
             if (intent.key().equals(pendingKey) || intent.key().equals(activeKey)) {
                 if (popupEditor != null) addPopupWaiter(intent, popupEditor, kind);
-                return;
+                return Admission.JOINED;
             }
+            displaced = detachDocumentation(ticket -> !ticket.group().equals(sourcePrefix));
             cancelPendingAndActiveLocked();
+            documentationTickets.replaceAll(ticket -> ticket.group().equals(sourcePrefix) ? ticket.ownedBy(null) : ticket);
             pendingKey = intent.key();
             pendingWaiters = popupEditor == null ? List.of() : List.of(waiter(intent, popupEditor, kind));
             setState(State.WAITING, "Waiting for a stable Nagi source snapshot.");
@@ -474,8 +635,12 @@ public final class NagiAssistService implements Disposable {
                 pendingKey = null;
                 pendingWaiters = List.of();
                 setState(State.CLOSED, "Project is closed.");
+                displaced.addAll(detachDocumentation(ticket -> true));
+                admission = Admission.REJECTED;
             }
         }
+        notifyDocumentation(displaced, false);
+        return admission;
     }
 
     private Intent makeIntent(PsiFile file, Editor editor) {
@@ -494,12 +659,17 @@ public final class NagiAssistService implements Disposable {
     private void execute(Intent intent) {
         String key = intent.key();
         ScheduledFuture<?> task;
+        Object attempt = new Object();
+        DocumentationRecapture continuation = null;
         synchronized (lock) {
             if (disposed || project.isDisposed() || !key.equals(pendingKey)) return;
             task = pending;
             pending = null;
             pendingKey = null;
             activeKey = key;
+            activeAttempt = attempt;
+            String group = documentationGroup(intent.file(), intent.documentStamp(), intent.epoch());
+            documentationTickets.replaceAll(ticket -> ticket.group().equals(group) ? ticket.ownedBy(attempt) : ticket);
             activeFuture = task;
             activeWaiters = pendingWaiters;
             pendingWaiters = List.of();
@@ -538,20 +708,26 @@ public final class NagiAssistService implements Disposable {
                 retrySnapshotLater(snapshot);
                 return;
             }
-            Snapshot responseSnapshot = withCompilerSources(withCompilerDirectories(snapshot, response), response);
+            Snapshot responseSnapshot = withCompilerSources(withCompilerDirectories(snapshot, response), response, attempt);
             if (!snapshotCurrent(responseSnapshot)) {
                 setStateForActive(key, State.STALE, "A Nagi source changed during compiler analysis; the response was discarded.");
                 restartOpenSourcesLater();
                 return;
             }
             CachedResponse result = new CachedResponse(responseSnapshot, response);
+            List<DocumentationTicket> readyTickets;
             synchronized (lock) {
                 if (!key.equals(activeKey) || responseSnapshot.epoch() != epoch.get()
                         || disposed || project.isDisposed()) return;
                 cached = result;
+                presentation.published(result.presentationIdentity, responseSnapshot.focusDocument());
                 knownSourcePaths = knownPaths(snapshot, response);
                 setState(State.READY, "Compiler assistance is current for this editor snapshot.");
+                readyTickets = detachDocumentation(ticket -> ticket.owner() == attempt && ticket.epoch() == responseSnapshot.epoch()
+                        && ticket.document() == responseSnapshot.focusDocument()
+                        && ticket.stamp() == responseSnapshot.focusDocumentStamp());
             }
+            notifyDocumentation(readyTickets, true);
             publish(result, currentWaiters(key));
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
@@ -560,6 +736,7 @@ public final class NagiAssistService implements Disposable {
             setStateForActive(key, State.STALE, "The Nagi source snapshot was cancelled by a new editor write.");
             restartOpenSourcesLater();
         } catch (SnapshotBlockedException exception) {
+            continuation = exception.documentationRecapture;
             if (exception.compilerUnavailable != null) {
                 setCompilerUnavailableForActive(key, exception.compilerUnavailable, exception.getMessage());
             } else {
@@ -571,17 +748,28 @@ public final class NagiAssistService implements Disposable {
             setStateForActive(key, State.FAILED, safeMessage(failure));
             com.intellij.openapi.diagnostic.Logger.getInstance(NagiAssistService.class).warn("Nagi editor assistance failed", failure);
         } finally {
+            List<DocumentationTicket> abandoned = List.of();
             synchronized (lock) {
-                if (key.equals(activeKey)) {
+                if (key.equals(activeKey) && activeAttempt == attempt) {
                     if (state == State.WAITING || state == State.RUNNING) {
                         setState(State.STALE, "Compiler assistance ended without a current result.");
                     }
                     activeKey = null;
+                    activeAttempt = null;
                     activeFuture = null;
                     activeCancellation = null;
                     activeWaiters = List.of();
+                    if (continuation != null && continuation.attempt() == attempt
+                            && intent.epoch() == epoch.get() && intent.document().getModificationStamp() == intent.documentStamp()
+                            && !disposed && !project.isDisposed()) {
+                        DocumentationRecapture transfer = continuation;
+                        documentationTickets.replaceAll(ticket -> ticket.owner() == attempt ? ticket.ownedBy(transfer) : ticket);
+                    } else {
+                        abandoned = detachDocumentation(ticket -> ticket.owner() == attempt);
+                    }
                 }
             }
+            notifyDocumentation(abandoned, false);
         }
     }
 
@@ -743,7 +931,7 @@ public final class NagiAssistService implements Disposable {
                 snapshot.focusFile(), snapshot.focusFileStamp(), snapshot.editor(), snapshot.caretOffset());
     }
 
-    private Snapshot withCompilerSources(Snapshot snapshot, NagiAssistProtocol.Response response) throws SnapshotBlockedException {
+    private Snapshot withCompilerSources(Snapshot snapshot, NagiAssistProtocol.Response response, Object attempt) throws SnapshotBlockedException {
         assertWorkerIo();
         List<FileStamp> stamps = new ArrayList<>(snapshot.files());
         Map<String, String> canonicalPaths = new HashMap<>(snapshot.canonicalPaths());
@@ -761,8 +949,15 @@ public final class NagiAssistService implements Disposable {
         if (discovered) {
             // A graph first reported after analysis was not captured before it.
             // Never associate those facts with post-hoc dependency stamps.
-            retrySnapshotLater(snapshot);
-            throw new SnapshotBlockedException(State.STALE, "New compiler dependencies require a fresh disk snapshot; the response was discarded.");
+            var transfer = new DocumentationRecapture(attempt, snapshot.focusFile(), snapshot.focusDocument(),
+                    snapshot.focusDocumentStamp(), snapshot.epoch(),
+                    documentationGroup(snapshot.focusFile(), snapshot.focusDocumentStamp(), snapshot.epoch()));
+            Editor recaptureEditor = snapshot.editor();
+            if (enqueue(() -> ApplicationManager.getApplication().invokeLater(() -> resumeDocumentationRecapture(transfer, recaptureEditor)))) {
+                throw new SnapshotBlockedException(State.STALE,
+                        "New compiler dependencies require a fresh disk snapshot; the response was discarded.", null, transfer);
+            }
+            throw new SnapshotBlockedException(State.STALE, "The dependency snapshot could not be rescheduled.");
         }
         for (String source : response.sourceFiles()) addCompilerSource(snapshot, stamps, canonicalPaths, seen, source);
         for (NagiAssistProtocol.Diagnostic diagnostic : response.diagnostics()) {
@@ -806,6 +1001,41 @@ public final class NagiAssistService implements Disposable {
         }
         canonicalPaths.put(normalizePath(source), canonical);
         stamps.add(new FileStamp(file, file.getModificationStamp()));
+    }
+
+    private static String documentationGroup(VirtualFile file, long stamp, long generation) {
+        return normalizePath(file.getPath()) + ":" + stamp + ":" + generation + ":";
+    }
+
+    /** Existing dependency recapture, with an explicit bounded ticket responsibility transfer. */
+    private void resumeDocumentationRecapture(DocumentationRecapture transfer, Editor recaptureEditor) {
+        Admission admission;
+        try {
+            admission = NagiPlatform.read(() -> {
+                if (!transfer.file().isValid()) return Admission.REJECTED;
+                PsiFile file = PsiManager.getInstance(project).findFile(transfer.file());
+                if (file == null || !documentationIdentityCurrent(file, transfer.document(),
+                        transfer.stamp(), transfer.epoch())) return Admission.REJECTED;
+                if (fresh(file) != null) return Admission.CURRENT;
+                return recaptureEditor == null ? documentationAdmission(file)
+                        : request(file, recaptureEditor, null, DIAGNOSTIC_DEBOUNCE_MS);
+            });
+        } catch (RuntimeException | Error failure) {
+            List<DocumentationTicket> abandoned;
+            synchronized (lock) { abandoned = detachDocumentation(ticket -> ticket.owner() == transfer); }
+            notifyDocumentation(abandoned, false);
+            throw failure;
+        }
+        List<DocumentationTicket> detached = List.of();
+        synchronized (lock) {
+            if (admission == Admission.CURRENT || admission == Admission.REJECTED) {
+                detached = detachDocumentation(ticket -> ticket.owner() == transfer);
+            } else {
+                Object owner = activeKey != null && activeKey.startsWith(transfer.group()) ? activeAttempt : null;
+                documentationTickets.replaceAll(ticket -> ticket.owner() == transfer ? ticket.ownedBy(owner) : ticket);
+            }
+        }
+        notifyDocumentation(detached, admission == Admission.CURRENT);
     }
 
     private void retrySnapshotLater(Snapshot snapshot) {
@@ -1086,10 +1316,11 @@ public final class NagiAssistService implements Disposable {
         ApplicationManager.getApplication().invokeLater(this::restartOpenSources);
     }
 
-    private void enqueue(Runnable task) {
-        try { worker.execute(task); }
+    private boolean enqueue(Runnable task) {
+        try { worker.execute(task); return true; }
         catch (java.util.concurrent.RejectedExecutionException exception) {
             if (!disposed) setState(State.CLOSED, "Project is closed.");
+            return false;
         }
     }
 
@@ -1127,8 +1358,12 @@ public final class NagiAssistService implements Disposable {
             for (RawFile raw : files) {
                 if (documentListeners.containsKey(raw.document())) continue;
                 DocumentListener listener = new DocumentListener() {
+                    @Override public void beforeDocumentChange(@NotNull DocumentEvent event) {
+                        presentation.beforeEdit(event);
+                    }
                     @Override public void documentChanged(@NotNull DocumentEvent event) {
-                        invalidate(State.STALE, "An open Nagi source or manifest changed.");
+                        invalidate(State.STALE, "An open Nagi source or manifest changed.",
+                                !isManifest(raw.file()) && presentation.softEdit(event.getDocument()));
                     }
                 };
                 // Complete the document subscription before publishing its
@@ -1297,8 +1532,14 @@ public final class NagiAssistService implements Disposable {
     }
 
     private void invalidate(State reason, String message) {
+        invalidate(reason, message, false);
+    }
+
+    private void invalidate(State reason, String message, boolean keepRolePresentation) {
+        if (!keepRolePresentation) presentation.clear();
         epoch.incrementAndGet();
         cached = null;
+        List<DocumentationTicket> abandoned;
         synchronized (lock) {
             failedKey = null;
             if (pending != null) pending.cancel(false);
@@ -1309,11 +1550,14 @@ public final class NagiAssistService implements Disposable {
             activeCancellation = null;
             activeFuture = null;
             activeKey = null;
+            activeAttempt = null;
             pendingWaiters = List.of();
             activeWaiters = List.of();
             popupScheduled.clear();
             setState(reason, message);
+            abandoned = detachDocumentation(ticket -> true);
         }
+        notifyDocumentation(abandoned, false);
     }
 
     private void cancelPendingAndActiveLocked() {
@@ -1325,6 +1569,7 @@ public final class NagiAssistService implements Disposable {
         activeCancellation = null;
         activeFuture = null;
         activeKey = null;
+        activeAttempt = null;
         pendingWaiters = List.of();
         activeWaiters = List.of();
     }
@@ -1409,6 +1654,8 @@ public final class NagiAssistService implements Disposable {
     }
 
     private void setState(State state, String message) {
+        if (state == State.FAILED || state == State.UNTRUSTED || state == State.UNSAVED_MANIFEST
+                || state == State.LIMIT || state == State.COMPILER_UNAVAILABLE || state == State.CLOSED) presentation.clear();
         this.state = state;
         this.statusMessage = message;
     }
@@ -1421,6 +1668,7 @@ public final class NagiAssistService implements Disposable {
     private void setStateForActive(String key, State state, String message) {
         synchronized (lock) {
             if (key.equals(activeKey)) {
+                if (state == State.STALE) presentation.clear();
                 setState(state, message);
                 if (state == State.FAILED || state == State.UNSAVED_MANIFEST || state == State.LIMIT) {
                     failedKey = key;
@@ -1488,12 +1736,18 @@ public final class NagiAssistService implements Disposable {
 
     @Override public void dispose() {
         disposed = true;
+        presentation.clear();
         knownImportDirectories = Set.of();
         importQueryFile = null;
         cached = null;
         if (session != null) session.close();
         setState(State.CLOSED, "Project is closed.");
-        synchronized (lock) { cancelPendingAndActiveLocked(); }
+        List<DocumentationTicket> abandoned;
+        synchronized (lock) {
+            cancelPendingAndActiveLocked();
+            abandoned = detachDocumentation(ticket -> true);
+        }
+        notifyDocumentation(abandoned, false);
         synchronized (documentListeners) {
             for (Map.Entry<Document, ListenerRecord> entry : documentListeners.entrySet()) {
                 Disposer.dispose(entry.getValue().subscription());
@@ -1515,11 +1769,17 @@ public final class NagiAssistService implements Disposable {
     private static final class SnapshotBlockedException extends Exception {
         private final State state;
         private final CompilerUnavailable compilerUnavailable;
-        private SnapshotBlockedException(State state, String message) { this(state, message, null); }
+        private final DocumentationRecapture documentationRecapture;
+        private SnapshotBlockedException(State state, String message) { this(state, message, null, null); }
         private SnapshotBlockedException(State state, String message, CompilerUnavailable compilerUnavailable) {
+            this(state, message, compilerUnavailable, null);
+        }
+        private SnapshotBlockedException(State state, String message, CompilerUnavailable compilerUnavailable,
+                                         DocumentationRecapture documentationRecapture) {
             super(message);
             this.state = state;
             this.compilerUnavailable = compilerUnavailable;
+            this.documentationRecapture = documentationRecapture;
         }
     }
 }
