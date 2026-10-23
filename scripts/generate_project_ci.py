@@ -12,6 +12,7 @@ from pathlib import Path
 
 
 VERSION_RE = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+", re.ASCII)
+BUILD_PROFILE_VERSION = (0, 2, 1)
 TOOLCHAIN_RE = re.compile(
     r"(?:stable|beta|nightly|[0-9]+\.[0-9]+(?:\.[0-9]+)?)(?:-[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)*)?",
     re.ASCII,
@@ -38,14 +39,34 @@ def validate_branch(value: str) -> str:
     return value
 
 
-def workflow_text(version: str, toolchain: str, os_matrix: bool, branch: str = "main") -> str:
+def version_tuple(value: str) -> tuple[int, int, int]:
+    major, minor, patch = value.split(".")
+    return int(major), int(minor), int(patch)
+
+
+def workflow_text(
+    version: str,
+    toolchain: str,
+    os_matrix: bool,
+    branch: str = "main",
+    build_profile: str = "release",
+) -> str:
+    if build_profile not in {"release", "dev"}:
+        raise ValueError("build profile must be release or dev")
+    if build_profile == "dev" and version_tuple(version) < BUILD_PROFILE_VERSION:
+        raise ValueError("Development profile requires Nagi 0.2.1 or newer")
+
+    supports_build_profile = version_tuple(version) >= BUILD_PROFILE_VERSION
+    build_command = (
+        f"nagic build --profile {build_profile}" if supports_build_profile else "nagic build"
+    )
     build_step = f"""      - name: Build Nagi project on Unix
         if: runner.os != 'Windows'
         shell: bash
         run: |
           started="$(date +%s)"
           set +e
-          nagic build
+          {build_command}
           status=$?
           set -e
           elapsed="$(( $(date +%s) - started ))"
@@ -56,7 +77,7 @@ def workflow_text(version: str, toolchain: str, os_matrix: bool, branch: str = "
         shell: pwsh
         run: |
           $started = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-          nagic build
+          {build_command}
           $status = $LASTEXITCODE
           $elapsed = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() - $started
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Nagi build completed in $elapsed seconds (exit code $status)."
@@ -139,7 +160,7 @@ jobs:
             ~/.cargo/git
             native-target
             build/*/Cargo.lock
-          key: nagi-project-v1-{version}-${{{{ runner.os }}}}-${{{{ runner.arch }}}}-{toolchain}-${{{{ steps.rust.outputs.cachekey }}}}-${{{{ hashFiles('**/Cargo.lock', '**/Cargo.toml', 'nagi.toml') }}}}
+          key: nagi-project-v2-{version}-{build_profile}-${{{{ runner.os }}}}-${{{{ runner.arch }}}}-{toolchain}-${{{{ steps.rust.outputs.cachekey }}}}-${{{{ hashFiles('**/Cargo.lock', '**/Cargo.toml', 'nagi.toml') }}}}
       - name: Install Nagi {version} (Unix)
         if: runner.os != 'Windows'
         shell: bash
@@ -179,8 +200,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--nagi-version",
         type=validate_version,
-        default="0.2.0",
-        help="released Nagi version to install (default: 0.2.0)",
+        default="0.2.1",
+        help="released Nagi version to install (default: 0.2.1)",
+    )
+    parser.add_argument(
+        "--build-profile",
+        choices=("release", "dev"),
+        default="release",
+        help="Nagi build profile (default: release; dev requires Nagi 0.2.1 or newer)",
     )
     parser.add_argument(
         "--toolchain",
@@ -241,8 +268,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.force and args.output is None:
         parser.error("--force requires --output")
+    if args.build_profile == "dev" and version_tuple(args.nagi_version) < BUILD_PROFILE_VERSION:
+        parser.error("--build-profile dev requires Nagi 0.2.1 or newer")
 
-    content = workflow_text(args.nagi_version, args.toolchain, args.os_matrix, args.default_branch)
+    content = workflow_text(
+        args.nagi_version, args.toolchain, args.os_matrix, args.default_branch, args.build_profile
+    )
     if args.output is None:
         sys.stdout.write(content)
         return 0

@@ -38,12 +38,24 @@ class DevelopmentDistributionVerificationTests(unittest.TestCase):
         self.canonical_output = False
         self.generation_counter = 0
         self.incremental_counter = 0
+        self.generator_mutation = lambda text: text
+        self.accept_unsupported_profile = False
 
     def answer(self, command, **kwargs):
         self.assertIsNotNone(kwargs.get("timeout"))
         if command[0] == sys.executable:
             self.assertEqual(Path(command[1]).parent, self.tools)
-            return self.real_run(command, **kwargs)
+            result = self.real_run(command, **kwargs)
+            if Path(command[1]).name == "generate_project_ci.py":
+                if self.accept_unsupported_profile and "0.2.0" in command and "dev" in command:
+                    return subprocess.CompletedProcess(command, 0, "", "")
+                if result.returncode == 0:
+                    result.stdout = self.generator_mutation(result.stdout)
+                    if "--output" in command:
+                        output = Path(command[command.index("--output") + 1])
+                        text = self.generator_mutation(output.read_text(encoding="utf-8"))
+                        output.write_text(text, encoding="utf-8", newline="\n")
+            return result
         if command[0] == str(self.compiler):
             if command[1] == "check":
                 self.assertEqual(kwargs["env"]["PATH"], "")
@@ -183,6 +195,32 @@ class DevelopmentDistributionVerificationTests(unittest.TestCase):
 
     def test_ignored_profile_cannot_pass(self):
         self.stats_mutation = lambda stats: {**stats, "profile": "ignored"}
+        with self.assertRaises(AssertionError):
+            self.check()
+
+    def test_generator_ignoring_dev_profile_cannot_pass(self):
+        self.generator_mutation = lambda text: text.replace(
+            "nagic build --profile dev", "nagic build --profile release"
+        )
+        with self.assertRaises(AssertionError):
+            self.check()
+
+    def test_generator_accepting_unsupported_dev_profile_cannot_pass(self):
+        self.accept_unsupported_profile = True
+        with self.assertRaisesRegex(AssertionError, "Unsupported dev profile was accepted"):
+            self.check()
+
+    def test_generator_sharing_profile_cache_keys_cannot_pass(self):
+        self.generator_mutation = lambda text: text.replace(
+            "nagi-project-v2-0.2.1-dev-", "nagi-project-v2-0.2.1-release-"
+        )
+        with self.assertRaises(AssertionError):
+            self.check()
+
+    def test_generator_adding_profile_to_legacy_cli_cannot_pass(self):
+        self.generator_mutation = lambda text: text.replace(
+            "nagic build\n", "nagic build --profile release\n"
+        )
         with self.assertRaises(AssertionError):
             self.check()
 
