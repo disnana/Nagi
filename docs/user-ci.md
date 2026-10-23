@@ -1,18 +1,18 @@
 # NagiアプリのGitHub Actions
 
-プロジェクトCI generatorを使い、アプリのworkflowを作成できます。Python 3.10以上が必要です。次の配布候補には`tools/generate_project_ci.py`を同梱しています。公開済み0.2.0には同梱されていないため、現時点では候補アーカイブまたはこのソースcheckoutを使ってください。`nagi.toml`があるアプリのルートで実行します。
+プロジェクトCI generatorを使い、アプリのworkflowを作成できます。Python 3.10以上が必要です。公開済み0.2.1には`tools/generate_project_ci.py`を同梱しています。0.2.1の配布物またはこのソースcheckoutを使ってください。公開0.2.0には同梱されていません。`nagi.toml`があるアプリのルートで実行します。
 
 ```bash
-# 配布候補を展開したdirectoryを指定
+# 0.2.1配布物を展開したdirectoryを指定
 python /path/to/nagi/tools/generate_project_ci.py \
-  --output .github/workflows/nagi.yml
+  --nagi-version 0.2.1 --output .github/workflows/nagi.yml
 ```
 
 ソースcheckoutを使う場合:
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --output .github/workflows/nagi.yml
+  --nagi-version 0.2.1 --output .github/workflows/nagi.yml
 ```
 
 generatorはPython標準ライブラリだけを使います。指定先へworkflowを書き込み、既存fileは上書きせず、必要な親directoryを作成します。既存fileを置き換えるときだけ`--force`を指定してください。保存前に内容を確認する場合は、標準出力へ表示できます。
@@ -21,11 +21,11 @@ generatorはPython標準ライブラリだけを使います。指定先へworkf
 python /path/to/Nagi/scripts/generate_project_ci.py
 ```
 
-生成workflowは公開済みNagi `0.2.0`を固定して使い、native buildにはstable Rustを使います。生成時に設定を変更できます。
+generatorの既定値はNagi `0.2.0`です。上のコマンドは`--nagi-version 0.2.1`で公開済み0.2.1へ固定します。native buildにはstable Rustを使います。生成時に設定を変更できます。
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --nagi-version 0.2.0 --toolchain stable \
+  --nagi-version 0.2.1 --toolchain stable \
   --output .github/workflows/nagi.yml
 ```
 

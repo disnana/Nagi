@@ -1,65 +1,75 @@
 ---
 name: nagi-development
-description: Build, change, and debug Nagi applications using typed High code, project configuration, generated Low, and small Rust adapters. Use when working on .nagi/.low sources or nagi.toml, including JSON, HTTP, actors, and reuse of Rust libraries.
+description: Create, change, debug, and verify Nagi applications with the published 0.2.1 compiler. Use for .nagi or .low source, nagi.toml projects, High/Low diagnostics, Rust adapters, HTTP, JSON, SQLite, actors, async work, or generated-code failures. Do not use for changes to the Nagi compiler or editor implementation; follow the repository's contributor instructions for those.
 ---
 
-# Nagi development
+# Nagi application development
 
-Deliver readable application logic and a working executable. Prefer High (`.nagi`) for business rules; use a small Rust adapter for existing crates and handwritten Low only when the task calls for it. This skill works on its own; if the project contains `ai/README.md`, `ai/language.md`, and `ai/rust-interop.md`, use those for the repository's current contracts and example catalogue.
+Use High (`.nagi`) for typed business logic, a small Rust adapter for existing crates or Rust-specific operations, and Low (`.low`) only when the task requires it. Deliver a focused change and verify the behavior the user asked for. This skill can be used on its own. In a Nagi checkout, also read `ai/README.md`, `ai/language.md`, `ai/rust-interop.md`, and, for failures, `ai/debugging.md`.
 
-## Establish the project and contract
+If the skill was copied without the repository, use the public [agent guide](https://github.com/disnana/Nagi/blob/main/ai/README.md), [language guide](https://github.com/disnana/Nagi/blob/main/ai/language.md), [Rust adapters](https://github.com/disnana/Nagi/blob/main/ai/rust-interop.md), and [debugging guide](https://github.com/disnana/Nagi/blob/main/ai/debugging.md). The [official syntax reference](https://nagi.disnana.com/en/docs/syntax/) and [built-in signatures](https://nagi.disnana.com/en/docs/builtins/) are also available without a checkout. Check each page's version against the installed compiler; if a reference cannot be retrieved, use the inline rules below and a small `check` reproduction rather than inventing an API.
 
-1. Read the user's goal, repository instructions, the nearest `nagi.toml`, and the entry source plus relevant imports. Preserve existing project structure and dependency constraints.
-2. Run `nagic --version` and `nagic --help`. The accompanying repository guides target Nagi compiler 0.1.11; confirm its official release record and the installed compiler instead of assuming the VS Code extension's version is the language version.
-3. Pick a small working example or inspect current builtin signatures/tests before adding an unfamiliar API. Registered unquoted imports include `std.http.server`, `std.actor`, and `std.result`; Nagi 0.1.11 and later also provide `std.auth`, `std.ownership`, and `std.task`. Confirm installed-compiler support; Rust crates require an adapter, not a new arbitrary Nagi import. Roadmap proposals are not available APIs.
+## Establish the version, project, and contract
 
-## Implement a narrow, usable change
+1. Read the user's goal, repository guidance, nearest `nagi.toml`, entry source, and relevant imports. Preserve existing project structure and dependency constraints.
+2. Run `nagic --version` and `nagic --help`. These guides target published Nagi compiler 0.2.1. Editor extensions have separate versions and binaries. Confirm the installed compiler before using a feature; do not assume unreleased repository changes or a plugin version are published. Check `cargo --version` when preparing for or diagnosing a native build, not for Nagi source checking.
+3. Choose a nearby working example and read its source/configuration, or consult the relevant reference and compiler tests before using an unfamiliar API. Roadmap and design pages describe proposals, not shipped APIs.
+4. Keep compiler implementation work out of this application workflow. For changes to Nagi itself, use the repository's `AGENTS.md`.
 
-Annotate parameters and returned values. Represent records with classes, alternatives with enums, and absence with `T?`/`Option[T]`. Construct nullable values with `some(value)`/`None`; extract them with both `Some`/`None` cases. Give absent values and empty lists type context, such as `missing: i64? = None` and `values: List[i64] = []`.
+## Write code within the supported language
 
-Use `Result[T, E]` for expected failures: `ok(value)`, `fail(problem)`, or built-in `error("reason")`, which returns an Err containing an invalid Error. `try expression` propagates the same error type; use explicit conversion when E differs. Match both `Ok`/`Err` when recovering. This is not Python exception handling. Handle each Result deliberately, including Results assigned to locals.
+Annotate function parameters and value-returning functions. Use classes for named records, enums for alternatives, `T?`/`Option[T]` for absence, and `Result[T, E]` for expected failures. Match all `Some`/`None`, `Ok`/`Err`, or declared enum cases. `try` propagates an Err with the same error type; it is not exception handling. Give empty lists and absent values type context.
 
-Pass read-only strings/lists as `view[str]`/`view[T]` and pass `view(owner)` at the call. Owned arguments move. Copy with `copy(view(owner))` only when the caller needs an independent value. To store a view, first save its owner: `text = "Nagi"`, then `borrowed = view(text)`; `borrowed = view("Nagi")` borrows a temporary and is rejected. Keep borrowed owners valid, and do not move non-Copy fields from shared state or borrowed list elements. Use ordinary owned types rather than unfinished `owned[T]` wrappers.
+Use `view[T]` for read-only borrowing and pass `view(owner)` at the call. Keep the owner alive while a borrow is used. Passing an owned non-Copy value moves it; use `copy(view(value))` only when an independent copy is needed. For an existing non-Copy local assignment, the published move syntax is `from std.ownership import move` followed by `target = move(source)`. Do not wrap fresh values or every argument/return in `move`. Confirm the installed compiler supports the syntax.
 
-For Nagi 0.1.11, import `move` from `std.ownership` and use `destination = move(source)` for a bare owned non-Copy local assignment; declarations, annotations, reassignment, and parentheses follow this rule. Fresh values and argument/return/field/index consumption keep their existing rules. Copy policy is unchanged, including supported local async function aliases; Result/shared remain non-Copy. Qualified imports and aliases use the canonical operation; user functions named `move` remain ordinary. The operation takes one inferred input, with no explicit type arguments, cloning, or allocation. It preserves nested view origins and cleanup responsibility, without allowing borrowed/shared field theft, Future/nested Future inputs, or first-class standard operation values. Confirm installed-release support before generating this syntax.
+Use plain functions and loops. Methods, inheritance, field reassignment, tuples, dictionaries, comprehensions, lambdas, f-strings, string `+`, trailing commas, `elif`, `break`, `continue`, and `pass` are unsupported. Use exact builtin signatures rather than guessing Python or Rust syntax. Validate numeric and indexing limits before operations that may overflow or panic. Read `ai/language.md` when present in the checkout, or consult its linked syntax reference there. This skill does not require the surrounding repository to be installed.
 
-Use plain functions and loops. Methods, inheritance, field assignment, tuples, dictionaries, comprehensions, lambdas, f-strings, string `+`, trailing commas, `elif`, `break`, `continue`, and `pass` are unsupported. Check exact builtin signatures instead of guessing Python or Rust syntax. Validate numeric and indexing limits before operations that can wrap or panic.
+For Rust integration, declare a typed `extern def` or `extern async def` with `@rust("native::function")`, and implement the matching `pub` function in the configured `[rust].file`. Put dependencies under `[rust.dependencies]` in `nagi.toml`. Adapt crate-specific types/errors into Nagi values; arbitrary Rust types and traits are not Nagi declarations. Async extern calls must be awaited. Read `ai/rust-interop.md` and the example matching the boundary.
 
-For Rust integration, pair `@rust("native::function")` with a typed `extern def` or `extern async def`; no declaration body or trailing colon. Put a matching `pub` implementation in `[rust].file`, and dependencies under `[rust.dependencies]` in `nagi.toml`. Adapt crate-specific types/errors into supported Nagi values. Named synchronous callbacks such as `fn[i64, i64]` map to Rust `fn(i64) -> i64`. Async extern calls must be awaited; arbitrary async callback parameters are unsupported. An existing Rust server can call a known generated Nagi function directly, such as `super::calculate(input).await`, with the adapter updated for that exact name and type.
+## Check, build, and exercise the change
 
-## Check, build, and prove the behavior
-
-From the application folder:
+For a project with `entry = "main.nagi"`, run from its directory and specify the project explicitly:
 
 ```sh
 nagic check --project .
-nagic build --project .
-nagic run --project .
+nagic run --project . --profile dev
 ```
 
-`run` executes the application. Choose temporary data and appropriate local resources for checks that touch files, databases, or listeners. A task involving an existing server may require starting it and sending requests instead of waiting for `run` to exit.
+An explicit source file does not automatically load nearby project configuration. Use `nagic check main.nagi --project .` when invoking a file. `check` validates Nagi source and writes generated Low; it does not invoke Cargo or validate Rust adapter bodies. `run` performs native generation/build and executes the program in one command. Keep source checking, native build, and runtime outcomes distinct in diagnosis and final reporting.
 
-`check` validates saved Nagi declarations, ownership, and borrowing and writes generated Low for High input. It does not invoke Cargo or verify adapter bodies. `build` must also pass Rust checks and dependency resolution. Inspect source-mapped diagnostics first, then generated Rust when needed; edit the original source/adapter rather than generated output. Application stdout and compiler stderr are separate.
+The default profile is `release`; use `run --profile dev` for the edit/run loop. For a release build or pre-release validation, run `nagic build --project . --profile release` only when needed. Avoid running both `build` and `run` by default because `run` builds again. Published 0.2.1 supports `--profile dev|release` and `--build-stats` on `build` and `run`. `--incremental` and `--incremental=units` require `build`/`run --profile dev`; these options are opt-in. Check `nagic --help` if using another installed version. `nagic build --locked` is unsupported; after generation, use the generated Cargo manifest when a locked Cargo build is needed:
 
-Use `--project` explicitly when invoking an entry source: `nagic check main.nagi --project .`. An explicit source without it does not discover a nearby config. Project paths are relative to `nagi.toml`; command-line paths are relative to the terminal.
+```sh
+cargo build --release --locked --manifest-path build/main/Cargo.toml
+```
 
-After checking High, validate saved Low separately when changing lowering, imports, type identity, extern boundaries, or native Low integration. For `entry = "main.nagi"`:
+If the change affects lowering, imports, type identity, extern boundaries, or native Low integration, validate saved Low separately while retaining project settings and using a distinct output directory. For `entry = "main.nagi"`:
 
 ```sh
 nagic check build/main/generated.low --project . --out build/from-low
 nagic build build/main/generated.low --project . --out build/from-low
 ```
 
-For a different entry stem, use its generated directory. In the compiler targeted for Nagi 0.1.11, stable application identity is separate from each successful build generation. Cooperating writers to one output directory use an OS lock; successful executables remain side by side. Read the emitted `native:` path. Set `NAGI_NATIVE_TARGET_DIR` to choose a shared dependency cache, not a successful generation. Confirm the official 0.1.11 release record before relying on this behavior in an installed compiler. Retain the generated Cargo.lock. For a locked Rust resolution after generation, run `cargo build --release --locked --manifest-path build/main/Cargo.toml`; `nagic build --locked` is unsupported.
+For another entry name, use its generated directory. Do not edit generated Low/Rust to repair High source. Inspect generated `build/main/generated.low`, generated `src/main.rs`, and source-mapped diagnostics to locate the issue, then change the original source or adapter. The emitted `native:` path identifies the executable; do not construct its name from the entry stem. `NAGI_NATIVE_TARGET_DIR` selects a shared dependency cache, not the generated-source output directory.
 
-Exercise the concrete changed behavior: a successful input, a relevant rejected input, and affected state/file/HTTP behavior. Prefer an existing project smoke script to a duplicate test. In this repository, for example:
+Exercise the concrete behavior with a successful input and a relevant rejected input, plus affected file, database, or HTTP behavior when applicable. Prefer an existing sample or verification script over a duplicate harness. For this repository, an example is:
 
 ```sh
 python scripts/verify_application_examples.py --compiler /path/to/nagic --only axum-service
 ```
 
-This checks and builds the example from both High and saved Low and exercises real HTTP. Use another supported `--only` project when its behavior matches the change. Run focused compiler/runtime tests for compiler changes; documentation-only edits need snippet/link checks, not the full application suite.
+This runner checks and builds the selected sample from High and saved Low, then exercises its HTTP behavior. Select an example related to the change. Do not run a full application suite for a documentation-only change.
 
-## Report completion accurately
+## Debug failures without hiding them
 
-State the behavior delivered, relevant files, checks actually run, and any remaining build/environment limitation. Separate successful Nagi checks from successful Rust builds and executed behavior. Do not infer complete error handling, concurrency safety, rollback, server guarantees, or published release status from a successful `check` or a roadmap entry.
+Record compiler version, exact command, exit code, first diagnostic, and failing stage. Separate Nagi parse/check errors from generated-code preparation, output locking/publication, Rust/Cargo compilation, executable launch, runtime behavior, and IDE behavior using the actual output. A successful `check` only says that saved Nagi source passed that check; a later `build` failure is not automatically an adapter failure. Check project configuration, source path, current directory, target/toolchain, and adapter boundary before changing unrelated code.
+
+Reduce the failure to a small source and input that preserve the failing stage. Retain needed `nagi.toml` settings and local adapter/crate only when the error crosses those boundaries. Preserve original source locations and generated artifacts as evidence. Before sharing logs or a reproduction, remove credentials, tokens, private URLs, customer data, usernames, secret environment values, and secrets from history or screenshots.
+
+Do not patch generated files, disable checks, weaken the input, rerun repeatedly until a flaky case passes, or delete every build/Cargo cache to make the failure disappear. A controlled rerun may test a transient failure; compare exact commands and conditions. Target a specific cache only after identifying its role. The emitted `native:` path and stderr diagnostics help separate compiler/build failure from program output.
+
+For an IDE mismatch, compare CLI and editor compiler paths and versions, project root, supported file type, and extension logs. Do not infer editor plugin availability from compiler publication. If this repository's guides are available, follow `ai/debugging.md` for the symptom-to-stage checklist and safe reproduction procedure.
+
+## Report completion
+
+State the delivered behavior and changed files, exact checks actually run, and any remaining limitation. Distinguish successful Nagi check, successful Rust build, and executed behavior. Do not infer complete error handling, concurrency safety, rollback, server guarantees, or publication status from a successful check, a roadmap entry, or a repository version number.

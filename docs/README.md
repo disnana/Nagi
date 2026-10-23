@@ -2,9 +2,15 @@
 
 初めて使うなら[インストール](getting-started.md)から[最初のCLIアプリ](first-app.md)まで順に進めます。言語全体の道筋は[言語機能索引](#言語機能索引)、書式や関数を引くには[文法](syntax.md)・[組み込み関数](builtins.md)へ。
 
-このDocsのcompiler基準版は[2026-10-20に公開したNagi 0.2.0](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0)です。エディター拡張は別の版で管理します。[エディターの案内](editor.md)を参照してください。公式サイトは通常mainから生成するため、その後の変更も含むことがあります。版ごとの差分は[Changelog](../CHANGELOG.md)と[0.2.0移行ガイド](migration-0.2.0.md)にあります。
+このDocsのcompiler基準版は[2026-10-23に公開したNagi 0.2.1](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.1)です。エディター拡張は別の版で管理します。[エディターの案内](editor.md)を参照してください。公式サイトは通常mainから生成するため、その後の変更も含むことがあります。版ごとの差分は[Changelog](../CHANGELOG.md)と[0.2.0移行ガイド](migration-0.2.0.md)にあります。
 
 目的と現在の範囲は[Nagiについて](introduction.md)へ。以下のリファレンスは実装済みAPIの使い方と制限を示します。未実装の案は[設計](library-design.md)・[開発予定](roadmap.md)に分けています。
+
+## 今すぐ探す
+
+[開発・デバッグの早見表](developer-workflow.md) · [特徴と他言語との比較](comparison.md) · [devビルド](development-builds.md) · [アプリCI](user-ci.md) · [AI向けDocs・Skill](../ai/README.md)
+
+日々のコマンド、症状別の修正先、APIの入口を早見表にまとめています。0.2.2の改善は開発中として区別します。
 
 ## 初めて使う
 
@@ -61,7 +67,7 @@
 | 複数ファイルに分ける、Rustを呼ぶ | [importとRust連携](modules-and-rust.md) |
 | 自作の共通コードやRustのcrateを使う | [ライブラリとRustの資産](libraries.md) |
 | 入口やビルド設定を保存する | [nagi.toml](projects.md) |
-| アプリのCIを生成する・開発ビルドを測る | [CI生成](user-ci.md)・[開発ビルド（未リリース）](development-builds.md) |
+| アプリのCIを生成する・開発ビルドを測る | [CI生成](user-ci.md)・[開発ビルド](development-builds.md) |
 | 自分のRust crateをアプリから使う | [ローカルライブラリのサンプル](../test-nagi-code/rust-library/README.md) |
 | 非同期処理を待つ、複数の処理を始める | [asyncとscope](async.md)、[並行処理](concurrency.md) |
 | 状態を持つ処理へメッセージを送り、再起動・停止を管理する | [actor](actor.md)、[Supervisor](supervisor.md)、[APIリファレンス](actor-reference.md) |
@@ -82,6 +88,6 @@
 
 `std.actor`はNagi 0.1.8から使える標準ライブラリです。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)で登録・呼び出し・停止を試せます。旧actor／Supervisorの組み込み関数と[キュー](queue.md)は検証用APIです。性能を調べる場合は、[測定方法](performance.md)、[測定結果](../PERFORMANCE.md)、[通信の負荷試験](http-capacity.md)を確認してください。
 
-Nagi 0.2.0と現在のソースが対象です。版ごとの変更は[変更履歴](../CHANGELOG.md)、未対応の機能は各ページに記載しています。
+Nagi 0.2.1と現在のソースが対象です。版ごとの変更は[変更履歴](../CHANGELOG.md)、未対応の機能は各ページに記載しています。
 
 - [認証・認可](security.md)と[0.2.0移行](migration-0.2.0.md)
