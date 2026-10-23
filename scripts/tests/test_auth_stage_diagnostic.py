@@ -564,6 +564,48 @@ class DiagnosticCases(unittest.TestCase):
         accepted, output = self.capture(self.raw("csrf") + "test result: ok. 427 passed; 0 failed; 1 ignored;\n", 0)
         self.assertFalse(accepted)
 
+    def test_producer_line_boundary_keeps_both_slots_after_libtest_prefix(self):
+        prefix = "test runtime::fixed_case ... "
+        blocks = self.raw().split("auth-stage slot=2", 1)
+        raw = (prefix + "\n" + blocks[0] + prefix + "\n" +
+               "auth-stage slot=2" + blocks[1] +
+               "test result: ok. 427 passed; 0 failed; 1 ignored;\n")
+        accepted, output = self.capture(raw, 0)
+        self.assertTrue(accepted)
+        self.assertEqual(output.count(b"auth-stage slot="), 2)
+        self.assertEqual(output.count(b"op="), 2)
+        self.assertEqual(output.count(b"lost=false\n"), 2)
+        self.assertNotIn(b"runtime::fixed_case", output)
+
+    def test_unframed_prefix_is_still_rejected_without_recovering_header(self):
+        raw = ("test runtime::fixed_case ... " + self.raw() +
+               "test result: ok. 427 passed; 0 failed; 1 ignored;\n")
+        accepted, output = self.capture(raw, 0)
+        self.assertFalse(accepted)
+        self.assertEqual(output.count(b"auth-stage slot="), 1)
+        self.assertIn(b"auth-stage slot=2", output)
+        self.assertIn(b"trace=unavailable\n", output)
+        self.assertIn(b"trace_validation=failed\n", output)
+        self.assertNotIn(b"runtime::fixed_case", output)
+
+    def test_framed_output_still_refuses_missing_duplicate_invalid_and_lost_records(self):
+        base = self.raw()
+        summary = "test result: ok. 427 passed; 0 failed; 1 ignored;\n"
+        variants = {
+            "missing_slot": self.raw("csrf"),
+            "duplicate_slot": self.raw("csrf") + base,
+            "unknown_slot": base.replace("slot=1", "slot=3"),
+            "invalid_record": base.replace("event=Success", "event=Unknown"),
+            "private_suffix": base.replace("kind=None", "kind=None wireSecret"),
+            "unclosed": base.replace("lost=false\n", "", 1),
+            "loss": base.replace("lost=false", "lost=true", 1),
+        }
+        for name, records in variants.items():
+            with self.subTest(case=name):
+                accepted, output = self.capture("\n" + records + summary, 0)
+                self.assertFalse(accepted)
+                self.assertNotIn(b"wireSecret", output)
+
     def test_missing_and_oversized_raw_reject_without_private_echo(self):
         sink = io.TextIOWrapper(io.BytesIO(), encoding="utf-8")
         with contextlib.redirect_stdout(sink):
