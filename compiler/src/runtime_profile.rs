@@ -26,13 +26,12 @@ impl Selection {
     }
 }
 
-fn capability(runtime: &Path) -> bool {
-    let Some(manifest) = std::fs::read_to_string(runtime.join("Cargo.toml"))
+fn manifest(path: &Path) -> Option<toml::Value> {
+    std::fs::read_to_string(path)
         .ok()
-        .and_then(|s| toml::from_str::<toml::Value>(&s).ok())
-    else {
-        return false;
-    };
+        .and_then(|s| toml::from_str(&s).ok())
+}
+fn declares_core(manifest: &toml::Value) -> bool {
     let Some(metadata) = manifest
         .get("package")
         .and_then(|v| v.get("metadata"))
@@ -41,35 +40,57 @@ fn capability(runtime: &Path) -> bool {
     else {
         return false;
     };
-    if metadata.get("schema").and_then(toml::Value::as_integer) != Some(1)
-        || metadata.get("core-feature").and_then(toml::Value::as_str) != Some("core")
-        || metadata.get("core-package").and_then(toml::Value::as_str) != Some("nagi-runtime-core")
-        || metadata.get("core-path").and_then(toml::Value::as_str) != Some("../runtime-core")
-    {
-        return false;
-    }
-    let core = runtime.join("../runtime-core");
-    let Some(core_manifest) = std::fs::read_to_string(core.join("Cargo.toml"))
-        .ok()
-        .and_then(|s| toml::from_str::<toml::Value>(&s).ok())
-    else {
-        return false;
-    };
-    core_manifest
+    metadata.get("schema").and_then(toml::Value::as_integer) == Some(1)
+        && metadata.get("core-feature").and_then(toml::Value::as_str) == Some("core")
+        && metadata.get("core-package").and_then(toml::Value::as_str) == Some("nagi-runtime-core")
+        && metadata.get("core-path").and_then(toml::Value::as_str) == Some("../runtime-core")
+}
+fn core_source(manifest: &toml::Value) -> bool {
+    manifest
         .get("package")
         .and_then(|v| v.get("name"))
         .and_then(toml::Value::as_str)
         == Some("nagi-runtime-core")
-        && core_manifest
+        && manifest
             .get("package")
             .and_then(|v| v.get("build"))
             .and_then(toml::Value::as_str)
             == Some("build.rs")
-        && core_manifest
+        && manifest
             .get("lib")
             .and_then(|v| v.get("path"))
             .and_then(toml::Value::as_str)
             == Some("../runtime/src/lib.rs")
+}
+
+/// Explicit compiler-known source inputs, not discovery of arbitrary Rust inputs.
+/// A legacy application output called runtime-core is not a runtime declaration.
+pub(crate) fn known_inputs(runtime: &Path) -> Vec<std::path::PathBuf> {
+    let mut paths = vec![runtime.join("Cargo.toml"), runtime.join("src/lib.rs")];
+    let core = runtime.with_file_name("runtime-core");
+    let declared = manifest(&runtime.join("Cargo.toml"))
+        .as_ref()
+        .is_some_and(declares_core)
+        || manifest(&core.join("Cargo.toml"))
+            .as_ref()
+            .is_some_and(core_source);
+    if declared {
+        paths.extend([core.join("Cargo.toml"), core.join("build.rs")]);
+    }
+    paths.into_iter().filter(|path| path.is_file()).collect()
+}
+fn capability(runtime: &Path) -> bool {
+    if !manifest(&runtime.join("Cargo.toml"))
+        .as_ref()
+        .is_some_and(declares_core)
+    {
+        return false;
+    }
+    let core = runtime.with_file_name("runtime-core");
+    let Some(core_manifest) = manifest(&core.join("Cargo.toml")) else {
+        return false;
+    };
+    core_source(&core_manifest)
         && runtime.join("src/lib.rs").is_file()
         && core.join("build.rs").is_file()
         && core_manifest
@@ -355,6 +376,18 @@ mod tests {
             capability(&runtime),
             p.program()
         );
+        #[cfg(unix)]
+        {
+            let linked = root.join("linked-root");
+            std::fs::create_dir(&linked).unwrap();
+            std::os::unix::fs::symlink(&runtime, linked.join("runtime")).unwrap();
+            assert!(
+                !capability(&linked.join("runtime")),
+                "the selected lexical sibling is absent"
+            );
+            std::os::unix::fs::symlink(&core, linked.join("runtime-core")).unwrap();
+            assert!(capability(&linked.join("runtime")));
+        }
         for (native, adapter, dependencies, reason) in [
             (true, false, false, "native_input"),
             (false, true, false, "rust_adapter"),

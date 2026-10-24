@@ -3651,8 +3651,161 @@ fn verify_receipt(binary: &Path) {
     }
 }
 
+fn declare_core_runtime(f: &Fixture) {
+    f.write("runtime/Cargo.toml", "[package]\nname='nagi-runtime'\nversion='0.1.0'\nedition='2021'\n[workspace]\n[package.metadata.nagi.runtime-profiles]\nschema=1\ncore-feature='core'\ncore-package='nagi-runtime-core'\ncore-path='../runtime-core'\n");
+    f.write("runtime-core/Cargo.toml", "[package]\nname='nagi-runtime-core'\nversion='0.1.0'\nedition='2021'\nbuild='build.rs'\n[workspace]\n[lib]\npath='../runtime/src/lib.rs'\n[features]\ncore=[]\n");
+    f.write("runtime-core/build.rs", "fn main() {}\n");
+}
+
 #[test]
-fn runtime_profiles_change_only_dependency_features_and_preserve_old_generations() {
+fn runtime_outputs_cannot_replace_known_manifest_build_script_or_shared_source() {
+    for mode in ["full", "auto"] {
+        for alias in [
+            "full-manifest",
+            "core-manifest",
+            "shared-hardlink",
+            "build-hardlink",
+        ] {
+            let f = Fixture::new();
+            declare_core_runtime(&f);
+            let out = match alias {
+                "full-manifest" => "runtime",
+                "core-manifest" => "runtime-core",
+                "shared-hardlink" => {
+                    fs::create_dir_all(f.0.join("out/src")).unwrap();
+                    fs::hard_link(f.0.join("runtime/src/lib.rs"), f.0.join("out/src/main.rs"))
+                        .unwrap();
+                    "out"
+                }
+                "build-hardlink" => {
+                    fs::create_dir(f.0.join("out")).unwrap();
+                    fs::hard_link(
+                        f.0.join("runtime-core/build.rs"),
+                        f.0.join("out/Cargo.toml"),
+                    )
+                    .unwrap();
+                    "out"
+                }
+                _ => unreachable!(),
+            };
+            let names = [
+                "runtime/Cargo.toml",
+                "runtime/src/lib.rs",
+                "runtime-core/Cargo.toml",
+                "runtime-core/build.rs",
+            ];
+            let before: Vec<_> = names
+                .iter()
+                .map(|n| fs::read(f.0.join(n)).unwrap())
+                .collect();
+            let mut c = f.cli("build", "main.nagi", out);
+            c.args(["--profile", "dev", "--runtime-profile", mode]);
+            let output = bounded_output(c);
+            assert!(!output.status.success(), "{mode}/{alias}");
+            for (name, bytes) in names.iter().zip(before) {
+                assert_eq!(
+                    fs::read(f.0.join(name)).unwrap(),
+                    bytes,
+                    "{mode}/{alias}/{name}"
+                );
+            }
+            assert!(
+                !f.0.join(out).join("generated.low").exists(),
+                "guard must precede the first projection"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_output_symlink_cannot_replace_declared_core_manifest() {
+    for mode in ["full", "auto"] {
+        let f = Fixture::new();
+        declare_core_runtime(&f);
+        fs::create_dir(f.0.join("out")).unwrap();
+        let source = f.0.join("runtime-core/Cargo.toml");
+        let before = fs::read(&source).unwrap();
+        std::os::unix::fs::symlink(&source, f.0.join("out/Cargo.toml")).unwrap();
+        let mut c = f.cli("build", "main.nagi", "out");
+        c.args(["--profile", "dev", "--runtime-profile", mode]);
+        let output = bounded_output(c);
+        assert!(!output.status.success());
+        assert_eq!(fs::read(source).unwrap(), before);
+        assert!(!f.0.join("out/generated.low").exists());
+    }
+}
+
+#[test]
+fn runtime_output_named_core_stays_a_valid_legacy_application_and_checks_need_no_runtime() {
+    let f = Fixture::new();
+    for mode in ["full", "auto", "auto", "full"] {
+        let mut c = f.cli("build", "main.nagi", "runtime-core");
+        c.args([
+            "--profile",
+            "dev",
+            "--runtime-profile",
+            mode,
+            "--build-stats",
+        ]);
+        let output = bounded_output(c);
+        assert_eq!(run(&native(&output)), "old");
+        assert_eq!(
+            stats(&output)["runtime"]["reason"],
+            if mode == "auto" {
+                "runtime_unsupported"
+            } else {
+                "full_requested"
+            }
+        );
+    }
+    for command in ["check", "lower"] {
+        let mut c = f.cli(command, "main.nagi", "frontend-out");
+        c.env("NAGI_ROOT", f.0.join("missing-installation"));
+        success(&bounded_output(c));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_directory_symlink_uses_the_same_core_sibling_as_the_manifest() {
+    let f = Fixture::new();
+    declare_core_runtime(&f);
+    let linked = f.0.join("linked-installation");
+    fs::create_dir(&linked).unwrap();
+    std::os::unix::fs::symlink(f.0.join("runtime"), linked.join("runtime")).unwrap();
+    let build = |mode: &str| {
+        let mut c = f.cli("build", "main.nagi", "linked-out");
+        c.env("NAGI_ROOT", &linked).args([
+            "--profile",
+            "dev",
+            "--runtime-profile",
+            mode,
+            "--build-stats",
+        ]);
+        bounded_output(c)
+    };
+    for mode in ["full", "auto"] {
+        let output = build(mode);
+        assert_eq!(run(&native(&output)), "old");
+        assert_eq!(stats(&output)["runtime"]["selected"], "full");
+        assert_eq!(
+            stats(&output)["runtime"]["reason"],
+            if mode == "auto" {
+                "runtime_unsupported"
+            } else {
+                "full_requested"
+            }
+        );
+    }
+    std::os::unix::fs::symlink(f.0.join("runtime-core"), linked.join("runtime-core")).unwrap();
+    let paired = build("auto");
+    assert_eq!(run(&native(&paired)), "old");
+    assert_eq!(stats(&paired)["runtime"]["selected"], "core");
+}
+
+#[test]
+fn runtime_profiles_change_runtime_dependency_and_preserve_old_generations() {
     let f = Fixture::new();
     let mut legacy = f.cli("build", "main.nagi", "legacy-out");
     legacy.args([
@@ -3665,9 +3818,7 @@ fn runtime_profiles_change_only_dependency_features_and_preserve_old_generations
     let legacy = bounded_output(legacy);
     assert_eq!(stats(&legacy)["runtime"]["reason"], "runtime_unsupported");
     assert_eq!(run(&native(&legacy)), "old");
-    f.write("runtime/Cargo.toml", "[package]\nname='nagi-runtime'\nversion='0.1.0'\nedition='2021'\n[workspace]\n[package.metadata.nagi.runtime-profiles]\nschema=1\ncore-feature='core'\ncore-package='nagi-runtime-core'\ncore-path='../runtime-core'\n");
-    f.write("runtime-core/Cargo.toml", "[package]\nname='nagi-runtime-core'\nversion='0.1.0'\nedition='2021'\nbuild='build.rs'\n[workspace]\n[lib]\npath='../runtime/src/lib.rs'\n[features]\ncore=[]\n");
-    f.write("runtime-core/build.rs", "fn main() {}\n");
+    declare_core_runtime(&f);
     let build = |mode: &str| {
         let mut c = f.cli("build", "main.nagi", "out");
         c.args([
@@ -3862,15 +4013,22 @@ fn original_runtime_keeps_complete_rust_api_with_no_default_and_all_features() {
         let mut cargo = Command::new(env!("CARGO"));
         cargo
             .current_dir(f.0.join("embedding"))
-            .args(["run", "--offline", features])
+            .args(["build", "--offline", features])
             .env("CARGO_TARGET_DIR", &target);
         let output =
             native_capture.run_bounded(&mut cargo, "embedding-build", Duration::from_secs(180));
         success(&output);
-        assert_eq!(
-            String::from_utf8_lossy(&output.stdout).trim(),
-            "full API retained"
-        );
+        let binary =
+            f.0.join("embedding")
+                .join(&target)
+                .join("debug")
+                .join(format!(
+                    "runtime-embedding-compatibility{}",
+                    std::env::consts::EXE_SUFFIX
+                ));
+        // Keep executable waiting under the original 60s bound, separate from
+        // the existing 180s native dependency compilation budget.
+        assert_eq!(run(&binary), "full API retained");
     }
 }
 

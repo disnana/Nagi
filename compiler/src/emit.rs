@@ -2014,6 +2014,13 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     p.classes = resolution.classes[..nc].to_vec();
     p.enums = resolution.enums[..ne].to_vec();
     p.functions = resolution.functions[..nf].to_vec();
+    // Resolve once before any projection so known runtime sources receive the
+    // same pre-lock and post-lock alias protection as explicit source inputs.
+    let runtime_root = if matches!(cmd, "build" | "run") {
+        Some(crate::installation::root()?)
+    } else {
+        None
+    };
     let write_output = map_options.is_none() && !(options.editor_input && cmd == "check");
     let mut inputs: Vec<_> = sources
         .files()
@@ -2021,6 +2028,11 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         .chain(rust_file.iter().cloned())
         .chain(project_manifest.iter().cloned())
         .chain(sql_schema.iter().cloned())
+        .chain(
+            runtime_root
+                .iter()
+                .flat_map(|root| crate::runtime_profile::known_inputs(&root.join("runtime"))),
+        )
         .chain(crate::output::assets(&resolution))
         .chain(crate::output::assets(&all))
         // These explicit roots are known; discovering arbitrary Rust/include or
@@ -2197,7 +2209,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let temporary_run = cmd == "run"
         && std::env::var_os("NAGI_RUN_RETENTION").is_some_and(|value| value == "latest");
     let binary = (|| -> Result<PathBuf, String> {
-    let root = crate::installation::root()?;
+    let root = runtime_root.as_ref().expect("build/run resolved runtime before projection");
     fs::create_dir_all(out.join("src")).map_err(|e| e.to_string())?;
     if p.functions.iter().any(|f| f.external) && rust_file.is_none() {
         return Err("extern関数のビルドには--rust FILE.rsが必要です".into());
