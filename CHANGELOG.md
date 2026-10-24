@@ -35,6 +35,14 @@
 - Bundle standard-library-only Python CI-generation and receipt-verification tools. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.
 - Document the existing security API guarantees, unsupported transports and staged build roadmap, with measured application build results and their limits. Previously distributed 0.2.0 binaries remain unchanged. Function-unit partitioning improved unchanged rebuilds in the measured fixture but slowed edited cases, so it remains opt-in; see the [measurements](benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md).
 
+## JetBrains 0.1.5 — 2026-10-24
+
+- 正常なHigh/Lowソースの末尾で改行した際、公開Nagi 0.2.1のカーソル回復解析がシンボル情報を欠落させても、同じ未保存スナップショットから情報を取り直し、色付け・ホバー説明・定義移動を維持します。`Point`の名前付きコンストラクターと末尾の字下げなし空行を含むケースを検証しています。公開済みplugin 0.1.4にはこの修正は含まれません。
+- Recover current symbol facts when published Nagi 0.2.1 omits its index after cursor recovery at a final unindented blank line. Preserve semantic colors, documentation and navigation for the same unsaved buffer, including the typed Point record case. This fix was merged after the 0.1.4 distribution was published.
+- Keep the original frontend verdict, diagnostics and completion candidates. Retry at most once within the existing shared deadline, cancellation, snapshot-identity and trusted-project checks; fixed compilers do not require the compatibility retry.
+- プラグインIDとIDEA/PyCharm共通ZIP、対応IDE下限、既存のDevelopment/Release Run設定を維持します。Nagi本体とMarketplaceは別の公開工程です。
+- Publish a fresh 0.1.5 common plugin ZIP with the existing plugin ID and supported IDE builds. The compiler remains a separate installation; this plugin patch does not release Nagi 0.2.2 or submit to JetBrains Marketplace.
+
 ## JetBrains 0.1.4
 
 - Add compiler-backed hover/Quick Documentation for exact function/class/variable targets, including available arguments, return types and fields. Complete the same initial documentation request after background analysis, without waiting on the UI thread or starting a Rust build. Keep bounded waits, cancellation, current-snapshot and trusted-project restrictions; do not invent missing builtin signatures.

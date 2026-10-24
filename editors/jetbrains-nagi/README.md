@@ -2,9 +2,15 @@
 
 [English](README.en.md)
 
-IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.4の公開を準備しています。ID `com.disnana.nagi`と表示名**Nagi**を維持します。利用可能な版はGitHub ReleasesとMarketplaceの一覧で確認してください。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
+IntelliJ IDEA・PyCharm向けのNagiプラグインです。このソースは0.1.5を対象としています。ID `com.disnana.nagi`と表示名**Nagi**を維持します。利用可能な版はGitHub ReleasesとMarketplaceの一覧で確認してください。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
 
 プラグインの版は`build.gradle.kts`で管理します。公開済み0.1.2には両IDE共通ZIPがあり、新しい利用可能な成果物はReleasesで確認してください。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
+
+## 0.1.5: 末尾空行の色付け・補助情報
+
+公開済み0.1.4には、正常な`Point`などのソースで末尾の字下げなし空行へ移ると、色付け・ホバー・定義移動の情報が消える問題があります。0.1.5には、同じ未保存バッファのシンボル情報を取り直す修正が含まれます。公開Nagi 0.2.1との連携を検証した修正で、Nagi 0.2.2の公開を待つ必要はありません。
+
+取り直しは既存の時間制限内で最大1回です。元の型検査結果・診断・補完候補を変更せず、古いバッファの情報も使いません。インストールするZIPの版は[GitHub Releases](https://github.com/disnana/Nagi/releases)で確認し、ディスクから更新した後はIDEを再起動してください。GitHub配布とMarketplaceでの提供状況は別です。
 
 ## 開発中：名前によるimport
 
@@ -23,7 +29,7 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.4の公開を準
 
 0.1.3の実装は[main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923)でIDEA/PyCharmのstable/EAP計4経路のtestとPlugin Verifierに成功しました。EAPのVerifierには各IDEで既存のdeprecated API 3件・experimental API 1件の警告があり、警告なしの結果ではありません。headless検証はGUI受入を意味せず、利用者による既存GUI確認は受入済みです。今回の掲載情報・compiler案内の更新ではIDE機能の制御ロジックを変更していません。IME、EditorConfig modifierと設定変更後の再読み込みは未確認です。
 
-## 0.1.4の編集補助（公開準備中）
+## 0.1.4の編集補助
 
 Highでは、自動字下げの後、空行で続けてEnterを押すと1段ずつブロックを抜けられます。手動入力・Backspace・paste・undoの後のEnterはその操作で選んだ字下げを尊重します。括弧内の継続行とLowのbrace内では、この退出補助は行いません。
 
@@ -31,7 +37,7 @@ Highでは、自動字下げの後、空行で続けてEnterを押すと1段ず�
 
 Pythonプラグインの追加インストールは不要です。これはPyCharm Pythonとの完全同等性を示すものではありません。調査した補助機能と今後の適用計画は[内部設計資料](../../docs/internal/jetbrains-python-editing-plan.md)に整理しています。全体の自動整形・Rename・自動importは今回の追加に含まれません。
 
-## 0.1.4: hoverとQuick Documentation（公開準備中）
+## 0.1.4: hoverとQuick Documentation
 
 plugin候補版は、マウスhoverの説明とQuick Documentationで、compilerが提供した関数signature・引数・戻り値、classのfield、正確な位置に対応する変数の型を表示します。class構築はfieldを名前付き指定する形式です。compilerの空parametersをゼロ引数constructorとは表示しません。引数情報にも、compilerが提供した場合だけ戻り値を表示します。
 
@@ -39,9 +45,9 @@ plugin候補版は、マウスhoverの説明とQuick Documentationで、compiler
 
 診断hoverでは既知のCLI装飾とtoken名を読みやすく表示し、元の診断descriptionは保持します。未知の文面・notes・hintsも残します。HTMLやentityに見える文字列は文字として表示し、`list[str?]`など意味のある型構文は削りません。
 
-信頼されたproject・対応するassist compiler・現在のsource snapshotが必要です。初回は同じ説明要求が背景解析の完了を待ちます。待機中に編集・依存・設定・信頼状態が変わった要求は取り消します。マウス表示にはIDE側のhover documentation設定が必要で、Quick Documentation actionも同じ情報を表示します。未保存の編集・依存・compiler設定変更で古い結果は失効します。compiler情報がない場合に型や説明文を推測しません。現protocolが署名を返さない組み込み`print`などには引数説明を作りません。部分的なeditor解析であり、完全なbuild検査ではありません。未リリースの変更で、実GUIの受入確認はheadless testと分けて記録します。[設計と検証範囲](../../docs/internal/jetbrains-documentation-plan.md)を参照してください。
+信頼されたproject・対応するassist compiler・現在のsource snapshotが必要です。初回は同じ説明要求が背景解析の完了を待ちます。待機中に編集・依存・設定・信頼状態が変わった要求は取り消します。マウス表示にはIDE側のhover documentation設定が必要で、Quick Documentation actionも同じ情報を表示します。未保存の編集・依存・compiler設定変更で古い結果は失効します。compiler情報がない場合に型や説明文を推測しません。現protocolが署名を返さない組み込み`print`などには引数説明を作りません。部分的なeditor解析であり、完全なbuild検査ではありません。0.1.4はGitHub Releasesで公開済みですが、実GUIの検証範囲はheadless testと分けて記録します。[設計と検証範囲](../../docs/internal/jetbrains-documentation-plan.md)を参照してください。
 
-利用者によるホバー・色付け候補の動作確認を受け、0.1.4として公開準備しています。公開Nagi 0.2.0と組み合わせて使います。正式配布には0.1.4の最終CI・四IDEのtest/Verifier成功が必要です。GitHub公開とMarketplaceでの提出・承認は別です。候補での動作確認をすべてのGUI操作の検証とは扱いません。
+0.1.4はGitHub Releasesで公開済みです。公開Nagi 0.2.0との組み合わせに対応し、最終CI・四IDEのtest/Verifierが成功した共通ZIPを配布しています。GitHub公開とMarketplaceでの提出・承認は別です。候補での動作確認をすべてのGUI操作の検証とは扱いません。
 
 ## 0.1.3
 
@@ -51,7 +57,8 @@ plugin候補版は、マウスhoverの説明とQuick Documentationで、compiler
 
 | plugin | compiler | 対応範囲 |
 |---|---|---|
-| 0.1.4（公開準備中） | 公開Nagi 0.2.0 | 0.1.3の機能に加え、ホバー説明・初回解析待ち・色保持・編集補助の改善 |
+| 0.1.5 | 公開Nagi 0.2.1で確認 | 0.1.4の機能と、末尾空行のシンボル情報欠落への互換処理 |
+| 0.1.4 | 公開Nagi 0.2.0 | 0.1.3の機能に加え、ホバー説明・初回解析待ち・色保持・編集補助の改善 |
 | 公開済み0.1.2 | 公開Nagi 0.2.0 / 0.1.11 | 手動Check/Runと基本編集。semantic assistance・標準Run Configuration・世代回収は0.1.2に含まれません |
 | 0.1.3 | 公開Nagi 0.2.0 | High/Lowのsemantic assistance、標準Run/Stop、IDE管理runの世代回収 |
 | 0.1.3 | 公開Nagi 0.1.11 | 通常Check/Runと標準Run Configurationによる通常実行。assist protocolと世代回収modeは未対応 |
@@ -67,7 +74,7 @@ High/Low syntax highlightingと、確認できた最上位文脈の字句`def`�
 
 IDE標準のRun Configurationは、既存のローカル`.nagi`または`.low`を開いてNagi設定を作り、通常のRun/Stop操作でコンパイラを起動します。近くに`nagi.toml`があればそのentryを使い、実行前に未保存ファイルを保存し、信頼されていないprojectでは起動を拒否します。起動準備ではエディターを止めずに保存の完了を待ち、IDEのbackground taskから中止できます。待機後に開いているfileの未保存変更が残っていた場合は、保存してから再実行してください。Nagi 0.1.11のcompilerで通常実行できます。これらは公開済み0.1.2には含まれない0.1.3の機能です。compiler 0.2.0は公開済みです。利用可能なplugin版はReleasesまたはMarketplaceで確認してください。
 
-標準Run Configurationの **Build profile** は **Development** が既定で、**Release** を明示選択して保存できます。既存設定でprofileが未指定の場合もDevelopmentになります。`Nagi: Run` actionもDevelopmentを使います。compilerのCLI既定値は変更しません。起動前の能力確認は保存完了後のbackground taskで行い、対応するcompilerだけに `--profile dev` を渡します。`--incremental=units` は自動で有効にしません。確認済みの公開Nagi 0.2.0 / 0.1.11はReleaseで実行し、consoleへ実際のprofileとfallback理由を表示します。未知・不正・timeoutのhelp応答では実行を止めるため、標準Run ConfigurationでReleaseを選ぶかcompiler設定を確認してください。正常に確認した能力は実行体のidentityに結び付けて上限付きで再利用し、設定・信頼・実行体が変わった場合は破棄します。同時の初回Runはそれぞれ独立した上限付きhelp確認を行う場合があります。Checkはこの確認を行いません。開発profile対応のNagi 0.2.1とこのplugin変更は、公開前の候補として検証中です。
+標準Run Configurationの **Build profile** は **Development** が既定で、**Release** を明示選択して保存できます。既存設定でprofileが未指定の場合もDevelopmentになります。`Nagi: Run` actionもDevelopmentを使います。compilerのCLI既定値は変更しません。起動前の能力確認は保存完了後のbackground taskで行い、対応するcompilerだけに `--profile dev` を渡します。`--incremental=units` は自動で有効にしません。確認済みの公開Nagi 0.2.0 / 0.1.11はReleaseで実行し、consoleへ実際のprofileとfallback理由を表示します。未知・不正・timeoutのhelp応答では実行を止めるため、標準Run ConfigurationでReleaseを選ぶかcompiler設定を確認してください。正常に確認した能力は実行体のidentityに結び付けて上限付きで再利用し、設定・信頼・実行体が変わった場合は破棄します。同時の初回Runはそれぞれ独立した上限付きhelp確認を行う場合があります。Checkはこの確認を行いません。公開Nagi 0.2.1はDevelopmentに対応し、このRun設定は公開済みplugin 0.1.4に含まれます。
 
 0.1.3では、IDEが管理するNagi Runに限って`NAGI_RUN_RETENTION=latest`を設定し、公開compiler 0.2.0の世代保持modeを使います。公開compiler 0.1.11は通常のCheck/Runに使えますが、このmodeを実装しておらず、CLI実行の成功世代を自動削除しません。通常のCLI世代はimmutableで、世代cleanupはCargo共有cache（`build/native-target/`または`NAGI_NATIVE_TARGET_DIR`）にも適用されません。このmodeはnative run成功を記録したlatest、実行中・すべてのappの入力snapshotが必要とする世代、失敗後のlast-goodを保護します。compile成功だけではrun成功とみなさず、managed世代の入力metadataが不明なら回収しません。入力snapshotは成功した通常buildも含み、namespace参照とfile identityを記録するため、non-latest run・別appが必要とする世代を保護します。外部hardlink inputのidentityがrun leaseと一致する場合も、そのleaseとgenerationを保持します。依存元を回収しても参照先が次のsuccessful sweepまで残ることがあり、総世代数や容量に厳密な上限はありません。unknown file、link/reparse point、failed stagingも削除しません。generation tree外のrecovery journalは次のplugin管理runで検査します。unknownまたはoversized recordは保持し、正常recordの回収は続けます。通常CLI向けのcleanup commandやpower-loss durability保証ではありません。
 
