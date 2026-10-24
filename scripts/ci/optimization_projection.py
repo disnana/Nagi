@@ -4,6 +4,8 @@ Only named, checked cache/pin/checkout/retention edits are removed. This is not 
 test-result adapter. Publication also has an executable fail-closed gate.
 """
 import re
+import importlib.util
+from pathlib import Path
 
 PINS = {
     ('actions/checkout', 'v4'): '11d5960a326750d5838078e36cf38b85af677262',
@@ -80,6 +82,12 @@ def save_step(path, critical=False):
 
 
 def cache_edit(job, inverse=False):
+    if job.split(':', 1)[0].strip() in ('linux-workspace', 'windows-contracts'):
+        spec = importlib.util.spec_from_file_location(
+            'parallel_cache_projection', Path(__file__).with_name('parallel_cache_projection.py'))
+        policy = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(policy)
+        return policy.validate_restore_only_job(job, unpin)
     blocks = list(STEP.finditer(job))
     cache_ref = r'(?:v4|0057852bfaa89a56745cba8c7296529d2fc39830)'
     candidates = [m for m in blocks if re.search(r'uses: actions/cache(?:/restore)?@' + cache_ref, m.group())]

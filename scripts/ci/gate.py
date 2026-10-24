@@ -22,7 +22,7 @@ def errors(needs: dict) -> list[str]:
         failures.append("linux: missing or invalid check plan")
     else:
         expected = "success" if comprehensive == "true" else "skipped"
-        for job in ("linux", "rust-1-88"):
+        for job in ("linux", "linux-workspace", "rust-1-88"):
             actual = needs.get(job, {}).get("result", "missing")
             if actual != expected:
                 failures.append(f"{job}: {actual}, expected {expected}")
@@ -49,7 +49,7 @@ def errors(needs: dict) -> list[str]:
         if actual != expected:
             failures.append(f"sf08-browser: {actual}, expected {expected}")
     for component, job in (("vscode", "vscode-package"), ("nagi", "nagi-package"),
-                           ("nagi", "nagi-regression")):
+                           ("nagi", "nagi-regression"), ("nagi", "windows-contracts")):
         planned = plan.get(f"package_{component}")
         if planned not in ("true", "false"):
             failures.append(f"{job}: missing or invalid package plan")

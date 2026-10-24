@@ -5,6 +5,9 @@ from pathlib import Path
 import levels_projection
 import optimization_projection as opt
 import publication_projection
+import linux_workspace_projection
+import windows_contract_projection
+import parallel_cache_projection
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -102,6 +105,10 @@ class OptimizationTests(unittest.TestCase):
             job = re.search(r'^  '+name+r':\n.*?(?=^  [a-z]|\Z)', source, re.M | re.S).group()
             self.assertNotIn('key: nagi-critical-v1-', job)
             self.assertIn(opt.SAVE_IF, job)
+        for name in ('linux-workspace', 'windows-contracts'):
+            job = re.search(r'^  '+name+r':\n.*?(?=^  [a-z]|\Z)', source, re.M | re.S).group()
+            parallel_cache_projection.validate_restore_only_job(job, opt.unpin)
+            self.assertNotIn('actions/cache/save@', job)
 
     def test_publication_aggregate_source_and_level_controls_cannot_drift(self):
         source = self.source()
@@ -110,7 +117,9 @@ class OptimizationTests(unittest.TestCase):
                               ('python -B scripts/ci/publication_gate.py', 'echo bypass')):
             with self.subTest(change=after), self.assertRaises(ValueError):
                 levels_projection.inverse_workflow(source.replace(before, after, 1))
-        plain = opt.inverse_infrastructure(source)
+        historical_caches = parallel_cache_projection.inverse_workflow(source)
+        without_windows = windows_contract_projection.inverse_workflow(historical_caches)
+        plain = opt.inverse_infrastructure(linux_workspace_projection.inverse_workflow(without_windows))
         self.assertEqual(publication_projection.inverse_publication(plain).count('  publish-release:\n'), 1)
 
     def test_critical_command_removal_is_not_hidden_by_infrastructure_projection(self):

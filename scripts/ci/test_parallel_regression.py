@@ -123,7 +123,7 @@ class RegressionGateTests(unittest.TestCase):
             needs['ci-plan']['outputs'] = dict(level=level, critical_checks=critical,
                 comprehensive_checks=comprehensive, package_checks=comprehensive,
                 matrix=json.dumps({'include':rows[:count]}, separators=(',', ':')))
-            for job in ['linux','rust-1-88','nagi-package','nagi-regression']:
+            for job in ['linux','linux-workspace','rust-1-88','nagi-package','nagi-regression','windows-contracts']:
                 needs[job]['result'] = expected
             needs['critical']['result'] = 'success' if critical == 'true' else 'skipped'
             self.assertEqual(gate.errors(needs), [], level)

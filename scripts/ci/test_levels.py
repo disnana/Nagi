@@ -29,9 +29,11 @@ def needs(level='1', full='true', plan=None):
             'release-plan': {'result': 'success', 'outputs': plan},
             'critical': yes(selected['critical_checks'] == 'true'),
             'linux': yes(selected['comprehensive_checks'] == 'true'),
+            'linux-workspace': yes(selected['comprehensive_checks'] == 'true'),
             'rust-1-88': yes(selected['comprehensive_checks'] == 'true'),
             'nagi-package': yes(selected['package_checks'] == 'true'),
             'nagi-regression': yes(selected['package_checks'] == 'true'),
+            'windows-contracts': yes(selected['package_checks'] == 'true'),
             'sf08-browser': yes(full == 'true' or plan['package_nagi'] == 'true' or selected['comprehensive_checks'] == 'true'),
             'jetbrains': yes(plan['package_jetbrains'] == 'true'),
             'vscode-package': yes(plan['package_vscode'] == 'true')}
@@ -51,7 +53,7 @@ class LevelsTests(unittest.TestCase):
         self.assertEqual(website['package_checks'], 'false')
         website_needs = needs('1', full='false', plan=release())
         self.assertEqual(gate.errors(website_needs), [])
-        for name in ('critical', 'linux', 'rust-1-88', 'nagi-package', 'nagi-regression', 'sf08-browser'):
+        for name in ('critical', 'linux', 'linux-workspace', 'rust-1-88', 'nagi-package', 'nagi-regression', 'windows-contracts', 'sf08-browser'):
             self.assertEqual(website_needs[name]['result'], 'skipped', name)
 
         protected_paths = (
