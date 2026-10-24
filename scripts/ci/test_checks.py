@@ -163,7 +163,8 @@ class ChangeTests(unittest.TestCase):
     def test_jetbrains_workflow_and_compiler_check_inputs_require_both_checks(self):
         for path in (".github/workflows/ci.yml", "scripts/ci/changes.py", "scripts/ci/gate.py",
                      "scripts/ci/test_checks.py", "Cargo.toml", "Cargo.lock",
-                     "compiler/src/lib.rs", "runtime/src/lib.rs"):
+                     "compiler/src/lib.rs", "runtime/src/lib.rs",
+                     "runtime-core/Cargo.toml", "runtime-core/build.rs"):
             with self.subTest(path=path):
                 base = self.run_git("rev-parse", "HEAD")
                 self.write(path, "CI control-plane change\n")

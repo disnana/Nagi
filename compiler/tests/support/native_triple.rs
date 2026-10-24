@@ -268,7 +268,12 @@ impl Fixture {
             }
         }
     }
-    fn run_bounded(&self, command: &mut Command, label: &str, timeout: Duration) -> Output {
+    pub(crate) fn run_bounded(
+        &self,
+        command: &mut Command,
+        label: &str,
+        timeout: Duration,
+    ) -> Output {
         // ファイル捕捉で大量のcompiler診断によるpipe満杯を避ける。
         let stdout = self.0.join(format!("{label}.stdout"));
         let stderr = self.0.join(format!("{label}.stderr"));

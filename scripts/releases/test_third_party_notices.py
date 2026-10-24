@@ -31,7 +31,7 @@ class NoticeGraphFixture(unittest.TestCase):
         (self.workspace_root / "compiler").mkdir(parents=True)
         (self.workspace_root / "runtime").mkdir(parents=True)
         (self.workspace_root / "Cargo.toml").write_text(
-            '[workspace]\nmembers = ["compiler", "runtime"]\n'
+            '[workspace]\nmembers = ["compiler", "runtime", "runtime-core"]\n'
             '[workspace.package]\nversion = "0.1.0"\nedition = "2021"\nlicense = "MIT"\n',
             encoding="utf-8")
         (self.workspace_root / "compiler/Cargo.toml").write_text(
@@ -70,9 +70,18 @@ class NoticeGraphFixture(unittest.TestCase):
 
         self.lock_data = self.lock_bytes()
         self.metadata = self.metadata_fixture()
+        (self.workspace_root / "runtime-core").mkdir()
+        (self.workspace_root / "runtime-core/Cargo.toml").write_text(
+            '[package]\nname="nagi-runtime-core"\nversion="0.1.0"\nedition="2021"\n', encoding="utf-8")
+        core_id = f"path+file://{self.workspace_root / 'runtime-core'}#nagi-runtime-core@0.1.0"
+        self.metadata["packages"].append({"id": core_id, "name": "nagi-runtime-core", "version": "0.1.0", "source": None,
+                                         "manifest_path": str(self.workspace_root / "runtime-core/Cargo.toml"), "license": "MIT", "license_file": None})
+        self.metadata["workspace_members"].append(core_id)
+        self.metadata["resolve"]["nodes"].append({"id": core_id, "deps": []})
         self.graphs = {
             "nagic": [("nagic", "0.1.0"), ("compiler-dep", "1.0.0"), ("build-tool", "2.0.0")],
             "nagi-runtime": [("nagi-runtime", "0.1.0"), ("compiler-dep", "1.0.0"), ("runtime-dep", "3.0.0")],
+            "nagi-runtime-core": [("nagi-runtime-core", "0.1.0")],
         }
 
     def tearDown(self):
@@ -119,6 +128,7 @@ class NoticeGraphFixture(unittest.TestCase):
         rows = [
             ('nagic', '0.1.0', None, None),
             ('nagi-runtime', '0.1.0', None, None),
+            ('nagi-runtime-core', '0.1.0', None, None),
             ('compiler-dep', '1.0.0', REGISTRY, self.archive_checksums[("compiler-dep", "1.0.0")]),
             ('build-tool', '2.0.0', REGISTRY, self.archive_checksums[("build-tool", "2.0.0")]),
             ('runtime-dep', '3.0.0', REGISTRY, self.archive_checksums[("runtime-dep", "3.0.0")]),
@@ -175,6 +185,19 @@ class NoticeGraphFixture(unittest.TestCase):
 
 
 class ThirdPartyNoticeTests(NoticeGraphFixture):
+    def test_core_runtime_is_a_required_lock_bound_source_root(self):
+        graphs = copy.deepcopy(self.graphs)
+        graphs["nagi-runtime-core"].append(("runtime-dep", "3.0.0"))
+        payload = notices.build_notice_payload(
+            self.lock_data, self.metadata, graphs, TARGET, COMMIT, BINARY_SHA256)
+        manifest = notices.validate_notice_payload(payload, self.lock_data, TARGET, COMMIT, BINARY_SHA256)
+        core = next(row for row in manifest["scope"]["roots"] if row["package"] == "nagi-runtime-core")
+        self.assertEqual(core["distribution_role"], "nagi-runtime-source")
+        self.assertTrue(any(row["name"] == "runtime-dep" for row in core["registry_packages"]))
+        del graphs["nagi-runtime-core"]
+        with self.assertRaisesRegex(ValueError, "tree roots"):
+            notices.build_notice_payload(self.lock_data, self.metadata, graphs, TARGET, COMMIT, BINARY_SHA256)
+
     def test_cargo_tree_parser_accepts_workspace_paths_and_shared_rows(self):
         rows = notices.parse_cargo_tree(
             "nagi-runtime v0.1.11 (/workspace/nagi/runtime)\n"

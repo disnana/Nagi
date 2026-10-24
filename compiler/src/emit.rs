@@ -1678,6 +1678,7 @@ fn cargo_manifest(
     bin_name: &str,
     runtime: PathBuf,
     mut dependencies: std::collections::BTreeMap<String, crate::project::RustDependency>,
+    core_runtime: bool,
 ) -> Result<String, String> {
     #[derive(serde::Serialize)]
     struct Package<'a> {
@@ -1716,6 +1717,13 @@ fn cargo_manifest(
         "nagi-runtime".into(),
         crate::project::RustDependency::Detailed(crate::project::RustDependencyTable {
             path: Some(runtime),
+            package: core_runtime.then(|| "nagi-runtime-core".into()),
+            default_features: core_runtime.then_some(false),
+            features: if core_runtime {
+                vec!["core".into()]
+            } else {
+                Vec::new()
+            },
             ..Default::default()
         }),
     );
@@ -1880,6 +1888,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     crate::editor_stage_diag::mark(1);
     let project_manifest = options.manifest_path;
     let profile = options.profile;
+    let runtime_profile = options.runtime_profile;
     let mut build_stats = options.build_stats.then(crate::build_analysis::Stats::new);
     let mut build_report = serde_json::Value::Null;
     let cmd = options.command.as_str();
@@ -1915,6 +1924,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     #[cfg(nagi_editor_stage_diag)]
     crate::editor_stage_diag::mark(3);
     let mut p = std::mem::take(&mut sources.program);
+    let has_native_input = !options.native.is_empty();
     let native = options.native;
     let out = options.out;
     let cost = options.cost;
@@ -2004,6 +2014,13 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     p.classes = resolution.classes[..nc].to_vec();
     p.enums = resolution.enums[..ne].to_vec();
     p.functions = resolution.functions[..nf].to_vec();
+    // Resolve once before any projection so known runtime sources receive the
+    // same pre-lock and post-lock alias protection as explicit source inputs.
+    let runtime_root = if matches!(cmd, "build" | "run") {
+        Some(crate::installation::root()?)
+    } else {
+        None
+    };
     let write_output = map_options.is_none() && !(options.editor_input && cmd == "check");
     let mut inputs: Vec<_> = sources
         .files()
@@ -2011,6 +2028,11 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         .chain(rust_file.iter().cloned())
         .chain(project_manifest.iter().cloned())
         .chain(sql_schema.iter().cloned())
+        .chain(
+            runtime_root
+                .iter()
+                .flat_map(|root| crate::runtime_profile::known_inputs(&root.join("runtime"))),
+        )
         .chain(crate::output::assets(&resolution))
         .chain(crate::output::assets(&all))
         // These explicit roots are known; discovering arbitrary Rust/include or
@@ -2187,7 +2209,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let temporary_run = cmd == "run"
         && std::env::var_os("NAGI_RUN_RETENTION").is_some_and(|value| value == "latest");
     let binary = (|| -> Result<PathBuf, String> {
-    let root = crate::installation::root()?;
+    let root = runtime_root.as_ref().expect("build/run resolved runtime before projection");
     fs::create_dir_all(out.join("src")).map_err(|e| e.to_string())?;
     if p.functions.iter().any(|f| f.external) && rust_file.is_none() {
         return Err("extern関数のビルドには--rust FILE.rsが必要です".into());
@@ -2195,6 +2217,8 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let generated_directory = &output_lock.as_ref().expect("build owns output lock").directory;
     let _export_pins = crate::generation::preserve_exported_inputs(generated_directory, &inputs)?;
     let package = crate::generation::application_name(&path, generated_directory)?;
+    let runtime_selection = crate::runtime_profile::select(&checked, runtime_profile,
+        &root.join("runtime"), options.incremental, has_native_input, rust_file.is_some(), !rust_deps.is_empty());
     let fallback = if !options.incremental { Some("not_requested") }
         else if temporary_run { Some("managed_run") }
         else if rust_file.is_some() { Some("rust_adapter") }
@@ -2253,6 +2277,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         let previous = crate::build_analysis::previous(&generated_directory.join(".nagi/apps").join(&package));
         build_report = serde_json::json!({
             "schema_version":1, "profile":profile.as_str(),
+            "runtime":{"requested":runtime_profile.as_str(),"selected":runtime_selection.name(),"reason":runtime_selection.reason},
             "observed_change":crate::build_analysis::change(previous.as_ref(), &analysis),
             "semantic_sha256":analysis["semantic_sha256"], "rust_sha256":analysis["rust_sha256"],
             "native_reuse":"cargo_only", "checks":"full", "cargo_always_invoked":true
@@ -2275,8 +2300,9 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let mut compatibility_manifest = cargo_manifest(
         &package,
         &generation.bin,
-        relative_path(&root.join("runtime"), generated_directory),
+        relative_path(&root.join(if runtime_selection.core { "runtime-core" } else { "runtime" }), generated_directory),
         rust_deps.clone(),
+        runtime_selection.core,
     )?;
     if let Some(body) = &body { compatibility_manifest = with_generated_body(compatibility_manifest, body, generated_directory, false)?; }
     fs::write(out.join("Cargo.toml"), &compatibility_manifest).map_err(|e| e.to_string())?;
@@ -2284,8 +2310,9 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let mut manifest = cargo_manifest(
         &package,
         &generation.bin,
-        relative_path(&root.join("runtime"), &generation.staging),
+        relative_path(&root.join(if runtime_selection.core { "runtime-core" } else { "runtime" }), &generation.staging),
         rust_deps,
+        runtime_selection.core,
     )?;
     if let Some(body) = &body { manifest = with_generated_body(manifest, body, &generation.staging, true)?; }
     generation.write("Cargo.toml", manifest.as_bytes())?;

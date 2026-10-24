@@ -1,0 +1,31 @@
+[package]
+name = "nagi-runtime-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+# The implementation is shared with the complete runtime; no copied backend.
+[lib]
+path = "../runtime/src/lib.rs"
+
+[features]
+# Explicit compiler capability marker, also checked by Cargo.
+core = []
+
+[dependencies]
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_json = "1.0"
+rusqlite = { version = "0.40", features = ["bundled", "hooks"] }
+bumpalo = "3.20"
+futures-util = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["io-util", "test-util"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(nagi_runtime_core)", "cfg(nagi_auth_stage_diag)", "cfg(nagi_browser_login_diag)"] }

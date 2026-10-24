@@ -35,6 +35,7 @@ Options:
   --cost-report           Write an allocation/copy cost report
   --rust-diagnostics      Include generated Rust diagnostic details (build/run)
   --profile dev|release   Native build profile (default: release; build/run)
+  --runtime-profile full|auto  Runtime dependencies (default: full; build/run)
   --build-stats           Print build timings and Cargo reuse as JSON on stderr
   --incremental[=units]   Reuse body or bounded function units (build/run; --profile dev)
   --editor-input          Read editor buffers from stdin (check/symbols/assist)
@@ -142,6 +143,7 @@ pub struct Options {
     /// Include raw generated Rust details after a mapped Nagi diagnostic.
     pub rust_diagnostics: bool,
     pub profile: BuildProfile,
+    pub runtime_profile: RuntimeProfile,
     pub build_stats: bool,
     pub incremental: bool,
     pub(crate) incremental_units: bool,
@@ -153,6 +155,21 @@ pub struct Options {
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
     pub(crate) manifest_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RuntimeProfile {
+    #[default]
+    Full,
+    Auto,
+}
+impl RuntimeProfile {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Auto => "auto",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -493,6 +510,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut cost = false;
     let mut rust_diagnostics = false;
     let mut profile = None;
+    let mut runtime_profile = None;
     let mut build_stats = false;
     let mut incremental = false;
     let mut incremental_units = false;
@@ -505,13 +523,23 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         let option = &args[i];
         match option.as_str() {
             "--project" | "--native" | "--rust" | "--rust-dep" | "--out" | "--sql-schema"
-            | "--sql-dialect" | "--profile" => {
+            | "--sql-dialect" | "--profile" | "--runtime-profile" => {
                 i += 1;
                 let value = args
                     .get(i)
                     .filter(|v| !v.starts_with("--") && !v.is_empty())
                     .ok_or_else(|| format!("{option} requires a value"))?;
                 match option.as_str() {
+                    "--runtime-profile" => {
+                        let selected = match value.as_str() {
+                            "full" => RuntimeProfile::Full,
+                            "auto" => RuntimeProfile::Auto,
+                            _ => return Err("--runtime-profile requires full or auto".into()),
+                        };
+                        if runtime_profile.replace(selected).is_some() {
+                            return Err("--runtime-profile must be specified once".into());
+                        }
+                    }
                     "--profile" => {
                         let selected = match value.as_str() {
                             "dev" => BuildProfile::Dev,
@@ -593,6 +621,9 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     }
     if (profile.is_some() || build_stats) && !matches!(command.as_str(), "build" | "run") {
         return Err("--profile and --build-stats are supported only by build/run".into());
+    }
+    if runtime_profile.is_some() && !matches!(command.as_str(), "build" | "run") {
+        return Err("--runtime-profile is supported only by build/run".into());
     }
     if editor_serve && !editor_input {
         return Err("assist --serve requires --editor-input".into());
@@ -682,6 +713,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         cost,
         rust_diagnostics,
         profile: profile.unwrap_or_default(),
+        runtime_profile: runtime_profile.unwrap_or_default(),
         build_stats,
         incremental,
         incremental_units,
