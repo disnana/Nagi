@@ -14,6 +14,8 @@ nagic build --project my-app --profile release --build-stats
 
 `dev` はCargoの開発profile、`release` は既存の最適化profileを使います。依存runtimeの開発用コンパイルを再利用でき、最適化待ちを減らせます。整数の加減乗算などのoverflowは通常devでpanic、releaseでwrapします。既存の言語契約です。Cargo設定や環境でprofileを上書きした場合はその設定にも従います。本番性能の測定と配布はreleaseで行ってください。
 
+0.2.2向け開発ソースには、対応する小さなプログラムの依存を減らす[明示opt-inのruntime選択](runtime-profiles.md)を追加しています。公開0.2.1には未対応で、既定fullと完全検査は維持します。
+
 ## 生成本体の差分再利用
 
 ```sh

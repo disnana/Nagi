@@ -40,6 +40,8 @@ nagic run --project . --profile dev
 
 The default native profile is `release`; use `--profile dev` for the normal edit/run loop. For an explicit release build or pre-release validation, run `nagic build --project . --profile release` when needed; do not also run `nagic run` unless you need a separate execution, since `run` builds again. The published 0.2.1 CLI accepts `--profile dev|release` and `--build-stats` on `build` and `run`; `--incremental` or `--incremental=units` requires `build`/`run --profile dev` and is opt-in. See the [development build guide](../docs/en/development-builds.md) for limits.
 
+Unreleased 0.2.2 development sources also provide [opt-in runtime selection](../docs/en/runtime-profiles.md). Check `nagic build --help` before using `--runtime-profile auto`; do not pass it to published 0.2.1 or enable it automatically. Read the selected profile and fallback reason in build stats, keep full checks, and do not generalize Hello/Point measurements to HTTP/database apps.
+
 ## Tested starting points
 
 Run from the repository root. Inspect the selected sample's source and configuration before adapting it.
