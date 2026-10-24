@@ -1,6 +1,7 @@
 package com.disnana.nagi;
 
 import com.intellij.openapi.editor.Document;
+import com.intellij.openapi.editor.ex.MarkupModelEx;
 import com.intellij.openapi.editor.impl.DocumentMarkupModel;
 import com.intellij.openapi.editor.markup.HighlighterLayer;
 import com.intellij.openapi.editor.markup.HighlighterTargetArea;
@@ -31,13 +32,16 @@ final class NagiSemanticColorLayer {
             if (equal) return true;
         }
         if (previous == null && documents.size() >= NagiAssistProtocol.MAX_FILES) return false;
-        List<RangeHighlighter> replacement = new ArrayList<>();
+        List<RangeHighlighter> replacement = new ArrayList<>(paints.size());
         try {
-            var markup = DocumentMarkupModel.forDocument(document, file.getProject(), true);
+            var markup = (MarkupModelEx) DocumentMarkupModel.forDocument(document, file.getProject(), true);
             for (var paint : paints) {
                 com.intellij.openapi.progress.ProgressManager.checkCanceled();
-                replacement.add(markup.addRangeHighlighter(paint.attributes(), paint.range().getStartOffset(),
-                        paint.range().getEndOffset(), HighlighterLayer.ADDITIONAL_SYNTAX, HighlighterTargetArea.EXACT_RANGE));
+                // This callback precedes afterAdded notification. Own the
+                // registered range even if a listener throws before return.
+                markup.addRangeHighlighterAndChangeAttributes(paint.attributes(), paint.range().getStartOffset(),
+                        paint.range().getEndOffset(), HighlighterLayer.ADDITIONAL_SYNTAX,
+                        HighlighterTargetArea.EXACT_RANGE, false, replacement::add);
             }
             com.intellij.openapi.progress.ProgressManager.checkCanceled();
             if (!current.getAsBoolean()) {

@@ -20,6 +20,7 @@ PyCharm 2026.2.3（統合版PY、build `262.10968.92`）と、その[公式sourc
 - token境界へ挿入するだけでは破棄せず、非greedyなrangeの移動後に現文書の完全tokenを照合する。空白/Enterで同じtokenが残る場合は保持し、識別子の結合・分割・comment/string化や証明できない範囲は破棄する。従来の境界一律破棄からの変更は、未変更の名前の色を安定させる利用者要求に基づく内部表示契約の更新である。
 - IDEのTextAttributesKeyを使い、配色設定を尊重する。色の層が診断の強調表示を隠さない。既存の保持量の上限、取消と解析時間の制限を維持する。
 - 色層とmarker storeの置換がそろうまで旧状態を変更しない。途中の取消/準備例外では新しく準備した要素だけを破棄し、hard clear後に旧色を復活させない。presentation storeに保持するmarker上限20,000は維持し、置換準備中だけはstore用の旧集合と新集合の最大40,000を許す。表示用highlighterの一時style集合もprotocolの予算内に限定する。これはIDE全体のRangeMarker数やRSS上限を表す値ではない。
+- 新highlighterはSDKの`afterAdded`通知より前のcallbackで一時所有集合へ登録する。listenerが直接取消/例外を投げ、追加APIが戻らなかった場合も準備済みrangeを解放し、旧store/旧表示を維持する。
 
 Nagiのparse/type/ownership/Policy検査、compiler protocol、Cargo、実行profileには変更を加えない。色は部分的な編集支援であり、保持された色からプログラムの受理や型の鮮度を推定しない。
 
@@ -29,7 +30,9 @@ Nagiのparse/type/ownership/Policy検査、compiler protocol、Cargo、実行pro
 
 修正後、この実経路と通常の収集/適用間の状態遷移、未commit編集、明示的に完全な空index、hard invalidation、UTF-16、複数editor、scheme keyと診断layer、空白/Enterの境界保持と単語結合/comment/string化の拒否を確認した。さらに、置換準備中の取消・factory例外・hard clearの5失敗を追加して修正した。型・docs・診断・navigationの旧情報拒否も維持する。
 
-公開Nagi 0.2.1の実Pointでは、未完成call/quote/type errorの新responseによって、別位置の未変更Point色が消える3件もRED再現した。入力の不完全さと完全な空indexを区別する変更後は、実MarkupModelの色消失がなくなり、partial provided優先・未提供名保持・上限・取消を含む対象28件が成功した。空のprogramがacceptedかつ明示空indexを返すことも実応答で確認した。最終の全plugin 304件も、current sourceと同じcompilerを使ってfailure/error/skipなしで成功した。
+公開Nagi 0.2.1の実Pointでは、未完成call/quote/type errorの新responseによって、別位置の未変更Point色が消える3件もRED再現した。入力の不完全さと完全な空indexを区別する変更後は、実MarkupModelの色消失がなくなり、partial provided優先・未提供名保持・上限・取消を含む対象30件が成功した。空のprogramがacceptedかつ明示空indexを返すことも実応答で確認した。最終の全plugin 306件も、current sourceと同じcompilerを使ってfailure/error/skipなしで成功した。
+
+独立監査では、SDKの`afterAdded` listenerが直接PCEまたはRuntimeExceptionを投げると、追加APIの戻り値を後から所有集合へ入れる方式では登録済みrangeが残る問題を指摘された。両例外を実listenerから直接投げる2件でREDを確認し、通知前のcallback内で所有権を登録する方式へ変更した。各ケース専用のlistener寿命で、seed済み/未seedの両方について、元の例外の伝播・旧store/旧色の維持・新rangeの解放・hard clear後の残留なしを確認した。使用するkey付きAPIと通知順序はSDK251/262/263のsourceで確認し、実行検証はPY262で行った。
 
 全plugin tests、共通ZIP、Plugin Verifierと最新HEAD CIは別の完了条件とする。テスト件数だけで、表示の連続性を確認したとは扱わない。Run fixtureの最初の全体検査では、SaveBarrier退出をstartupの終端と誤って同一視した待機でPENDINGを読み失敗した。製品Runの処理とREJECTED/failure型/未起動のassertを維持し、既存5秒待機でterminalを明示確認する修正後、関連22件が成功した。原失敗は中間証拠として残した。
 
@@ -41,7 +44,7 @@ Nagiのparse/type/ownership/Policy検査、compiler protocol、Cargo、実行pro
 
 ## 未確認範囲
 
-固定した最終0.1.6 ZIP（327,188 bytes、SHA-256 `dd92eaadedbe2bdd64f68ff3acd2f0184154d27ba91775702e5eb25dafd855da`）はPY262 Plugin VerifierでCompatibleだった。deprecated API3件・experimental API4件の警告を保持し、warning-freeとは扱わない。置換途中取消・入力途中の追加前に成功した全体291/296件や初期ZIPは中間証拠であり、最終sourceの検査へ代用しない。headlessでの実IDE pipeline検証は、利用者のWindows GUIでの連続した描画確認とは区別する。PyCharm Pythonと同じ全言語機能や全入力状態を提供したという主張ではない。
+ローカルPY262/JDK25（Java21 bytecode）検証用に固定した0.1.6候補ZIP（327,317 bytes、SHA-256 `f3eda744902905792d48ec19e85952974aa2f65f5097e390103371b955025439`）はPY262 Plugin VerifierでCompatibleだった。deprecated API3件・experimental API4件の警告を保持し、warning-freeとは扱わない。このSHAはローカル検証用ZIPの識別であり、IC251/JDK21で作るCI共通ZIPの配布checksumとは分ける。公開候補の正本は最新HEADのCI artifactとそのchecksumで確認する。置換途中取消・入力途中・listener直接例外の追加前に成功した全体291/296/304件や旧ZIPは中間証拠であり、最終sourceの検査へ代用しない。headlessでの実IDE pipeline検証は、利用者のWindows GUIでの連続した描画確認とは区別する。PyCharm Pythonと同じ全言語機能や全入力状態を提供したという主張ではない。
 
 ## 公開前のゲート
 

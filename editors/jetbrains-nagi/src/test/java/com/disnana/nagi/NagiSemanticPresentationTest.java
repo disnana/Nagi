@@ -428,6 +428,63 @@ public final class NagiSemanticPresentationTest extends BasePlatformTestCase {
         assertNull(ownedRole(document, 0)); assertNull(ownedRole(document, 6));
     }
 
+    public void testDirectColorAddedListenerPceCannotLeakTemporaryOwnership() {
+        throwingColorAddedListener(new com.intellij.openapi.progress.ProcessCanceledException());
+    }
+
+    public void testDirectColorAddedListenerRuntimeFailureCannotLeakTemporaryOwnership() {
+        throwingColorAddedListener(new IllegalStateException("injected afterAdded failure"));
+    }
+
+    private void throwingColorAddedListener(RuntimeException injected) {
+        for (boolean seeded : new boolean[]{true, false}) {
+            var document = configure("alpha beta\n");
+            Object owner = new Object();
+            presentation.published(owner, document);
+            if (seeded) presentation.current(myFixture.getFile(), document, owner, List.of(color(1, 5)));
+            var original = ownedRole(document, 0);
+            if (seeded) assertNotNull(original);
+            var attempted = new java.util.concurrent.atomic.AtomicReference<com.intellij.openapi.editor.markup.RangeHighlighter>();
+            var markup = (com.intellij.openapi.editor.ex.MarkupModelEx) com.intellij.openapi.editor.impl.DocumentMarkupModel
+                    .forDocument(document, getProject(), true);
+            var listenerLifetime = com.intellij.openapi.util.Disposer.newDisposable("direct afterAdded failure case");
+            markup.addMarkupModelListener(listenerLifetime, new com.intellij.openapi.editor.impl.event.MarkupModelListener() {
+                @Override public void afterAdded(com.intellij.openapi.editor.ex.RangeHighlighterEx highlighter) {
+                    if (highlighter.getStartOffset() == 6) {
+                        attempted.set(highlighter);
+                        assertTrue("the SDK registers the range before invoking afterAdded", markup.containsHighlighter(highlighter));
+                        throw injected;
+                    }
+                }
+            });
+            try {
+                try {
+                    presentation.current(myFixture.getFile(), document, owner, List.of(color(7, 4)));
+                    fail("the listener's direct failure must propagate");
+                } catch (RuntimeException failure) { assertSame(injected, failure); }
+                assertNotNull("this iteration's listener must observe its own addition; seeded=" + seeded, attempted.get());
+                assertEquals(seeded ? 1 : 0, presentation.retainedRoleCount());
+                assertEquals(seeded ? 1 : 0, presentation.retained(myFixture.getFile(), document).size());
+                if (seeded) {
+                    assertTrue(original.isValid());
+                    assertSame("a failed replacement cannot remove the original color", original, ownedRole(document, 0));
+                }
+                assertFalse("a failure before addRangeHighlighter returns cannot orphan its registered range", attempted.get().isValid());
+                assertFalse(markup.containsHighlighter(attempted.get()));
+                assertNull(ownedRole(document, 6));
+                presentation.clear();
+                assertEquals(0, presentation.retainedRoleCount());
+                assertNull(ownedRole(document, 0)); assertNull(ownedRole(document, 6));
+                assertFalse(attempted.get().isValid());
+            } finally {
+                com.intellij.openapi.util.Disposer.dispose(listenerLifetime);
+                presentation.clear();
+                // Preserve fixture isolation even when the pre-fix leak assertion is RED.
+                if (attempted.get() != null && attempted.get().isValid()) attempted.get().dispose();
+            }
+        }
+    }
+
     public void testPartialPaintOverlaysNewRolesAndKeepsOnlyValidatedUncoveredColors() {
         var document = configure("alpha beta\n");
         Object owner = new Object();
