@@ -22,7 +22,7 @@ def errors(needs: dict) -> list[str]:
         failures.append("linux: missing or invalid check plan")
     else:
         expected = "success" if comprehensive == "true" else "skipped"
-        for job in ("linux", "rust-1-88"):
+        for job in ("linux", "linux-workspace", "rust-1-88"):
             actual = needs.get(job, {}).get("result", "missing")
             if actual != expected:
                 failures.append(f"{job}: {actual}, expected {expected}")

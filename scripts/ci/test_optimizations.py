@@ -5,6 +5,7 @@ from pathlib import Path
 import levels_projection
 import optimization_projection as opt
 import publication_projection
+import linux_workspace_projection
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -98,7 +99,7 @@ class OptimizationTests(unittest.TestCase):
         self.assertIn(opt.CRITICAL_SAVE_IF, critical)
         self.assertIn('key: nagi-critical-v1-', critical)
         self.assertNotIn('native-target', critical)
-        for name in ('linux', 'nagi-package', 'nagi-regression'):
+        for name in ('linux', 'linux-workspace', 'nagi-package', 'nagi-regression'):
             job = re.search(r'^  '+name+r':\n.*?(?=^  [a-z]|\Z)', source, re.M | re.S).group()
             self.assertNotIn('key: nagi-critical-v1-', job)
             self.assertIn(opt.SAVE_IF, job)
@@ -110,7 +111,7 @@ class OptimizationTests(unittest.TestCase):
                               ('python -B scripts/ci/publication_gate.py', 'echo bypass')):
             with self.subTest(change=after), self.assertRaises(ValueError):
                 levels_projection.inverse_workflow(source.replace(before, after, 1))
-        plain = opt.inverse_infrastructure(source)
+        plain = opt.inverse_infrastructure(linux_workspace_projection.inverse_workflow(source))
         self.assertEqual(publication_projection.inverse_publication(plain).count('  publish-release:\n'), 1)
 
     def test_critical_command_removal_is_not_hidden_by_infrastructure_projection(self):

@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MAIN_REF = "refs/heads/main"
 COMPONENTS = ("nagi", "vscode", "jetbrains")
 SHA = "a" * 40
-JOBS = ("ready", "ci-plan", "critical", "changes", "linux", "rust-1-88", "sf08-browser", "release-plan",
+JOBS = ("ready", "ci-plan", "critical", "changes", "linux", "linux-workspace", "rust-1-88", "sf08-browser", "release-plan",
         "jetbrains", "vscode-package", "nagi-package", "nagi-regression")
 ALLOWED_NAMES = {
     "github.event_name", "github.ref", "needs.changes.result",
@@ -204,6 +204,7 @@ def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None, cancelled=
     for job in ['linux','sf08-browser','jetbrains','vscode-package','nagi-package']:
         needs[job] = {'result':results.get(job,'success')}
     needs['rust-1-88'] = {'result':results.get('rust-1-88', results.get('linux','success'))}
+    needs['linux-workspace'] = {'result':results.get('linux-workspace', results.get('linux','success'))}
     needs['nagi-regression'] = {'result':results.get('nagi-regression',
         'skipped' if results.get('nagi-package') == 'skipped' else 'success')}
     return {'github': {'event_name':event, 'ref':ref}, 'needs':needs, 'cancelled':cancelled}

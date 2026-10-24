@@ -17,7 +17,7 @@ def valid(component="nagi"):
     needs["changes"]["outputs"] = {"full_checks": str(nagi).lower(), "jetbrains_checks": str(nagi or component == "jetbrains").lower()}
     needs["release-plan"]["outputs"] = plan
     needs["ci-plan"]["outputs"] = levels.expected("3", str(nagi).lower(), plan["package_nagi"])
-    for name in ("linux", "rust-1-88", "sf08-browser", "nagi-package", "nagi-regression"):
+    for name in ("linux", "linux-workspace", "rust-1-88", "sf08-browser", "nagi-package", "nagi-regression"):
         needs[name] = {"result": "success" if nagi else "skipped"}
     needs["critical"] = {"result": "skipped"}
     needs["jetbrains"] = {"result": "success" if nagi or component == "jetbrains" else "skipped"}

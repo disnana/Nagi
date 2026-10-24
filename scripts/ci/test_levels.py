@@ -29,6 +29,7 @@ def needs(level='1', full='true', plan=None):
             'release-plan': {'result': 'success', 'outputs': plan},
             'critical': yes(selected['critical_checks'] == 'true'),
             'linux': yes(selected['comprehensive_checks'] == 'true'),
+            'linux-workspace': yes(selected['comprehensive_checks'] == 'true'),
             'rust-1-88': yes(selected['comprehensive_checks'] == 'true'),
             'nagi-package': yes(selected['package_checks'] == 'true'),
             'nagi-regression': yes(selected['package_checks'] == 'true'),
@@ -51,7 +52,7 @@ class LevelsTests(unittest.TestCase):
         self.assertEqual(website['package_checks'], 'false')
         website_needs = needs('1', full='false', plan=release())
         self.assertEqual(gate.errors(website_needs), [])
-        for name in ('critical', 'linux', 'rust-1-88', 'nagi-package', 'nagi-regression', 'sf08-browser'):
+        for name in ('critical', 'linux', 'linux-workspace', 'rust-1-88', 'nagi-package', 'nagi-regression', 'sf08-browser'):
             self.assertEqual(website_needs[name]['result'], 'skipped', name)
 
         protected_paths = (

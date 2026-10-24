@@ -640,6 +640,7 @@ class GateTests(unittest.TestCase):
             "critical": {"result": "success" if selected["critical_checks"] == "true" else "skipped"},
             "changes": {"result": "success", "outputs": {"full_checks": full, "jetbrains_checks": jetbrains}},
             "linux": {"result": "success" if full == "true" else "skipped"},
+            "linux-workspace": {"result": "success" if full == "true" else "skipped"},
             "rust-1-88": {"result": "success" if full == "true" else "skipped"},
             "sf08-browser": {"result": "success" if full == "true" or package_nagi == "true" else "skipped"},
             "jetbrains": {"result": "success" if jetbrains == "true" or package_jetbrains == "true" else "skipped"},
