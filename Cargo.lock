@@ -959,6 +959,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nagi-runtime-core"
+version = "0.2.1"
+dependencies = [
+ "bumpalo",
+ "futures-util",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "nagic"
 version = "0.2.1"
 dependencies = [

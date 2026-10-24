@@ -4,6 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[package.metadata.nagi.runtime-profiles]
+schema = 1
+core-package = "nagi-runtime-core"
+core-path = "../runtime-core"
+core-feature = "core"
+
 # Keep generated application locks off Tokio 1.54.0 (timer UAF; upstream #8692).
 [dependencies]
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
@@ -51,4 +57,4 @@ windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Stor
 
 # The observer is a closed test-only cfg, not a public Cargo feature.
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(nagi_auth_stage_diag)", "cfg(nagi_browser_login_diag)"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(nagi_runtime_core)", "cfg(nagi_auth_stage_diag)", "cfg(nagi_browser_login_diag)"] }

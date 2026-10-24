@@ -22,6 +22,7 @@ mod output;
 pub mod parser;
 pub mod project;
 mod routes;
+mod runtime_profile;
 mod rust_names;
 pub mod source;
 mod sql_check;
