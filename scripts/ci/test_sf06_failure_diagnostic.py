@@ -20,7 +20,8 @@ from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
-SECRET = "DO_NOT_PUBLISH_COOKIE_BEARER_SECRET"
+# Public synthetic input for exclusion checks, never a credential.
+PUBLIC_FIXTURE_MARKER = "PUBLIC_DIAGNOSTIC_FIXTURE_MARKER"
 
 
 def guard_source(source):
@@ -58,54 +59,54 @@ class DiagnosticTests(unittest.TestCase):
     def test_failure_reports_only_known_ids_locations_and_codes(self):
         name = diag.INVENTORY["tests"]["runtime-http-client"][0]
         text = cargo_text(name) + (
-            f"test {SECRET} ... FAILED\nthread '{SECRET}' panicked at C:\\private\\runtime\\src\\http_client.rs:12:4:\n"
-            f"assertion left={SECRET}; Authorization: Bearer {SECRET}\nerror[E0308]: {SECRET}\n"
-            f"  process didn't exit successfully: `{SECRET}` (exit code: 0xc0000005, STATUS_ACCESS_VIOLATION)\n")
+            f"test {PUBLIC_FIXTURE_MARKER} ... FAILED\nthread '{PUBLIC_FIXTURE_MARKER}' panicked at C:\\private\\runtime\\src\\http_client.rs:12:4:\n"
+            f"assertion left={PUBLIC_FIXTURE_MARKER}; Authorization: Bearer {PUBLIC_FIXTURE_MARKER}\nerror[E0308]: {PUBLIC_FIXTURE_MARKER}\n"
+            f"  process didn't exit successfully: `{PUBLIC_FIXTURE_MARKER}` (exit code: 0xc0000005, STATUS_ACCESS_VIOLATION)\n")
         record = diag.analyze("runtime-http-client", 101, 1, text, "ok")
         self.assertEqual(record["failed_test_ids"], [name])
         self.assertEqual(record["panic_sources"], [{"file": "runtime/src/http_client.rs", "line": 12, "column": 4}])
         self.assertEqual(record["rust_error_codes"], ["E0308"])
         self.assertEqual(record["process_terminations"], ["windows_access_violation"])
         self.assertEqual(record["unknown_test_rows"], 1)
-        self.assertNotIn(SECRET, json.dumps(record))
+        self.assertNotIn(PUBLIC_FIXTURE_MARKER, json.dumps(record))
         self.assertNotIn("private", json.dumps(record))
 
     def test_unrecognized_or_out_of_range_panic_does_not_publish_text(self):
-        text = f"thread '{SECRET}' panicked at /host/{SECRET}.rs:1:1:\n{SECRET}\n"
+        text = f"thread '{PUBLIC_FIXTURE_MARKER}' panicked at /host/{PUBLIC_FIXTURE_MARKER}.rs:1:1:\n{PUBLIC_FIXTURE_MARKER}\n"
         text += "thread 'worker' panicked at runtime/src/http_client.rs:999999:1:\n"
         record = diag.analyze("runtime-http-client", 101, 1, text, "ok")
         self.assertEqual(record["panic_sources"], [])
         self.assertEqual(record["unknown_panics"], 2)
-        self.assertNotIn(SECRET, json.dumps(record))
+        self.assertNotIn(PUBLIC_FIXTURE_MARKER, json.dumps(record))
 
     def test_panic_location_accepts_optional_numeric_thread_id_and_crlf(self):
         expected = [{"file": "runtime/src/http_client.rs", "line": 12, "column": 4}]
         for suffix in ("", " (251248)", " (12345678901234567890)"):
             with self.subTest(suffix=suffix):
-                text = (f"thread '{SECRET}'{suffix} panicked at C:\\private\\runtime\\src\\http_client.rs:12:4:\r\n"
-                        f"assertion left={SECRET}; Cookie: {SECRET}\r\n")
+                text = (f"thread '{PUBLIC_FIXTURE_MARKER}'{suffix} panicked at C:\\private\\runtime\\src\\http_client.rs:12:4:\r\n"
+                        f"assertion left={PUBLIC_FIXTURE_MARKER}; Cookie: {PUBLIC_FIXTURE_MARKER}\r\n")
                 record = diag.analyze("runtime-http-client", 101, 1, text, "ok")
                 self.assertEqual(record["panic_sources"], expected)
                 self.assertEqual(record["unknown_panics"], 0)
                 encoded = json.dumps(record)
-                for private in (SECRET, "251248", "12345678901234567890", "private"):
+                for private in (PUBLIC_FIXTURE_MARKER, "251248", "12345678901234567890", "private"):
                     self.assertNotIn(private, encoded)
 
     def test_malformed_thread_id_does_not_publish_a_location_or_text(self):
         for suffix in (" ()", " (123456789012345678901)", " (12abc)",
-                       f" ({SECRET})", f" (12) {SECRET}", " (12\r\n34)"):
+                       f" ({PUBLIC_FIXTURE_MARKER})", f" (12) {PUBLIC_FIXTURE_MARKER}", " (12\r\n34)"):
             with self.subTest(suffix=suffix):
-                text = f"thread '{SECRET}'{suffix} panicked at runtime/src/http_client.rs:12:4:\r\n"
+                text = f"thread '{PUBLIC_FIXTURE_MARKER}'{suffix} panicked at runtime/src/http_client.rs:12:4:\r\n"
                 record = diag.analyze("runtime-http-client", 101, 1, text, "ok")
                 self.assertEqual(record["panic_sources"], [])
-                self.assertNotIn(SECRET, json.dumps(record))
+                self.assertNotIn(PUBLIC_FIXTURE_MARKER, json.dumps(record))
 
     def test_process_termination_is_a_closed_enum(self):
-        text = (f"  process didn't exit successfully: `{SECRET}` (signal: 9, SIGKILL: {SECRET})\n"
-                f"  process didn't exit successfully: `{SECRET}` (exit code: {SECRET})\n")
+        text = (f"  process didn't exit successfully: `{PUBLIC_FIXTURE_MARKER}` (signal: 9, SIGKILL: {PUBLIC_FIXTURE_MARKER})\n"
+                f"  process didn't exit successfully: `{PUBLIC_FIXTURE_MARKER}` (exit code: {PUBLIC_FIXTURE_MARKER})\n")
         record = diag.analyze("runtime-http-client", 101, 1, text, "ok")
         self.assertEqual(record["process_terminations"], ["unix_sigkill"])
-        self.assertNotIn(SECRET, json.dumps(record))
+        self.assertNotIn(PUBLIC_FIXTURE_MARKER, json.dumps(record))
 
     def test_publication_binds_only_a_new_completed_closed_file(self):
         record = diag.analyze("runtime-http-client", 101, 1, "", "ok")
@@ -113,7 +114,7 @@ class DiagnosticTests(unittest.TestCase):
             root = Path(directory)
             stale = root / "sf06-check-closed-stale"
             stale.mkdir()
-            (stale / "diagnostic.json").write_text(SECRET)
+            (stale / "diagnostic.json").write_text(PUBLIC_FIXTURE_MARKER)
             output = root / "output"
             with patch.dict(os.environ, GITHUB_OUTPUT=str(output)):
                 with patch.object(diag.tempfile, "mkdtemp", side_effect=OSError):
@@ -125,7 +126,7 @@ class DiagnosticTests(unittest.TestCase):
             self.assertEqual(end, "SF06_CLOSED_JSON")
             self.assertNotEqual(Path(path).parent, stale)
             self.assertEqual(json.loads(Path(path).read_text()), record)
-            self.assertEqual((stale / "diagnostic.json").read_text(), SECRET)
+            self.assertEqual((stale / "diagnostic.json").read_text(), PUBLIC_FIXTURE_MARKER)
             with patch.dict(os.environ, GITHUB_OUTPUT=""):
                 self.assertFalse(diag.publish(record, root))
 
@@ -144,7 +145,7 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(diag.analyze("runtime-http-client", 0, 1, cargo_text(), "ok")["parse_state"], "complete")
         for text in ("", cargo_text().replace("221 passed", "220 passed"), cargo_text() + cargo_text()):
             self.assertEqual(diag.analyze("runtime-http-client", 0, 1, text, "ok")["parse_state"], "incomplete")
-        self.assertEqual(diag.analyze(SECRET, 101, 1, SECRET, "ok")["suite"], "unknown")
+        self.assertEqual(diag.analyze(PUBLIC_FIXTURE_MARKER, 101, 1, PUBLIC_FIXTURE_MARKER, "ok")["suite"], "unknown")
 
 
 class WorkflowTests(unittest.TestCase):
@@ -185,22 +186,22 @@ class WorkflowTests(unittest.TestCase):
                 self.assertNotEqual(Path(path).parent, root)
                 record = json.loads(Path(path).read_text())
             self.assertEqual((root / "observed").read_text(), "False")
-            self.assertNotIn(SECRET, result.stdout + result.stderr + json.dumps(record))
+            self.assertNotIn(PUBLIC_FIXTURE_MARKER, result.stdout + result.stderr + json.dumps(record))
             return result, record
 
     def test_success_preserves_guard_pass_without_diagnostic(self):
-        result, record = self.invoke(cargo_text() + SECRET, 0)
+        result, record = self.invoke(cargo_text() + PUBLIC_FIXTURE_MARKER, 0)
         self.assertEqual(result.returncode, 0)
         self.assertIsNone(record)
 
     def test_cargo_failure_is_not_repaired_by_a_complete_log(self):
-        result, record = self.invoke(cargo_text() + SECRET, 101)
+        result, record = self.invoke(cargo_text() + PUBLIC_FIXTURE_MARKER, 101)
         self.assertEqual(result.returncode, 1)
         self.assertEqual((record["cargo_exit"], record["guard_exit"]), (101, 1))
 
     def test_actual_guard_status_is_returned_even_if_diagnostic_invocation_fails(self):
         for missing in (False, True):
-            result, record = self.invoke(SECRET, 101, diagnostic_missing=missing, guard_status=7)
+            result, record = self.invoke(PUBLIC_FIXTURE_MARKER, 101, diagnostic_missing=missing, guard_status=7)
             self.assertEqual(result.returncode, 7)
             if not missing:
                 self.assertEqual(record["guard_exit"], 7)
@@ -208,13 +209,13 @@ class WorkflowTests(unittest.TestCase):
     def test_nonzero_guard_and_closed_failure_survive_all_diagnostic_cases(self):
         failed = diag.INVENTORY["tests"]["runtime-http-client"][0]
         for text, remove, state in [(cargo_text(failed), False, "ok"),
-                                    (SECRET * (diag.LIMIT // len(SECRET) + 1), False, "oversize"),
-                                    (SECRET, True, "unreadable")]:
+                                    (PUBLIC_FIXTURE_MARKER * (diag.LIMIT // len(PUBLIC_FIXTURE_MARKER) + 1), False, "oversize"),
+                                    (PUBLIC_FIXTURE_MARKER, True, "unreadable")]:
             with self.subTest(state=state):
                 result, record = self.invoke(text, 101, remove=remove)
                 self.assertEqual(result.returncode, 1)
                 self.assertEqual(record["read_state"], state)
-        result, record = self.invoke(SECRET, 101, diagnostic_missing=True)
+        result, record = self.invoke(PUBLIC_FIXTURE_MARKER, 101, diagnostic_missing=True)
         self.assertEqual(result.returncode, 1)
         self.assertIsNone(record)
         self.assertIn("reason=invocation_error", result.stdout)
