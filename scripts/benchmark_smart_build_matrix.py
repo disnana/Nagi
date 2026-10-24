@@ -49,40 +49,54 @@ def reject_overrides(environment: dict[str, str]) -> None:
         raise ValueError("unset build/runtime overrides: " + ", ".join(rejected))
 
 
-def runtime_workspace_manifest(text: str) -> str:
+def runtime_workspace_manifest(text: str, members: tuple[str, ...] = ("runtime",)) -> str:
     """Change only workspace.members; reject any unreviewed TOML rewrite."""
     original = tomllib.loads(text)
-    if "runtime" not in original.get("workspace", {}).get("members", []):
-        raise ValueError("runtime root must explicitly contain the runtime workspace member")
+    if members not in (("runtime",), ("runtime", "runtime-core")) or any(
+            member not in original.get("workspace", {}).get("members", []) for member in members):
+        raise ValueError("runtime root must explicitly contain the selected runtime workspace members")
     if "default-members" in original["workspace"]:
         raise ValueError("runtime-copy default-members requires an explicit design")
     section = re.search(r"(?ms)^\[workspace\][ \t]*\n(.*?)(?=^\[|\Z)", text)
     if section is None:
         raise ValueError("cannot locate the runtime root workspace table")
-    body, count = re.subn(r"(?ms)^members[ \t]*=[ \t]*\[.*?\]", 'members = ["runtime"]',
+    body, count = re.subn(r"(?ms)^members[ \t]*=[ \t]*\[.*?\]", "members = " + json.dumps(list(members)),
                           section[1], count=1)
     if count != 1:
         raise ValueError("cannot rewrite runtime workspace members")
     result = text[:section.start(1)] + body + text[section.end(1):]
     expected = copy.deepcopy(original)
-    expected["workspace"]["members"] = ["runtime"]
+    expected["workspace"]["members"] = list(members)
     if tomllib.loads(result) != expected:
         raise ValueError("runtime-copy rewrite changed more than workspace.members")
     return result
 
 
+def validate_measurement_paths(source: Path, *paths: Path) -> None:
+    for path in paths:
+        if any(path.resolve().is_relative_to((source / member).resolve())
+               for member in ("runtime", "runtime-core")):
+            raise ValueError("measurement paths must stay outside the original runtime source trees")
+
+
 def copy_runtime(source: Path, destination: Path) -> dict:
-    runtime = source / "runtime"
+    validate_measurement_paths(source, destination)
+    core = source / "runtime-core"
+    members = ("runtime", "runtime-core") if core.exists() or core.is_symlink() else ("runtime",)
     # A source copy must not retain aliases to the developer's runtime.
-    if runtime.is_symlink() or any(path.is_symlink() for path in runtime.rglob("*")):
-        raise ValueError("runtime copy requires a plain source tree without symlinks")
+    for member in members:
+        tree = source / member
+        if (not tree.is_dir() or tree.is_symlink()
+                or any(path.is_symlink() for path in tree.rglob("*"))):
+            raise ValueError("runtime copy requires plain source trees without symlinks")
     destination.mkdir()
     manifest = (source / "Cargo.toml").read_text(encoding="utf-8")
-    rewritten = runtime_workspace_manifest(manifest)
+    rewritten = runtime_workspace_manifest(manifest, members)
     (destination / "Cargo.toml").write_text(rewritten, encoding="utf-8")
     shutil.copyfile(source / "Cargo.lock", destination / "Cargo.lock")
-    shutil.copytree(runtime, destination / "runtime",
-                    ignore=shutil.ignore_patterns("target", "native-target", "__pycache__", ".git"))
+    for member in members:
+        shutil.copytree(source / member, destination / member,
+                        ignore=shutil.ignore_patterns("target", "native-target", "__pycache__", ".git"))
     library = destination / "runtime/src/lib.rs"
     if MARKER in library.read_text(encoding="utf-8"):
         raise ValueError("runtime source already contains the benchmark marker")
@@ -90,10 +104,10 @@ def copy_runtime(source: Path, destination: Path) -> dict:
             "original_workspace_manifest_sha256": digest(source / "Cargo.toml"),
             "copied_workspace_manifest_sha256": digest(destination / "Cargo.toml"),
             "original_members": tomllib.loads(manifest)["workspace"]["members"],
-            "copied_members": ["runtime"], "workspace_change": "workspace.members only",
+            "copied_members": list(members), "workspace_change": "workspace.members only",
             "seed_lock_sha256": digest(destination / "Cargo.lock"),
             "source_library_sha256": digest(library),
-            "copied_runtime_bytes": size(destination / "runtime")}
+            "copied_runtime_bytes": sum(size(destination / member) for member in members)}
 
 
 @dataclass
@@ -184,7 +198,7 @@ def measure(command: list[str], cwd: Path, environment: dict[str, str], log: Pat
             "native": natives[0] if natives else None,
             "cargo_lock_parse_rejection_observed": "Cargo.lock" in text
             and bool(re.search(r"failed to parse lock file|TOML parse error", text, re.IGNORECASE)),
-            "runtime_compilation_observed": bool(re.search(r"Compiling nagi-runtime v", text))}
+            "runtime_compilation_observed": bool(re.search(r"Compiling nagi-runtime(?:-core)? v", text))}
 
 
 def execute(binary: Path, expected: str, project: Path, environment: dict[str, str], log: Path) -> dict:
@@ -433,10 +447,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.output.exists() or args.output.is_symlink():
         parser.error("output must be a new report path; existing files are never overwritten")
     compiler, runtime_source = args.compiler.resolve(strict=True), args.runtime_root.resolve(strict=True)
-    runtime_tree = runtime_source / "runtime"
-    if (args.work_dir.resolve().is_relative_to(runtime_tree)
-            or args.output.resolve().is_relative_to(runtime_tree)):
-        parser.error("work-dir and output must stay outside the original runtime tree")
+    try:
+        validate_measurement_paths(runtime_source, args.work_dir, args.output)
+    except ValueError as error:
+        parser.error(str(error))
     compiler_hash = digest(compiler)
     args.work_dir.mkdir(parents=True, exist_ok=True)
     capacity([args.work_dir, Path(tempfile.gettempdir())], int(args.min_free_gib * 1024 ** 3))

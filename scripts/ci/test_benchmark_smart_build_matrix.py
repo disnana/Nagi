@@ -88,6 +88,56 @@ class MatrixTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             matrix.main(["--compiler", "missing", "--work-dir", "w", "--output", "o", "--repeat", "2"])
 
+    def test_core_runtime_copy_preserves_the_shared_library_and_only_selected_members(self):
+        source = self.root / "source"
+        (source / "runtime/src").mkdir(parents=True)
+        (source / "runtime-core").mkdir()
+        (source / "Cargo.toml").write_text('[workspace]\nmembers=["compiler", "runtime", "runtime-core"]\n')
+        (source / "Cargo.lock").write_text("version=4\n")
+        (source / "runtime/Cargo.toml").write_text('[package]\nname="nagi-runtime"\n')
+        (source / "runtime/src/lib.rs").write_bytes(b"pub const VALUE: i64 = 7;\n")
+        core_manifest = '[package]\nname="nagi-runtime-core"\n[lib]\npath="../runtime/src/lib.rs"\n'
+        (source / "runtime-core/Cargo.toml").write_text(core_manifest)
+        (source / "runtime-core/build.rs").write_text('fn main() { println!("cargo:rustc-cfg=nagi_runtime_core"); }\n')
+        destination = self.root / "copy"
+        record = matrix.copy_runtime(source, destination)
+        self.assertEqual(record["copied_members"], ["runtime", "runtime-core"])
+        self.assertEqual((destination / "runtime-core/Cargo.toml").read_text(), core_manifest)
+        self.assertEqual((destination / "runtime-core/../runtime/src/lib.rs").read_bytes(), b"pub const VALUE: i64 = 7;\n")
+        (destination / "runtime/src/lib.rs").write_bytes(b"owned edit\n")
+        self.assertEqual((source / "runtime/src/lib.rs").read_bytes(), b"pub const VALUE: i64 = 7;\n")
+        for members in (("runtime", "compiler"), ("runtime-core",), ("runtime", "runtime-core", "extra")):
+            with self.subTest(members=members), self.assertRaises(ValueError):
+                matrix.runtime_workspace_manifest((source / "Cargo.toml").read_text(), members)
+
+    def test_core_runtime_alias_is_rejected_before_copy(self):
+        if not hasattr(os, "symlink"):
+            return
+        source = self.root / "source"
+        (source / "runtime/src").mkdir(parents=True)
+        outside = self.root / "outside"
+        outside.mkdir()
+        try:
+            (source / "runtime-core").symlink_to(outside, target_is_directory=True)
+        except OSError as error:
+            self.skipTest(f"symlink privilege unavailable: {error}")
+        with self.assertRaisesRegex(ValueError, "symlinks"):
+            matrix.copy_runtime(source, self.root / "copy")
+        self.assertFalse((self.root / "copy").exists())
+
+    def test_runtime_copies_cannot_recurse_into_either_original_tree(self):
+        source = self.root / "source"
+        (source / "runtime").mkdir(parents=True)
+        (source / "runtime-core").mkdir()
+        for name in ("runtime", "runtime-core"):
+            destination = source / name / "owned-looking-copy"
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "outside"):
+                matrix.copy_runtime(source, destination)
+            self.assertFalse(destination.exists())
+            with self.assertRaises(ValueError):
+                matrix.validate_measurement_paths(source, self.root / "safe", source / name / "report.json")
+        matrix.validate_measurement_paths(source, self.root / "safe-work", self.root / "safe-report.json")
+
     def test_corrupt_lock_rejection_restores_exact_bytes_before_recovery(self):
         out = self.out()
         observed = []
@@ -152,6 +202,12 @@ class MatrixTests(unittest.TestCase):
                        subprocess.CompletedProcess([], 0, b"42\n", b"warning")):
             with patch.object(matrix.subprocess, "run", return_value=result), self.assertRaises(RuntimeError):
                 matrix.execute(Path("unused"), "42\n", self.root, {}, self.root / "native.log")
+
+    def test_measure_recognizes_full_and_core_runtime_rebuilds(self):
+        for name, expected in (("nagi-runtime", True), ("nagi-runtime-core", True), ("nagi-runtime-other", False)):
+            result = matrix.measure([sys.executable, "-c", f"print('   Compiling {name} v0.2.1')"],
+                                    self.root, dict(os.environ), self.root / (name + ".log"))
+            self.assertEqual(result["runtime_compilation_observed"], expected)
 
     def test_prune_removes_only_completed_owned_target_and_preserves_outputs(self):
         folder = self.root / "trial-1-units"

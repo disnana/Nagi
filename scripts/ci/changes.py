@@ -24,7 +24,7 @@ JETBRAINS_CHECK_INPUTS = {
     ".github/workflows/ci.yml", "scripts/ci/changes.py", "scripts/ci/gate.py",
     "scripts/ci/test_checks.py", "Cargo.toml", "Cargo.lock",
 }
-JETBRAINS_CHECK_PREFIXES = ("compiler/", "runtime/")
+JETBRAINS_CHECK_PREFIXES = ("compiler/", "runtime/", "runtime-core/")
 
 
 def valid_path(path: str) -> bool:
