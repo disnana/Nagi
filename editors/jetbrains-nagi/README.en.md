@@ -10,7 +10,7 @@ The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release
 
 The custom gesture that reduces indentation on consecutive Enter presses has been removed. Repeated Enter keeps the current blank-line indentation. Manual Backspace and Shift+Tab, ordinary block indentation and delimiter continuation remain available. This change is not in the published 0.1.5 ZIP.
 
-Transient color loss during typing or Enter, reported after the 0.1.5 release, is being fixed and tested through the IDE's presentation-update path. The user has confirmed that hover documentation works.
+This candidate keeps colors for unchanged names through typing, Enter, and replacement or cancellation of background analysis. Spaces and Enter beside a name preserve its color when the complete token is unchanged. Unfinished expressions and calls keep those colors until complete analysis refreshes them. Edits that change a word or turn it into a comment or string are revalidated. Documentation, types, diagnostics and navigation retain their current-snapshot requirements. The user has confirmed that hover documentation works. See the [design and validation scope](../../docs/internal/jetbrains-semantic-presentation.md).
 
 ## 0.1.5: final-blank-line colors and source facts
 
@@ -63,7 +63,7 @@ This section describes 0.1.3 features and their limits, separately from 0.1.2. I
 
 | Plugin | Compiler | Supported behavior |
 |---|---|---|
-| 0.1.6 candidate (unreleased) | Public Nagi 0.2.1 | Removes the custom repeated-Enter exit gesture; typing-time color retention is under validation |
+| 0.1.6 candidate (unreleased) | Public Nagi 0.2.1 | Improves typing-time color retention and removes the custom repeated-Enter exit gesture |
 | 0.1.5 | Verified with public Nagi 0.2.1 | Inherits 0.1.4 and recovers missing symbol facts at a final blank line |
 | 0.1.4 | Public Nagi 0.2.0 | Inherits 0.1.3 and improves documentation, initial-analysis waits, color retention and editing assistance |
 | Published 0.1.2 | Public Nagi 0.2.0 / 0.1.11 | Manual Check/Run and basic editing; no semantic assistance, standard Run Configuration, or generation cleanup in 0.1.2 |
