@@ -406,6 +406,7 @@ jobs:
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
       - name: Check SF07 charged native wire checkpoint
+        id: sf07_checkpoint
         shell: bash
         run: |
           set -euo pipefail
@@ -416,6 +417,7 @@ jobs:
           fi
           export NAGI_TEST_BASH
           python -B scripts/tests/test_sf07_owned_state_summary.py
+          python -B scripts/tests/test_sf07_prelogin_owner_diagnostic.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
           cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
@@ -428,6 +430,20 @@ jobs:
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send
+      - name: Capture bounded SF07 prelogin owner stages after checkpoint failure
+        id: sf07_prelogin_owner_diag
+        if: failure() && steps.sf07_checkpoint.outcome == 'failure' && !cancelled()
+        shell: bash
+        run: |
+          python -B scripts/ci/sf07_prelogin_owner_diagnostic.py "$RUNNER_TEMP/sf07-prelogin-owner"
+      - name: Preserve bounded SF07 prelogin owner stages
+        if: always() && steps.sf07_checkpoint.outcome == 'failure' && steps.sf07_prelogin_owner_diag.outputs.sanitized == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: sf07-prelogin-owner-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/sf07-prelogin-owner/auth-stage-prelogin.trace
+          if-no-files-found: ignore
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -461,24 +477,30 @@ jobs:
         shell: bash
         run: |
           set -e
+          python -B scripts/tests/test_auth_stage_join.py
           python scripts/tests/test_auth_stage_diagnostic.py
           set +e
-          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2>&1
+          join_failed=0
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2> "$RUNNER_TEMP/auth-stage-csrf.stderr.raw"
           csrf_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2>&1
+          python -B scripts/ci/auth_stage_join.py "$RUNNER_TEMP" csrf || join_failed=1
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2> "$RUNNER_TEMP/auth-stage-prelogin.stderr.raw"
           prelogin_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
+          python -B scripts/ci/auth_stage_join.py "$RUNNER_TEMP" prelogin || join_failed=1
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2> "$RUNNER_TEMP/auth-stage-broad.stderr.raw"
           broad_rc=$?
+          python -B scripts/ci/auth_stage_join.py "$RUNNER_TEMP" broad || join_failed=1
           python -B scripts/tests/test_browser_login_stage_coverage.py
           stage_unit_rc=$?
           python -B scripts/ci/browser_login_stage_coverage.py "$RUNNER_TEMP/auth-stage-broad.raw" "$broad_rc" "$RUNNER_TEMP/auth-stage-browser-native.json"
           stage_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2> "$RUNNER_TEMP/auth-stage-cases.stderr.raw"
           cases_rc=$?
+          python -B scripts/ci/auth_stage_join.py "$RUNNER_TEMP" cases || join_failed=1
           python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc" "$cases_rc"
           sanitize_rc=$?
-          if [ "$stage_unit_rc" -ne 0 ] || [ "$stage_rc" -ne 0 ]; then sanitize_rc=1; fi
-          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw"
+          if [ "$stage_unit_rc" -ne 0 ] || [ "$stage_rc" -ne 0 ] || [ "$join_failed" -ne 0 ]; then sanitize_rc=1; fi
+          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw" "$RUNNER_TEMP/auth-stage-csrf.stderr.raw" "$RUNNER_TEMP/auth-stage-prelogin.stderr.raw" "$RUNNER_TEMP/auth-stage-broad.stderr.raw" "$RUNNER_TEMP/auth-stage-cases.stderr.raw"
           exit "$sanitize_rc"
       - name: Preserve bounded Session auth-stage traces
         if: always()
@@ -1691,6 +1713,7 @@ jobs:
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
       - name: Check SF07 charged native wire checkpoint
+        id: sf07_checkpoint
         shell: bash
         run: |
           set -euo pipefail
@@ -1701,6 +1724,7 @@ jobs:
           fi
           export NAGI_TEST_BASH
           python -B scripts/tests/test_sf07_owned_state_summary.py
+          python -B scripts/tests/test_sf07_prelogin_owner_diagnostic.py
           cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
           cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
           cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
@@ -1713,6 +1737,20 @@ jobs:
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners
           CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send
+      - name: Capture bounded SF07 prelogin owner stages after checkpoint failure
+        id: sf07_prelogin_owner_diag
+        if: failure() && steps.sf07_checkpoint.outcome == 'failure' && !cancelled()
+        shell: bash
+        run: |
+          python -B scripts/ci/sf07_prelogin_owner_diagnostic.py "$RUNNER_TEMP/sf07-prelogin-owner"
+      - name: Preserve bounded SF07 prelogin owner stages
+        if: always() && steps.sf07_checkpoint.outcome == 'failure' && steps.sf07_prelogin_owner_diag.outputs.sanitized == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: sf07-prelogin-owner-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/sf07-prelogin-owner/auth-stage-prelogin.trace
+          if-no-files-found: ignore
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -1778,24 +1816,30 @@ jobs:
             fi
             export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
           fi
+          python -B scripts/tests/test_auth_stage_join.py
           python scripts/tests/test_auth_stage_diagnostic.py
           set +e
-          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2>&1
+          join_failed=0
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-csrf.raw" 2> "$RUNNER_TEMP/auth-stage-csrf.stderr.raw"
           csrf_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2>&1
+          python -B scripts/ci/auth_stage_join.py "$RUNNER_TEMP" csrf || join_failed=1
+          RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::consumed_bearer_identity_can_issue_session_without_replacing_original_ceiling -- --exact --nocapture > "$RUNNER_TEMP/auth-stage-prelogin.raw" 2> "$RUNNER_TEMP/auth-stage-prelogin.stderr.raw"
           prelogin_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2>&1
+          python -B scripts/ci/auth_stage_join.py "$RUNNER_TEMP" prelogin || join_failed=1
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --nocapture > "$RUNNER_TEMP/auth-stage-broad.raw" 2> "$RUNNER_TEMP/auth-stage-broad.stderr.raw"
           broad_rc=$?
+          python -B scripts/ci/auth_stage_join.py "$RUNNER_TEMP" broad || join_failed=1
           python -B scripts/tests/test_browser_login_stage_coverage.py
           stage_unit_rc=$?
           python -B scripts/ci/browser_login_stage_coverage.py "$RUNNER_TEMP/auth-stage-broad.raw" "$broad_rc" "$RUNNER_TEMP/auth-stage-browser-native.json"
           stage_rc=$?
-          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2>&1
+          RUSTFLAGS='--cfg nagi_auth_stage_diag --cfg nagi_browser_login_diag' cargo test --locked -p nagi-runtime --lib -- --list > "$RUNNER_TEMP/auth-stage-cases.raw" 2> "$RUNNER_TEMP/auth-stage-cases.stderr.raw"
           cases_rc=$?
+          python -B scripts/ci/auth_stage_join.py "$RUNNER_TEMP" cases || join_failed=1
           python scripts/ci/auth_stage_diagnostic.py "$RUNNER_TEMP" "$csrf_rc" "$prelogin_rc" "$broad_rc" "$cases_rc"
           sanitize_rc=$?
-          if [ "$stage_unit_rc" -ne 0 ] || [ "$stage_rc" -ne 0 ]; then sanitize_rc=1; fi
-          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw"
+          if [ "$stage_unit_rc" -ne 0 ] || [ "$stage_rc" -ne 0 ] || [ "$join_failed" -ne 0 ]; then sanitize_rc=1; fi
+          rm -f "$RUNNER_TEMP/auth-stage-csrf.raw" "$RUNNER_TEMP/auth-stage-prelogin.raw" "$RUNNER_TEMP/auth-stage-broad.raw" "$RUNNER_TEMP/auth-stage-cases.raw" "$RUNNER_TEMP/auth-stage-csrf.stderr.raw" "$RUNNER_TEMP/auth-stage-prelogin.stderr.raw" "$RUNNER_TEMP/auth-stage-broad.stderr.raw" "$RUNNER_TEMP/auth-stage-cases.stderr.raw"
           exit "$sanitize_rc"
       - name: Preserve bounded Session auth-stage traces
         if: always()

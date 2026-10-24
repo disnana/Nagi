@@ -38,6 +38,43 @@ def needs(level='1', full='true', plan=None):
 
 
 class LevelsTests(unittest.TestCase):
+    def test_root_website_tests_keep_pages_coverage_and_escalate_mixed_core_changes(self):
+        pages = (ROOT / '.github/workflows/pages.yml').read_text()
+        self.assertIn('on:\n  pull_request:\n  push:', pages)
+        self.assertIn('python -m pip install -r website/requirements.txt', pages)
+        self.assertIn("python -m unittest discover -s website -p 'test_*.py'", pages)
+
+        website = levels.select('pull_request', ['website/test_discovery.py'], 'false', release())
+        self.assertEqual(website['level'], '1')
+        self.assertEqual(website['critical_checks'], 'false')
+        self.assertEqual(website['comprehensive_checks'], 'false')
+        self.assertEqual(website['package_checks'], 'false')
+        website_needs = needs('1', full='false', plan=release())
+        self.assertEqual(gate.errors(website_needs), [])
+        for name in ('critical', 'linux', 'rust-1-88', 'nagi-package', 'nagi-regression', 'sf08-browser'):
+            self.assertEqual(website_needs[name]['result'], 'skipped', name)
+
+        protected_paths = (
+            'compiler/src/check/security.rs',
+            'runtime/src/auth/session.rs',
+            'runtime/src/http_server.rs',
+            'Cargo.lock',
+        )
+        for path in protected_paths:
+            with self.subTest(path=path):
+                mixed = levels.select(
+                    'pull_request', ['website/test_discovery.py', path], 'true', release())
+                self.assertEqual(mixed['level'], '2')
+                self.assertEqual(mixed['comprehensive_checks'], 'true')
+                self.assertEqual(mixed['package_checks'], 'true')
+                self.assertEqual(len(json.loads(mixed['matrix'])['include']), 3)
+
+                mixed_needs = needs('2', full='true', plan=release())
+                self.assertEqual(gate.errors(mixed_needs), [])
+                broken = copy.deepcopy(mixed_needs)
+                broken['nagi-package']['result'] = 'skipped'
+                self.assertTrue(gate.errors(broken))
+
     def test_recognized_pr_critical_and_unknown_security_dependency_escalation(self):
         for path in ['compiler/src/lexer.rs', 'compiler/src/parser.rs', 'compiler/tests/enum_parser.rs']:
             value = levels.select('pull_request', [path], 'true', release(package_nagi='true'))

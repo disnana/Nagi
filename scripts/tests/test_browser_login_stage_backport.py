@@ -482,7 +482,9 @@ class BackportSourceTests(unittest.TestCase):
         self.assertEqual(workflow.count(package_gate), 1)
         for line in (*projection.CI_SOURCE_GUARD_LINES, projection.CI_BROWSER_SOURCE_LINE):
             self.assertEqual(workflow.count(line), 1)
-        self.assertEqual(workflow.count(projection.CI_SF07_STEP_ANCHOR), 2)
+        identified_sf07 = projection.CI_SF07_STEP_ANCHOR.replace(
+            '        shell: bash\n', projection.PRELOGIN_OWNER_PRIMARY_ID + '        shell: bash\n', 1)
+        self.assertEqual(workflow.count(identified_sf07), 2)
         self.assertEqual(workflow.count(projection.CI_BROWSER_STEP_ANCHOR), 2)
         self.assertEqual(workflow.count('          python -B scripts/tests/test_sf07_owned_state_summary.py\n'), 2)
         self.assertEqual(
