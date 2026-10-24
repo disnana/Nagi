@@ -22,16 +22,16 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase;
 public class NagiPythonEditingTest extends BasePlatformTestCase {
     private void enter() { myFixture.performEditorAction(IdeActions.ACTION_EDITOR_ENTER); }
 
-    public void testRepeatedEnterExitsOneNestedBlockAtATime() {
+    public void testRepeatedEnterKeepsTheCurrentNestedBlockIndent() {
         myFixture.configureByText("main.nagi", "def main():\n    if ready:\n        print(1)<caret>");
         enter();
         myFixture.checkResult("def main():\n    if ready:\n        print(1)\n        <caret>");
         enter();
-        myFixture.checkResult("def main():\n    if ready:\n        print(1)\n        \n    <caret>");
+        myFixture.checkResult("def main():\n    if ready:\n        print(1)\n        \n        <caret>");
         enter();
-        myFixture.checkResult("def main():\n    if ready:\n        print(1)\n        \n    \n<caret>");
+        myFixture.checkResult("def main():\n    if ready:\n        print(1)\n        \n        \n        <caret>");
         enter();
-        assertEquals(0, myFixture.getEditor().getCaretModel().getLogicalPosition().column);
+        assertEquals(8, myFixture.getEditor().getCaretModel().getLogicalPosition().column);
     }
 
     public void testManualBackspaceDedentIsNotUndoneOrRepeated() {
@@ -73,12 +73,12 @@ public class NagiPythonEditingTest extends BasePlatformTestCase {
         myFixture.checkResult("def main():\n    \n    <caret>");
     }
 
-    public void testIncreasingSequenceStartingAtZeroSupportsTwoEnters() {
+    public void testIncreasingSequenceStartingAtZeroKeepsIndentOnRepeatedEnter() {
         myFixture.configureByText("main.nagi", "def main():<caret>");
         maskSequence(true);
         enter();
         enter();
-        myFixture.checkResult("def main():\n    \n<caret>");
+        myFixture.checkResult("def main():\n    \n    <caret>");
     }
 
     /** Keep real platform actions/document edits; mask only our delegate's sequence capability. */
@@ -164,7 +164,7 @@ public class NagiPythonEditingTest extends BasePlatformTestCase {
         }
     }
 
-    public void testTwoSpaceStyleUsesOneConfiguredStep() {
+    public void testTwoSpaceStyleKeepsNestedIndentOnRepeatedEnter() {
         var settings = CodeStyle.getSettings(getProject()).clone();
         settings.getLanguageIndentOptions(NagiLanguage.HIGH).INDENT_SIZE = 2;
         var previous = CodeStyleSettingsManager.getInstance(getProject()).getTemporarySettings();
@@ -173,7 +173,7 @@ public class NagiPythonEditingTest extends BasePlatformTestCase {
             myFixture.configureByText("main.nagi", "def main():\n  if ready:\n    print(1)<caret>");
             enter();
             enter();
-            assertEquals(2, myFixture.getEditor().getCaretModel().getLogicalPosition().column);
+            assertEquals(4, myFixture.getEditor().getCaretModel().getLogicalPosition().column);
         } finally {
             if (previous == null) CodeStyle.dropTemporarySettings(getProject());
             else CodeStyle.setTemporarySettings(getProject(), previous);

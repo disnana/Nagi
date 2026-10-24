@@ -150,6 +150,78 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
         assertTrue(java.util.Arrays.stream(variants).anyMatch(item -> item.getLookupString().equals("y")));
         assertTrue(FileDocumentManager.getInstance().isDocumentUnsaved(document));
     }
+    public void testPointColorSurvivesAnUnclosedCallResponse() throws Exception { incompletePoint("print(p.x + p.y", false); }
+    public void testPointColorSurvivesAnUnclosedQuoteResponse() throws Exception { incompletePoint("print(\"", false); }
+    public void testPointColorSurvivesATypeErrorResponse() throws Exception { incompletePoint("print(p.x + \"bad\")", false); }
+    public void testPointColorSurvivesACheckedPartialMemberResponse() throws Exception { incompletePoint("print(p.)", true); }
+
+    /** Current diagnostics/facts change; an untouched class color must never have an empty interval. */
+    private void incompletePoint(String incomplete, boolean memberQuery) throws Exception {
+        String text = "# 固定型の値 😀\nclass Point:\n    x: f64\n    y: f64\n\ndef main():\n"
+                + "    p = Point(x=1.5, y=2.5)\n    print(p.x + p.y)\n";
+        open("incomplete Point.nagi", text);
+        var file = myFixture.getFile();
+        var editor = myFixture.getEditor();
+        var document = editor.getDocument();
+        editor.getCaretModel().moveToOffset(text.length());
+        var service = getProject().getService(NagiAssistService.class);
+        service.requestBaseline(file, editor);
+        waitFor(() -> service.fresh(file, editor) != null);
+        var original = service.fresh(file, editor);
+        assertTrue(original.response().frontendAccepted());
+        assertTrue(original.response().hasSymbolIndex());
+        myFixture.doHighlighting();
+        int declaration = text.indexOf("Point");
+        var markup = (com.intellij.openapi.editor.ex.MarkupModelEx) com.intellij.openapi.editor.impl.DocumentMarkupModel
+                .forDocument(document, getProject(), true);
+        java.util.function.Predicate<com.intellij.openapi.editor.markup.RangeHighlighter> classRole = highlighter ->
+                highlighter.isValid() && highlighter.getStartOffset() == declaration
+                        && highlighter.getEndOffset() == declaration + 5
+                        && highlighter.getTextAttributesKey() == com.intellij.openapi.editor.DefaultLanguageHighlighterColors.CLASS_NAME;
+        assertTrue(java.util.Arrays.stream(markup.getAllHighlighters()).anyMatch(classRole));
+        var observing = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var gap = new java.util.concurrent.atomic.AtomicBoolean();
+        markup.addMarkupModelListener(getTestRootDisposable(), new com.intellij.openapi.editor.impl.event.MarkupModelListener() {
+            @Override public void beforeRemoved(com.intellij.openapi.editor.ex.RangeHighlighterEx removed) {
+                if (observing.get() && classRole.test(removed) && java.util.Arrays.stream(markup.getAllHighlighters())
+                        .noneMatch(other -> other != removed && classRole.test(other))) gap.set(true);
+            }
+        });
+        try {
+            int start = text.indexOf("print(p.x + p.y)");
+            WriteCommandAction.runWriteCommandAction(getProject(), () -> document.replaceString(
+                    start, start + "print(p.x + p.y)".length(), incomplete));
+            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+            assertNull(service.fresh(file));
+            assertFalse(service.isCurrent(file, original));
+            assertNull("old checked signatures are unavailable during the edit", service.documentedDefinition(
+                    file, file.findElementAt(declaration)));
+            editor.getCaretModel().moveToOffset(memberQuery ? document.getText().lastIndexOf("p.") + 2 : document.getTextLength());
+            service.requestBaseline(file, editor);
+            waitFor(() -> service.fresh(file, editor) != null);
+            var current = service.fresh(file, editor);
+            assertFalse(current.response().frontendAccepted());
+            assertFalse(current.response().diagnostics().isEmpty());
+            if (memberQuery) {
+                assertEquals("editor-partial", current.response().semanticStatus());
+                assertTrue(current.response().hasSymbolIndex());
+            } else if (incomplete.contains("bad")) {
+                assertTrue(current.response().frontendChecked());
+                assertTrue(current.response().hasSymbolIndex());
+            } else {
+                assertFalse(current.response().frontendChecked());
+                assertFalse(current.response().hasSymbolIndex());
+            }
+            assertFalse(service.isCurrent(file, original));
+            assertTrue(service.semanticColors(file, original).isEmpty());
+            if (!current.response().semanticStatus().equals("editor-partial"))
+                assertNull("retained colors never supply a signature", service.documentedDefinition(file, file.findElementAt(declaration)));
+            myFixture.doHighlighting();
+            assertFalse("normal incomplete input must not remove the last untouched class color", gap.get());
+            assertTrue(java.util.Arrays.stream(markup.getAllHighlighters()).anyMatch(classRole));
+        } finally { observing.set(false); }
+    }
+
     public void testRegisteredReferencesNavigateHighLowAndImportedFiles() throws Exception {
         for (boolean low : new boolean[]{false, true}) {
             String name = low ? "main.low" : "main.nagi";

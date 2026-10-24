@@ -35,6 +35,15 @@
 - Bundle standard-library-only Python CI-generation and receipt-verification tools. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.
 - Document the existing security API guarantees, unsupported transports and staged build roadmap, with measured application build results and their limits. Previously distributed 0.2.0 binaries remain unchanged. Function-unit partitioning improved unchanged rebuilds in the measured fixture but slowed edited cases, so it remains opt-in; see the [measurements](benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md).
 
+## JetBrains 0.1.6
+
+- 入力・改行・解析パスの差し替えや取消で、未変更tokenの意味色が一瞬消える経路を修正。表示色を診断の注釈から分離し、同じ完全tokenの色を新しい描画まで保持します。編集後の字句照合・完全な新indexの空表示・hard invalidationと保持上限を維持し、型・説明・診断・定義移動は現在のsnapshotだけを使います。
+- keep unchanged semantic colors visible through typing, Enter, and rejected or coalesced analysis passes. Own the visual highlighters separately from diagnostics, revalidate complete tokens after edits, and replace colors from complete current results, including empty results. Preserve invalidation, storage limits, theme keys and current-snapshot requirements for types, documentation, diagnostics and navigation.
+- 連続Enterで空行の字下げを1段戻す独自動作を撤去。空行の字下げを維持し、手動Backspace・undo/redo・括弧内・Low・設定幅の動作を保ちます。公開済み0.1.5のZIPは変更しません。
+- remove the custom consecutive-Enter block-exit gesture. Keep the current blank-line indentation while preserving manual Backspace, undo/redo, delimiter continuations, Low braces and configured indent widths. Published 0.1.5 assets remain unchanged.
+- 入力途中の式・call・文字列や型エラーでは、字句確認できる未変更名の色だけを維持し、現在のpartial情報を優先します。旧型・説明・診断・参照は再利用しません。
+- Retain only lexical-checked visual styles while input is incomplete, prioritizing provided current partial colors. Keep the plugin ID, common ZIP, Java 21 bytecode and supported IDE minimum. The compiler remains a separate installation; this plugin release does not publish Nagi 0.2.2.
+
 ## JetBrains 0.1.5 — 2026-10-24
 
 - 正常なHigh/Lowソースの末尾で改行した際、公開Nagi 0.2.1のカーソル回復解析がシンボル情報を欠落させても、同じ未保存スナップショットから情報を取り直し、色付け・ホバー説明・定義移動を維持します。`Point`の名前付きコンストラクターと末尾の字下げなし空行を含むケースを検証しています。公開済みplugin 0.1.4にはこの修正は含まれません。

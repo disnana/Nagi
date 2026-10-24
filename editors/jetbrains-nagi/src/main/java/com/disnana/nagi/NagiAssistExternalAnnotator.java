@@ -1,6 +1,5 @@
 package com.disnana.nagi;
 
-import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
 import com.intellij.lang.annotation.AnnotationHolder;
 import com.intellij.lang.annotation.ExternalAnnotator;
 import com.intellij.lang.annotation.HighlightSeverity;
@@ -10,7 +9,6 @@ import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiFile;
-import java.util.List;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -53,11 +51,13 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
         if (result == null || result.file() != file || !file.isValid()) return;
         Document document = PsiDocumentManager.getInstance(file.getProject()).getDocument(file);
         if (document == null) return;
+        // Color ownership is independent of this captured diagnostic pass.
+        // Its cancellation/rejection may replace annotations with an empty set.
+        result.service().rolePresentation(file, document, result.service().fresh(file));
         if (result.response() == null) {
             if (document.getModificationStamp() != result.documentStamp()
                     || result.service().state() != result.state()
                     || !result.service().statusMessage().equals(result.message())) return;
-            paintRoles(result.service().rolePresentation(file, document, null), holder);
             if (shouldRenderFileLevelState(result.state())) {
                 holder.newAnnotation(HighlightSeverity.WEAK_WARNING,
                         "Nagi editor assistance: " + result.message()).fileLevel().create();
@@ -65,7 +65,6 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
             return;
         }
         if (!result.service().isCurrent(file, result.response())) return;
-        paintRoles(result.service().rolePresentation(file, document, result.response()), holder);
         for (NagiAssistProtocol.Diagnostic diagnostic : result.response().response().diagnostics()) {
             if (!result.service().diagnosticTargetsFile(result.response(), file.getVirtualFile(), diagnostic.file())) continue;
             String message = diagnostic.message();
@@ -110,14 +109,6 @@ public final class NagiAssistExternalAnnotator extends ExternalAnnotator<NagiAss
                     .tooltip(tooltip);
             if (start == end) annotation.afterEndOfLine().create();
             else annotation.range(new TextRange(start, end)).create();
-        }
-    }
-
-    private static void paintRoles(List<NagiSemanticPresentation.Paint> roles, AnnotationHolder holder) {
-        for (var role : roles) {
-            com.intellij.openapi.progress.ProgressManager.checkCanceled();
-            holder.newSilentAnnotation(HighlightSeverity.INFORMATION).range(role.range())
-                    .textAttributes(role.attributes()).create();
         }
     }
 

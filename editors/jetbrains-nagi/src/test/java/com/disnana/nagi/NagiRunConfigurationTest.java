@@ -262,6 +262,10 @@ public class NagiRunConfigurationTest extends BasePlatformTestCase {
             }
             barrier.release.countDown();
             PlatformTestUtil.waitWithEventsDispatching("Save barrier did not exit", () -> barrier.exited.getCount() == 0, 5);
+            // The barrier's finally precedes Runner.prepare and its EDT onSuccess.
+            // Await that separate terminal phase before inspecting its outcome.
+            PlatformTestUtil.waitWithEventsDispatching("Run startup did not settle after the save barrier",
+                    () -> startupResult.getState() != org.jetbrains.concurrency.Promise.State.PENDING, 5);
             PlatformTestUtil.waitForAllBackgroundActivityToCalmDown();
             PlatformTestUtil.dispatchAllEventsInIdeEventQueue();
 

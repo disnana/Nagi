@@ -530,7 +530,12 @@ public final class NagiAssistService implements Disposable {
         }
         if (response != null) {
             if (!isCurrent(file, response)) return List.of();
-            return presentation.current(file, document, response.presentationIdentity, semanticColors(file, response));
+            var colors = semanticColors(file, response);
+            // Completion status is not index completeness. Only an accepted
+            // frontend plus an explicit index can replace all visual roles.
+            return response.response.frontendAccepted() && response.response.hasSymbolIndex()
+                    ? presentation.current(file, document, response.presentationIdentity, colors)
+                    : presentation.partial(file, document, response.presentationIdentity, colors);
         }
         return presentation.retained(file, document);
     }
@@ -1397,6 +1402,7 @@ public final class NagiAssistService implements Disposable {
                         presentation.beforeEdit(event);
                     }
                     @Override public void documentChanged(@NotNull DocumentEvent event) {
+                        presentation.afterEdit(event);
                         invalidate(State.STALE, "An open Nagi source or manifest changed.",
                                 !isManifest(raw.file()) && presentation.softEdit(event.getDocument()));
                     }
