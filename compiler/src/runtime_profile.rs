@@ -75,9 +75,30 @@ pub(crate) fn known_inputs(runtime: &Path) -> Vec<std::path::PathBuf> {
             .as_ref()
             .is_some_and(core_source);
     if declared {
-        paths.extend([core.join("Cargo.toml"), core.join("build.rs")]);
+        paths.extend([
+            core.join("Cargo.toml"),
+            core.join("build.rs"),
+            // Preserve Cargo's logical manifest parent and OS resolution of
+            // '..'; a directory symlink can place this source outside runtime.
+            core.join("../runtime/src/lib.rs"),
+        ]);
     }
     paths.into_iter().filter(|path| path.is_file()).collect()
+}
+fn same_shared_source(full: &Path, core: &Path) -> bool {
+    if !full.is_file() || !core.is_file() {
+        return false;
+    }
+    let (Ok(full), Ok(core)) = (std::fs::File::open(full), std::fs::File::open(core)) else {
+        return false;
+    };
+    let same = matches!(
+        (crate::output::identity(&full), crate::output::identity(&core)),
+        (Ok(a), Ok(b)) if a == b
+    );
+    // Keep both handles alive until comparison; do not widen inode reuse races.
+    drop((full, core));
+    same
 }
 fn capability(runtime: &Path) -> bool {
     if !manifest(&runtime.join("Cargo.toml"))
@@ -91,7 +112,10 @@ fn capability(runtime: &Path) -> bool {
         return false;
     };
     core_source(&core_manifest)
-        && runtime.join("src/lib.rs").is_file()
+        && same_shared_source(
+            &runtime.join("src/lib.rs"),
+            &core.join("../runtime/src/lib.rs"),
+        )
         && core.join("build.rs").is_file()
         && core_manifest
             .get("features")
@@ -267,6 +291,33 @@ fn eligible(checked: &CheckedProgram) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn shared_source_identity_accepts_hardlinks_and_rejects_copies_or_missing_files() {
+        let root = std::env::temp_dir().join(format!(
+            "nagi-shared-source-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let a = root.join("凪-a.rs");
+        let b = root.join("凪-b.rs");
+        std::fs::write(&a, "pub const VALUE: u64 = 1;\n").unwrap();
+        assert!(!same_shared_source(&a, &b));
+        assert!(!same_shared_source(&a, &root));
+        std::fs::copy(&a, &b).unwrap();
+        assert!(!same_shared_source(&a, &b));
+        std::fs::remove_file(&b).unwrap();
+        std::fs::hard_link(&a, &b).unwrap();
+        assert!(same_shared_source(&a, &b));
+        assert_ne!(
+            std::fs::canonicalize(&a).unwrap(),
+            std::fs::canonicalize(&b).unwrap()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
     fn checked(text: &str, high: bool) -> CheckedProgram {
         let mut program = crate::parser::parse(text, high).unwrap();
         crate::check::check(&mut program).unwrap();
@@ -387,6 +438,43 @@ mod tests {
             );
             std::os::unix::fs::symlink(&core, linked.join("runtime-core")).unwrap();
             assert!(capability(&linked.join("runtime")));
+        }
+        #[cfg(unix)]
+        {
+            let independent = root.join("independent");
+            std::fs::create_dir_all(independent.join("runtime/src")).unwrap();
+            std::fs::write(independent.join("runtime/src/lib.rs"), "").unwrap();
+            std::fs::create_dir(independent.join("runtime-core")).unwrap();
+            std::fs::copy(
+                core.join("Cargo.toml"),
+                independent.join("runtime-core/Cargo.toml"),
+            )
+            .unwrap();
+            std::fs::copy(
+                core.join("build.rs"),
+                independent.join("runtime-core/build.rs"),
+            )
+            .unwrap();
+            let mixed = root.join("mixed-root");
+            std::fs::create_dir(&mixed).unwrap();
+            std::os::unix::fs::symlink(&runtime, mixed.join("runtime")).unwrap();
+            std::os::unix::fs::symlink(
+                independent.join("runtime-core"),
+                mixed.join("runtime-core"),
+            )
+            .unwrap();
+            // Identical bytes in distinct source files do not establish sharing.
+            assert!(!capability(&mixed.join("runtime")));
+            std::fs::remove_file(independent.join("runtime/src/lib.rs")).unwrap();
+            std::fs::hard_link(
+                runtime.join("src/lib.rs"),
+                independent.join("runtime/src/lib.rs"),
+            )
+            .unwrap();
+            assert!(
+                capability(&mixed.join("runtime")),
+                "a genuine hardlink shares file identity"
+            );
         }
         for (native, adapter, dependencies, reason) in [
             (true, false, false, "native_input"),

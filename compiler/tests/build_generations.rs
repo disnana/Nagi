@@ -3804,6 +3804,144 @@ fn runtime_directory_symlink_uses_the_same_core_sibling_as_the_manifest() {
     assert_eq!(stats(&paired)["runtime"]["selected"], "core");
 }
 
+#[cfg(unix)]
+fn redirect_core_directory(f: &Fixture) -> PathBuf {
+    declare_core_runtime(f);
+    let foreign = f.0.join("foreign");
+    f.write("foreign/runtime/src/lib.rs", "");
+    f.write("foreign/runtime-core/build.rs", "fn main() {}\n");
+    fs::copy(
+        f.0.join("runtime-core/Cargo.toml"),
+        foreign.join("runtime-core/Cargo.toml"),
+    )
+    .unwrap();
+    fs::remove_dir_all(f.0.join("runtime-core")).unwrap();
+    std::os::unix::fs::symlink(foreign.join("runtime-core"), f.0.join("runtime-core")).unwrap();
+    foreign
+}
+
+#[cfg(unix)]
+#[test]
+fn core_directory_symlink_protects_the_actual_shared_lib_before_cargo_can_start() {
+    for mode in ["full", "auto"] {
+        let f = Fixture::new();
+        let foreign = redirect_core_directory(&f);
+        let actual = foreign.join("runtime/src/lib.rs");
+        fs::create_dir_all(f.0.join("out/src")).unwrap();
+        fs::hard_link(&actual, f.0.join("out/src/main.rs")).unwrap();
+        let original = fs::read(&actual).unwrap();
+        let tools = f.0.join("empty-tools");
+        fs::create_dir(&tools).unwrap();
+        let mut c = f.cli("build", "main.nagi", "out");
+        c.args(["--profile", "dev", "--runtime-profile", mode])
+            .env("PATH", tools);
+        let output = bounded_output(c);
+        assert!(!output.status.success());
+        assert_eq!(
+            fs::read(&actual).unwrap(),
+            original,
+            "{mode}: actual shared source must remain unchanged"
+        );
+        assert!(String::from_utf8_lossy(&output.stderr)
+            .contains("Generated output cannot overwrite input file"));
+        assert!(!f.0.join("out/generated.low").exists());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn core_directory_symlink_requires_source_identity_but_accepts_a_shared_hardlink() {
+    let f = Fixture::new();
+    let foreign = redirect_core_directory(&f);
+    let build = |mode: &str| {
+        let mut c = f.cli("build", "main.nagi", "out");
+        c.args([
+            "--profile",
+            "dev",
+            "--runtime-profile",
+            mode,
+            "--build-stats",
+        ]);
+        bounded_output(c)
+    };
+    for mode in ["full", "auto"] {
+        let output = build(mode);
+        assert_eq!(run(&native(&output)), "old");
+        assert_eq!(stats(&output)["runtime"]["selected"], "full");
+        assert_eq!(
+            stats(&output)["runtime"]["reason"],
+            if mode == "auto" {
+                "runtime_unsupported"
+            } else {
+                "full_requested"
+            }
+        );
+    }
+    fs::remove_file(foreign.join("runtime/src/lib.rs")).unwrap();
+    fs::hard_link(
+        f.0.join("runtime/src/lib.rs"),
+        foreign.join("runtime/src/lib.rs"),
+    )
+    .unwrap();
+    let shared = build("auto");
+    assert_eq!(run(&native(&shared)), "old");
+    assert_eq!(stats(&shared)["runtime"]["selected"], "core");
+}
+
+#[cfg(unix)]
+#[test]
+fn core_manifest_file_symlink_keeps_cargos_logical_source_and_build_origins() {
+    let f = Fixture::new();
+    declare_core_runtime(&f);
+    f.write(
+        "foreign/runtime/src/lib.rs",
+        "pub const UNUSED_FOREIGN: u64 = 1;\n",
+    );
+    f.write(
+        "foreign/runtime-core/build.rs",
+        "compile_error!(\"wrong build origin\");\n",
+    );
+    let core = f.0.join("runtime-core");
+    let foreign = f.0.join("foreign/runtime-core/Cargo.toml");
+    fs::copy(core.join("Cargo.toml"), &foreign).unwrap();
+    fs::remove_file(core.join("Cargo.toml")).unwrap();
+    std::os::unix::fs::symlink(foreign, core.join("Cargo.toml")).unwrap();
+    let mut metadata = Command::new(env!("CARGO"));
+    metadata
+        .args([
+            "metadata",
+            "--offline",
+            "--no-deps",
+            "--format-version",
+            "1",
+            "--manifest-path",
+        ])
+        .arg(core.join("Cargo.toml"));
+    let output = bounded_output(metadata);
+    success(&output);
+    let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    for target in metadata["packages"][0]["targets"].as_array().unwrap() {
+        let actual = fs::canonicalize(target["src_path"].as_str().unwrap()).unwrap();
+        let expected = if target["kind"][0] == "lib" {
+            f.0.join("runtime/src/lib.rs")
+        } else {
+            core.join("build.rs")
+        };
+        assert_eq!(actual, fs::canonicalize(expected).unwrap());
+    }
+    let mut c = f.cli("build", "main.nagi", "out");
+    c.args([
+        "--profile",
+        "dev",
+        "--runtime-profile",
+        "auto",
+        "--build-stats",
+    ]);
+    let output = bounded_output(c);
+    assert_eq!(run(&native(&output)), "old");
+    assert_eq!(stats(&output)["runtime"]["selected"], "core");
+}
+
 #[test]
 fn runtime_profiles_change_runtime_dependency_and_preserve_old_generations() {
     let f = Fixture::new();
