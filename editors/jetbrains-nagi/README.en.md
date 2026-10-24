@@ -6,6 +6,12 @@ Nagi support for IntelliJ IDEA and PyCharm. This source targets version 0.1.5, p
 
 The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release includes a common ZIP for both IDEs; check Releases for newer available assets. For Marketplace installs, check the existing listing's Versions view for available versions and compatible IDE builds. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download one common ZIP for both IDEs from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
+## Next editing changes (unreleased)
+
+The custom gesture that reduces indentation on consecutive Enter presses has been removed. Repeated Enter keeps the current blank-line indentation. Manual Backspace and Shift+Tab, ordinary block indentation and delimiter continuation remain available. This change is not in the published 0.1.5 ZIP.
+
+Transient color loss during typing or Enter, reported after the 0.1.5 release, is being fixed and tested through the IDE's presentation-update path. The user has confirmed that hover documentation works.
+
 ## 0.1.5: final-blank-line colors and source facts
 
 Published plugin 0.1.4 can lose semantic colors, documentation and navigation when a valid source such as the typed `Point` record ends at an unindented blank line. Version 0.1.5 recovers the symbol facts from the same unsaved buffer. The compatibility fix has been tested with published Nagi 0.2.1 and does not require the Nagi 0.2.2 release.
