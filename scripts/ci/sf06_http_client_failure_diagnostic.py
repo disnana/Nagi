@@ -16,7 +16,8 @@ ITEM_LIMIT = 16
 ROW = re.compile(r"^test ([A-Za-z0-9_:]{1,512}) \.\.\. (ok|FAILED|ignored)$", re.M)
 RUNNING = re.compile(r"^running ([0-9]{1,6}) tests?$", re.M)
 RESULT = re.compile(r"^test result: (ok|FAILED)\. ([0-9]{1,6}) passed; ([0-9]{1,6}) failed; ([0-9]{1,6}) ignored; [0-9]{1,6} measured; [0-9]{1,6} filtered out; finished in [^\r\n]{1,80}$", re.M)
-PANIC = re.compile(r"^thread '[^'\r\n]{1,512}' panicked at ([^\r\n]{1,1024}\.rs):([1-9][0-9]{0,5}):([1-9][0-9]{0,3}):$", re.M)
+# Current Rust may include a numeric thread ID. Neither name nor ID is captured.
+PANIC = re.compile(r"^thread '[^'\r\n]{1,512}'(?: \([0-9]{1,20}\))? panicked at ([^\r\n]{1,1024}\.rs):([1-9][0-9]{0,5}):([1-9][0-9]{0,3}):$", re.M)
 CODE = re.compile(r"^error\[(E[0-9]{4})\]:", re.M)
 TERMINATIONS = {
     "windows_access_violation": r"exit code: 0xc0000005(?:, STATUS_ACCESS_VIOLATION)?",

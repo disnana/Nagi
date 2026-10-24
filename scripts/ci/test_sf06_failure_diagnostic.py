@@ -78,6 +78,28 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(record["unknown_panics"], 2)
         self.assertNotIn(SECRET, json.dumps(record))
 
+    def test_panic_location_accepts_optional_numeric_thread_id_and_crlf(self):
+        expected = [{"file": "runtime/src/http_client.rs", "line": 12, "column": 4}]
+        for suffix in ("", " (251248)", " (12345678901234567890)"):
+            with self.subTest(suffix=suffix):
+                text = (f"thread '{SECRET}'{suffix} panicked at C:\\private\\runtime\\src\\http_client.rs:12:4:\r\n"
+                        f"assertion left={SECRET}; Cookie: {SECRET}\r\n")
+                record = diag.analyze("runtime-http-client", 101, 1, text, "ok")
+                self.assertEqual(record["panic_sources"], expected)
+                self.assertEqual(record["unknown_panics"], 0)
+                encoded = json.dumps(record)
+                for private in (SECRET, "251248", "12345678901234567890", "private"):
+                    self.assertNotIn(private, encoded)
+
+    def test_malformed_thread_id_does_not_publish_a_location_or_text(self):
+        for suffix in (" ()", " (123456789012345678901)", " (12abc)",
+                       f" ({SECRET})", f" (12) {SECRET}", " (12\r\n34)"):
+            with self.subTest(suffix=suffix):
+                text = f"thread '{SECRET}'{suffix} panicked at runtime/src/http_client.rs:12:4:\r\n"
+                record = diag.analyze("runtime-http-client", 101, 1, text, "ok")
+                self.assertEqual(record["panic_sources"], [])
+                self.assertNotIn(SECRET, json.dumps(record))
+
     def test_process_termination_is_a_closed_enum(self):
         text = (f"  process didn't exit successfully: `{SECRET}` (signal: 9, SIGKILL: {SECRET})\n"
                 f"  process didn't exit successfully: `{SECRET}` (exit code: {SECRET})\n")
