@@ -46,7 +46,7 @@ def runtime_manifest(text: str, workspace: dict) -> bytes:
 
 
 def included(name: str) -> bool:
-    return name == "LICENSE" or name == "runtime/Cargo.toml" or (
+    return name in {"LICENSE", "runtime/Cargo.toml", "runtime-core/Cargo.toml", "runtime-core/build.rs"} or (
         name.startswith("runtime/src/") and not name.endswith(("/tests.rs", "_tests.rs"))
     )
 
@@ -136,9 +136,16 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
     validate_project_tool_sources(ROOT, sha)
     source = subprocess.check_output(
         ["git", "archive", "--format=tar", sha, "--", "Cargo.toml", "Cargo.lock",
-         "runtime/Cargo.toml", "runtime/src", "LICENSE",
+         "runtime/Cargo.toml", "runtime/src", "runtime-core", "LICENSE",
          *(source_name for source_name, _ in PROJECT_TOOLS)], cwd=ROOT)
     tool_payload = project_tool_payload(source)
+    core_manifest = tomllib.loads(_archive_member(source, "runtime-core/Cargo.toml").decode())
+    if (core_manifest.get("package", {}).get("name") != "nagi-runtime-core"
+            or core_manifest.get("lib", {}).get("path") != "../runtime/src/lib.rs"
+            or core_manifest.get("package", {}).get("build") != "build.rs"):
+        raise ValueError("Core runtime must use the fixed shared runtime source and build script")
+    _archive_member(source, "runtime/src/lib.rs")
+    _archive_member(source, "runtime-core/build.rs")
     binary_data = binary.read_bytes()
     metadata = third_party_notices.cargo_metadata(ROOT, target)
     third_party_notices.validate_workspace_inputs(ROOT, sha, metadata,
@@ -165,7 +172,7 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
                         continue
                     if member.isfile():
                         data = sources.extractfile(member).read()
-                        if member.name == "runtime/Cargo.toml":
+                        if member.name in {"runtime/Cargo.toml", "runtime-core/Cargo.toml"}:
                             data = runtime_manifest(data.decode(), workspace)
                         archive.writestr(*zip_entry(f"{stem}/{member.name}", data, member.mode))
                     elif not member.isdir():
@@ -191,7 +198,7 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
                     if not member.isfile():
                         raise ValueError(f"Unsupported tracked source entry: {member.name}")
                     data = sources.extractfile(member).read()
-                    if member.name == "runtime/Cargo.toml":
+                    if member.name in {"runtime/Cargo.toml", "runtime-core/Cargo.toml"}:
                         data = runtime_manifest(data.decode(), workspace)
                     member.size = len(data)
                     member.name = f"{stem}/{member.name}"
