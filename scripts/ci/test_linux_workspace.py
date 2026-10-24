@@ -16,11 +16,13 @@ import test_levels
 import test_publication_gate
 import test_publish_conditions
 import windows_contract_projection
+import parallel_cache_projection
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def prove(source):
+    source = parallel_cache_projection.apply_workflow(source)
     digest = hashlib.sha256(historical.inverse_workflow(source).encode()).hexdigest()
     if digest != BASE_WORKFLOW_SHA256:
         raise AssertionError("historical whole-workflow identity changed")
@@ -28,7 +30,8 @@ def prove(source):
 
 class LinuxWorkspaceSourceTests(unittest.TestCase):
     def setUp(self):
-        self.source = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.current_source = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.source = parallel_cache_projection.inverse_workflow(self.current_source)
         self.linux_source = windows_contract_projection.inverse_workflow(self.source)
 
     def test_one_command_moves_and_all_original_linux_checks_are_restored(self):
@@ -49,14 +52,14 @@ class LinuxWorkspaceSourceTests(unittest.TestCase):
         self.assertNotIn('linux-workspace', restored)
         # Both direct source guards and the historical levels/parallel callers
         # must see the same inherited command body and aggregate graph.
-        inherited = levels_projection.inverse_workflow(self.source)
+        inherited = levels_projection.inverse_workflow(self.current_source)
         self.assertIn(shard.WORKSPACE_STEP + shard.ANCHOR, inherited)
 
     def test_raw_guard_composes_with_existing_infrastructure(self):
-        plain = optimization_projection.inverse_infrastructure(self.source)
+        plain = optimization_projection.inverse_infrastructure(self.current_source)
         with self.assertRaises(ValueError):
             shard.inverse_workflow(plain)
-        self.assertEqual(optimization_projection.infrastructure(plain), self.source)
+        self.assertEqual(optimization_projection.infrastructure(plain), self.current_source)
         restored = shard.inverse_workflow(self.linux_source)
         self.assertNotIn('linux-workspace', restored)
         plain_restored = optimization_projection.inverse_infrastructure(restored)

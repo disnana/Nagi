@@ -15,6 +15,7 @@ import test_levels
 import test_publication_gate
 import test_publish_conditions
 import windows_contract_projection as shard
+import parallel_cache_projection
 
 ROOT = Path(__file__).resolve().parents[2]
 # Immutable Linux-only commit 0e233491; its workflow must be restored exactly.
@@ -74,13 +75,15 @@ def prove(source):
     restored = shard.inverse_workflow(source)
     if hashlib.sha256(restored.encode()).hexdigest() != LINUX_WORKFLOW_SHA256:
         raise AssertionError('Linux-only workflow identity changed')
-    if hashlib.sha256(historical.inverse_workflow(source).encode()).hexdigest() != BASE_WORKFLOW_SHA256:
+    current = parallel_cache_projection.apply_workflow(source)
+    if hashlib.sha256(historical.inverse_workflow(current).encode()).hexdigest() != BASE_WORKFLOW_SHA256:
         raise AssertionError('historical frozen workflow identity changed')
 
 
 class WindowsContractSourceTests(unittest.TestCase):
     def setUp(self):
-        self.source = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.current_source = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.source = parallel_cache_projection.inverse_workflow(self.current_source)
 
     def test_effective_inventory_is_once_on_all_four_release_platforms(self):
         prove(self.source)
@@ -103,7 +106,7 @@ class WindowsContractSourceTests(unittest.TestCase):
                          'Check demo packaging with Windows PowerShell',
                          'Check demo packaging with PowerShell 7'):
             self.assertIn(retained, package)
-        self.assertEqual(infrastructure.infrastructure(infrastructure.inverse_infrastructure(self.source)), self.source)
+        self.assertEqual(infrastructure.infrastructure(infrastructure.inverse_infrastructure(self.current_source)), self.current_source)
 
     def test_private_controls_and_native_send_oracles_remain_strict(self):
         self.assertIn("if: always() && runner.os == 'Windows'", shard.PRIVATE_STEP)
