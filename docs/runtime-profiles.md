@@ -29,7 +29,7 @@ coreも、データ型の生成に必要なSerdeとSQLiteの`FromRow`等を保�
 | `unsupported_ir` | 未対応の型・操作・構文、async等を含む |
 | `incremental_requested` | 本体/関数単位CASはfullを使う |
 | `native_input` / `rust_adapter` / `rust_dependencies` | 追加入力・adapter・Rust依存の境界でfullを使う |
-| `runtime_unsupported` | 古いruntime等にcore対応の宣言がない |
+| `runtime_unsupported` | core対応宣言・固定配置・共有ソースの同一性を確認できない |
 
 `auto`と`--incremental`または`--incremental=units`を併用しても、初版のruntimeはfullです。既存CASの再利用は従来の条件で行います。coreを強制して未対応APIを削除するオプションはありません。
 
@@ -51,8 +51,10 @@ python scripts/benchmark_runtime_profiles.py --compiler path/to/nagic --work-dir
 
 同じコンパイラ・入力パス・lockを使い、通常構成とautoを交互に測ります。Hello/Pointそれぞれでcold、変更なし、本体・公開形状の変更、runtime変更、lock破損からの拒否・回復を確認します。coldは新しいCargo targetであり、registry/OS cacheは温まっています。既定の測定条件はdev・debug情報0・2 jobsで、通常dev profileと同一と誤認しないでください。
 
+計測のseed lockはrunnerが出力先へ配置します。通常のbuildは出力先の既存Cargo.lockを継承し、なければCargoが依存を解決します。初回のindex更新・download時間はこのoffline測定に含みません。
+
 出力にはwall/CPU/最大子プロセスRSS、Cargo Fresh/Compiled、容量、中央値と範囲、native出力検査を記録します。RSSは同時実行プロセス全体の合計ではありません。起動時間は本番throughputの比較ではありません。`--prune-owned-targets`はこの計測で作った完了済みtargetだけを削除し、ログ・ソース・公開済み実行ファイルを残します。
 
-[2026-10-24の実測](../benchmarks/results/runtime-profiles-2026-10-24/README.md)では、同じ環境・3回のPoint初回ビルド中央値はfull 59.92秒、auto 12.44秒でした。対象・条件を限定した結果で、未対応のアプリはfullを使います。
+[2026-10-24の実測](../benchmarks/results/runtime-profiles-2026-10-24/README.md)では、同じ環境・3回のPoint初回ビルド中央値はfull 60.68秒、auto 11.41秒でした。対象・条件を限定した結果で、未対応のアプリはfullを使います。
 
 [既存の開発ビルド](development-builds.md)と[技術設計](internal/runtime-profile-selection.md)も参照してください。

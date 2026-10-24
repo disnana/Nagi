@@ -52,6 +52,9 @@ root選択能力の観測後にruntimeが変わればCargo失敗を含め通常�
 build/runは最初の投影書込み前にinstallation rootを解決し、既知のruntime manifest・共有libを
 既存の入力identity保護へ加える。coreの固定宣言またはpackage/lib/buildのidentityがある場合は
 core manifest/build scriptも含め、pre-lock/post-lockの双方でsymlink/hardlinkを含む別名を拒否する。
+coreの固定lib.pathもCargoと同じlogical manifest親から解決し、実共有libを入力へ追加する。
+coreとfullのlibは両File handleを保持した状態で既存のOS file identityを比較し、不一致や確認不能は
+fullへ戻す。manifestファイルだけがsymlinkの場合に、独自に物理manifest親へ解決基準を変えない。
 単にruntime-coreという名前の旧アプリ出力をruntime入力とは見做さない。任意のRust include依存を
 完全に探索する機能ではなく、check/lowerのRust不要という契約も維持する。
 
@@ -62,10 +65,18 @@ statsは`runtime:{requested,selected,reason}`を追加する。理由は公開[�
 
 plannerのHigh/Low positive/negative、未使用async/未知operation/入力境界、runtime能力、CLI引数を検査する。
 実nativeではHello/Point、同out/共有targetでfull→core→full、継承lock・壊れたlockでの旧成功保持、
-adapter/SQL/HTTP等のfallback、旧receipt/CASの互換性を確認する。default fullの既存全suiteと4 OS CIは別gateである。
+adapter/SQL/HTTP等のfallback、旧receipt/CASの互換性を確認する。default fullの既存全suiteと
+CIは計測とは別gateである。CIの既存levelを維持し、通常L2 PRはLinux/Windows/macOS-arm64、
+正式releaseのL3はmacOS Intelも含む4 OSを検査する。未実施のL3をL2成功で代用したとは扱わない。
 
 `benchmark_runtime_profiles.py`は既存smart-build harnessのmeasurement/receipt/cleanupを再利用し、
 Hello/Point×full/autoを3回以上、交互順・同compiler/source/runtime/seed lock・個別empty targetで測る。
 body/API/runtime編集とlock破損・回復、全旧exeのbytes/実行も確認する。完了した専有targetだけを回収する。
 時間・CPU・最大子RSS・Fresh/Compiled・容量・native出力を記録し、速くないcaseも残す。
 実行性能はprocess startupと出力の確認に限り、本番throughputの比較とは扱わない。
+
+CIの信頼境界・cache writer・検査levelは変更しない。runtime-core単独変更もfull検査と
+JetBrains integrationの対象にする。既存Rust cache keyのソースglobはcompiler/runtimeを対象とし、
+runtime-coreだけの変更では同じcache snapshotを復元し得る。Cargoがmanifest/build scriptを
+再判定するのでnativeの誤再利用にはならないが、更新後cacheを保存できず再コンパイルする
+効率上の余地がある。専用globの追加と既存CI projectionの整合性は別の測定可能な改善として残す。

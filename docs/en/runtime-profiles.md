@@ -29,7 +29,7 @@ Core retains Serde and SQLite's `FromRow` support needed by generated records. S
 | `unsupported_ir` | Unsupported types, operations, syntax, or async |
 | `incremental_requested` | Body/function-unit CAS retains full |
 | `native_input` / `rust_adapter` / `rust_dependencies` | Additional native inputs, adapters or Rust dependencies retain full |
-| `runtime_unsupported` | An older or external runtime lacks the core capability declaration |
+| `runtime_unsupported` | The core declaration, expected layout or shared-source identity cannot be confirmed |
 
 Combining auto with `--incremental` or `--incremental=units` retains full runtime dependencies, while existing source reuse follows its normal rules. There is no force-core option that removes unsupported APIs.
 
@@ -51,8 +51,10 @@ python scripts/benchmark_runtime_profiles.py --compiler path/to/nagic --work-dir
 
 The harness alternates ordinary and auto configurations using the same compiler, source paths and seed lock. For Hello and Point, it covers cold, unchanged, body/API-shape edits, runtime edits, and corrupt-lock rejection/recovery. Cold means a fresh Cargo target with warm registry/OS caches. Default measurement settings are dev, debug information 0 and 2 jobs; these are explicit conditions, not the unmodified dev profile.
 
+The measurement runner places the seed lock in the output directory. Ordinary builds inherit an existing output Cargo.lock; otherwise Cargo resolves dependencies. Initial index updates and downloads are outside this offline measurement.
+
 Reports retain wall/CPU time, largest-child RSS, Cargo Fresh/Compiled counts, capacity, medians/ranges and native output checks. RSS is not a sum across concurrent processes. Process startup is not production throughput. `--prune-owned-targets` removes only completed targets owned by this measurement and retains logs, sources and published executables.
 
-The [2026-10-24 measurements](../../benchmarks/results/runtime-profiles-2026-10-24/README.md) report Point cold-build medians of 59.92 seconds for full and 12.44 seconds for auto over three trials under the same stated conditions. These results are specific to the supported subset; other applications retain full.
+The [2026-10-24 measurements](../../benchmarks/results/runtime-profiles-2026-10-24/README.md) report Point cold-build medians of 60.68 seconds for full and 11.41 seconds for auto over three trials under the same stated conditions. These results are specific to the supported subset; other applications retain full.
 
 See [development builds](development-builds.md) and the [technical design](../internal/runtime-profile-selection.md).
