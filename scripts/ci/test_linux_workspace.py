@@ -15,6 +15,7 @@ from sf07_projection_contract import BASE_WORKFLOW_SHA256
 import test_levels
 import test_publication_gate
 import test_publish_conditions
+import windows_contract_projection
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -28,6 +29,7 @@ def prove(source):
 class LinuxWorkspaceSourceTests(unittest.TestCase):
     def setUp(self):
         self.source = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.linux_source = windows_contract_projection.inverse_workflow(self.source)
 
     def test_one_command_moves_and_all_original_linux_checks_are_restored(self):
         prove(self.source)
@@ -42,7 +44,7 @@ class LinuxWorkspaceSourceTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r'^      - run:', shard.JOB, re.M)), 1)
         self.assertNotIn('continue-on-error:', shard.JOB)
         self.assertNotIn('needs: [linux', shard.JOB)
-        restored = shard.inverse_workflow(self.source)
+        restored = shard.inverse_workflow(self.linux_source)
         self.assertIn(shard.WORKSPACE_STEP + shard.ANCHOR, restored)
         self.assertNotIn('linux-workspace', restored)
         # Both direct source guards and the historical levels/parallel callers
@@ -55,7 +57,7 @@ class LinuxWorkspaceSourceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             shard.inverse_workflow(plain)
         self.assertEqual(optimization_projection.infrastructure(plain), self.source)
-        restored = shard.inverse_workflow(self.source)
+        restored = shard.inverse_workflow(self.linux_source)
         self.assertNotIn('linux-workspace', restored)
         plain_restored = optimization_projection.inverse_infrastructure(restored)
         self.assertEqual(optimization_projection.infrastructure(plain_restored), restored)
@@ -96,8 +98,8 @@ class LinuxWorkspaceSourceTests(unittest.TestCase):
         ):
             self.assertIn(old, shard.JOB)
             mutations.append(self.source.replace(shard.JOB, shard.JOB.replace(old, new, 1), 1))
-        for new, old in ((shard.READY_NEW, shard.READY_OLD), (shard.PUBLISH_NEW, shard.PUBLISH_OLD)):
-            mutations.append(self.source.replace(new, old, 1))
+        for new in (windows_contract_projection.READY_NEW, windows_contract_projection.PUBLISH_NEW):
+            mutations.append(self.source.replace(new, new.replace(' linux-workspace,', '', 1), 1))
         for index, changed in enumerate(mutations):
             with self.subTest(mutation=index), self.assertRaises((ValueError, AssertionError)):
                 prove(changed)

@@ -651,6 +651,7 @@ class GateTests(unittest.TestCase):
             }},
             "nagi-package": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
             "nagi-regression": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
+            "windows-contracts": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
             "vscode-package": {"result": "success" if package_vscode == "true" else "skipped"},
         }
 
