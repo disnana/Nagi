@@ -284,6 +284,104 @@ public final class NagiSemanticEditorIntegrationTest extends BasePlatformTestCas
         }
     }
 
+    /** Actual mouse-hover entry, including the SDK DocumentationBrowser consumer. */
+    private String mouseDocumentation(com.intellij.psi.PsiFile file, int offset) throws Exception {
+        var editor = myFixture.getEditor();
+        var indicator = new com.intellij.openapi.progress.EmptyProgressIndicator();
+        var finished = new java.util.concurrent.CountDownLatch(1);
+        var ownedBrowser = new java.util.concurrent.atomic.AtomicReference<com.intellij.openapi.Disposable>();
+        var future = com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread(
+                (java.util.concurrent.Callable<Object>) () -> {
+                    try {
+                        return com.intellij.openapi.progress.ProgressManager.getInstance().runProcess(() -> {
+                            try {
+                                var entry = Class.forName("com.intellij.lang.documentation.ide.impl.DocumentationTargetHoverInfoKt")
+                                        .getDeclaredMethod("calcTargetDocumentationInfo", com.intellij.openapi.project.Project.class,
+                                                com.intellij.openapi.editor.Editor.class, int.class);
+                                entry.setAccessible(true);
+                                Object hover = entry.invoke(null, getProject(), editor, offset);
+                                if (hover == null) return null;
+                                var field = hover.getClass().getDeclaredField("browser");
+                                field.setAccessible(true);
+                                var browser = (com.intellij.openapi.Disposable) field.get(hover);
+                                ownedBrowser.set(browser);
+                                return browser;
+                            } catch (java.lang.reflect.InvocationTargetException exception) {
+                                if (exception.getCause() instanceof RuntimeException runtime) throw runtime;
+                                if (exception.getCause() instanceof Error error) throw error;
+                                throw new AssertionError(exception.getCause());
+                            } catch (ReflectiveOperationException exception) {
+                                throw new AssertionError("the supported SDK mouse-hover entry must remain observable", exception);
+                            }
+                        }, indicator);
+                    } finally { finished.countDown(); }
+                });
+        try {
+            waitFor(future::isDone);
+            Object browser = future.get(1, TimeUnit.SECONDS);
+            assertNotNull("the actual mouse-hover entry must create a documentation browser", browser);
+            var html = new java.util.concurrent.atomic.AtomicReference<String>();
+            waitFor(() -> {
+                try {
+                    var pageField = browser.getClass().getDeclaredField("myPageFlow");
+                    pageField.setAccessible(true);
+                    Object page = ((kotlinx.coroutines.flow.StateFlow<?>) pageField.get(browser)).getValue();
+                    var current = page.getClass().getDeclaredMethod("getCurrentContent");
+                    current.setAccessible(true);
+                    Object content = current.invoke(page);
+                    if (content == null) return false;
+                    var contentGetter = content.getClass().getDeclaredMethod("getContent");
+                    contentGetter.setAccessible(true);
+                    Object data = contentGetter.invoke(content);
+                    var htmlGetter = data.getClass().getMethod("getHtml");
+                    htmlGetter.setAccessible(true);
+                    html.set((String) htmlGetter.invoke(data));
+                    return html.get() != null;
+                } catch (ReflectiveOperationException exception) {
+                    throw new AssertionError("the actual browser content must remain observable", exception);
+                }
+            });
+            return html.get();
+        } finally {
+            if (!future.isDone()) { indicator.cancel(); future.cancel(true); }
+            waitFor(() -> finished.getCount() == 0);
+            if (ownedBrowser.get() != null) Disposer.dispose(ownedBrowser.get());
+        }
+    }
+
+    public void testMouseHoverBrowserShowsPointColdWarmAndAfterTrailingNewline() throws Exception {
+        String text = "# 固定型の値 😀\nclass Point:\n    x: f64\n    y: f64\n\ndef main():\n"
+                + "    print(\"Hello, Nagi!\")\n    p = Point(x=1.5, y=2.5)\n    print(p.x + p.y)\n";
+        Path path = root.resolve("日本語 Point hover.nagi");
+        Files.writeString(path, text);
+        var virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path);
+        assertNotNull(virtualFile);
+        myFixture.configureFromExistingVirtualFile(virtualFile);
+        var file = myFixture.getFile();
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(text.length());
+        var service = getProject().getService(NagiAssistService.class);
+        assertNull(service.fresh(file));
+        int offset = text.indexOf("Point(x=") + 1;
+        var settings = com.intellij.openapi.editor.ex.EditorSettingsExternalizable.getInstance();
+        boolean originalHover = settings.isShowQuickDocOnMouseOverElement();
+        settings.setShowQuickDocOnMouseOverElement(true);
+        try {
+            String cold = mouseDocumentation(file, offset);
+            assertTrue(cold, cold.contains("Point") && cold.contains("f64"));
+            assertNotNull(service.fresh(file));
+            String warm = mouseDocumentation(file, offset);
+            assertTrue(warm, warm.contains("Point") && warm.contains("f64"));
+            WriteCommandAction.runWriteCommandAction(getProject(), () -> editor.getDocument().insertString(
+                    editor.getDocument().getTextLength(), "\n"));
+            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+            assertNull("editing invalidates compiler documentation", service.fresh(file));
+            String edited = mouseDocumentation(file, offset);
+            assertTrue(edited, edited.contains("Point") && edited.contains("f64"));
+            assertFalse(Files.exists(root.resolve("target")));
+        } finally { settings.setShowQuickDocOnMouseOverElement(originalHover); }
+    }
+
     public void testColdPlatformConsumerCompletesSameHoverWithRealCompiler() throws Exception {
         for (boolean low : new boolean[]{false, true}) {
             String text = low

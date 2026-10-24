@@ -1241,6 +1241,168 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
                         "i64", false, List.of())), List.of());
     }
 
+    private com.intellij.util.ui.update.MergingUpdateQueue externalAnnotationQueue() throws Exception {
+        Class<?> type = Class.forName("com.intellij.codeInsight.daemon.impl.ExternalAnnotatorManager");
+        var getter = type.getDeclaredMethod("getInstance");
+        getter.setAccessible(true);
+        Object manager = getter.invoke(null);
+        var field = type.getDeclaredField("myExternalActivitiesQueue");
+        field.setAccessible(true);
+        return (com.intellij.util.ui.update.MergingUpdateQueue) field.get(manager);
+    }
+
+    private Object defaultHighlightingContext() throws ReflectiveOperationException {
+        Class<?> contexts;
+        try { contexts = Class.forName("com.intellij.codeInsight.multiverse.CodeInsightContexts"); }
+        catch (ClassNotFoundException sdk251) {
+            contexts = Class.forName("com.intellij.codeInsight.multiverse.CodeInsightContextKt");
+        }
+        return contexts.getMethod("defaultContext").invoke(null);
+    }
+
+    private void inExternalHighlightingSession(PsiFile file, Runnable action) {
+        var indicator = new com.intellij.codeInsight.daemon.impl.DaemonProgressIndicator();
+        com.intellij.openapi.progress.ProgressManager.getInstance().runProcess(() ->
+                com.intellij.openapi.application.ReadAction.run(() -> {
+                    try {
+                        var type = com.intellij.codeInsight.daemon.impl.HighlightingSessionImpl.class;
+                        var methods = java.util.Arrays.stream(type.getDeclaredMethods())
+                                .filter(method -> method.getName().equals("runInsideHighlightingSession")).toList();
+                        assertEquals("one supported SDK highlighting-session entry is required", 1, methods.size());
+                        var method = methods.getFirst();
+                        java.util.function.Consumer<Object> run = ignored -> action.run();
+                        var range = com.intellij.openapi.util.ProperTextRange.create(file.getTextRange());
+                        if (method.getParameterCount() == 5) method.invoke(null, file,
+                                myFixture.getEditor().getColorsScheme(), range, false, run);
+                        else {
+                            assertEquals(6, method.getParameterCount());
+                            var context = defaultHighlightingContext();
+                            method.invoke(null, file, context, myFixture.getEditor().getColorsScheme(), range, false, run);
+                        }
+                    } catch (java.lang.reflect.InvocationTargetException exception) {
+                        if (exception.getCause() instanceof RuntimeException runtime) throw runtime;
+                        if (exception.getCause() instanceof Error error) throw error;
+                        throw new AssertionError(exception.getCause());
+                    } catch (ReflectiveOperationException exception) { throw new AssertionError(exception); }
+                }), indicator);
+    }
+
+    private com.intellij.codeHighlighting.TextEditorHighlightingPass externalAnnotationPass(PsiFile file) throws Exception {
+        var editor = myFixture.getEditor();
+        var result = new AtomicReference<com.intellij.codeHighlighting.TextEditorHighlightingPass>();
+        var future = ApplicationManager.getApplication().executeOnPooledThread(() -> inExternalHighlightingSession(file, () -> {
+            try {
+                Class<?> type = Class.forName("com.intellij.codeInsight.daemon.impl.ExternalToolPass");
+                var constructor = type.getDeclaredConstructor(PsiFile.class, com.intellij.openapi.editor.Document.class,
+                        com.intellij.openapi.editor.Editor.class, int.class, int.class,
+                        com.intellij.codeInsight.daemon.impl.HighlightInfoProcessor.class);
+                constructor.setAccessible(true);
+                var pass = (com.intellij.codeHighlighting.TextEditorHighlightingPass) constructor.newInstance(file,
+                        editor.getDocument(), editor, 0, file.getTextLength(),
+                        com.intellij.codeInsight.daemon.impl.HighlightInfoProcessor.getEmpty());
+                pass.setId(com.intellij.codeHighlighting.Pass.EXTERNAL_TOOLS);
+                pass.setContext((com.intellij.codeInsight.multiverse.CodeInsightContext) defaultHighlightingContext());
+                pass.collectInformation(com.intellij.openapi.progress.ProgressManager.getInstance().getProgressIndicator());
+                result.set(pass);
+            } catch (ReflectiveOperationException exception) { throw new AssertionError(exception); }
+        }));
+        try { waitUntil(future::isDone); future.get(1, java.util.concurrent.TimeUnit.SECONDS); return result.get(); }
+        finally { if (!future.isDone()) future.cancel(true); }
+    }
+
+
+    public void testRejectedAndCoalescedExternalPassCannotRemoveOwnedRoleColors() throws Exception {
+        PsiFile file = source("rejected-colors.nagi", "def add(value: i64) -> i64:\n    return value\n\ndef main():\n    print(add(1))\n");
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> roleFacts(file, false));
+        installService();
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        myFixture.doHighlighting();
+        assertTrue(functionRoleAt(4, 3));
+        var queue = externalAnnotationQueue();
+        boolean passThrough = queue.isPassThrough(), suspended = queue.isSuspended();
+        queue.setPassThrough(false);
+        queue.suspend();
+        try {
+            var first = externalAnnotationPass(file);
+            assertFalse("the actual external pass must be queued", queue.isEmpty());
+            var completed = first.getClass().getDeclaredField("externalUpdateTaskCompleted");
+            completed.setAccessible(true);
+            assertFalse(completed.getBoolean(first));
+            var second = externalAnnotationPass(file);
+            assertTrue("same-file queue coalescing must reject the first actual SDK update", completed.getBoolean(first));
+            assertTrue("a rejected external pass must not remove an untouched role", functionRoleAt(4, 3));
+            var cancelled = ApplicationManager.getApplication().executeOnPooledThread(() -> inExternalHighlightingSession(file, queue::cancelAllUpdates));
+            waitUntil(cancelled::isDone);
+            cancelled.get(1, java.util.concurrent.TimeUnit.SECONDS);
+            assertTrue("queue cancellation must reject the second actual SDK update", completed.getBoolean(second));
+            assertTrue("cancellation must not remove an untouched role", functionRoleAt(4, 3));
+        } finally {
+            var cleanup = ApplicationManager.getApplication().executeOnPooledThread(() -> inExternalHighlightingSession(file, queue::cancelAllUpdates));
+            waitUntil(cleanup::isDone);
+            cleanup.get(1, java.util.concurrent.TimeUnit.SECONDS);
+            queue.setPassThrough(passThrough);
+            if (!suspended) queue.resume();
+        }
+    }
+
+    public void testCollectedPendingPassKeepsRolesAcrossTheWorkerStateTransition() throws Exception {
+        PsiFile file = source("transition-colors.nagi", "def add(value: i64) -> i64:\n    return value\n\ndef main():\n    print(add(1))\n");
+        CountDownLatch finish = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            if (calls.incrementAndGet() > 1) finish.await();
+            return roleFacts(file, true);
+        });
+        installService();
+        try {
+            service.requestBaseline(file);
+            waitUntil(() -> service.fresh(file) != null);
+            myFixture.doHighlighting();
+            assertTrue(functionRoleAt(4, 3));
+            var document = myFixture.getEditor().getDocument();
+            var admitted = new CountDownLatch(1);
+            var releaseAdmission = new CountDownLatch(1);
+            var workerField = NagiAssistService.class.getDeclaredField("worker");
+            workerField.setAccessible(true);
+            ((java.util.concurrent.ScheduledExecutorService) workerField.get(service)).execute(() -> {
+                admitted.countDown();
+                try { releaseAdmission.await(); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+            });
+            waitUntil(() -> admitted.getCount() == 0);
+            int literal = document.getText().lastIndexOf('1');
+            WriteCommandAction.runWriteCommandAction(getProject(), () -> document.replaceString(literal, literal + 1, "2"));
+            PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+            var queue = externalAnnotationQueue();
+            boolean passThrough = queue.isPassThrough(), suspended = queue.isSuspended();
+            queue.setPassThrough(false);
+            queue.suspend();
+            try {
+                var pass = externalAnnotationPass(file);
+                    assertEquals(NagiAssistService.State.WAITING, service.state());
+                releaseAdmission.countDown();
+                waitUntil(() -> calls.get() == 2);
+                assertEquals(NagiAssistService.State.RUNNING, service.state());
+                queue.setPassThrough(passThrough);
+                queue.resume();
+                var flushed = ApplicationManager.getApplication().executeOnPooledThread(queue::flush);
+                waitUntil(flushed::isDone);
+                flushed.get(1, java.util.concurrent.TimeUnit.SECONDS);
+                var completion = pass.getClass().getDeclaredField("externalUpdateTaskCompleted");
+                completion.setAccessible(true);
+                waitUntil(() -> { try { return completion.getBoolean(pass); } catch (IllegalAccessException exception) { throw new AssertionError(exception); } });
+                assertTrue("collect/apply state changes must not empty the visual lane", functionRoleAt(4, 3));
+                assertNull(service.documentedDefinition(file, file.findElementAt(4)));
+            } finally {
+                releaseAdmission.countDown();
+                var cleanup = ApplicationManager.getApplication().executeOnPooledThread(() -> inExternalHighlightingSession(file, queue::cancelAllUpdates));
+                waitUntil(cleanup::isDone); cleanup.get(1, java.util.concurrent.TimeUnit.SECONDS);
+                queue.setPassThrough(passThrough);
+                if (suspended) queue.suspend(); else queue.resume();
+            }
+        } finally { finish.countDown(); }
+    }
+
     public void testPendingAnalysisKeepsOnlyUntouchedRolePresentation() throws Exception {
         PsiFile file = source("steady.nagi", "def add(value: i64) -> i64:\n    return value\n\ndef main():\n    print(add(1))\n");
         CountDownLatch finish = new CountDownLatch(1);
@@ -1266,6 +1428,31 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
             assertFalse("old diagnostic positions must not survive an edit", pendingHighlights.stream()
                     .anyMatch(info -> "old diagnostic".equals(info.getDescription())));
         } finally { finish.countDown(); }
+    }
+
+    public void testAcceptedExplicitEmptyIndexClearsPreviouslyRetainedColors() throws Exception {
+        PsiFile file = source("complete-empty.nagi", "def add(value: i64) -> i64:\n    return value\n\ndef main():\n    print(add(1))\n");
+        AtomicInteger calls = new AtomicInteger();
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) ->
+                calls.incrementAndGet() == 1 ? roleFacts(file, false) : new NagiAssistProtocol.Response("none",
+                        true, true, false, "names", List.of(), List.of(), List.of(),
+                        List.of(file.getVirtualFile().getPath()), List.of(), List.of()));
+        installService();
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        var document = myFixture.getEditor().getDocument();
+        assertFalse(service.rolePresentation(file, document, service.fresh(file)).isEmpty());
+        int literal = document.getText().lastIndexOf('1');
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> document.replaceString(literal, literal + 1, "2"));
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        assertFalse(service.rolePresentation(file, document, null).isEmpty());
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        var current = service.fresh(file);
+        assertTrue(current.response().frontendAccepted()); assertTrue(current.response().hasSymbolIndex());
+        assertTrue(service.rolePresentation(file, document, current).isEmpty());
+        assertFalse("complete empty output cannot be mistaken for missing facts", functionRoleAt(4, 3));
+        assertEquals(2, calls.get());
     }
 
     public void testRapidEditsKeepDebounceAndCancelOnlyTheActiveAnalysis() throws Exception {
@@ -1327,6 +1514,7 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         service.requestBaseline(file);
         waitUntil(() -> service.state() == NagiAssistService.State.FAILED);
         assertTrue("transport failure removes every retained role", service.rolePresentation(file, document, null).isEmpty());
+        assertFalse("transport failure also removes the independently owned color", functionRoleAt(4, 3));
         WriteCommandAction.runWriteCommandAction(getProject(), () -> document.replaceString(literal, literal + 1, "3"));
         PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
         service.requestBaseline(file);
@@ -1334,6 +1522,7 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         assertFalse(service.rolePresentation(file, document, service.fresh(file)).isEmpty());
         NagiSettings.update(NagiSettings.getInstance().getState().compilerPath, 6);
         assertTrue("configuration changes are hard invalidations", service.rolePresentation(file, document, null).isEmpty());
+        assertFalse("hard invalidation removes owned markup", functionRoleAt(4, 3));
         assertNull(service.fresh(file));
     }
 
