@@ -107,7 +107,7 @@ public final class NagiRunPreparation implements Disposable {
     }
     Prepared prepare(NagiCommandPlan original, NagiBuildProfile profile, Selection selection,
                      ProgressIndicator indicator, BooleanSupplier mayLaunch) throws ExecutionException {
-        ApplicationManager.getApplication().assertIsNonDispatchThread();
+        com.intellij.util.concurrency.ThreadingAssertions.assertBackgroundThread();
         if (ApplicationManager.getApplication().isReadAccessAllowed()) throw new IllegalStateException("Run preparation must not hold a read action.");
         checkCurrent(selection);
         indicator.checkCanceled();

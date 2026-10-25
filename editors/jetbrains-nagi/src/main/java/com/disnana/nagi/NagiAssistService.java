@@ -1136,7 +1136,7 @@ public final class NagiAssistService implements Disposable {
     }
 
     private static void assertWorkerIo() {
-        ApplicationManager.getApplication().assertIsNonDispatchThread();
+        com.intellij.util.concurrency.ThreadingAssertions.assertBackgroundThread();
     }
 
     private boolean updateImportDirectoryWatch(Set<String> directories, Snapshot snapshot) throws SnapshotBlockedException {
