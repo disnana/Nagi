@@ -10,7 +10,7 @@ import com.intellij.psi.PsiReferenceRegistrar;
 import com.intellij.util.ProcessingContext;
 import org.jetbrains.annotations.NotNull;
 
-/** Exposes navigation only when the compiler has an exact source-span to declaration mapping. */
+/** Stable syntax hosts; navigation is resolved from current exact compiler facts. */
 public final class NagiAssistReferenceContributor extends PsiReferenceContributor {
     @Override public void registerReferenceProviders(@NotNull PsiReferenceRegistrar registrar) {
         registrar.registerReferenceProvider(PlatformPatterns.psiElement(), new PsiReferenceProvider() {
@@ -21,16 +21,9 @@ public final class NagiAssistReferenceContributor extends PsiReferenceContributo
                         || !(element instanceof NagiParserDefinition.ReferenceElement)) {
                     return PsiReference.EMPTY_ARRAY;
                 }
-                NagiAssistService service = file.getProject().getService(NagiAssistService.class);
-                if (service == null) return PsiReference.EMPTY_ARRAY;
-                NagiAssistService.CachedResponse response = service.fresh(file);
-                if (response == null) {
-                    service.requestNavigation(file);
-                    return PsiReference.EMPTY_ARRAY;
-                }
-                NagiAssistProtocol.Location target = service.referenceTarget(file, element);
-                if (target == null) return PsiReference.EMPTY_ARRAY;
-                return new PsiReference[] { new NagiAssistReference(element, service, response, target) };
+                // Platform caches this array against PSI changes only. Compiler
+                // arrival must change resolution, never its syntax-only shape.
+                return new PsiReference[] { new NagiAssistReference(element) };
             }
         });
     }

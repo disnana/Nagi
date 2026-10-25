@@ -10,22 +10,23 @@ import org.jetbrains.annotations.Nullable;
 
 /** A soft, navigation-only compiler reference; it never performs IDE-side name resolution. */
 final class NagiAssistReference extends PsiReferenceBase<PsiElement> {
-    private final NagiAssistService service;
-    private final NagiAssistService.CachedResponse response;
-    private final NagiAssistProtocol.Location target;
-
-    NagiAssistReference(@NotNull PsiElement element, NagiAssistService service,
-                        NagiAssistService.CachedResponse response, NagiAssistProtocol.Location target) {
+    NagiAssistReference(@NotNull PsiElement element) {
         super(element, new TextRange(0, element.getTextLength()), true);
-        this.service = service;
-        this.response = response;
-        this.target = target;
     }
 
     @Override public @Nullable PsiElement resolve() {
+        com.intellij.openapi.progress.ProgressManager.checkCanceled();
+        PsiElement result = resolveCurrent();
+        com.intellij.openapi.progress.ProgressManager.checkCanceled();
+        return result;
+    }
+
+    private @Nullable PsiElement resolveCurrent() {
+        if (!myElement.isValid()) return null;
         PsiFile source = myElement.getContainingFile();
-        if (source == null || !myElement.isValid()) return null;
-        return service.resolveTarget(source, response, target);
+        if (source == null || source.getProject().isDisposed()) return null;
+        NagiAssistService service = source.getProject().getService(NagiAssistService.class);
+        return service == null ? null : service.resolveReference(source, myElement);
     }
 
     @Override public Object @NotNull [] getVariants() { return new Object[0]; }

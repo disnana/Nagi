@@ -455,10 +455,15 @@ public final class NagiAssistService implements Disposable {
 
     /** Exact compiler reference lookup; PSI token shape never determines ownership or target. */
     public NagiAssistProtocol.Location referenceTarget(PsiFile file, PsiElement element) {
-        CachedResponse response = fresh(file);
-        if (response == null || element == null || !element.isValid()) return null;
-        Document document = PsiDocumentManager.getInstance(project).getDocument(file);
-        if (document == null) return null;
+        return referenceTarget(file, element, fresh(file));
+    }
+
+    private NagiAssistProtocol.Location referenceTarget(PsiFile file, PsiElement element, CachedResponse response) {
+        if (!isCurrent(file, response) || element == null || !element.isValid()
+                || element.getContainingFile() != file) return null;
+        var documents = PsiDocumentManager.getInstance(project);
+        Document document = documents.getDocument(file);
+        if (document == null || !documents.isCommitted(document)) return null;
         int start = element.getTextRange().getStartOffset();
         int end = element.getTextRange().getEndOffset();
         if (start < 0 || end < start || end > document.getTextLength()) return null;
@@ -466,6 +471,18 @@ public final class NagiAssistService implements Disposable {
         int column = start - document.getLineStartOffset(line);
         String path = canonicalPathFor(response.snapshot, file.getVirtualFile());
         return response.referenceTargets.get(new ReferenceKey(normalizePath(path), line + 1, column + 1, end - start));
+    }
+
+    /** A cached PSI reference is only a host; capture one response for lookup and resolution. */
+    PsiElement resolveReference(PsiFile file, PsiElement element) {
+        CachedResponse response = fresh(file);
+        if (response == null) {
+            requestNavigation(file); // Nonblocking normal worker admission, never a UI wait.
+            return null;
+        }
+        NagiAssistProtocol.Location target = referenceTarget(file, element, response);
+        PsiElement resolved = resolveTarget(file, response, target);
+        return isCurrent(file, response) ? resolved : null;
     }
 
     public NagiAssistProtocol.Definition functionDefinition(PsiFile file, PsiElement callee) {
@@ -559,6 +576,8 @@ public final class NagiAssistService implements Disposable {
             PsiFile importedFile = PsiManager.getInstance(project).findFile(sourceFile);
             if (importedFile == null || !importedFile.isValid()
                     || !responseContainsFile(response, sourceFile)) return null;
+            Document importedDocument = FileDocumentManager.getInstance().getCachedDocument(sourceFile);
+            if (importedDocument != null && !PsiDocumentManager.getInstance(project).isCommitted(importedDocument)) return null;
             return importedFile;
         }
         if (target.length() < 1) return null;
@@ -569,7 +588,7 @@ public final class NagiAssistService implements Disposable {
         PsiFile targetFile = PsiManager.getInstance(project).findFile(virtualFile);
         if (targetFile == null || !targetFile.isValid() || !responseContainsFile(response, virtualFile)) return null;
         Document document = PsiDocumentManager.getInstance(project).getDocument(targetFile);
-        if (document == null) return null;
+        if (document == null || !PsiDocumentManager.getInstance(project).isCommitted(document)) return null;
         int lineIndex = target.line() - 1;
         if (lineIndex < 0 || lineIndex >= document.getLineCount()) return null;
         int lineStart = document.getLineStartOffset(lineIndex);
