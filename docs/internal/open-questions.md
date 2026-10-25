@@ -1,5 +1,11 @@
 # コンパイラ・Rust境界の未決事項
 
+## 現在の公開状態（2026-10-25）
+
+このページには当時の判断・進行状況を残す。以下の#99関連のdraft／CI pendingは作成時の履歴で、現在の未完了項目ではない。main基点 `22183d7` でSQLite Pool/Tx APIは実装・統合済みで、公開版Nagi 0.2.0（release commit `b873881`、2026-10-20）に含まれる。公開リリースの記録は[roadmap](../roadmap.md#020-security-foundation)と[SQLite Pool/Txガイド](../sqlite-pool.md)を参照。
+
+Q-002の承認済み契約・調査・当時の検証記録は設計根拠として維持する。PR #99の当時のhead、draft状態、4 OS／website readback待ちを、現在のmainまたは公開状態として引用しない。特定の公開版で使う場合はNagi 0.2.0以降を基準にする。
+
 ## Q-001: 同じアプリの識別と実行ファイルの世代を分ける
 
 状態: 2026-10-05にAを承認済み。PR0で発見。Phase 2の開発差分で、承認済みの内部path期待を更新した。検証とmainへの反映状況は[進捗](progress.md)を参照。
@@ -47,9 +53,9 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 ### Q-002: SQLite Pool／Txの初版APIと終了policy
 
-状態: 2026-10-06にユーザーが選択1を承認。公開API・SQL制限・終了policyとruntime rusqlite hooksを採用し、[ADR 010](adr/010-sqlite-transaction-boundary.md)へ固定した。Phase 3の#80はCI成功後にmainへ反映済みだが、それは公開Pool/Txの実装ではない。現在のSQLite public API sourceはmain 6765767 baseの[PR #99](https://github.com/disnana/Nagi/pull/99) head e3e0ea3に実装され、draft。initial checksは進行中でlatest-head CIの最終readbackは未完了。Linux source tests、fuzz smoke、native sample、local archive extraction verificationは成功したが、4 OS CIは別に確認する。mergeもreleaseもしておらず、Nagi 0.1.11には含まれない。具体的な署名・所有契約・値・失敗policyは[API契約](sqlite-pool-proposal.md)、採用候補と不採用案・native APIの根拠は[調査](sqlite-pool-research.md)にある。
+**履歴（2026-10-06時点）:** ユーザーが選択1を承認し、公開API・SQL制限・終了policyとruntime rusqlite hooksを採用、[ADR 010](adr/010-sqlite-transaction-boundary.md)へ固定した。当時は#99がdraftで、latest-head CIのreadbackは未完了、merge／release前だった。現在は本ページ冒頭の公開状態を参照する。具体的な署名・所有契約・値・失敗policyは[API契約](sqlite-pool-proposal.md)、採用候補と不採用案・native APIの根拠は[調査](sqlite-pool-research.md)にある。
 
-推奨候補は`std.db.sqlite`、owned Parametersの型別builder、affine Tx、worker-localのsafe rusqlite Transaction。旧Dbは維持する。必要な容量・timeout・begin modeは明示指定し、数値defaultを追加しない。SQLを自作解析せず、SQLite prepare・Authorizer・結果metadataを使う。
+当時の推奨案は`std.db.sqlite`、owned Parametersの型別builder、affine Tx、worker-localのsafe rusqlite Transactionだった。初版APIとして0.2.0に実装・公開した。旧Dbは維持する。必要な容量・timeout・begin modeは明示指定し、数値defaultを追加しない。SQLを自作解析せず、SQLite prepare・Authorizer・結果metadataを使う。
 
 判断は3つに分ける。
 
@@ -57,7 +63,7 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 2. runtimeのrusqlite `hooks`有効化と、新Txだけに適用する一文・transaction-control/PRAGMA等のSQL制約。[既存Rust wrapper](sqlite-pool-rust-reuse.md)の比較結果を反映し、追加crate/feature/版が必要なら別に明示する。hooks承認をwrapper依存承認と兼ねない。
 3. cleanup確認前の再利用禁止、退役時の新取得停止、commit outcomeとcleanup failureの分離、close後の取消/timeoutの扱い。
 
-上の3判断とruntime hooksは承認済み。同じ承認を再要求しない。safe一接続prototypeは#81でmainに入り、その範囲のcleanupを検証した。その後の公開Pool/Tx、Nagi compiler接続、multi-connection runtimeはPR #99 sourceに実装された。Linux runtime/workspaceとcompilerの段階別検査結果は[今回の記録](sqlite-public-results.md)にある。Linux fuzz smoke、native CLI sample、extracted local archive、narrow generated-versus-manual cost sampleは成功し範囲を記録済み。latest-head 4 OS/website CIのreadbackが未完了で、draft/未release状態を維持する。
+上の3判断とruntime hooksは承認済み。同じ承認を再要求しない。safe一接続prototypeは#81でmainに入り、その範囲のcleanupを検証した。公開Pool/Tx、Nagi compiler接続、multi-connection runtimeの実装・段階別検証の記録は[今回の記録](sqlite-public-results.md)にある。**当時のrelease前CI待ちは履歴であり、現在の公開状態ではない。**
 
 ### Q-004: SQLite Poolのwrapper依存と未指定capability
 
@@ -65,13 +71,13 @@ Aを推奨する。旧app identityとcache共有を保ち、実際にrunするim
 
 状態: 2026-10-06の承認記録はgeneric deadpool 0.13.1（managed／rt_tokio_1、default featuresなし）とdeadpool-runtime 0.3.1の比較試作を認めた履歴である。最終公開candidateはその試作を採用せず、既存Tokio semaphoreとlazy dedicated adapterを使い、deadpool/deadpool-runtimeを除去した。新依存・Tokio/rusqliteの版更新はない。承認したcapability表とQ002の終了・転送契約は維持し、現在の実装は[確定判断](sqlite-public-runtime-decision.md)とPR #99 sourceで確認する。
 
-[PR #82](https://github.com/disnana/Nagi/pull/82)のprivate一接続adapter比較は4 OS CIまで成功し、main 7999babへ反映済み。これは当時のdeadpool比較とprivate adapterの履歴で、現在のadapter実装や公開acceptanceとは別である。[main側の判断資料](sqlite-pool-adapter-decision.md)は比較の根拠として残す。Q002/Q004を再び未承認へ戻さない。現在のPR #99 sourceはregistry、Tx capture rules、multi-connection、acquire/busy policyを接続し、Linux段階検査を記録済みだが、4 OS CIとrelease前の全体受入は未完了。Tx／ParametersのDebug不可、Pool／Failureの状態だけのDebug、Failureと小さいenumのshared可は初版採用値を維持する。予想外の依存追加・版更新が必要なら差分を示して判断へ戻す。
+[PR #82](https://github.com/disnana/Nagi/pull/82)のprivate一接続adapter比較は4 OS CIまで成功し、main 7999babへ反映済み。これは当時のdeadpool比較とprivate adapterの履歴で、現在のadapter実装や公開acceptanceとは別である。[main側の判断資料](sqlite-pool-adapter-decision.md)は比較の根拠として残す。Q002/Q004を再び未承認へ戻さない。registry、Tx capture rules、multi-connection、acquire/busy policyのLinux段階検査と当時のrelease前CI待ちも履歴として保持する。Tx／ParametersのDebug不可、Pool／Failureの状態だけのDebug、Failureと小さいenumのshared可は初版採用値を維持する。予想外の依存追加／版更新が必要なら差分を示して判断へ戻す。
 
 ### Q-005: 既存所有値の代入を明示する範囲
 
-状態: moveの意味論と通常代入の移行は確定し、作業branchで実装済み・未リリース。作者が既存設計に沿うAPIを自律的に選び実装するよう指示したため、確認待ちで止めない。[採用仕様V1/V2](value-task-implementation-plan.md#v1v2の採用仕様)と[OWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)に統合した。
+**履歴（2026-10-06時点）:** moveの意味論と通常代入の移行を確定し、作業branchで実装済み・未リリースだった。その後Nagi 0.1.11で公開済み。作者が既存設計に沿うAPIを自律的に選び実装するよう指示したため、当時は確認待ちで止めなかった。[採用仕様V1/V2](value-task-implementation-plan.md#v1v2の採用仕様)と[OWN-04](adr/011-language-behavior-and-docs.md#own-04-既存所有値の代入)に統合した。
 
-canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopy所有ローカルそのものの代入の移行を採用する。操作の追加と通常代入拒否を先行テストの後に順に実装した。一つのdraft実装PRで全回帰と4 OS CIまで検証し、その状況とmain反映は[実装結果](explicit-move-results.md)と[進捗](progress.md)で別に記録する。新値生成、引数、return、field/index、matchは既存の規則を保つ。shared handleのtransferとclone_shared、viewとcopyを区別する。
+canonical `std.ownership.move`、現行Copy表の据置、右辺がnonCopy所有ローカルそのものの代入の移行を採用した。操作の追加と通常代入拒否を先行テストの後に順に実装した。draft実装PR時点の回帰と4 OS CI、main反映は[実装結果](explicit-move-results.md)と[進捗](progress.md)の履歴を参照する。新値生成、引数、return、field/index、matchは既存の規則を保つ。shared handleのtransferとclone_shared、viewとcopyを区別する。
 
 旧受理と18件の正常実行は移行前の監査結果として保存する。新規則に合わせたfixture修正は承認済み移行であり、借用・source位置・cleanupのoracleを緩めない。merge/releaseは別途判断する。
 
@@ -99,11 +105,11 @@ Send/Sync、内部可変性、容量課金、資源の保持、replyへの流出
 
 | 項目 | 判断する時点 | 条件 |
 |---|---|---|
-| Pool容量・acquire/busy timeout・transaction開始mode | Q002契約採用、PR #99 sourceに実装 | required Options/mode、旧Db維持、capacity validation、acquire budget/SQLite busyの区別を実装・Docs化。latest-head 4 OS CI/website readbackは待ち。cost sampleは測定範囲と制限を別記録済み |
-| Pool/Tx module・API、worker session/lease | PR #99 sourceに実装、未merge/release | public registry/capture/SQL/multi-connectionはLinux段階検査あり。native sampleとlocal archive検査も成功。PR latest-head 4 OS CI/website readbackは未完了 |
+| Pool容量・acquire/busy timeout・transaction開始mode | Q002契約採用、0.2.0で実装・公開 | 初版のrequired Options/mode、旧Db維持、capacity validation、acquire budget/SQLite busyの区別を記録。cost sampleは測定範囲と制限を別記録済み |
+| Pool/Tx module・API、worker session/lease | 0.2.0で実装・公開 | public registry/capture/SQL/multi-connectionの設計と段階別証拠は[公開実装結果](sqlite-public-results.md)に保存。履歴上の#99 latest-head CI待ちは現在の状態ではない |
 | 旧Grant[P]とGrant[P,Scope]の互換性 | Phase 5以降 | Phase 4完了前に実装しない。arity変更・既存API削除は別途判断 |
 | 任意opaque Rust resource・async callback | 計画外 | Rust API自動importや自己申告Contractを追加しない。必要なら別設計 |
-| Txを捕捉したFutureのtask transfer | PR #99で対応するchecker negativeを追加 | Pool/Txの具体的なtask transfer負例をsource oracleで検証。任意Futureや一般effect/regionについての保証へ拡張しない。4 OS/native全体受入は待ち |
+| Txを捕捉したFutureのtask transfer | 0.2.0のPool/Tx具体契約 | 対応するchecker negativeを含む検証記録は[公開実装結果](sqlite-public-results.md)。任意Futureや一般effect/regionの保証へ拡張しない |
 | 世代snapshotと互換出力 | Phase 2実装・main反映済み | canonical outのwrite lock、app別metadata、check/lower並行とprojection途中失敗を検証した。外部workspace全体のatomic snapshotは対象外。公開版への反映は別に確認 |
 
 2026-10-08 統合追記: PR #98のhead `bc6a76b`へPR #99をrebaseし、#98をbaseとする依存PRへ整理した。最終反映先はmain。双方の目次・CIを保持し、compiler/runtime/Cargo.lock・SQLite配布gate・費用harnessは検証済み`e3e0ea3`から差分なし。統合source `fbfebd3`でwebsite 98 pages、初アプリHigh/保存Low native 10件、SQLite日英コード一致、CI policy 59 testsを確認した。以降の公開headと必須CIの最終結果は[PR #99](https://github.com/disnana/Nagi/pull/99)の本文とChecksを正とし、この文書の作成時点のCI pendingを現在状態と読み替えない。

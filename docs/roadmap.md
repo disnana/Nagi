@@ -37,9 +37,9 @@ S1 Task結果handleとS2 Supervisor/HTTP移行はNagi 0.1.11で公開済みで�
 
 Nagi 0.2.0 Security Foundationは[4 OS・browser受入](https://github.com/disnana/Nagi/actions/runs/39422234923)を経て[2026-10-20に公開しました](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0)。明示HTTP policy、request-bound Grant、永続Session/Cookie、CSRF/CORS、typed HTML subset、literal SQLとtyped bind、送信先検証、応答・rate予算を含みます。制限は[移行](migration-0.2.0.md)と各APIリファレンスを参照してください。
 
-### 0.2.1計画: HTTP応答の圧縮展開（SF06-COMP-021）
+### HTTP応答の圧縮展開候補（SF06-COMP-021）
 
-これは0.2.1の計画で、未着手・実装0件です。0.2.0のHTTP clientはidentity encodingのみを受理し、それ以外の`Content-Encoding`を暗黙展開や再送なしで失敗させます。
+これは0.2.1向けに記録した候補で、Nagi 0.2.1公開後も現行sourceに圧縮展開はありません。clientは`Accept-Encoding: identity`を送り、応答はencodingなしまたは`identity`だけを受け入れます。他の`Content-Encoding`は`UNSUPPORTED_ENCODING`で失敗し、暗黙展開や再送はしません（[HTTP clientの現在の契約](http-client.md#接続動作と現在の検証範囲)と[回帰](../runtime/src/http_client/operation_tests.rs)）。次のrelease targetと着手時期は未確定です。
 
-0.2.1では依存の独立review後にcodecを選び、encoded/decoded size、memory、処理時間を別々に制限します。破損入力や取消では安全に停止し、workerの実join後に資源を解放する受入が必要です。codec、具体的な上限値、厳密な全OS CPU保証は未決です。既存API signatureと安全契約を保ちます。Q1の有限TCP failoverとTTL=0の一操作規則は維持し、decode失敗を自動retryしません。実装・review・website生成は未実行です。
+実装を再開する場合は依存の独立review後にcodecを選び、encoded/decoded size、memory、処理時間を別々に制限します。破損入力や取消では安全に停止し、workerの実join後に資源を解放する受入が必要です。codec、具体的な上限値、厳密な全OS CPU保証は未決です。既存API signatureと安全契約を保ちます。Q1の有限TCP failoverとTTL=0の一操作規則は維持し、decode失敗を自動retryしません。これらは実装前の受入条件であり、実装済み保証ではありません。
 
