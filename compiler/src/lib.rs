@@ -17,6 +17,7 @@ mod generation;
 pub mod graph;
 mod installation;
 pub mod lexer;
+mod lock_seed;
 pub mod modules;
 mod output;
 pub mod parser;

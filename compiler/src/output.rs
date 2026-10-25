@@ -15,6 +15,12 @@ struct ExistingFile {
 impl ExistingFile {
     fn open(path: &Path) -> std::io::Result<Self> {
         let canonical = fs::canonicalize(path)?;
+        if !fs::metadata(&canonical)?.is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "output identity requires a regular file",
+            ));
+        }
         let file = File::open(&canonical)?;
         let identity = identity(&file)?;
         Ok(Self {

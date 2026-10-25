@@ -36,6 +36,7 @@ Options:
   --rust-diagnostics      Include generated Rust diagnostic details (build/run)
   --profile dev|release   Native build profile (default: release; build/run)
   --runtime-profile full|auto  Runtime dependencies (default: full; build/run)
+  --seed-lock             Use a bundled initial dependency lock (build/run; opt-in)
   --build-stats           Print build timings and Cargo reuse as JSON on stderr
   --incremental[=units]   Reuse body or bounded function units (build/run; --profile dev)
   --editor-input          Read editor buffers from stdin (check/symbols/assist)
@@ -144,6 +145,7 @@ pub struct Options {
     pub rust_diagnostics: bool,
     pub profile: BuildProfile,
     pub runtime_profile: RuntimeProfile,
+    pub seed_lock: bool,
     pub build_stats: bool,
     pub incremental: bool,
     pub(crate) incremental_units: bool,
@@ -511,6 +513,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut rust_diagnostics = false;
     let mut profile = None;
     let mut runtime_profile = None;
+    let mut seed_lock = false;
     let mut build_stats = false;
     let mut incremental = false;
     let mut incremental_units = false;
@@ -591,6 +594,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             "--no-project" => no_project = true,
             "--cost-report" => cost = true,
             "--rust-diagnostics" => rust_diagnostics = true,
+            "--seed-lock" if !seed_lock => seed_lock = true,
             "--build-stats" if !build_stats => build_stats = true,
             "--incremental" if !incremental => incremental = true,
             "--incremental=units" if !incremental => {
@@ -621,6 +625,9 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     }
     if (profile.is_some() || build_stats) && !matches!(command.as_str(), "build" | "run") {
         return Err("--profile and --build-stats are supported only by build/run".into());
+    }
+    if seed_lock && !matches!(command.as_str(), "build" | "run") {
+        return Err("--seed-lock is supported only by build/run".into());
     }
     if runtime_profile.is_some() && !matches!(command.as_str(), "build" | "run") {
         return Err("--runtime-profile is supported only by build/run".into());
@@ -714,6 +721,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         rust_diagnostics,
         profile: profile.unwrap_or_default(),
         runtime_profile: runtime_profile.unwrap_or_default(),
+        seed_lock,
         build_stats,
         incremental,
         incremental_units,

@@ -27,10 +27,26 @@ impl Selection {
 }
 
 fn manifest(path: &Path) -> Option<toml::Value> {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| toml::from_str(&s).ok())
+    use std::io::Read;
+    const LIMIT: u64 = 1024 * 1024;
+    // Discovery accepts ordinary linked manifests, but must not open a FIFO or
+    // consume unbounded input before the selected seed's stricter validation.
+    // This precheck does not guarantee safety against concurrent path swaps.
+    if !std::fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let mut text = String::new();
+    std::fs::File::open(path)
+        .ok()?
+        .take(LIMIT + 1)
+        .read_to_string(&mut text)
+        .ok()?;
+    if text.len() as u64 > LIMIT {
+        return None;
+    }
+    toml::from_str(&text).ok()
 }
+
 fn declares_core(manifest: &toml::Value) -> bool {
     let Some(metadata) = manifest
         .get("package")
@@ -291,6 +307,84 @@ fn eligible(checked: &CheckedProgram) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn manifest_discovery_is_bounded_and_preserves_regular_link_aliases() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let root = loop {
+            let root = std::env::temp_dir().join(format!(
+                "nagi-manifest-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match std::fs::create_dir(&root) {
+                Ok(()) => break root,
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => panic!("{error}"),
+            }
+        };
+        let directory = root.join("regular");
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("Cargo.toml");
+        std::fs::write(&path, "[package]\nname='golden'\n").unwrap();
+        let golden = manifest(&path).unwrap();
+        let hardlink = root.join("hardlink.toml");
+        std::fs::hard_link(&path, &hardlink).unwrap();
+        assert_eq!(manifest(&hardlink).as_ref(), Some(&golden));
+        #[cfg(unix)]
+        {
+            let symlink = root.join("symlink.toml");
+            std::os::unix::fs::symlink(&path, &symlink).unwrap();
+            assert_eq!(manifest(&symlink).as_ref(), Some(&golden));
+            let linked_directory = root.join("linked-directory");
+            std::os::unix::fs::symlink(&directory, &linked_directory).unwrap();
+            assert_eq!(
+                manifest(&linked_directory.join("Cargo.toml")).as_ref(),
+                Some(&golden)
+            );
+        }
+        #[cfg(windows)]
+        {
+            let junction = root.join("junction");
+            let result = std::process::Command::new("cmd.exe")
+                .args(["/d", "/c", "mklink", "/J"])
+                .arg(&junction)
+                .arg(&directory)
+                .output()
+                .unwrap();
+            assert!(result.status.success(), "{result:?}");
+            assert_eq!(
+                manifest(&junction.join("Cargo.toml")).as_ref(),
+                Some(&golden)
+            );
+            std::fs::remove_dir(junction).unwrap();
+        }
+        assert!(manifest(&directory).is_none());
+        assert!(manifest(&root.join("missing.toml")).is_none());
+        std::fs::write(&path, [0xff]).unwrap();
+        assert!(
+            manifest(&path).is_none(),
+            "UTF-8 read failure stays unavailable"
+        );
+        std::fs::write(&path, "invalid = [").unwrap();
+        assert!(manifest(&path).is_none());
+        let mut text = "[package]\nname='golden'\n#".to_owned();
+        text.extend(std::iter::repeat_n('a', 1024 * 1024 - text.len()));
+        std::fs::write(&path, &text).unwrap();
+        assert_eq!(
+            manifest(&path).as_ref(),
+            Some(&golden),
+            "exact limit accepted"
+        );
+        text.push('a');
+        std::fs::write(&path, &text).unwrap();
+        assert!(
+            manifest(&path).is_none(),
+            "over-limit discovery is unavailable"
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn shared_source_identity_accepts_hardlinks_and_rejects_copies_or_missing_files() {
         let root = std::env::temp_dir().join(format!(

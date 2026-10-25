@@ -591,3 +591,64 @@ class StandardVerifierEnvironmentTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LockSeedDistributionVerificationTests(unittest.TestCase):
+    def exercise(self, mutation=lambda stats: None):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            compiler = folder / 'extracted/nagic'
+            compiler.parent.mkdir()
+            compiler.write_bytes(b'compiler')
+            calls = []
+            snapshots = []
+
+            def answer(command, **kwargs):
+                self.assertIsNotNone(kwargs.get('timeout'))
+                calls.append(command)
+                if command[0] == str(compiler):
+                    self.assertEqual(command[1], 'run')
+                    self.assertIn('--seed-lock', command)
+                    output = Path(command[command.index('--out') + 1])
+                    mode = command[command.index('--runtime-profile') + 1]
+                    inherited = (output / 'Cargo.lock').exists()
+                    generation = output / str(len(calls))
+                    generation.mkdir(parents=True)
+                    (output / 'Cargo.lock').write_bytes(b'caller lock')
+                    binary = generation / 'native'
+                    binary.write_bytes(str(len(calls)).encode())
+                    snapshots.append(binary)
+                    stats = {'lockfile': {'requested': True, 'source': 'output' if inherited else 'bundled',
+                             'reason': 'existing_output_lock' if inherited else 'bundled_seed'},
+                             'runtime': {'selected': 'core' if mode == 'auto' else 'full'},
+                             'checks': 'full', 'cargo_always_invoked': True,
+                             'receipt': str(generation / 'build-receipt.json')}
+                    mutation(stats)
+                    return subprocess.CompletedProcess(command, 0, '42\n',
+                            'nagi-build-stats: ' + json.dumps(stats) + '\nnative: ' + str(binary) + '\n')
+                if command[0] == sys.executable:
+                    self.assertEqual(Path(command[1]), compiler.parent / 'tools/verify_build_receipt.py')
+                    self.assertIn('--compiler', command)
+                    return subprocess.CompletedProcess(command, 0, '', '')
+                self.assertIn(Path(command[0]), snapshots)
+                return subprocess.CompletedProcess(command, 0, '42\n', '')
+
+            with patch.object(verify.subprocess, 'run', side_effect=answer):
+                verify.verify_lock_seed(compiler, folder, {})
+            self.assertEqual(len(snapshots), 4)
+            self.assertEqual(len(calls), 12)
+
+    def test_seed_gate_checks_full_core_existing_lock_receipts_and_old_executables(self):
+        self.exercise()
+
+    def test_seed_gate_rejects_fallback_instead_of_applying_seed(self):
+        with self.assertRaises(AssertionError):
+            self.exercise(lambda stats: stats['lockfile'].update(source='cargo'))
+
+    def test_seed_gate_rejects_full_instead_of_eligible_core(self):
+        with self.assertRaises(AssertionError):
+            self.exercise(lambda stats: stats['runtime'].update(selected='full'))
+
+    def test_seed_gate_rejects_missing_full_checks(self):
+        with self.assertRaises(AssertionError):
+            self.exercise(lambda stats: stats.update(checks='skipped'))

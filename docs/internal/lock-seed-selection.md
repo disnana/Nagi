@@ -1,0 +1,27 @@
+# Bundled initial lock selection
+
+This implements an opt-in initial Cargo resolution input for unreleased 0.2.2. It does not restore native artifacts or skip checking/Cargo. `--seed-lock` is build/run-only; no project setting or default change is introduced. See [user documentation](../lock-seeds.md) and [English](../en/lock-seeds.md).
+
+## Input and selection boundary
+
+The packager reads the reviewed Git commit's root Cargo.lock and emits it at `runtime-seed/Cargo.lock`, never the distribution root. A generated schema-1 `runtime-seed/seed.json` binds byte lengths and SHA-256 for exactly that lock, the distributed (workspace-independent) full/core manifests, core build.rs, and shared runtime/src/lib.rs. These are fixed paths, not descriptor-supplied paths. Both runtime package identities, the core fixed library/build layout, and compiler/runtime version must match. The package NOTICE describes this new distribution input. A digest is an integrity/consistency check, not a signature or a claim that arbitrary external runtime source is trustworthy.
+
+An existing output Cargo.lock always wins, including malformed locks and caller comments. Otherwise, opt-out, native/adapter/additional Rust dependencies, and incremental CAS keep ordinary Cargo resolution. No descriptor or an unsupported schema/consistent runtime version falls back explicitly. A selected supported descriptor with corrupt/missing/extra inputs, mismatched identity or lock syntax fails before projection, without retry. A descriptor mislabeled with another runtime version is corruption; a coherent other version is unsupported. Cargo still updates/prunes the initial lock for the generated application and always runs.
+
+Selected inputs are checked as plain files/directories (including Windows reparse rejection), read with fixed limits (descriptor/manifests/build: 1 MiB; lock: 8 MiB; shared library: 64 MiB), then hashed from those same bytes. Existing special files must be rejected before opening them. No hostile concurrent path-replacement guarantee is added.
+
+## Output and generation boundary
+
+A declared seed's existing regular file identities join known inputs before initial projection, after acquiring the permanent output lock, and after Cargo before publishing the generation. Disabled and existing-lock builds do not parse/hash unused seed bytes. Unused nonregular seed paths are not read; selected ones fail validation. If existing output/input identity cannot be established, writing is rejected. Output identity lookup now rejects nonregular files before opening them, avoiding FIFO/device blocking while retaining regular symlink/hardlink checks and live file handles during identity comparisons. This precheck does not claim to prevent an adversarial swap after stat.
+
+BuildGeneration inherits output lock bytes first; a bundled seed is only a separate second-choice initial input. It never becomes the caller's inherited-lock baseline. Existing lock semantic/comment preservation, Cargo failure behavior, output lock ownership, receipt contents, latest publication and old executable lifetime remain under their existing rules. Additive stats report requested/source/reason; source is output, bundled or cargo.
+
+## Required verification
+
+Planner tests distinguish unsupported from corrupt, validate fixed identities/layout and reject fallback-boundary bypasses. Native generation tests cover High/saved Low, full/core, dev/release, caller and corrupt output locks, seed aliases before projection/after lock waiting/after Cargo, unchanged old latest/executable, and bounded special-file/symlink/reparse rejection. Existing output-safety/shared-target/generation suites remain mandatory. Distribution tests bind the seed to committed sources and require exact unique regular payload entries. The extracted-distribution verifier runs Point full/core with first bundled and second output selection, full checks, Cargo invocation, receipts and immutable old executables. Full Rust tests, all-target Clippy, fmt, release Python tests and actual archive verification are required before acceptance. Separate performance measurements must state cache/network conditions; this feature does not promise faster download or compilation.
+
+## Manifest discovery before seed selection
+
+Runtime capability/known-input discovery precedes selected-seed validation. Its manifest reader follows regular symlink/junction/hardlink aliases for legacy compatibility, first rejects nonregular inputs, and reads at most 1 MiB + 1 byte before UTF-8/TOML parsing. Missing, unreadable, invalid or oversized inputs retain the existing unavailable (`None`) discovery result. It does not apply the selected seed reader's stricter plain-path policy to legacy installations, remove mandatory input protection, or add a concurrent path-swap guarantee. Selected seeds still fail explicitly under the strict reader.
+
+Independent LS-FINAL-001 reproduced a prepatch FIFO wait before any Cargo/projection with a valid seed descriptor and a full manifest lacking optional core metadata. Bounded CLI regression covers that exact discovery order, device input, invalid UTF-8 and oversized full/core manifests; manifest helper tests preserve exact-limit parsing and regular file/link alias behavior. The earlier candidate/archive/full-suite evidence predates this fix and is retained separately. Final acceptance requires refreshed full tests, package/native proof and measurements for the fixed source.

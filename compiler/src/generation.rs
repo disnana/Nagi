@@ -92,6 +92,7 @@ pub(crate) struct BuildGeneration {
     id: String,
     package: String,
     inherited_lock: Option<Vec<u8>>,
+    pub(crate) lock_source: &'static str,
     temporary_run: bool,
     observed: bool,
     generated_body: Option<String>,
@@ -116,7 +117,7 @@ impl BuildGeneration {
                 &format!("{:?}", ready_header(&self.package, &self.id)),
             ))
     }
-    pub(crate) fn create(out: &Path, package: &str) -> Result<Self, String> {
+    pub(crate) fn create(out: &Path, package: &str, seed: Option<&[u8]>) -> Result<Self, String> {
         let hash = package
             .rsplit('-')
             .next()
@@ -149,13 +150,20 @@ impl BuildGeneration {
                         app,
                         id,
                         package: package.to_owned(),
+                        lock_source: if inherited_lock.is_some() {
+                            "output"
+                        } else if seed.is_some() {
+                            "bundled"
+                        } else {
+                            "cargo"
+                        },
                         inherited_lock,
                         temporary_run: false,
                         observed: false,
                         generated_body: None,
                         partitioned: false,
                     };
-                    if let Some(lock) = &result.inherited_lock {
+                    if let Some(lock) = result.inherited_lock.as_deref().or(seed) {
                         result.write("Cargo.lock", lock)?;
                     }
                     return Ok(result);

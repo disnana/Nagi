@@ -539,9 +539,20 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual(set(names), {prefix + name for name in (
             "nagic.exe" if platform == "windows-x86_64" else "nagic",
             "runtime-core/Cargo.toml", "runtime-core/build.rs",
+            "runtime-seed/Cargo.lock", "runtime-seed/seed.json",
             "runtime/Cargo.toml", "runtime/src/lib.rs", "runtime/src/sqlite/mod.rs", "runtime/src/sqlite/adapter.rs",
             "runtime/src/sqlite/session.rs", "LICENSE", "release.json", "README.txt",
             *(destination for _, destination in package.PROJECT_TOOLS))} | notice_paths)
+        seed = json.loads(read(prefix + "runtime-seed/seed.json"))
+        self.assertEqual(set(seed), {"schema_version", "runtime_version", "files"})
+        self.assertEqual(seed["schema_version"], 1)
+        self.assertEqual(seed["runtime_version"], "0.1.0")
+        self.assertEqual(set(seed["files"]), {"runtime-seed/Cargo.lock", *package.SEED_INPUTS})
+        for filename, digest in seed["files"].items():
+            payload = read(prefix + filename)
+            self.assertEqual(digest, {"sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)})
+        self.assertEqual(read(prefix + "runtime-seed/Cargo.lock"), subprocess.check_output(
+            ["git", "show", f"{commit}:Cargo.lock"], cwd=self.root))
         self.assertNotIn(prefix + "Cargo.lock", names)
         self.assertNotIn(prefix + "Cargo.toml", names)
         for source_name, destination_name in package.PROJECT_TOOLS:
@@ -957,3 +968,30 @@ class GitHubProtocolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SeedArchiveValidationTests(unittest.TestCase):
+    def test_seed_payload_must_remain_exact_unique_and_regular(self):
+        expected = {'runtime-seed/seed.json': b'{}', 'runtime-seed/Cargo.lock': b'version=4'}
+        with tempfile.TemporaryDirectory() as directory:
+            for kind in ('valid', 'changed', 'extra', 'duplicate', 'link'):
+                with self.subTest(kind=kind):
+                    archive_path = Path(directory) / f'{kind}.tar.gz'
+                    with tarfile.open(archive_path, 'w:gz') as archive:
+                        for name, content in expected.items():
+                            entry = tarfile.TarInfo('nagi-test/' + name)
+                            entry.size = len(content)
+                            archive.addfile(entry, io.BytesIO(content))
+                        if kind in ('extra', 'duplicate', 'link'):
+                            name = 'seed.json' if kind == 'duplicate' else 'unexpected'
+                            entry = tarfile.TarInfo('nagi-test/runtime-seed/' + name)
+                            if kind == 'link':
+                                entry.type = tarfile.SYMTYPE
+                                entry.linkname = '../Cargo.lock'
+                            archive.addfile(entry, io.BytesIO(b''))
+                    selected = expected if kind != 'changed' else {**expected, 'runtime-seed/seed.json': b'changed'}
+                    if kind == 'valid':
+                        package._verify_seed_archive(archive_path, 'linux-x86_64', 'nagi-test', selected)
+                    else:
+                        with self.assertRaises(ValueError):
+                            package._verify_seed_archive(archive_path, 'linux-x86_64', 'nagi-test', selected)

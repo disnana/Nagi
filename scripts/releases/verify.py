@@ -145,6 +145,51 @@ def main():
         verify_sqlite_pool(exe, folder, environment)
         verify_development_builds(exe, folder, environment)
         verify_function_units(exe, folder, environment)
+        verify_lock_seed(exe, folder, environment)
+
+
+def verify_lock_seed(exe: Path, folder: Path, environment: dict) -> None:
+    """Initial lock seeding must work from the extracted installation itself."""
+    project = folder / "lock seed project 凪"
+    project.mkdir()
+    source = project / "point.nagi"
+    source.write_text("class Point:\n    x: i64\ndef main():\n    print(Point(x=42).x)\n", encoding="utf-8")
+    verifier = exe.parent / "tools/verify_build_receipt.py"
+    snapshots = []
+    for mode, selected in (("full", "full"), ("auto", "core")):
+        output = folder / f"lock seed output {mode} 凪"
+        assert not (output / "Cargo.lock").exists(), "Seed gate requires an initial output"
+        command = [str(exe), "run", str(source), "--out", str(output), "--seed-lock",
+                   "--profile", "dev", "--runtime-profile", mode, "--build-stats"]
+        for expected in ("bundled", "output"):
+            completed = subprocess.run(command, cwd=project, env=environment,
+                                       capture_output=True, text=True, encoding="utf-8", timeout=600)
+            assert completed.returncode == 0, completed.stderr
+            assert completed.stdout.splitlines() == ["42"], completed.stdout
+            reports = [json.loads(line.removeprefix("nagi-build-stats: "))
+                       for line in completed.stderr.splitlines() if line.startswith("nagi-build-stats: ")]
+            assert len(reports) == 1, completed.stderr
+            stats = reports[0]
+            assert stats["lockfile"] == {"requested": True, "source": expected,
+                    "reason": "bundled_seed" if expected == "bundled" else "existing_output_lock"}, stats
+            assert stats["runtime"]["selected"] == selected, stats
+            assert stats["checks"] == "full" and stats["cargo_always_invoked"] is True, stats
+            paths = [Path(line.removeprefix("native: ")) for line in completed.stderr.splitlines()
+                     if line.startswith("native: ")]
+            assert len(paths) == 1, completed.stderr
+            binary = paths[0]
+            snapshots.append((binary, binary.read_bytes()))
+            verified = subprocess.run([sys.executable, str(verifier), stats["receipt"], "--compiler", str(exe)],
+                                      cwd=project, env=environment, capture_output=True,
+                                      text=True, encoding="utf-8", timeout=15)
+            assert verified.returncode == 0, verified.stderr
+    assert len({path for path, _ in snapshots}) == 4, "Seed builds reused a published executable path"
+    for binary, original in snapshots:
+        assert binary.read_bytes() == original, "A seed build overwrote a published executable"
+        result = subprocess.run([str(binary)], cwd=project, env=environment, capture_output=True,
+                                text=True, encoding="utf-8", timeout=15)
+        assert result.returncode == 0 and result.stdout.splitlines() == ["42"], result
+    print("Verified bundled initial lock: full/core Point, existing output priority, full checks, receipts, immutable executables")
 
 
 def verify_function_units(exe: Path, folder: Path, environment: dict) -> None:
