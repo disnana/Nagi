@@ -512,3 +512,27 @@ fn native_profiles_and_stats_are_additive_and_validated_before_writing() {
         );
     }
 }
+
+#[test]
+fn initial_lock_seed_is_explicit_and_only_build_or_run() {
+    let f = Fixture::new();
+    f.write("main.nagi", "def main():\n    print(1)\n");
+    for command in ["build", "run"] {
+        let args = [command, "main.nagi", "--no-project"].map(str::to_owned);
+        assert!(!project::resolve(&args, &f.0).unwrap().seed_lock);
+        let args = [command, "main.nagi", "--no-project", "--seed-lock"].map(str::to_owned);
+        assert!(project::resolve(&args, &f.0).unwrap().seed_lock);
+    }
+    for args in [
+        vec!["build", "main.nagi", "--seed-lock", "--seed-lock"],
+        vec!["check", "main.nagi", "--seed-lock"],
+        vec!["lower", "main.nagi", "--seed-lock"],
+        vec!["symbols", "main.nagi", "--seed-lock"],
+    ] {
+        assert!(project::resolve(
+            &args.into_iter().map(str::to_owned).collect::<Vec<_>>(),
+            &f.0
+        )
+        .is_err());
+    }
+}

@@ -2033,6 +2033,11 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                 .iter()
                 .flat_map(|root| crate::runtime_profile::known_inputs(&root.join("runtime"))),
         )
+        .chain(
+            runtime_root
+                .iter()
+                .flat_map(|root| crate::lock_seed::known_inputs(root)),
+        )
         .chain(crate::output::assets(&resolution))
         .chain(crate::output::assets(&all))
         // These explicit roots are known; discovering arbitrary Rust/include or
@@ -2084,12 +2089,30 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
                     outputs.push(latest);
                 }
             }
+            if let Some(root) = &runtime_root {
+                inputs.extend(crate::lock_seed::known_inputs(root));
+                inputs.sort();
+                inputs.dedup();
+            }
             crate::output::protect(&outputs, &inputs, "Generated")?;
             crate::generated_body::protect_outputs(&lock.directory, &outputs)?;
             Some(lock)
         }
     } else {
         None
+    };
+    let lock_seed_selection = if let Some(root) = &runtime_root {
+        crate::lock_seed::select(
+            root,
+            &out,
+            options.seed_lock,
+            options.incremental,
+            has_native_input,
+            rust_file.is_some(),
+            !rust_deps.is_empty(),
+        )?
+    } else {
+        crate::lock_seed::Selection::disabled()
     };
     let partial_projection = |error: String| {
         if write_output && !outputs.is_empty() && !error.contains("projection may be partial") {
@@ -2261,7 +2284,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     if options.incremental {
         if let Some(reason) = fallback { eprintln!("incremental: monolithic fallback ({reason})"); }
     }
-    let mut generation = crate::generation::BuildGeneration::create(generated_directory, &package)?;
+    let mut generation = crate::generation::BuildGeneration::create(generated_directory, &package, lock_seed_selection.bytes.as_deref())?;
     let entry_guard = if temporary_run { Some(generation.temporary_run_guard()?) } else { None };
     let mut generated_rust = match library_rust { Some(rust) => rust, None => rust_with_entry_guard(&checked, entry_guard.as_deref(), false)? };
     if let Some(body) = &body { generation.record_body(body)?; }
@@ -2277,6 +2300,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         let previous = crate::build_analysis::previous(&generated_directory.join(".nagi/apps").join(&package));
         build_report = serde_json::json!({
             "schema_version":1, "profile":profile.as_str(),
+            "lockfile":lock_seed_selection.report(generation.lock_source),
             "runtime":{"requested":runtime_profile.as_str(),"selected":runtime_selection.name(),"reason":runtime_selection.reason},
             "observed_change":crate::build_analysis::change(previous.as_ref(), &analysis),
             "semantic_sha256":analysis["semantic_sha256"], "rust_sha256":analysis["rust_sha256"],
@@ -2418,6 +2442,9 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         std::env::consts::EXE_SUFFIX
     ));
     let publish_started = std::time::Instant::now();
+    inputs.extend(crate::lock_seed::known_inputs(root));
+    inputs.sort();
+    inputs.dedup();
     let executable = generation.finish(&cached_binary, generated_directory, high, &inputs, &compatibility_manifest)?;
     if build_stats.is_some() {
         build_report["publish_ms"] = serde_json::json!(publish_started.elapsed().as_secs_f64() * 1000.0);

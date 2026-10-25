@@ -58,3 +58,5 @@ Reports retain wall/CPU time, largest-child RSS, Cargo Fresh/Compiled counts, ca
 The [2026-10-24 measurements](../../benchmarks/results/runtime-profiles-2026-10-24/README.md) report Point cold-build medians of 60.68 seconds for full and 11.41 seconds for auto over three trials under the same stated conditions. These results are specific to the supported subset; other applications retain full.
 
 See [development builds](development-builds.md) and the [technical design](../internal/runtime-profile-selection.md).
+
+[Initial dependency lock selection](lock-seeds.md) is an independent opt-in.

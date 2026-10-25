@@ -51,6 +51,27 @@ def included(name: str) -> bool:
     )
 
 
+SEED_DIRECTORY = "runtime-seed"
+SEED_INPUTS = ("runtime/Cargo.toml", "runtime-core/Cargo.toml", "runtime-core/build.rs", "runtime/src/lib.rs")
+
+
+def seed_payload(source: bytes, workspace: dict) -> dict[str, bytes]:
+    """Bind the reviewed lock to the exact distributed runtime manifests/source."""
+    lock = _archive_member(source, "Cargo.lock")
+    payload = {f"{SEED_DIRECTORY}/Cargo.lock": lock}
+    inputs = dict(payload)
+    for name in SEED_INPUTS:
+        data = _archive_member(source, name)
+        if name.endswith("Cargo.toml"):
+            data = runtime_manifest(data.decode("utf-8"), workspace)
+        inputs[name] = data
+    descriptor = {"schema_version": 1, "runtime_version": workspace["version"],
+                  "files": {name: {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
+                            for name, data in sorted(inputs.items())}}
+    payload[f"{SEED_DIRECTORY}/seed.json"] = (json.dumps(descriptor, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    return payload
+
+
 def project_tool_payload(source: bytes) -> dict[str, bytes]:
     """Read only the explicitly mapped regular tool files from the tested commit."""
     with tarfile.open(fileobj=io.BytesIO(source), mode="r:") as archive:
@@ -139,6 +160,7 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
          "runtime/Cargo.toml", "runtime/src", "runtime-core", "LICENSE",
          *(source_name for source_name, _ in PROJECT_TOOLS)], cwd=ROOT)
     tool_payload = project_tool_payload(source)
+    bundled_seed = seed_payload(source, workspace)
     core_manifest = tomllib.loads(_archive_member(source, "runtime-core/Cargo.toml").decode())
     if (core_manifest.get("package", {}).get("name") != "nagi-runtime-core"
             or core_manifest.get("lib", {}).get("path") != "../runtime/src/lib.rs"
@@ -177,7 +199,7 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
                         archive.writestr(*zip_entry(f"{stem}/{member.name}", data, member.mode))
                     elif not member.isdir():
                         raise ValueError(f"Unsupported tracked source entry: {member.name}")
-                for name, data in tool_payload.items():
+                for name, data in (tool_payload | bundled_seed).items():
                     archive.writestr(*zip_entry(f"{stem}/{name}", data))
                 for name, data in notice_files.items():
                     archive.writestr(*zip_entry(f"{stem}/{name}", data))
@@ -203,7 +225,7 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
                     member.size = len(data)
                     member.name = f"{stem}/{member.name}"
                     archive.addfile(member, io.BytesIO(data))
-                for name, data in tool_payload.items():
+                for name, data in (tool_payload | bundled_seed).items():
                     member = tarfile.TarInfo(f"{stem}/{name}")
                     member.size = len(data)
                     member.mode = 0o644
@@ -222,6 +244,7 @@ def package(binary: Path, version: str, platform: str, output: Path, commit: str
     _verify_notice_archive(destination, platform, stem, notice_files,
                            _archive_member(source, "Cargo.lock"), target, sha,
                            hashlib.sha256(binary_data).hexdigest())
+    _verify_seed_archive(destination, platform, stem, bundled_seed)
     checksum = hashlib.sha256(destination.read_bytes()).hexdigest()
     destination.with_name(destination.name + ".sha256").write_text(f"{checksum}  {destination.name}\n", encoding="utf-8")
     return destination
@@ -268,6 +291,29 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=ROOT / "build/distribution")
     args = parser.parse_args()
     print(package(args.binary, args.version, args.platform, args.out))
+
+
+def _verify_seed_archive(path: Path, platform: str, stem: str, expected: dict[str, bytes]) -> None:
+    prefix = f"{stem}/runtime-seed/"
+    actual = {}
+    if platform == "windows-x86_64":
+        with ZipFile(path) as archive:
+            for member in archive.infolist():
+                if member.filename.startswith(prefix):
+                    key = member.filename.removeprefix(stem + "/")
+                    if member.is_dir() or key in actual or (member.external_attr >> 16) & 0o170000 not in (0, 0o100000):
+                        raise ValueError("Bundled runtime seed requires unique regular files")
+                    actual[key] = archive.read(member)
+    else:
+        with tarfile.open(path, "r:gz") as archive:
+            for member in archive.getmembers():
+                if member.name.startswith(prefix):
+                    key = member.name.removeprefix(stem + "/")
+                    if not member.isfile() or key in actual:
+                        raise ValueError("Bundled runtime seed requires unique regular files")
+                    actual[key] = archive.extractfile(member).read()
+    if actual != expected:
+        raise ValueError("Bundled runtime seed differs from the reviewed payload")
 
 
 if __name__ == "__main__":

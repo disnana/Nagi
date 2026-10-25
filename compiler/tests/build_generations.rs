@@ -4378,3 +4378,457 @@ fn build_stats_keep_raw_source_paths_and_receipt_location_from_non_utf8_cwd() {
         &binary.parent().unwrap().join("build-receipt.json"),
     );
 }
+
+fn bundled_seed(f: &Fixture) {
+    use sha2::Digest;
+    declare_core_runtime(f);
+    for name in ["runtime/Cargo.toml", "runtime-core/Cargo.toml"] {
+        f.write(
+            name,
+            &fs::read_to_string(f.0.join(name))
+                .unwrap()
+                .replace("0.1.0", env!("CARGO_PKG_VERSION")),
+        );
+    }
+    f.write("runtime-seed/Cargo.lock",&format!("# bundled seed\nversion=3\n[[package]]\nname='nagi-runtime'\nversion='{}'\n[[package]]\nname='nagi-runtime-core'\nversion='{}'\n",env!("CARGO_PKG_VERSION"),env!("CARGO_PKG_VERSION")));
+    let files: std::collections::BTreeMap<_,_>=["runtime-seed/Cargo.lock","runtime/Cargo.toml","runtime-core/Cargo.toml","runtime-core/build.rs","runtime/src/lib.rs"].into_iter().map(|name| {
+        let bytes=fs::read(f.0.join(name)).unwrap();(name,serde_json::json!({"sha256":format!("{:x}",sha2::Sha256::digest(&bytes)),"bytes":bytes.len()}))
+    }).collect();
+    f.write("runtime-seed/seed.json",&serde_json::json!({"schema_version":1,"runtime_version":env!("CARGO_PKG_VERSION"),"files":files}).to_string());
+}
+
+#[test]
+fn bundled_seed_initial_full_core_high_low_and_existing_locks_keep_generation_contracts() {
+    let f = Fixture::new();
+    bundled_seed(&f);
+    f.write("saved.low", "fn main() { print(\"old\"); }\n");
+    for (index, (source, runtime, profile)) in [
+        ("main.nagi", "full", "dev"),
+        ("saved.low", "auto", "dev"),
+        ("main.nagi", "auto", "release"),
+        ("saved.low", "full", "release"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let out = format!("out-{index}");
+        let mut command = f.cli("build", source, &out);
+        command.args([
+            "--seed-lock",
+            "--runtime-profile",
+            runtime,
+            "--profile",
+            profile,
+            "--build-stats",
+        ]);
+        let result = bounded_output(command);
+        let binary = native(&result);
+        assert_eq!(run(&binary), "old");
+        verify_receipt(&binary);
+        assert_eq!(
+            stats(&result)["lockfile"],
+            serde_json::json!({"requested":true,"source":"bundled","reason":"bundled_seed"})
+        );
+        assert_eq!(
+            stats(&result)["runtime"]["selected"],
+            if runtime == "auto" { "core" } else { "full" }
+        );
+    }
+    let first = f.build();
+    let first_bytes = fs::read(&first).unwrap();
+    let lock = f.0.join("out/Cargo.lock");
+    let mut bytes = fs::read(&lock).unwrap();
+    bytes.extend_from_slice(b"\n# caller bytes\n");
+    fs::write(&lock, &bytes).unwrap();
+    // A malformed unused descriptor is not a dependency failure. Caller lock wins.
+    f.write("runtime-seed/seed.json", "bad unused descriptor");
+    let mut command = f.cli("build", "main.nagi", "out");
+    command.args(["--seed-lock", "--profile", "dev", "--build-stats"]);
+    let built = bounded_output(command);
+    assert_eq!(stats(&built)["lockfile"]["source"], "output");
+    assert_eq!(fs::read(&lock).unwrap(), bytes);
+    let latest = f.latest("out").0;
+    fs::write(&lock, b"corrupt [[ lock").unwrap();
+    let mut command = f.cli("build", "main.nagi", "out");
+    command.args(["--seed-lock", "--profile", "dev"]);
+    let failed = bounded_output(command);
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("Cargo.lock"));
+    assert_eq!(fs::read(&lock).unwrap(), b"corrupt [[ lock");
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(fs::read(&first).unwrap(), first_bytes);
+    assert_eq!(run(&first), "old");
+}
+
+#[test]
+fn unused_bundled_descriptor_is_not_parsed_but_seed_output_aliases_are_always_rejected() {
+    for requested in [false, true] {
+        for source in ["runtime-seed/seed.json", "runtime-seed/Cargo.lock"] {
+            let f = Fixture::new();
+            bundled_seed(&f);
+            f.write("runtime-seed/seed.json", "bad unused descriptor");
+            let original = fs::read(f.0.join(source)).unwrap();
+            fs::create_dir_all(f.0.join("out")).unwrap();
+            fs::hard_link(f.0.join(source), f.0.join("out/Cargo.toml")).unwrap();
+            let mut command = f.cli("build", "main.nagi", "out");
+            if requested {
+                command.arg("--seed-lock");
+            }
+            let failed = bounded_output(command);
+            assert!(!failed.status.success());
+            assert!(String::from_utf8_lossy(&failed.stderr).contains("cannot overwrite input"));
+            assert_eq!(fs::read(f.0.join(source)).unwrap(), original);
+            assert!(!f.0.join("out/generated.low").exists());
+        }
+    }
+    let f = Fixture::new();
+    bundled_seed(&f);
+    f.write("runtime-seed/seed.json", "invalid unused descriptor");
+    let mut command = f.cli("build", "main.nagi", "off");
+    command.args(["--profile", "dev", "--build-stats"]);
+    let result = bounded_output(command);
+    assert_eq!(run(&native(&result)), "old");
+    assert_eq!(
+        stats(&result)["lockfile"],
+        serde_json::json!({"requested":false,"source":"cargo","reason":"not_requested"})
+    );
+}
+
+#[test]
+fn bundled_seed_corruption_fails_before_projection_and_never_retries_without_seed() {
+    for corrupt in ["descriptor", "hash", "missing", "lock"] {
+        let f = Fixture::new();
+        bundled_seed(&f);
+        match corrupt {
+            "descriptor" => f.write("runtime-seed/seed.json", "{"),
+            "hash" => f.write("runtime-seed/Cargo.lock", "changed"),
+            "missing" => fs::remove_file(f.0.join("runtime-seed/Cargo.lock")).unwrap(),
+            "lock" => {
+                f.write("runtime-seed/Cargo.lock", "invalid [[");
+                let p = f.0.join("runtime-seed/seed.json");
+                let mut data: serde_json::Value =
+                    serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
+                use sha2::Digest;
+                let bytes = fs::read(f.0.join("runtime-seed/Cargo.lock")).unwrap();
+                data["files"]["runtime-seed/Cargo.lock"] = serde_json::json!({"sha256":format!("{:x}",sha2::Sha256::digest(&bytes)),"bytes":bytes.len()});
+                fs::write(p, data.to_string()).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let mut command = f.cli("build", "main.nagi", "out");
+        command
+            .arg("--seed-lock")
+            .env("PATH", f.0.join("missing-cargo"));
+        let result = bounded_output(command);
+        assert!(!result.status.success());
+        let message = String::from_utf8_lossy(&result.stderr);
+        assert!(!message.contains("Cargoが見つかりません"), "{message}");
+        assert!(!f.0.join("out/generated.low").exists());
+        assert!(!f.0.join("out/Cargo.lock").exists());
+    }
+}
+
+#[test]
+fn bundled_seed_inputs_appearing_while_waiting_are_rechecked_before_projection() {
+    let f = Fixture::new();
+    fs::create_dir_all(f.0.join("out")).unwrap();
+    let held = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(f.0.join("out/.nagi-write.lock"))
+        .unwrap();
+    held.lock().unwrap();
+    let mut command = f.cli("build", "main.nagi", "out");
+    command.arg("--seed-lock").env("PATH", f.0.join("no-cargo"));
+    let mut pending = Running::spawn(command, f.0.join("signals"));
+    pending.wait_for("waiting");
+    bundled_seed(&f);
+    let bytes = fs::read(f.0.join("runtime-seed/Cargo.lock")).unwrap();
+    fs::hard_link(
+        f.0.join("runtime-seed/Cargo.lock"),
+        f.0.join("out/Cargo.toml"),
+    )
+    .unwrap();
+    drop(held);
+    let output = pending.output();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cannot overwrite input"));
+    assert_eq!(
+        fs::read(f.0.join("runtime-seed/Cargo.lock")).unwrap(),
+        bytes
+    );
+    assert!(!f.0.join("out/generated.low").exists());
+}
+
+#[test]
+fn bundled_seed_alias_after_cargo_failure_to_project_keeps_old_latest_and_executable() {
+    let f = Fixture::new();
+    let old = f.build();
+    let bytes = fs::read(&old).unwrap();
+    let latest = f.latest("out").0;
+    let wrapper = f.wrapper();
+    let mut command = f.wrapped(&wrapper, "build", "main.nagi", "out", "seed-after", "after");
+    command.arg("--seed-lock");
+    let mut pending = Running::wrapper(command, f.0.join("seed-after"));
+    pending.wait_for("compiled");
+    f.write("runtime-seed/seed.json", "unused declaration");
+    f.write("runtime-seed/Cargo.lock", "must not overwrite");
+    fs::remove_file(f.0.join("out/Cargo.lock")).unwrap();
+    fs::hard_link(
+        f.0.join("runtime-seed/Cargo.lock"),
+        f.0.join("out/Cargo.lock"),
+    )
+    .unwrap();
+    pending.release();
+    let failed = pending.output();
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("cannot overwrite input"));
+    assert_eq!(
+        fs::read(f.0.join("runtime-seed/Cargo.lock")).unwrap(),
+        b"must not overwrite"
+    );
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(fs::read(&old).unwrap(), bytes);
+    assert_eq!(run(&old), "old");
+}
+
+#[cfg(unix)]
+#[test]
+fn bundled_seed_and_output_special_files_are_rejected_without_blocking() {
+    let capture = native_triple::Fixture::new();
+    for kind in ["fifo", "directory", "device"] {
+        for filename in ["runtime-seed/seed.json", "runtime-seed/Cargo.lock"] {
+            for requested in [false, true] {
+                let f = Fixture::new();
+                bundled_seed(&f);
+                let path = f.0.join(filename);
+                fs::remove_file(&path).unwrap();
+                if kind == "fifo" {
+                    assert!(Command::new("mkfifo")
+                        .arg(&path)
+                        .status()
+                        .unwrap()
+                        .success());
+                } else if kind == "device" {
+                    std::os::unix::fs::symlink("/dev/null", &path).unwrap();
+                } else {
+                    fs::create_dir(&path).unwrap();
+                }
+                let mut command = f.cli("build", "main.nagi", "out");
+                if requested {
+                    command.arg("--seed-lock");
+                }
+                command.env("PATH", f.0.join("no-cargo"));
+                let result =
+                    capture.run_bounded(&mut command, "seed-special-input", Duration::from_secs(5));
+                assert!(!result.status.success());
+                let stderr = String::from_utf8_lossy(&result.stderr);
+                assert_eq!(
+                    stderr.contains("Cargoが見つかりません"),
+                    !requested,
+                    "{stderr}"
+                );
+            }
+        }
+        let f = Fixture::new();
+        fs::create_dir_all(f.0.join("out")).unwrap();
+        let path = f.0.join("out/Cargo.toml");
+        if kind == "fifo" {
+            assert!(Command::new("mkfifo")
+                .arg(&path)
+                .status()
+                .unwrap()
+                .success());
+        } else if kind == "device" {
+            std::os::unix::fs::symlink("/dev/null", &path).unwrap();
+        } else {
+            fs::create_dir(path).unwrap();
+        }
+        let result = capture.run_bounded(
+            &mut f.cli("build", "main.nagi", "out"),
+            "seed-special-output",
+            Duration::from_secs(5),
+        );
+        assert!(!result.status.success());
+        assert!(String::from_utf8_lossy(&result.stderr).contains("regular file"));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn selected_bundled_seed_rejects_file_or_parent_symlinks() {
+    let capture = native_triple::Fixture::new();
+    for path in [
+        "runtime-seed/Cargo.lock",
+        "runtime-core/build.rs",
+        "runtime/src",
+    ] {
+        let f = Fixture::new();
+        bundled_seed(&f);
+        let original = f.0.join(path);
+        let target = f.0.join("moved");
+        fs::rename(&original, &target).unwrap();
+        std::os::unix::fs::symlink(&target, &original).unwrap();
+        let mut command = f.cli("build", "main.nagi", "out");
+        command.arg("--seed-lock").env("PATH", f.0.join("no-cargo"));
+        let failed = capture.run_bounded(&mut command, "seed-link", Duration::from_secs(5));
+        assert!(!failed.status.success());
+        assert!(String::from_utf8_lossy(&failed.stderr).contains("plain"));
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn selected_bundled_seed_rejects_directory_junction() {
+    let f = Fixture::new();
+    bundled_seed(&f);
+    let original = f.0.join("runtime-seed");
+    let target = f.0.join("moved-seed");
+    fs::rename(&original, &target).unwrap();
+    let result = Command::new("cmd.exe")
+        .args(["/d", "/c", "mklink", "/J"])
+        .arg(&original)
+        .arg(&target)
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{result:?}");
+    let capture = native_triple::Fixture::new();
+    let mut command = f.cli("build", "main.nagi", "out");
+    command.arg("--seed-lock");
+    let failed = capture.run_bounded(&mut command, "seed-junction", Duration::from_secs(5));
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("plain directory"));
+}
+
+#[test]
+fn bundled_seed_cli_opaque_inputs_and_unsupported_roots_keep_ordinary_resolution() {
+    let f = Fixture::new();
+    bundled_seed(&f);
+    f.write(
+        "runtime-seed/seed.json",
+        "invalid but unused at an opaque boundary",
+    );
+    f.write("native.low", "fn unused_native() -> i64 { return 1; }\n");
+    f.write("adapter.rs", "pub fn unused_adapter() {}\n");
+    for (index, (extra, reason)) in [
+        (vec!["--native", "native.low"], "native_input"),
+        (vec!["--rust", "adapter.rs"], "rust_adapter"),
+        (vec!["--rust-dep", "serde=1.0"], "rust_dependencies"),
+        (vec!["--incremental"], "incremental_requested"),
+        (vec!["--incremental=units"], "incremental_requested"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut command = f.cli("build", "main.nagi", &format!("opaque-{index}"));
+        command
+            .args(["--profile", "dev", "--seed-lock", "--build-stats"])
+            .args(extra);
+        let result = bounded_output(command);
+        let binary = native(&result);
+        assert_eq!(run(&binary), "old");
+        assert_eq!(
+            stats(&result)["lockfile"],
+            serde_json::json!({
+            "requested":true,"source":"cargo","reason":reason})
+        );
+        verify_receipt(&binary);
+    }
+    fs::remove_file(f.0.join("runtime-seed/seed.json")).unwrap();
+    let mut command = f.cli("build", "main.nagi", "unsupported");
+    command.args(["--profile", "dev", "--seed-lock", "--build-stats"]);
+    let result = bounded_output(command);
+    assert_eq!(run(&native(&result)), "old");
+    assert_eq!(
+        stats(&result)["lockfile"],
+        serde_json::json!({
+        "requested":true,"source":"cargo","reason":"runtime_unsupported"})
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bundled_seed_manifest_discovery_rejects_special_or_oversized_inputs_without_blocking() {
+    use sha2::Digest;
+    let capture = native_triple::Fixture::new();
+    for kind in [
+        "fifo",
+        "device",
+        "invalid-utf8",
+        "full-oversized",
+        "core-oversized",
+    ] {
+        let f = Fixture::new();
+        bundled_seed(&f);
+        // This is a supported seed identity without the optional core-profile
+        // declaration. Discovery must inspect the core manifest before seeding.
+        let full = format!(
+            "[package]\nname='nagi-runtime'\nversion='{}'\nedition='2021'\n",
+            env!("CARGO_PKG_VERSION")
+        );
+        f.write("runtime/Cargo.toml", &full);
+        let descriptor_path = f.0.join("runtime-seed/seed.json");
+        let mut descriptor: serde_json::Value =
+            serde_json::from_slice(&fs::read(&descriptor_path).unwrap()).unwrap();
+        let full_bytes = full.as_bytes();
+        descriptor["files"]["runtime/Cargo.toml"] = serde_json::json!({
+            "bytes":full_bytes.len(),"sha256":format!("{:x}",sha2::Sha256::digest(full_bytes))});
+        let name = if kind == "full-oversized" {
+            "runtime/Cargo.toml"
+        } else {
+            "runtime-core/Cargo.toml"
+        };
+        let path = f.0.join(name);
+        if matches!(kind, "fifo" | "device") {
+            // Preserve a complete valid descriptor, then replace just its core
+            // manifest as in independent LS-FINAL-001's prepatch reproduction.
+            fs::remove_file(&path).unwrap();
+            if kind == "fifo" {
+                assert!(Command::new("mkfifo")
+                    .arg(&path)
+                    .status()
+                    .unwrap()
+                    .success());
+            } else {
+                std::os::unix::fs::symlink("/dev/null", &path).unwrap();
+            }
+        } else {
+            let bytes = if kind == "invalid-utf8" {
+                vec![0xff]
+            } else {
+                let mut bytes = fs::read(&path).unwrap();
+                bytes.extend_from_slice(b"\n#");
+                bytes.resize(1024 * 1024 + 1, b'a');
+                bytes
+            };
+            fs::write(&path, &bytes).unwrap();
+            descriptor["files"][name] = serde_json::json!({
+                "bytes":bytes.len(),"sha256":format!("{:x}",sha2::Sha256::digest(&bytes))});
+        }
+        fs::write(descriptor_path, descriptor.to_string()).unwrap();
+        let mut command = f.cli("build", "main.nagi", "out");
+        command.arg("--seed-lock").env("PATH", f.0.join("no-cargo"));
+        let rejected = capture.run_bounded(
+            &mut command,
+            "seed-manifest-discovery",
+            Duration::from_secs(5),
+        );
+        assert!(!rejected.status.success(), "{kind}");
+        let stderr = String::from_utf8_lossy(&rejected.stderr);
+        assert!(
+            !stderr.contains("Cargoが見つかりません"),
+            "{kind}: {stderr}"
+        );
+        if matches!(kind, "fifo" | "device") {
+            assert!(stderr.contains("plain regular file"), "{kind}: {stderr}");
+        }
+        if kind.contains("oversized") {
+            assert!(stderr.contains("input limit"), "{kind}: {stderr}");
+        }
+        assert!(!f.0.join("out/generated.low").exists(), "{kind}");
+        assert!(!f.0.join("out/src/main.rs").exists(), "{kind}");
+        assert!(!f.0.join("out/Cargo.lock").exists(), "{kind}");
+    }
+}

@@ -734,7 +734,7 @@ def build_notice_payload(lock_data: bytes, metadata: dict,
             "feature_selection": "Cargo default feature selection",
             "roots": roots,
             "limits": [
-                "Cargo.lock is a verification input and is not included in the archive.",
+                "The reviewed Cargo.lock is included as runtime-seed/Cargo.lock for explicit initial seeding.",
                 "Runtime source consumers may resolve a different future application graph.",
                 "Non-default optional feature configurations may select dependencies not enumerated here.",
                 "The compiler entry is its Cargo build graph, not a symbol-level link audit.",
@@ -758,7 +758,7 @@ def build_notice_payload(lock_data: bytes, metadata: dict,
         f"Cargo.lock SHA-256: {manifest['snapshot']['cargo_lock_sha256']}\n"
         f"Compiler binary SHA-256: {compiler_binary_sha256}\n\n"
         "The manifest distinguishes the nagic binary build graph from dependencies of the distributed runtime source. "
-        "The runtime source archive does not include Cargo.lock; a later generated application may resolve a different graph. "
+        "The runtime source archive includes an explicit opt-in runtime-seed/Cargo.lock; a later generated application may resolve a different graph. "
         "This inventory preserves selected package license expressions and observed source texts. It is not legal advice "
         "or a conclusion that any distribution is legally compliant.\n"
     ).encode("utf-8")

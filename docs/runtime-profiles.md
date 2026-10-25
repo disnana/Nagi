@@ -58,3 +58,5 @@ python scripts/benchmark_runtime_profiles.py --compiler path/to/nagic --work-dir
 [2026-10-24の実測](../benchmarks/results/runtime-profiles-2026-10-24/README.md)では、同じ環境・3回のPoint初回ビルド中央値はfull 60.68秒、auto 11.41秒でした。対象・条件を限定した結果で、未対応のアプリはfullを使います。
 
 [既存の開発ビルド](development-builds.md)と[技術設計](internal/runtime-profile-selection.md)も参照してください。
+
+[初回依存lockの明示選択](lock-seeds.md)も独立に指定できます。
