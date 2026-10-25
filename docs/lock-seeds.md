@@ -13,6 +13,8 @@ nagic run --project my-app --seed-lock --runtime-profile auto --profile dev --bu
 
 これはvendoringではありません。registryのindex・crate downloadやRust/Cビルドは依然必要な場合があり、オフライン利用やビルド時間短縮を保証しません。配布lockの依存集合は、生成アプリが最終的に使う集合と一致するとは限りません。依存更新を自動追随する仕組みでもありません。
 
+[3回ずつのLinux測定](../benchmarks/results/lock-seed-2026-10-25/README.md)では、空のtargetからのfullビルドは通常約46〜47秒・seed約58秒で、seedの方が遅くなりました。同じCargo targetを使う別アプリでは短縮しましたが、依存版の違いもあり、Nagi単独の効果や一般的な高速化率とは扱えません。測定はdev・debug情報0・2 jobs・offlineでregistry/OS cacheが温まった条件です。再現性を重視する場合にこのopt-inを選び、通常解決の既定は維持します。
+
 ## 選択結果
 
 `--build-stats`の`lockfile`を確認できます。

@@ -13,6 +13,8 @@ nagic run --project my-app --seed-lock --runtime-profile auto --profile dev --bu
 
 This is not vendoring. Registry index access, crate downloads and Rust/C compilation may still be necessary; offline operation or a build speedup is not guaranteed. The distribution lock can contain packages the generated application does not ultimately use. It does not automatically track future dependency updates.
 
+In the [three-repeat Linux measurements](../../benchmarks/results/lock-seed-2026-10-25/README.md), cold full builds took about 46–47 seconds with ordinary resolution and 58 seconds with seed, so seed was slower. A separate application sharing the Cargo target was faster, but dependency versions also differed; these results do not isolate a Nagi-only effect or establish a general speedup. Conditions were dev, debug info 0, two jobs, offline, with warm registry/OS caches. Choose this opt-in for a reviewed initial graph; ordinary resolution remains the default.
+
 ## Read the selection
 
 Inspect `lockfile` in `--build-stats`:
