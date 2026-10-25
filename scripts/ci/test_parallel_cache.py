@@ -7,6 +7,7 @@ import unittest
 import optimization_projection as infrastructure
 import parallel_cache_projection as policy
 import sf07_request_projection as historical
+import sf06_failure_projection
 from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -35,7 +36,7 @@ def key_fields(step):
 
 
 def prove(source):
-    restored = policy.inverse_workflow(source)
+    restored = sf06_failure_projection.inverse_workflow(policy.inverse_workflow(source))
     if hashlib.sha256(restored.encode()).hexdigest() != PRE_POLICY_WORKFLOW_SHA256:
         raise AssertionError('pre-policy workflow identity changed')
     if hashlib.sha256(historical.inverse_workflow(source).encode()).hexdigest() != BASE_WORKFLOW_SHA256:

@@ -60,12 +60,15 @@ class ReleasePlanTests(unittest.TestCase):
         registry_src = f".cargo/registry/src/{registry_id}"
         registry_cache = self.root / ".cargo" / "registry" / "cache" / registry_id
         workspace = (
-            '[workspace]\nmembers = ["compiler", "runtime"]\n'
+            '[workspace]\nmembers = ["compiler", "runtime", "runtime-core"]\n'
             '[workspace.package]\nversion = "0.1.0"\nedition = "2021"\nlicense = "MIT"\n'
         )
         self.change("Cargo.toml", workspace)
         self.change("compiler/Cargo.toml", '[package]\nname = "nagic"\nversion = "0.1.0"\nedition = "2021"\n')
         self.change("runtime/Cargo.toml", '[package]\nname="nagi-runtime"\nversion.workspace=true\nedition.workspace=true\nlicense.workspace=true\n[dev-dependencies]\nunused="1"\n')
+        self.change("runtime-core/Cargo.toml", '[package]\nname="nagi-runtime-core"\nversion.workspace=true\nedition.workspace=true\nlicense.workspace=true\nbuild="build.rs"\n[lib]\npath="../runtime/src/lib.rs"\n[features]\ncore=[]\n')
+        self.change("runtime-core/build.rs", 'fn main() { println!("cargo::rustc-cfg=nagi_runtime_core"); }\n')
+        self.change("runtime-core/private-note.txt", "Not a distributed source input\n")
         source_specs = (
             ("compiler-dep", "1.0.0", "Apache-2.0 OR MIT",
              {"LICENSE-APACHE": "Apache fixture text\n", "LICENSE-MIT": "MIT fixture text\n"}),
@@ -96,6 +99,7 @@ class ReleasePlanTests(unittest.TestCase):
         package_rows = [
             ("nagic", "0.1.0", None, None),
             ("nagi-runtime", "0.1.0", None, None),
+            ("nagi-runtime-core", "0.1.0", None, None),
             ("compiler-dep", "1.0.0", registry, archive_checksums[("compiler-dep", "1.0.0")]),
             ("build-tool", "2.0.0", registry, archive_checksums[("build-tool", "2.0.0")]),
             ("runtime-dep", "3.0.0", registry, archive_checksums[("runtime-dep", "3.0.0")]),
@@ -144,6 +148,13 @@ class ReleasePlanTests(unittest.TestCase):
             "nagic": [("nagic", "0.1.0"), ("compiler-dep", "1.0.0"), ("build-tool", "2.0.0")],
             "nagi-runtime": [("nagi-runtime", "0.1.0"), ("compiler-dep", "1.0.0"), ("runtime-dep", "3.0.0")],
         }
+        core_id = f"path+file://{self.root / 'runtime-core'}#nagi-runtime-core@0.1.0"
+        metadata["packages"].append({"id": core_id, "name": "nagi-runtime-core", "version": "0.1.0", "source": None,
+                                     "manifest_path": str(self.root / "runtime-core/Cargo.toml"), "license": "MIT", "license_file": None})
+        metadata["workspace_members"].append(core_id)
+        metadata["resolve"]["nodes"].append({"id": core_id, "deps": [
+            {"pkg": ids["runtime-dep"], "dep_kinds": [{"kind": None, "target": None}]}]})
+        trees["nagi-runtime-core"] = [("nagi-runtime-core", "0.1.0"), ("runtime-dep", "3.0.0")]
         return metadata, trees
 
     def add_project_tool_fixtures(self, *, missing=None, symlink=None, nonregular=None):
@@ -203,6 +214,7 @@ class ReleasePlanTests(unittest.TestCase):
 
     def test_compiler_runtime_and_cargo_changes_validate_only_nagi_without_releasing(self):
         files = (
+            "runtime-core/Cargo.toml", "runtime-core/build.rs",
             "compiler/src/check.rs", "compiler/src/emit.rs", "compiler/tests/codegen.rs",
             "compiler/tests/resource_contract_characterization.rs",
             "compiler/tests/fixtures/resource-contract/http.low",
@@ -526,6 +538,7 @@ class ReleasePlanTests(unittest.TestCase):
         notice_paths |= {manifest_path, prefix + "runtime/THIRD-PARTY-NOTICES/README.md"}
         self.assertEqual(set(names), {prefix + name for name in (
             "nagic.exe" if platform == "windows-x86_64" else "nagic",
+            "runtime-core/Cargo.toml", "runtime-core/build.rs",
             "runtime/Cargo.toml", "runtime/src/lib.rs", "runtime/src/sqlite/mod.rs", "runtime/src/sqlite/adapter.rs",
             "runtime/src/sqlite/session.rs", "LICENSE", "release.json", "README.txt",
             *(destination for _, destination in package.PROJECT_TOOLS))} | notice_paths)
@@ -542,6 +555,10 @@ class ReleasePlanTests(unittest.TestCase):
         self.assertEqual(manifest["package"], {"name": "nagi-runtime", "version": "0.1.0", "edition": "2021", "license": "MIT"})
         self.assertIn("workspace", manifest)
         self.assertNotIn("dev-dependencies", manifest)
+        core_manifest = tomllib.loads(read(prefix + "runtime-core/Cargo.toml").decode())
+        self.assertEqual(core_manifest["package"], {"name": "nagi-runtime-core", "version": "0.1.0", "edition": "2021", "license": "MIT", "build": "build.rs"})
+        self.assertEqual(core_manifest["lib"]["path"], "../runtime/src/lib.rs")
+        self.assertEqual(read(prefix + "runtime-core/build.rs"), subprocess.check_output(["git", "show", f"{commit}:runtime-core/build.rs"], cwd=self.root))
         metadata = json.loads(read(next(name for name in names if name.endswith("/release.json"))))
         self.assertEqual(metadata, {"commit": commit, "platform": platform, "version": "0.1.0"})
         self.assertEqual(notice["snapshot"]["source_commit"], commit)
@@ -596,6 +613,22 @@ class ReleasePlanTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "No license text source for runtime-dep@3.0.0"):
                         package.package(binary, "0.1.0", "linux-x86_64", output, commit)
                 self.assertFalse(output.exists())
+
+    def test_package_requires_fixed_core_source_closure(self):
+        for invalid in ("missing-build", "outside-lib"):
+            with self.subTest(invalid=invalid):
+                _, binary, metadata, trees = self.package_test_fixture()
+                if invalid == "missing-build":
+                    (self.root / "runtime-core/build.rs").unlink()
+                else:
+                    path = self.root / "runtime-core/Cargo.toml"
+                    path.write_text(path.read_text().replace("../runtime/src/lib.rs", "../private.rs"))
+                commit = self.commit()
+                metadata_patch, graph_patch = self.patch_notice_graph(metadata, trees)
+                with patch.object(package, "ROOT", self.root), metadata_patch, graph_patch:
+                    with self.assertRaisesRegex(ValueError, "runtime-core/build.rs|fixed shared runtime"):
+                        package.package(binary, "0.1.0", "linux-x86_64", self.root / "blocked", commit)
+                self.assertFalse((self.root / "blocked").exists())
 
     def test_package_refuses_working_lock_different_from_release_commit(self):
         self.change("runtime/src/lib.rs", "// committed runtime\n")

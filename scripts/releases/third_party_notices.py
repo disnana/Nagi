@@ -30,6 +30,7 @@ TEXT_ROOT = f"{NOTICE_ROOT}/texts/sha256/"
 ROOT_ROLES = {
     "nagic": "nagic-binary",
     "nagi-runtime": "nagi-runtime-source",
+    "nagi-runtime-core": "nagi-runtime-source",
 }
 SPDX_LICENSE_IDS = frozenset({
     "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "BSL-1.0", "CC0-1.0",

@@ -70,7 +70,7 @@ def plan(base: str, head: str) -> dict[str, str]:
     # Validate all four native distributions when their build/test inputs
     # change. Packaging does not publish an unchanged component version.
     nagi_changed = any(p in ("Cargo.toml", "Cargo.lock")
-                       or p.startswith(("compiler/", "runtime/")) for p in changed)
+                       or p.startswith(("compiler/", "runtime/", "runtime-core/")) for p in changed)
     extension_changed = any(p.startswith("editors/vscode-nagi/")
                             and not p.startswith("editors/vscode-nagi/test/")
                             and p != "editors/vscode-nagi/README.md" for p in changed)

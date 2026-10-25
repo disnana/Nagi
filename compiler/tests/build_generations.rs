@@ -8,6 +8,8 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+#[path = "support/native_triple.rs"]
+mod native_triple;
 
 static ID: AtomicU64 = AtomicU64::new(0);
 const DEADLINE: Duration = Duration::from_secs(60);
@@ -3646,6 +3648,525 @@ fn verify_receipt(binary: &Path) {
         let bytes = fs::read(directory.join(name)).unwrap();
         assert_eq!(identity["bytes"].as_u64().unwrap(), bytes.len() as u64);
         assert_eq!(identity["sha256"], format!("{:x}", Sha256::digest(&bytes)));
+    }
+}
+
+fn declare_core_runtime(f: &Fixture) {
+    f.write("runtime/Cargo.toml", "[package]\nname='nagi-runtime'\nversion='0.1.0'\nedition='2021'\n[workspace]\n[package.metadata.nagi.runtime-profiles]\nschema=1\ncore-feature='core'\ncore-package='nagi-runtime-core'\ncore-path='../runtime-core'\n");
+    f.write("runtime-core/Cargo.toml", "[package]\nname='nagi-runtime-core'\nversion='0.1.0'\nedition='2021'\nbuild='build.rs'\n[workspace]\n[lib]\npath='../runtime/src/lib.rs'\n[features]\ncore=[]\n");
+    f.write("runtime-core/build.rs", "fn main() {}\n");
+}
+
+#[test]
+fn runtime_outputs_cannot_replace_known_manifest_build_script_or_shared_source() {
+    for mode in ["full", "auto"] {
+        for alias in [
+            "full-manifest",
+            "core-manifest",
+            "shared-hardlink",
+            "build-hardlink",
+        ] {
+            let f = Fixture::new();
+            declare_core_runtime(&f);
+            let out = match alias {
+                "full-manifest" => "runtime",
+                "core-manifest" => "runtime-core",
+                "shared-hardlink" => {
+                    fs::create_dir_all(f.0.join("out/src")).unwrap();
+                    fs::hard_link(f.0.join("runtime/src/lib.rs"), f.0.join("out/src/main.rs"))
+                        .unwrap();
+                    "out"
+                }
+                "build-hardlink" => {
+                    fs::create_dir(f.0.join("out")).unwrap();
+                    fs::hard_link(
+                        f.0.join("runtime-core/build.rs"),
+                        f.0.join("out/Cargo.toml"),
+                    )
+                    .unwrap();
+                    "out"
+                }
+                _ => unreachable!(),
+            };
+            let names = [
+                "runtime/Cargo.toml",
+                "runtime/src/lib.rs",
+                "runtime-core/Cargo.toml",
+                "runtime-core/build.rs",
+            ];
+            let before: Vec<_> = names
+                .iter()
+                .map(|n| fs::read(f.0.join(n)).unwrap())
+                .collect();
+            let mut c = f.cli("build", "main.nagi", out);
+            c.args(["--profile", "dev", "--runtime-profile", mode]);
+            let output = bounded_output(c);
+            assert!(!output.status.success(), "{mode}/{alias}");
+            for (name, bytes) in names.iter().zip(before) {
+                assert_eq!(
+                    fs::read(f.0.join(name)).unwrap(),
+                    bytes,
+                    "{mode}/{alias}/{name}"
+                );
+            }
+            assert!(
+                !f.0.join(out).join("generated.low").exists(),
+                "guard must precede the first projection"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_output_symlink_cannot_replace_declared_core_manifest() {
+    for mode in ["full", "auto"] {
+        let f = Fixture::new();
+        declare_core_runtime(&f);
+        fs::create_dir(f.0.join("out")).unwrap();
+        let source = f.0.join("runtime-core/Cargo.toml");
+        let before = fs::read(&source).unwrap();
+        std::os::unix::fs::symlink(&source, f.0.join("out/Cargo.toml")).unwrap();
+        let mut c = f.cli("build", "main.nagi", "out");
+        c.args(["--profile", "dev", "--runtime-profile", mode]);
+        let output = bounded_output(c);
+        assert!(!output.status.success());
+        assert_eq!(fs::read(source).unwrap(), before);
+        assert!(!f.0.join("out/generated.low").exists());
+    }
+}
+
+#[test]
+fn runtime_output_named_core_stays_a_valid_legacy_application_and_checks_need_no_runtime() {
+    let f = Fixture::new();
+    for mode in ["full", "auto", "auto", "full"] {
+        let mut c = f.cli("build", "main.nagi", "runtime-core");
+        c.args([
+            "--profile",
+            "dev",
+            "--runtime-profile",
+            mode,
+            "--build-stats",
+        ]);
+        let output = bounded_output(c);
+        assert_eq!(run(&native(&output)), "old");
+        assert_eq!(
+            stats(&output)["runtime"]["reason"],
+            if mode == "auto" {
+                "runtime_unsupported"
+            } else {
+                "full_requested"
+            }
+        );
+    }
+    for command in ["check", "lower"] {
+        let mut c = f.cli(command, "main.nagi", "frontend-out");
+        c.env("NAGI_ROOT", f.0.join("missing-installation"));
+        success(&bounded_output(c));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_directory_symlink_uses_the_same_core_sibling_as_the_manifest() {
+    let f = Fixture::new();
+    declare_core_runtime(&f);
+    let linked = f.0.join("linked-installation");
+    fs::create_dir(&linked).unwrap();
+    std::os::unix::fs::symlink(f.0.join("runtime"), linked.join("runtime")).unwrap();
+    let build = |mode: &str| {
+        let mut c = f.cli("build", "main.nagi", "linked-out");
+        c.env("NAGI_ROOT", &linked).args([
+            "--profile",
+            "dev",
+            "--runtime-profile",
+            mode,
+            "--build-stats",
+        ]);
+        bounded_output(c)
+    };
+    for mode in ["full", "auto"] {
+        let output = build(mode);
+        assert_eq!(run(&native(&output)), "old");
+        assert_eq!(stats(&output)["runtime"]["selected"], "full");
+        assert_eq!(
+            stats(&output)["runtime"]["reason"],
+            if mode == "auto" {
+                "runtime_unsupported"
+            } else {
+                "full_requested"
+            }
+        );
+    }
+    std::os::unix::fs::symlink(f.0.join("runtime-core"), linked.join("runtime-core")).unwrap();
+    let paired = build("auto");
+    assert_eq!(run(&native(&paired)), "old");
+    assert_eq!(stats(&paired)["runtime"]["selected"], "core");
+}
+
+#[cfg(unix)]
+fn redirect_core_directory(f: &Fixture) -> PathBuf {
+    declare_core_runtime(f);
+    let foreign = f.0.join("foreign");
+    f.write("foreign/runtime/src/lib.rs", "");
+    f.write("foreign/runtime-core/build.rs", "fn main() {}\n");
+    fs::copy(
+        f.0.join("runtime-core/Cargo.toml"),
+        foreign.join("runtime-core/Cargo.toml"),
+    )
+    .unwrap();
+    fs::remove_dir_all(f.0.join("runtime-core")).unwrap();
+    std::os::unix::fs::symlink(foreign.join("runtime-core"), f.0.join("runtime-core")).unwrap();
+    foreign
+}
+
+#[cfg(unix)]
+#[test]
+fn core_directory_symlink_protects_the_actual_shared_lib_before_cargo_can_start() {
+    for mode in ["full", "auto"] {
+        let f = Fixture::new();
+        let foreign = redirect_core_directory(&f);
+        let actual = foreign.join("runtime/src/lib.rs");
+        fs::create_dir_all(f.0.join("out/src")).unwrap();
+        fs::hard_link(&actual, f.0.join("out/src/main.rs")).unwrap();
+        let original = fs::read(&actual).unwrap();
+        let tools = f.0.join("empty-tools");
+        fs::create_dir(&tools).unwrap();
+        let mut c = f.cli("build", "main.nagi", "out");
+        c.args(["--profile", "dev", "--runtime-profile", mode])
+            .env("PATH", tools);
+        let output = bounded_output(c);
+        assert!(!output.status.success());
+        assert_eq!(
+            fs::read(&actual).unwrap(),
+            original,
+            "{mode}: actual shared source must remain unchanged"
+        );
+        assert!(String::from_utf8_lossy(&output.stderr)
+            .contains("Generated output cannot overwrite input file"));
+        assert!(!f.0.join("out/generated.low").exists());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn core_directory_symlink_requires_source_identity_but_accepts_a_shared_hardlink() {
+    let f = Fixture::new();
+    let foreign = redirect_core_directory(&f);
+    let build = |mode: &str| {
+        let mut c = f.cli("build", "main.nagi", "out");
+        c.args([
+            "--profile",
+            "dev",
+            "--runtime-profile",
+            mode,
+            "--build-stats",
+        ]);
+        bounded_output(c)
+    };
+    for mode in ["full", "auto"] {
+        let output = build(mode);
+        assert_eq!(run(&native(&output)), "old");
+        assert_eq!(stats(&output)["runtime"]["selected"], "full");
+        assert_eq!(
+            stats(&output)["runtime"]["reason"],
+            if mode == "auto" {
+                "runtime_unsupported"
+            } else {
+                "full_requested"
+            }
+        );
+    }
+    fs::remove_file(foreign.join("runtime/src/lib.rs")).unwrap();
+    fs::hard_link(
+        f.0.join("runtime/src/lib.rs"),
+        foreign.join("runtime/src/lib.rs"),
+    )
+    .unwrap();
+    let shared = build("auto");
+    assert_eq!(run(&native(&shared)), "old");
+    assert_eq!(stats(&shared)["runtime"]["selected"], "core");
+}
+
+#[cfg(unix)]
+#[test]
+fn core_manifest_file_symlink_keeps_cargos_logical_source_and_build_origins() {
+    let f = Fixture::new();
+    declare_core_runtime(&f);
+    f.write(
+        "foreign/runtime/src/lib.rs",
+        "pub const UNUSED_FOREIGN: u64 = 1;\n",
+    );
+    f.write(
+        "foreign/runtime-core/build.rs",
+        "compile_error!(\"wrong build origin\");\n",
+    );
+    let core = f.0.join("runtime-core");
+    let foreign = f.0.join("foreign/runtime-core/Cargo.toml");
+    fs::copy(core.join("Cargo.toml"), &foreign).unwrap();
+    fs::remove_file(core.join("Cargo.toml")).unwrap();
+    std::os::unix::fs::symlink(foreign, core.join("Cargo.toml")).unwrap();
+    let mut metadata = Command::new(env!("CARGO"));
+    metadata
+        .args([
+            "metadata",
+            "--offline",
+            "--no-deps",
+            "--format-version",
+            "1",
+            "--manifest-path",
+        ])
+        .arg(core.join("Cargo.toml"));
+    let output = bounded_output(metadata);
+    success(&output);
+    let metadata: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    for target in metadata["packages"][0]["targets"].as_array().unwrap() {
+        let actual = fs::canonicalize(target["src_path"].as_str().unwrap()).unwrap();
+        let expected = if target["kind"][0] == "lib" {
+            f.0.join("runtime/src/lib.rs")
+        } else {
+            core.join("build.rs")
+        };
+        assert_eq!(actual, fs::canonicalize(expected).unwrap());
+    }
+    let mut c = f.cli("build", "main.nagi", "out");
+    c.args([
+        "--profile",
+        "dev",
+        "--runtime-profile",
+        "auto",
+        "--build-stats",
+    ]);
+    let output = bounded_output(c);
+    assert_eq!(run(&native(&output)), "old");
+    assert_eq!(stats(&output)["runtime"]["selected"], "core");
+}
+
+#[test]
+fn runtime_profiles_change_runtime_dependency_and_preserve_old_generations() {
+    let f = Fixture::new();
+    let mut legacy = f.cli("build", "main.nagi", "legacy-out");
+    legacy.args([
+        "--profile",
+        "dev",
+        "--runtime-profile",
+        "auto",
+        "--build-stats",
+    ]);
+    let legacy = bounded_output(legacy);
+    assert_eq!(stats(&legacy)["runtime"]["reason"], "runtime_unsupported");
+    assert_eq!(run(&native(&legacy)), "old");
+    declare_core_runtime(&f);
+    let build = |mode: &str| {
+        let mut c = f.cli("build", "main.nagi", "out");
+        c.args([
+            "--profile",
+            "dev",
+            "--runtime-profile",
+            mode,
+            "--build-stats",
+        ]);
+        bounded_output(c)
+    };
+    let mut retained: Vec<(PathBuf, Vec<u8>)> = Vec::new();
+    for (index, mode) in ["full", "auto", "auto", "full"].into_iter().enumerate() {
+        if index == 2 {
+            // The core package's lib.path is outside its manifest directory.
+            // Cargo must track shared source edits, not only its build script.
+            f.write(
+                "runtime/src/lib.rs",
+                "pub const SHARED_SOURCE_EDIT: u64 = 1;\n",
+            );
+        }
+        let output = build(mode);
+        let binary = native(&output);
+        let report = stats(&output);
+        assert_eq!(
+            report["runtime"],
+            serde_json::json!({
+                "requested": mode, "selected": if mode == "auto" { "core" } else { "full" },
+                "reason": if mode == "auto" { "eligible_core" } else { "full_requested" }
+            })
+        );
+        assert_eq!(report["checks"], "full");
+        assert_eq!(report["cargo_always_invoked"], true);
+        if index == 2 {
+            assert!(
+                report["cargo_compiled_artifacts"].as_u64().unwrap() >= 2,
+                "shared runtime library and new application must both compile"
+            );
+        }
+        let manifest: toml::Value = toml::from_str(
+            &fs::read_to_string(binary.parent().unwrap().join("Cargo.toml")).unwrap(),
+        )
+        .unwrap();
+        let dependency = manifest["dependencies"]["nagi-runtime"].as_table().unwrap();
+        if mode == "auto" {
+            assert_eq!(dependency.len(), 4);
+            assert_eq!(dependency["package"].as_str(), Some("nagi-runtime-core"));
+            assert_eq!(dependency["default-features"].as_bool(), Some(false));
+            assert_eq!(
+                dependency["features"].as_array().unwrap(),
+                &[toml::Value::String("core".into())]
+            );
+        } else {
+            assert_eq!(
+                dependency.len(),
+                1,
+                "full stays path-only, including CAS contracts"
+            );
+        }
+        assert_eq!(run(&binary), "old");
+        verify_receipt(&binary);
+        for (old, bytes) in &retained {
+            assert_ne!(&binary, old);
+            assert_eq!(&fs::read(old).unwrap(), bytes);
+            assert_eq!(run(old), "old");
+        }
+        retained.push((binary.clone(), fs::read(binary).unwrap()));
+    }
+    let (latest, _) = f.latest("out");
+    let corrupt = b"this is not a valid Cargo.lock [[";
+    f.write("out/Cargo.lock", std::str::from_utf8(corrupt).unwrap());
+    let rejected = build("auto");
+    assert!(!rejected.status.success());
+    let error = String::from_utf8_lossy(&rejected.stderr);
+    assert!(
+        error.contains("Cargo.lock") && error.contains("failed to parse lock file"),
+        "{error}"
+    );
+    assert_eq!(f.latest("out").0, latest);
+    assert_eq!(fs::read(f.0.join("out/Cargo.lock")).unwrap(), corrupt);
+    for (old, bytes) in retained {
+        assert_eq!(fs::read(&old).unwrap(), bytes);
+        assert_eq!(run(&old), "old");
+    }
+}
+
+#[test]
+fn runtime_profiles_execute_real_scalar_records_and_fall_back_for_emitted_boundaries() {
+    let f = Fixture::new();
+    let native_capture = native_triple::Fixture::new();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    // Share the ordinary native regression cache; Cargo still revalidates every
+    // generation and every feature transition. Only fixture outputs are private.
+    let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("native-target"));
+    let build = |source: &str, out: &str, extra: &[&str]| {
+        let mut c = f.cli("build", source, out);
+        c.env("NAGI_ROOT", root)
+            .env("NAGI_NATIVE_TARGET_DIR", &target)
+            .args([
+                "--profile",
+                "dev",
+                "--runtime-profile",
+                "auto",
+                "--build-stats",
+            ])
+            .args(extra);
+        // Real dependency compilation uses the existing native fixture budget;
+        // all ordinary generation/barrier and executable budgets stay unchanged.
+        native_capture.run_bounded(&mut c, "runtime-profile-build", Duration::from_secs(180))
+    };
+    f.write("main.nagi", "class Point:\n    x: f64\n    y: f64\ndef main():\n    print(\"Hello, Nagi!\")\n    p = Point(x=1.5, y=2.5)\n    print(p.x + p.y)\n");
+    let high = build("main.nagi", "real-out", &[]);
+    let high_binary = native(&high);
+    assert_eq!(stats(&high)["runtime"]["selected"], "core");
+    assert_eq!(run(&high_binary), "Hello, Nagi!\n4");
+    verify_receipt(&high_binary);
+    fs::copy(f.0.join("real-out/generated.low"), f.0.join("saved.low")).unwrap();
+    let low = build("saved.low", "low-out", &[]);
+    assert_eq!(stats(&low)["runtime"]["selected"], "core");
+    assert_eq!(run(&native(&low)), "Hello, Nagi!\n4");
+    for prefix in [
+        "async def unused():\n    return\n",
+        "import std.http.server as http\ndef unused() -> http.Options:\n    return http.default_options()\n",
+        "import std.db.sqlite as sqlite\ndef unused() -> Result[sqlite.Options, Error]:\n    return sqlite.options(1, 2, 1000, 0)\n",
+    ] {
+        f.write("main.nagi", &format!("{prefix}def main():\n    print(42)\n"));
+        let output = build("main.nagi", "real-out", &[]);
+        assert_eq!(run(&native(&output)), "42");
+        assert_eq!(stats(&output)["runtime"]["reason"], "unsupported_ir");
+    }
+    f.source("main.nagi", "boundary");
+    f.write("native.low", "fn unused_native() -> i64 { return 1; }\n");
+    f.write("adapter.rs", "pub fn unused_adapter() {}\n");
+    for (extra, reason) in [
+        (vec!["--native", "native.low"], "native_input"),
+        (vec!["--rust", "adapter.rs"], "rust_adapter"),
+        (vec!["--rust-dep", "serde=1.0"], "rust_dependencies"),
+        (vec!["--incremental"], "incremental_requested"),
+        (vec!["--incremental=units"], "incremental_requested"),
+    ] {
+        let output = build("main.nagi", "real-out", &extra);
+        let binary = native(&output);
+        assert_eq!(run(&binary), "boundary");
+        verify_receipt(&binary);
+        let manifest: toml::Value = toml::from_str(
+            &fs::read_to_string(binary.parent().unwrap().join("Cargo.toml")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            manifest["dependencies"]["nagi-runtime"]
+                .as_table()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(stats(&output)["runtime"]["selected"], "full");
+        assert_eq!(stats(&output)["runtime"]["reason"], reason);
+    }
+    assert_eq!(run(&high_binary), "Hello, Nagi!\n4");
+}
+
+#[test]
+fn original_runtime_keeps_complete_rust_api_with_no_default_and_all_features() {
+    let f = Fixture::new();
+    let native_capture = native_triple::Fixture::new();
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let target = std::env::var_os("NAGI_NATIVE_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("native-target"));
+    let dependency = toml::Table::from_iter([
+        (
+            "path".into(),
+            toml::Value::String(root.join("runtime").to_str().unwrap().into()),
+        ),
+        ("default-features".into(), toml::Value::Boolean(false)),
+    ]);
+    f.write("embedding/Cargo.toml", &format!("[package]\nname='runtime-embedding-compatibility'\nversion='0.1.0'\nedition='2021'\n[workspace]\n[dependencies.nagi-runtime]\n{}", toml::to_string(&dependency).unwrap()));
+    f.write(
+        "embedding/src/main.rs",
+        r#"fn main() {
+        let _: Option<nagi_runtime::auth::AuthScope> = None;
+        let _: Option<nagi_runtime::sqlite::Options> = None;
+        let _ = nagi_runtime::http_server::default_options();
+        let _ = nagi_runtime::sqlite::options(1, 2, 1000, 0);
+        assert_eq!(nagi_runtime::axum::http::StatusCode::OK.as_u16(), 200);
+        println!("full API retained");
+    }"#,
+    );
+    for features in ["--no-default-features", "--all-features"] {
+        let mut cargo = Command::new(env!("CARGO"));
+        cargo
+            .current_dir(f.0.join("embedding"))
+            .args(["build", "--offline", features])
+            .env("CARGO_TARGET_DIR", &target);
+        let output =
+            native_capture.run_bounded(&mut cargo, "embedding-build", Duration::from_secs(180));
+        success(&output);
+        let binary =
+            f.0.join("embedding")
+                .join(&target)
+                .join("debug")
+                .join(format!(
+                    "runtime-embedding-compatibility{}",
+                    std::env::consts::EXE_SUFFIX
+                ));
+        // Keep executable waiting under the original 60s bound, separate from
+        // the existing 180s native dependency compilation budget.
+        assert_eq!(run(&binary), "full API retained");
     }
 }
 

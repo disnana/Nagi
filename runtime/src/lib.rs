@@ -1,21 +1,29 @@
+#[cfg(not(nagi_runtime_core))]
 mod security_sf07_private;
+#[cfg(not(nagi_runtime_core))]
 pub use axum;
 pub use rusqlite;
 pub use serde;
 pub use serde_json;
 pub mod actor;
+#[cfg(not(nagi_runtime_core))]
 pub mod auth;
 mod concurrent;
 mod database;
+#[cfg(not(nagi_runtime_core))]
 pub mod html;
+#[cfg(not(nagi_runtime_core))]
 pub mod http_server;
 // Legacy private phase ports remain internal; canonical operation values are public.
 #[allow(dead_code, unused_imports)]
+#[cfg(not(nagi_runtime_core))]
 pub mod http_client;
 pub mod metrics;
 pub mod result;
+#[cfg(not(nagi_runtime_core))]
 pub mod sqlite;
 mod task;
+#[cfg(not(nagi_runtime_core))]
 use axum::{
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
@@ -193,6 +201,7 @@ impl fmt::Display for Uuid {
     }
 }
 
+#[cfg(not(nagi_runtime_core))]
 pub fn response<T: Serialize>(r: Result<T, Error>) -> Response {
     match r {
         Ok(t) => match serde_json::to_vec(&t) {
@@ -209,6 +218,7 @@ pub fn response<T: Serialize>(r: Result<T, Error>) -> Response {
         Err(e) => error_response(e),
     }
 }
+#[cfg(not(nagi_runtime_core))]
 pub fn error_response(e: Error) -> Response {
     let code = match e.kind {
         ErrorKind::Invalid => StatusCode::BAD_REQUEST,

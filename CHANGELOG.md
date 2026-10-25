@@ -2,6 +2,8 @@
 
 ## 未リリース / Unreleased
 
+- `build/run --runtime-profile full|auto`を明示opt-inで追加。既定fullと既存Rust API（default-features無効時を含む）を保持し、完全検査済みの小さな同期プログラムだけ共有ソースの軽量packageを選択します。unknown/async/adapter/追加Rust依存/incrementalはfullへ戻し、Cargoのnative再判定と旧成功世代の保護を維持します。[計測条件と限界](benchmarks/results/runtime-profiles-2026-10-24/README.md)。
+- Add opt-in runtime dependency selection from checked IR, preserving complete High/Low/type/ownership/Policy checks and the existing full runtime API. Include the shared-source core package and its dependency notices in distributions. Keep release settings and receipt/CAS compatibility; the measured gains apply to supported small synchronous programs, not arbitrary HTTP/SQL backends.
 - Keep changes limited to discoverable root-level website tests on the existing documentation CI path. Preserve full validation for unknown files and mixed compiler, runtime, security or dependency changes. This optimizes Nagi's repository CI; application build behavior is unchanged.
 - 利用者向けCI generatorに`--build-profile dev|release`を追加。既定releaseと完全検査を維持し、Nagi 0.2.1以上の開発用buildをWindows/Unixで選択できます。profile別cacheと0.2.0向けrelease互換を維持し、未対応の組合せは出力前に拒否します。
 - Add explicit development/release profile selection to the next user-project CI generator, defaulting to release and targeting published Nagi 0.2.1 by default. Keep full checks, trusted-branch cache writes and older CLI release compatibility; separate profile caches under a new key namespace. Published 0.2.1 archives are unchanged.

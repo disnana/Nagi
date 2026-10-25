@@ -1220,6 +1220,7 @@ jobs:
           cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
           python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
       - name: Check SF06 public HTTP client across package targets
+        id: sf06_public_client
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/native-target
           CARGO_PROFILE_DEV_DEBUG: '0'
@@ -1500,8 +1501,13 @@ jobs:
             shift
             local log="$RUNNER_TEMP/sf06-${label}.log"
             local status=0
-            "$@" > "$log" 2>&1 || status=$?
-            python "$RUNNER_TEMP/sf06-http-client-guard.py" "$label" "$status" "$log"
+            (unset GITHUB_OUTPUT; "$@") > "$log" 2>&1 || status=$?
+            local guard_status=0
+            (unset GITHUB_OUTPUT; python "$RUNNER_TEMP/sf06-http-client-guard.py" "$label" "$status" "$log") || guard_status=$?
+            if [ "$guard_status" -ne 0 ]; then
+              python -B scripts/ci/sf06_http_client_failure_diagnostic.py "$label" "$status" "$guard_status" "$log" "$RUNNER_TEMP" 2>/dev/null || printf '%s\n' 'sf06_http_client_failure_diag=v1 status=unavailable reason=invocation_error artifact_saved=false'
+            fi
+            return "$guard_status"
           }
           run_check runtime-http-client cargo test --locked -p nagi-runtime --lib http_client::
           run_check production-dns cargo test --locked -p nagi-runtime --test http_client_operation_public_api production_public_handle_rejects_loopback_before_tcp_or_http -- --exact
@@ -1515,7 +1521,9 @@ jobs:
         with:
           retention-days: 7 # ci-retention
           name: sf06-http-client-native-${{ matrix.platform }}
-          path: ${{ runner.temp }}/sf06-http-client-native/sf06-native-diagnostic.json
+          path: |
+            ${{ runner.temp }}/sf06-http-client-native/sf06-native-diagnostic.json
+            ${{ steps.sf06_public_client.outputs.closed_failure_diagnostic }}
           if-no-files-found: ignore
       - name: Classify SF06 public signature failure from captured output
         if: always()
