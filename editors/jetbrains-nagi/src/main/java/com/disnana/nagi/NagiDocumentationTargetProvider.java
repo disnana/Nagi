@@ -64,7 +64,7 @@ public final class NagiDocumentationTargetProvider implements DocumentationTarge
         }
 
         private DocumentationResult.Documentation awaitDocumentation() {
-            ApplicationManager.getApplication().assertIsNonDispatchThread();
+            com.intellij.util.concurrency.ThreadingAssertions.assertBackgroundThread();
             if (ApplicationManager.getApplication().isReadAccessAllowed())
                 throw new IllegalStateException("Nagi documentation cannot wait in a read action.");
             ProgressManager.checkCanceled();

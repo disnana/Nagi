@@ -66,7 +66,7 @@ public final class NagiProgramRunner extends AsyncProgramRunner<RunnerSettings> 
                 @Override public void run(@NotNull ProgressIndicator indicator) {
                     startup.indicator = indicator;
                     startup.checkCanceled();
-                    ApplicationManager.getApplication().assertIsNonDispatchThread();
+                    com.intellij.util.concurrency.ThreadingAssertions.assertBackgroundThread();
                     try {
                         SaveBarrier barrier = environment.getUserData(SAVE_BARRIER);
                         if (barrier == null) NagiSaveBarrier.awaitDiskWrites();

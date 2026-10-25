@@ -2,6 +2,10 @@
 
 [目次](README.md) · [準備と最初の実行](getting-started.md) · [拡張のインストールと設定](../editors/vscode-nagi/README.md)
 
+**現在の公開版（2026-10-25）:** Nagi 0.2.1は[10月23日に公開](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.1)、JetBrains plugin 0.1.6は[GitHub Releasesで公開](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6)済みです。導入可能な版とIDE対応は[GitHub Releases](https://github.com/disnana/Nagi/releases)またはMarketplaceで確認してください。[README](../README.md)に公開版の範囲を、[Docs目次](README.md)に0.2.2開発中の差分を掲載しています。下の0.1.2・0.1.3の記述は当時の版別記録で、現在の配布ZIP一覧ではありません。新しい配布物を選ぶ根拠にせず、個別releaseの情報を確認してください。
+
+## JetBrains 0.1.2・0.1.3の版別記録
+
 VS Code拡張はMarketplaceまたはGitHub ReleasesのVSIXから導入できます。IntelliJ IDEA・PyCharm向けの[Nagi](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.md)は[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールできます。Marketplaceから入れる場合は、一覧のVersionsで利用可能な版とIDE対応を確認してください。[GitHub Releases](https://github.com/disnana/Nagi/releases)では、IDEAとPyCharm共通の公開済み0.1.2 ZIPを手動でインストールできます。公開ファイル名は[導入ガイド](getting-started.md)を参照してください。
 
 [GitHub Releases](https://github.com/disnana/Nagi/releases)の公開済み0.1.2共通ZIPは、IntelliJ IDEA 2025.1.1 build 251.25410.109以降、PyCharm 2025.1.1 build 251.25410.122以降を対象とします。2025.1 branch初期buildでは0.1.2のtrust checkが使う公開APIが解決されないため、このZIPの対象外です。2024.3または2025.1初期buildの利用者は、インストール済みの版をそのまま使うか、IDEを対応buildへ更新してから0.1.2 ZIPへ移行してください。Marketplaceから入れる場合は、Versionsに表示される版の対応IDE buildを確認してください。
@@ -12,15 +16,15 @@ JetBrains plugin 0.1.3の編集補助は、IDE標準設定に沿った括弧・�
 
 plugin 0.1.3の世代保持はcompiler 0.2.0を使い、IDE管理のRunだけに適用されます。公開`nagic` 0.1.11は通常のCLI Check/Runに対応しますが、自動世代回収には対応しません。CLIの成功世代は保持され、Cargo共有cacheは別に残ります。この回収modeは、成功記録のあるlatest、実行中世代、全appの入力snapshotが参照する世代、失敗後のlast-goodを保護します。compile成功だけでrun成功とはみなさず、入力metadataが不明なmanaged世代も回収しません。回収数・容量に厳密な上限はなく、依存元を削除した後も参照先が次のsuccessful sweepまで残る場合があります。compiler 0.1.12の一時候補は中止されました。JetBrains pluginの利用可能な版は[GitHub Releases](https://github.com/disnana/Nagi/releases)またはJetBrains Marketplaceで確認してください。世代とCargo cacheの違いは[プロジェクト設定](projects.md)を参照してください。
 
-## 開発中のimport編集支援
+## 隣接ファイルのimport支援（Nagi 0.2.1・JetBrains 0.1.6）
 
-次の機能は0.2.1向けの開発中変更で、公開済みcompiler 0.2.0／plugin 0.1.3の機能ではありません。この変更を含むcompilerとpluginを組み合わせて試してください。
+隣接ファイルを名前でimportするcompiler側の支援はNagi 0.2.1に含まれ、JetBrains plugin 0.1.6の[公開release](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6)にも反映されています。Nagi 0.2.0／plugin 0.1.3以前には含まれません。Nagi 0.2.2の開発差分は[Docs目次](README.md)で別に確認してください。この案内は手動GUIやIMEの受入を示すものではありません。
 
-同じフォルダーに`models.nagi`を保存すると、Highの`import mo`で`models`、`from models import `でそのファイル自身の定義を候補にします。Lowでは隣の`.low`が対象です。標準moduleの候補もcompilerの登録情報から取得します。`from`で関数を選んでも呼び出し括弧は付けません。import先・選んだ定義・別名の定義移動は、compilerが元ファイルの正確な位置を返せる場合に利用できます。[構文と実行例](modules-and-rust.md#開発中隣のファイルを名前でimportする)を参照してください。
+同じフォルダーに`models.nagi`を保存すると、Highの`import mo`で`models`、`from models import `でそのファイル自身の定義を候補にします。Lowでは隣の`.low`が対象です。標準moduleの候補もcompilerの登録情報から取得します。`from`で関数を選んでも呼び出し括弧は付けません。import先・選んだ定義・別名の定義移動は、compilerが元ファイルの正確な位置を返せる場合に利用できます。[構文と実行例](modules-and-rust.md#隣のファイルを名前でimportする)を参照してください。
 
 開く・編集する操作で既存のバックグラウンド解析を更新し、補完は現在のカーソルに対応する結果を使います。常駐compilerとdebounce・取消処理を共有し、IDE側に別の型検査器は作りません。compilerは問い合わせごとに対象graphを解析する方式で、差分解析ではありません。補完の表示・選択ではファイルを走査せず、workerで検証したsnapshotとメモリ上の編集世代を照合します。開いているbufferの編集で古くなった結果は適用しません。外部ツールによるファイル追加・削除・移動はIDEの変更通知後に無効化するため、通知までの遅延があります。実際のcheck/buildではimportを改めて検査します。
 
-候補を探すのは直近のフォルダーだけです。無関係な項目も含め8192件を超える場合は不完全な候補を表示せず、候補なしになります。この補完用の上限は通常のimport可否を変更しません。未検査のexportは型やsignatureを推測しません。新しいimport支援の実GUI受入・4 IDE互換性検査は、公開済み0.1.3の結果と分けて確認する必要があります。
+候補を探すのは直近のフォルダーだけです。無関係な項目も含め8192件を超える場合は不完全な候補を表示せず、候補なしになります。この補完用の上限は通常のimport可否を変更しません。未検査のexportは型やsignatureを推測しません。IDEごとの対応範囲は[JetBrains導入ガイド](../editors/jetbrains-nagi/README.md)を参照してください。自動テストやPlugin Verifierの結果は、手動GUIやIMEの動作確認とは区別します。
 
 監視の初期化では、既存workerが対象の親フォルダーだけをIDEのVFS（仮想ファイルシステム）へ読み込み、非同期で更新します。8192件はcompilerの候補列挙とworkerの前後検査の上限です。IDE内部の読み込みには同じ上限を指定できないため、検査の間に大量の項目が追加された場合のIDE内部処理量やメモリ全体を8192件相当に制限する保証はありません。
 
@@ -100,7 +104,7 @@ classを返す関数の`make().`、入れ子の`container.item.`、Copy classの
 | `show(count)`の`count` | `case Ok(count)` |
 | `error_message(problem)`の`problem` | `case Err(problem)` |
 
-再代入した名前は最初の定義へ戻ります。forで外側と同じ名前を使うと、ループ内ではforの名前へ、ループ後では元の定義へ戻ります。if・while・scope・caseの中で新しく作った名前は、そのブロック内だけが対象です。move後の使用や初期化の型エラーがあっても、束縛先を特定できる名前には移動できます。classのフィールド名や組み込み関数へのF12は未対応です。
+再代入した名前は最初の定義へ戻ります。forで外側と同じ名前を使うと、ループ内ではforの名前へ、ループ後では元の定義へ戻ります。if・while・scope・caseの中で新しく作った名前は、そのブロック内だけが対象です。move後の使用や初期化の型エラーがあっても、束縛先を特定できる名前には移動できます。classのフィールド名は、compilerが正確な宣言位置を返す場合にF12で移動できます。組み込み関数名や正確な宣言位置を得られない項目への移動は未対応です。
 
 ### moduleの候補と定義を試す
 
