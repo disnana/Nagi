@@ -1559,6 +1559,103 @@ public class NagiAssistServiceTest extends BasePlatformTestCase {
         assertNull(service.fresh(myFixture.getFile()));
     }
 
+    private NagiAssistProtocol.Response navigationFacts(PsiFile file) {
+        String path = file.getVirtualFile().getPath();
+        return new NagiAssistProtocol.Response("none", true, true, false, "names", List.of(), List.of(),
+                List.of(new NagiAssistProtocol.Reference(new NagiAssistProtocol.Location(path, 4, 11, 6),
+                        new NagiAssistProtocol.Location(path, 1, 5, 6))), List.of(path));
+    }
+
+    public void testReferenceProviderShapeIsStableAcrossAsyncPublicationWithoutPsiChanges() throws Exception {
+        String text = "def target() -> i64:\n    return 1\ndef main():\n    print(target())\n";
+        PsiFile file = source("reference-stability.nagi", text);
+        var host = NagiDocumentationProvider.sourceElement(file.findElementAt(text.lastIndexOf("target")));
+        assertNotNull(host);
+        var release = new CountDownLatch(1);
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> {
+            assertTrue(release.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            return navigationFacts(file);
+        });
+        installService();
+        var hints = new com.intellij.psi.PsiReferenceService.Hints(null, -1);
+        long psiStamp = com.intellij.psi.util.PsiModificationTracker.getInstance(getProject()).getModificationCount();
+        try {
+            var cold = com.intellij.psi.impl.source.resolve.reference.ReferenceProvidersRegistry.getReferencesFromProviders(host, hints);
+            assertNull(service.fresh(file));
+            service.requestBaseline(file);
+            release.countDown();
+            waitUntil(() -> service.fresh(file) != null);
+            assertEquals("publishing compiler facts must not require a PSI edit", psiStamp,
+                    com.intellij.psi.util.PsiModificationTracker.getInstance(getProject()).getModificationCount());
+            var warm = com.intellij.psi.impl.source.resolve.reference.ReferenceProvidersRegistry.getReferencesFromProviders(host, hints);
+            assertEquals("provider arrays must be interchangeable across async arrival", cold.length, warm.length);
+            assertEquals(1, cold.length);
+            assertTrue(cold[0].isSoft());
+            assertNotNull("a reference created while cold resolves current compiler facts", cold[0].resolve());
+            assertEquals(text.indexOf("target"), cold[0].resolve().getTextOffset());
+        } finally { release.countDown(); }
+    }
+
+    public void testCachedReferenceUsesCurrentSnapshotAndRejectsUncommittedPsi() throws Exception {
+        String text = "def target() -> i64:\n    return 1\ndef main():\n    print(target())\n";
+        PsiFile file = source("reference-generation.nagi", text);
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) -> navigationFacts(file));
+        installService();
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        var first = service.fresh(file);
+        var held = file.findReferenceAt(text.lastIndexOf("target"));
+        assertNotNull(held);
+        assertNotNull(held.resolve());
+        var editor = myFixture.getEditor();
+        editor.getCaretModel().moveToOffset(text.lastIndexOf("target") + 2);
+        service.requestCompletion(file, editor);
+        waitUntil(() -> service.fresh(file, editor) != null && service.fresh(file, editor) != first);
+        assertFalse(service.isCurrent(file, first));
+        assertNotNull("a platform-cached reference must not pin the first response", held.resolve());
+        assertEquals(text.indexOf("target"), held.resolve().getTextOffset());
+        var document = editor.getDocument();
+        WriteCommandAction.runWriteCommandAction(getProject(), () -> document.setText(text.replace("target", "chosen")));
+        assertFalse(PsiDocumentManager.getInstance(getProject()).isCommitted(document));
+        assertNull("new document facts must never resolve an old uncommitted PSI token", held.resolve());
+        PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        var current = file.findReferenceAt(document.getText().lastIndexOf("chosen"));
+        assertNotNull("unsaved but committed overlay remains navigable", current);
+        assertEquals("chosen", current.resolve().getText());
+        TrustedProjects.setProjectTrusted(getProject(), false);
+        assertNull("trust loss rejects resolution even when the reference object remains", current.resolve());
+        service.dispose();
+        assertNull("disposed compiler assistance cannot resolve", current.resolve());
+    }
+
+    public void testBuiltinAndUnresolvedSoftReferencesStayNullAndPropagateCancellation() throws Exception {
+        PsiFile file = source("reference-misses.nagi", "def main():\n    print(missing())\n");
+        service = new NagiAssistService(getProject(), (plan, input, timeout, cancellation, guard) ->
+                new NagiAssistProtocol.Response("none", true, false, false, "names", List.of(), List.of(), List.of(),
+                        List.of(file.getVirtualFile().getPath())));
+        installService();
+        service.requestBaseline(file);
+        waitUntil(() -> service.fresh(file) != null);
+        for (String name : List.of("print", "missing")) {
+            var reference = file.findReferenceAt(file.getText().indexOf(name));
+            assertNotNull("syntax-only soft reference exists without inventing a target", reference);
+            assertTrue(reference.isSoft());
+            assertNull("no compiler exact target for " + name, reference.resolve());
+            assertEquals(0, reference.getVariants().length);
+            var indicator = new com.intellij.openapi.progress.EmptyProgressIndicator();
+            try {
+                com.intellij.openapi.progress.ProgressManager.getInstance().runProcess(() -> {
+                    indicator.cancel();
+                    reference.resolve();
+                    fail("reference resolution must propagate cancellation");
+                }, indicator);
+                fail("a canceled resolution cannot succeed");
+            } catch (com.intellij.openapi.progress.ProcessCanceledException expected) { }
+        }
+    }
+
     private void installService() {
         serviceReplacement = com.intellij.openapi.util.Disposer.newDisposable("Nagi import assistance service replacement");
         ServiceContainerUtil.replaceService(getProject(), NagiAssistService.class, service, serviceReplacement);

@@ -350,6 +350,10 @@ public final class NagiSemanticEditorIntegrationTest extends BasePlatformTestCas
     }
 
     public void testMouseHoverBrowserShowsPointColdWarmAndAfterTrailingNewline() throws Exception {
+        // Recompute the platform PSI-reference cache on every read: async
+        // compiler publication must not change the cached provider array.
+        com.intellij.openapi.util.registry.Registry.get("platform.random.idempotence.check.rate")
+                .setValue(1, getTestRootDisposable());
         String text = "# 固定型の値 😀\nclass Point:\n    x: f64\n    y: f64\n\ndef main():\n"
                 + "    print(\"Hello, Nagi!\")\n    p = Point(x=1.5, y=2.5)\n    print(p.x + p.y)\n";
         Path path = root.resolve("日本語 Point hover.nagi");
