@@ -40,9 +40,10 @@ jsonwebtoken = { version = "=11.1.0", default-features = false, features = ["aws
 aws-lc-rs = "=1.18.1"
 
 # SF06 private TLS dependency candidate. Runtime implementation remains unconnected.
-rustls = { version = "=0.23.45", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["std", "tls12", "aws_lc_rs"] }
+rustls-webpki = { version = "=0.103.16", default-features = false }
 tokio-rustls = { version = "=0.26.6", default-features = false }
-webpki-roots = { version = "=1.0.9", default-features = false }
+webpki-roots = { version = "=1.0.10", default-features = false }
 
 # SF06 private tracked DNS provider; runtime API remains unconnected.
 hickory-resolver = { version = "=0.26.3", default-features = false, features = ["tokio"] }
