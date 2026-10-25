@@ -128,7 +128,7 @@ Lowの互換性を保ちながら、当面はHighとRust連携を優先します
 | async・scope、typed actor・Supervisor | Tokio上の同一プロセス。独自VM、無停止更新、分散actorはありません |
 | ファイルのimport、標準module、Rust連携、Lowの関数差し替え | 任意のRust型をそのまま使う機能や、安定した外部ABIはありません |
 
-SQLiteの固定SQLは直接literalを`sqlite.literal(...)`へ渡して`Query`にし、値は型付き`Parameters`でbindします。request由来文字列をSQL構造として実行するfactoryはありません。schemaを明示する[事前検査](docs/sql-check.md)は、直接QueryのSQL形・schema名・必要な列と、直接Parameters builder列のbind数を確認できます。実値の型・NULL・数値範囲はruntime検査に残り、事前検査は配備先DBとの一致を保証しません。Pool/Txの詳細は[SQLite](docs/sqlite-pool.md)を参照してください。このAPIは公開0.1.11には含まれません.
+SQLiteの固定SQLは直接literalを`sqlite.literal(...)`へ渡して`Query`にし、値は型付き`Parameters`でbindします。request由来文字列をSQL構造として実行するfactoryはありません。schemaを明示する[事前検査](docs/sql-check.md)は、直接QueryのSQL形・schema名・必要な列と、直接Parameters builder列のbind数を確認できます。実値の型・NULL・数値範囲はruntime検査に残り、事前検査は配備先DBとの一致を保証しません。Pool/Txの詳細は[SQLite](docs/sqlite-pool.md)を参照してください。このAPIはNagi 0.2.0で導入され、公開0.1.11には含まれません。
 
 
 各APIの条件は[リファレンス](docs/README.md)で確認してください。Nagiの検査とrustcの役割は[所有権](docs/ownership.md)、実装基盤の分担は[紹介](docs/introduction.md#コンパイラと既存ライブラリ)に記載しています。

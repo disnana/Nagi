@@ -33,9 +33,9 @@ The program prints `Nagi` and `42`. Paths are relative to the file containing th
 
 This traditional import loads definitions from the file and its dependencies into the same namespace. Built-in functions remain available as before.
 
-### In development: import a neighboring file by name
+### Import a neighboring file by name
 
-This feature is in development for 0.2.1. With published 0.2.0, use the quoted paths above. To try the new syntax, use a compiler containing this change.
+This syntax is included in published Nagi 0.2.1. With 0.2.0 or earlier, use the quoted paths above. Existing quoted imports remain supported.
 
 With the same `models.nagi`, save this as `app.nagi` beside it. Resolution starts beside the importing file, independently of the working directory.
 
