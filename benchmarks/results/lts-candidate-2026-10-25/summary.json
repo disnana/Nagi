@@ -842,11 +842,21 @@
       "rust188_public_api": 1,
       "workspace": {
         "exit_code": 0,
-        "groups": 124,
-        "passed": 2029,
+        "groups": 121,
+        "passed": 2026,
         "failed": 0,
         "ignored": 4,
-        "wall_s": 949.5909388699997
+        "wall_s": 949.5909388699997,
+        "child_helpers": {
+          "invocations": 3,
+          "groups": 3,
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered_out": 24,
+          "note": "Three graph_render subprocess invocations rerun one helper test each. The 24 cumulative filtered slots are not omitted parent-suite cases. One child summary prefix is interleaved with a parent test-ok line in the unchanged raw log."
+        },
+        "count_definition": "groups and passed/failed/ignored count final unfiltered top-level Running/Doc-tests summaries only; graph_render child-helper results are separate."
       },
       "release_python": 160,
       "official_upstream_distrusted_spki": {

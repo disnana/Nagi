@@ -40,7 +40,7 @@ full/coreの均衡化した既存比較と既定releaseのCPU probeは[別の測
 
 VS Codeの既存`npm test`はNode 24.19.0、候補compilerをPATHへ明示して3回実行し、各196成功/失敗0/skip0（22ファイル）。wallは1.286/1.130/1.171秒、中央値1.171秒、範囲1.130–1.286秒。初回compiler欠落のENOENTと、通常sandboxでのsnippet起動EPERMを保存し、同じテストを適切な実行許可で再実行した。テスト・assert・timeoutを変更していない。これはNode/compiler test時間であり、IDE GUIの応答時間ではない。
 
-[機械可読の測定・対応表](../../benchmarks/results/lts-candidate-2026-10-25/summary.json)に実行・build・smokeを分けて記録する。今回の全workspaceテスト時間のbefore/after比較は行っていない。先行#160の全Rust2,029成功と最新L3で正しさを検証し、削除・skipによる「高速化」は行わない。
+[機械可読の測定・対応表](../../benchmarks/results/lts-candidate-2026-10-25/summary.json)に実行・build・smokeを分けて記録する。今回の全workspaceテスト時間のbefore/after比較は行っていない。先行#160のRust回帰は、独立したtop-level 121 groupで2,026成功・失敗0・既存ignored 4。`graph_render`の子helper 3実行・3成功はtop-level countと分けて計上する。raw logのsummary行を単純合算して2,029 top-level成功とは扱わない。最新L3も正しさの別証拠として記録し、削除・skipによる「高速化」は行わない。
 
 ## 分かりやすさと導入負担
 
@@ -71,7 +71,7 @@ JetBrainsの[既存入力測定](../../editors/jetbrains-nagi/benchmarks/python-
 
 別途、公開RustSec DB `21d909e4c8bd4e14c7aea58bf980c881a0053ab1`（更新2026-10-24）とcargo-audit0.22.2で元Cargo.lockを照合した。ignore・OS/arch絞り込み・stale許可なし、exit1でTLS依存の既知version一致6件を検出した。静的triageでは現固定profileの必要条件を欠く4件と、設定された信頼root/証明書経路の確認が必要な2件に分け、Nagiでの悪用成立を確定したものは0件。任意のRust依存によるfeature統合は別graphで再確認が必要。既知の修正版への最小依存更新は[別Draft #162](https://github.com/disnana/Nagi/pull/162)で扱い、更新後の照合・互換性・L3が揃うまでLTS可とはしない。一般的な新規security scanや実攻撃の検証を行ったわけではなく、脆弱性ゼロと断定しない。
 
-修正候補は`55d785a145437be773cc139e57da3fbbdae636ff`。runtime manifestと2 lockだけを更新し、rustls0.23.46/WebPKI0.103.16/roots1.0.10を要求する。既存アプリの継承lockも通常buildで全3版が更新され、旧exe/receiptを保持した。同じDBで両lockの既知版一致6→0、HTTP client221（うちTLS固有15）/公開API1/registry3/contracts11/native2、Clippy、既存Rust1.88 Ed25519 core14/public1、全workspace2,029成功・失敗0・既存ignored4。949.59秒は今回の全体回帰1回の観測で、before/after比較ではない。独立した最終reviewも具体的指摘なし。[修正候補の4 OS L3](https://github.com/disnana/Nagi/actions/runs/40154996082)と[#162](https://github.com/disnana/Nagi/pull/162)で完了状態・結果を確認し、元mainのL3と分けて判定する。文書の更新時刻や過去の状態表示ではなく、対象SHAの実際の完了jobを根拠とする。
+修正候補は`55d785a145437be773cc139e57da3fbbdae636ff`。runtime manifestと2 lockだけを更新し、rustls0.23.46/WebPKI0.103.16/roots1.0.10を要求する。既存アプリの継承lockも通常buildで全3版が更新され、旧exe/receiptを保持した。同じDBで両lockの既知版一致6→0、HTTP client221（うちTLS固有15）/公開API1/registry3/contracts11/native2、Clippy、既存Rust1.88 Ed25519 core14/public1、全workspace top-level 121 groupで2,026成功・失敗0・既存ignored4。`graph_render`の子helper 3実行・3成功は別計上する。949.59秒は今回の全体回帰1回の観測で、before/after比較ではない。独立した最終reviewも具体的指摘なし。[修正候補の4 OS L3](https://github.com/disnana/Nagi/actions/runs/40154996082)と[#162](https://github.com/disnana/Nagi/pull/162)で完了状態・結果を確認し、元mainのL3と分けて判定する。文書の更新時刻や過去の状態表示ではなく、対象SHAの実際の完了jobを根拠とする。
 
 さらに公式WebPKI VCS `8ecdcc76f56b68fda67a6adf7976f5eed5006a4c`と公開crate library/data30ファイルの一致を確認し、無編集の既存`distrusted_spki`回帰1件が成功した（119 filtered、全上流testを実行した主張ではない）。同じAWS-LC版/featuresだが上流dev/test全graphは別の検証lockであり、Nagi配置での攻撃再現ではない。上の30構成・速度測定は元mainの記録で、TLS修正後の速度へ転用しない。
 
