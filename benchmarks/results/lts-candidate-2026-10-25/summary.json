@@ -1,0 +1,896 @@
+{
+  "source_head": "22183d7233950bdb575b62a72393dac9b4aa0767",
+  "source_tree": "a7a2e3985847a1bbd2fca8be22b05f5c69018322",
+  "compiler_sha256": "49aa30fbf2b0eec6067755f1c1b72408e9a0d650d6862f2652b3fd4ecf887f9c",
+  "private_runner_sha256": "6f4c4b9ae3ebb9d37e9b605f9d37d21bceb93b1cd46b3878a7743ecba2a33a59",
+  "builds": 30,
+  "receipts_reverified_after_target_prune": 30,
+  "preserved_executables": 30,
+  "projects": [
+    {
+      "project": "hello",
+      "builds": 4,
+      "sources": [
+        "high",
+        "low"
+      ],
+      "auto": {
+        "reason": "eligible_core",
+        "requested": "auto",
+        "selected": "core"
+      },
+      "smoke_facts": {
+        "cases": 1,
+        "result": "passed",
+        "stdout": "Hello, Nagi!\n4\n"
+      },
+      "check_wall_s": 0.00986755799999628,
+      "build_wall_s": 55.258426466999936,
+      "smoke_wall_s": 0.0050690529999997125
+    },
+    {
+      "project": "stock-report",
+      "builds": 4,
+      "sources": [
+        "high",
+        "low"
+      ],
+      "auto": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "smoke_facts": {
+        "cases": 12,
+        "result": "passed"
+      },
+      "check_wall_s": 0.023460236999994777,
+      "build_wall_s": 1.8351073940000333,
+      "smoke_wall_s": 0.21842781600003036
+    },
+    {
+      "project": "device-settings",
+      "builds": 4,
+      "sources": [
+        "high",
+        "low"
+      ],
+      "auto": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "smoke_facts": {
+        "cases": 12,
+        "starts": 2,
+        "result": "passed"
+      },
+      "check_wall_s": 0.05393709999998464,
+      "build_wall_s": 4.217524228000059,
+      "smoke_wall_s": 0.4971941780000293
+    },
+    {
+      "project": "seat-reservations",
+      "builds": 4,
+      "sources": [
+        "high",
+        "low"
+      ],
+      "auto": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "smoke_facts": {
+        "cases": 1,
+        "result": "passed"
+      },
+      "check_wall_s": 0.043673584000032406,
+      "build_wall_s": 2.630169628000033,
+      "smoke_wall_s": 0.061250981999933174
+    },
+    {
+      "project": "supervised-worker",
+      "builds": 4,
+      "sources": [
+        "high",
+        "low"
+      ],
+      "auto": {
+        "reason": "rust_adapter",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "smoke_facts": {
+        "cases": 12,
+        "starts": 1,
+        "result": "passed"
+      },
+      "check_wall_s": 0.052677209000023595,
+      "build_wall_s": 2.8231770069999698,
+      "smoke_wall_s": 0.05805204800009278
+    },
+    {
+      "project": "file-json",
+      "builds": 4,
+      "sources": [
+        "high",
+        "low"
+      ],
+      "auto": {
+        "reason": "rust_adapter",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "smoke_facts": {
+        "cases": 4,
+        "result": "passed"
+      },
+      "check_wall_s": 0.01206347899994853,
+      "build_wall_s": 1.6555236880000166,
+      "smoke_wall_s": 0.02369397999996181
+    },
+    {
+      "project": "auth-boundary",
+      "builds": 4,
+      "sources": [
+        "high",
+        "low"
+      ],
+      "auto": {
+        "reason": "rust_adapter",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "smoke_facts": {
+        "cases": 52,
+        "starts": 2,
+        "result": "passed"
+      },
+      "check_wall_s": 0.05673712499992689,
+      "build_wall_s": 4.442501094999898,
+      "smoke_wall_s": 16.590919399999905
+    },
+    {
+      "project": "order-quote",
+      "builds": 2,
+      "sources": [
+        "low"
+      ],
+      "auto": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "smoke_facts": {
+        "cases": 23,
+        "result": "passed"
+      },
+      "check_wall_s": 0.008911254999986795,
+      "build_wall_s": 0.9748444350000227,
+      "smoke_wall_s": 0.06865561099999695
+    }
+  ],
+  "timing_totals_s": {
+    "check": 0.2613275469998939,
+    "build": 73.83727394199997,
+    "smoke": 17.52326306799995
+  },
+  "peak_observed_target_bytes": 745709568,
+  "owned_target_removed": true,
+  "native_execution": {
+    "full": {
+      "samples": 3,
+      "median_wall_s": 0.014688729999988936,
+      "min_wall_s": 0.01451287599996931,
+      "max_wall_s": 0.014822422999998253,
+      "selected": "full",
+      "reason": "full_requested"
+    },
+    "auto": {
+      "samples": 3,
+      "median_wall_s": 0.014776122999990093,
+      "min_wall_s": 0.014570222000031663,
+      "max_wall_s": 0.014963284999964799,
+      "selected": "full",
+      "reason": "unsupported_ir"
+    }
+  },
+  "repository_edits_by_application_validation": false,
+  "final_source17_and_all_application_input_hashes_unchanged": true,
+  "platform": "Linux x86_64 only",
+  "limits": [
+    "dev/debug0/jobs2/offline, shared warmed target; not a paired cold-build performance experiment",
+    "Native timing includes process startup and actor scenario, not steady-state throughput; only3 samples per mode",
+    "HTTP/SQLite/auth real localhost fixtures and synthetic credentials; no public network or production credentials",
+    "No release-profile application replay, Windows/macOS application replay, load/soak, axum-service/quote-api/byte-inspector smoke or fresh-distribution replay",
+    "LTS designation and support policy remain undecided"
+  ],
+  "conditions": {
+    "build_profile": "dev",
+    "debug_info": 0,
+    "jobs": 2,
+    "offline": true,
+    "incremental": false,
+    "shared_owned_target": true,
+    "builds_are_not_cold_paired_speed_benchmark": true,
+    "native_timing_is_separate_from_build_and_smoke": true
+  },
+  "compiler_source_sha256": {
+    "Cargo.toml": "44f8b9dc2d0c113f54b7be07419df4f22ccfe4249d2ca188e360e15792501263",
+    "Cargo.lock": "695d972caa4f4d340f9f19b2a893448d003b62e6736bdfa41232cfefe01ed319",
+    "runtime/Cargo.toml": "32d7b00604189e45f1dc053f4b477f77561df2b0de7cc250b3cf6cc60590c725",
+    "runtime/src/lib.rs": "3786995285c3568c75ac85e2fdbb22502b463696dd9e645eb5a796bdfe9db045",
+    "runtime-core/Cargo.toml": "a46ae4a2ee11c49ec3e6b6653f42b020674d36505302ab6a4d147aa03306cf5e",
+    "runtime-core/build.rs": "2be6d7fea6ae91a610b8fca9c93419752242582b493c90ec182946016ef2ee62",
+    "compiler/src/emit.rs": "3d6ad6233442ebfd17c53236710acb2aaace8b16eae21969689f2b90d0c767d1",
+    "compiler/src/project.rs": "479772ccfbef68356f01c36de6e2d4e60266810014dc052dddf873412da06163",
+    "compiler/src/lib.rs": "fa6d1634b105739f16f3d2b111f099e6d4209e34550cbd3de079d52a0d85f2df",
+    "compiler/src/runtime_profile.rs": "87955146bef0cef09ef58d09a5dc299f57fc8db92a65c9546438a007f10b8ada",
+    "compiler/tests/build_generations.rs": "8435b3718db98922ee90c3c903a2650e25776b1f52ef2ddd4f08412330f2f8ca",
+    "scripts/releases/package.py": "f97872fad0700b704b18382b81aaa31972ec313f2f6d494b8dc515a8b9dcb4b0",
+    "scripts/releases/plan.py": "b794210809bddc2498fd9ec4c88d44e94c8dfb189189377317707273019eeb85",
+    "scripts/releases/third_party_notices.py": "ae9526353f38bba7fad07bd83539772a656360e9cc3fc331db43d80273a1cc06",
+    "scripts/releases/test_release.py": "e1402c8a9bdcad604a3def4653b33c681705280a577b04f41dd215eedc6a20a3",
+    "scripts/releases/test_third_party_notices.py": "911cea9837c2b211eddc16bc1229f58f9f1922f67133e4cb11baa261e2cb310d",
+    "compiler/tests/support/native_triple.rs": "03489fa06607b29c715b3a6edbe8737bb59f92af6d0d10ffa24b576f7ac5c175"
+  },
+  "application_input_sha256": {
+    "examples/hello.nagi": "c212629690812bbc3be13fc3f60f503cb5a48ce73d51de72a134a89e3373e2b1",
+    "test-nagi-code/application-examples/stock-report/README.en.md": "88fe85da3a89dc8037029105a75290411c9a6edceef17a057fc420c79263c95b",
+    "test-nagi-code/application-examples/stock-report/README.md": "33bab9b1a8dae4dace0e522796e8616a5c7c8e3cf3a6e7f00eb5bceb187a52f1",
+    "test-nagi-code/application-examples/stock-report/inventory.nagi": "c14f9d5fa8f338993c4a213c1b69b94e5a5ffbe923032276bfec4f098428fc4b",
+    "test-nagi-code/application-examples/stock-report/main.nagi": "86f0be247152c9450923e7bc84d410601ed45a4d5c93a1ab2e7ce2ee85a539c8",
+    "test-nagi-code/application-examples/stock-report/nagi.toml": "53a3b52851fc11c54926de1fab1677f5ca0e92095f683bbcb2c7100af52e4f63",
+    "test-nagi-code/application-examples/stock-report/smoke.py": "cd42251d456ddf600f5e66ddc7ea8fb746fdb14018257c62a8738cf01b00f823",
+    "test-nagi-code/application-examples/device-settings/README.en.md": "f0ed1fe0740d84c91f706e77f0d6ec955e2f35499fe25b57892e110b7e90abb7",
+    "test-nagi-code/application-examples/device-settings/README.md": "58da6194bdf49b44f14a16e41d819c99583adcb96c90118200b9a7a69b048f38",
+    "test-nagi-code/application-examples/device-settings/main.nagi": "319ab7a84912bfbf182f9d475c5f578f9ec734a12c40cb5fe481bfe38855731d",
+    "test-nagi-code/application-examples/device-settings/nagi.toml": "53a3b52851fc11c54926de1fab1677f5ca0e92095f683bbcb2c7100af52e4f63",
+    "test-nagi-code/application-examples/device-settings/smoke.py": "f9b8b93fa41e9860785d45b64da7a410552540bfeec875a32632a6cc7df0ebd7",
+    "test-nagi-code/application-examples/seat-reservations/README.en.md": "68da0f84bc3e48c59c37c14b89b3d7b699523c28cd0f69c2de7acf7298e02deb",
+    "test-nagi-code/application-examples/seat-reservations/README.md": "34667736a05208647229ee6624c1c81da3d94b9b1625a6bb97edfbcbbe52e424",
+    "test-nagi-code/application-examples/seat-reservations/main.nagi": "306a0ceebd5a91a3f552b5fbb79aebb1994d4040e53d7e313c098a91590b27e3",
+    "test-nagi-code/application-examples/seat-reservations/nagi.toml": "53a3b52851fc11c54926de1fab1677f5ca0e92095f683bbcb2c7100af52e4f63",
+    "test-nagi-code/application-examples/seat-reservations/smoke.py": "1100ca1002555626de3196f2eae68a573cd195fafdc831fdbdf599382a46f03b",
+    "test-nagi-code/application-examples/supervised-worker/README.en.md": "94f615e6a5dd4dc74dc17e0f2914e9c55a02d349ee3f9ecdeb3055f5897dd876",
+    "test-nagi-code/application-examples/supervised-worker/README.md": "19a0036547bfd2abf5057f51905cf311f1263d267679c8b89812c95fae44860c",
+    "test-nagi-code/application-examples/supervised-worker/main.nagi": "1863c019d8724f7d2316b76daeec2f56d24883b8750f242fc227b2b0ed14d561",
+    "test-nagi-code/application-examples/supervised-worker/nagi.toml": "d434eac7482589e4e363cc785f8f3181962d51144f0e00abced1e10a76d526fb",
+    "test-nagi-code/application-examples/supervised-worker/native.rs": "8ab99c98597199e505ed91107567d32fc3b638d0c1885497aa34c99f095eab7b",
+    "test-nagi-code/application-examples/supervised-worker/smoke.py": "7ed31c05f1d1262d07974329e60f5bdbceffa7e57596fe1e43f52685acacce5a",
+    "test-nagi-code/application-examples/file-json/README.en.md": "43b74ac3e6537f12d6ebafa9bde8e1fca0f50a80e9618ec2eb4bf2ba3aaef6db",
+    "test-nagi-code/application-examples/file-json/README.md": "3a4bf1ed739d30926d33cec3c84c2f6da5ab780e7b7c6db5f6e5b46d99925ad9",
+    "test-nagi-code/application-examples/file-json/main.nagi": "e9a875e0d6e12d2b447ea3bc77b4e80f2e504979981fa79a0707064e55c234ea",
+    "test-nagi-code/application-examples/file-json/nagi.toml": "d434eac7482589e4e363cc785f8f3181962d51144f0e00abced1e10a76d526fb",
+    "test-nagi-code/application-examples/file-json/native.rs": "c191a37650865c9237920d5449a855a673b445e9d3b8638ad8ab6de312f2b6ae",
+    "test-nagi-code/application-examples/file-json/smoke.py": "4e706b710b394e03c4555be04e0e83b502bbd8e2b9365bf81be7ffce87e04954",
+    "test-nagi-code/application-examples/auth-boundary/README.en.md": "70f6a5345769ee290e7e7bd2627df7397d23a59b9ef4c888ad49566c605c1c69",
+    "test-nagi-code/application-examples/auth-boundary/README.md": "ecb4f2f72887d88505807b72d0cf7c578d9d6a331165fb6118dd61a88648edaa",
+    "test-nagi-code/application-examples/auth-boundary/main.nagi": "63a0b31b051f44860143509105b54e7ca0ca2f2e76cfdd1862747a9907c87981",
+    "test-nagi-code/application-examples/auth-boundary/nagi.toml": "e16fffa728270ac84aabaef04553768af53c7ae375b6548fd37f12c45fe5ca6a",
+    "test-nagi-code/application-examples/auth-boundary/native.rs": "90851686379f484d41b0f5ea40251254387ff0b44a4d31af798341aed88315d7",
+    "test-nagi-code/application-examples/auth-boundary/smoke.py": "4e30f02883670db6aeab189472026cb8bd53476ba3be5674564c1f53c7aeb19f",
+    "test-nagi-code/low-examples/order-quote/README.en.md": "be480bca4e1533dd6f2f597538a02a423030ab55bbbd65268c229e51e67babdb",
+    "test-nagi-code/low-examples/order-quote/README.md": "343f5834badc1be8ab648a45a36ec790f0f9946d78fa0081fa83e611229d832f",
+    "test-nagi-code/low-examples/order-quote/main.low": "a344369700434721bbbc5ef4d3457f1691faad9a2efa6b5213de9de226a3bcfa",
+    "test-nagi-code/low-examples/order-quote/nagi.toml": "1d1e6b67f48af6d8fcf028801ba0c2e07bdc4eb2e46e391199de6c254203314a",
+    "test-nagi-code/low-examples/order-quote/quote.low": "8c14947d1c7197a9b9acf420d363e8b2237136638ea714c98fb6af90d9084f90",
+    "test-nagi-code/low-examples/order-quote/smoke.py": "45196f7af1577fc773b6bc7e43c34dd56572a5b0bf875b4e1a24ef3b7ce19c5a"
+  },
+  "runs": [
+    {
+      "project": "hello",
+      "source": "high",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "c2493101c097e5fbd28afb6567bdd8cb113d617159ac97b367980e71180606b1",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "hello",
+      "source": "low",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "11c9f1571ce719340aaf8d194b2c273d028d3a1a1930daeb16b7f554a6f39657",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "hello",
+      "source": "high",
+      "runtime": {
+        "reason": "eligible_core",
+        "requested": "auto",
+        "selected": "core"
+      },
+      "executable_sha256": "a171bfe73839d4e599f10da636be6f20975130f5c9f4d2d881ceac4846f448ea",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "hello",
+      "source": "low",
+      "runtime": {
+        "reason": "eligible_core",
+        "requested": "auto",
+        "selected": "core"
+      },
+      "executable_sha256": "be1d3005be78b1767305ba21258e5fb7a05e816490dc5278983e07e184907836",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "stock-report",
+      "source": "high",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "34dba5c421e81e5464003db14c6394974c17b87a94144a90ff61a3f8155f589c",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "stock-report",
+      "source": "low",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "e1ca3dbd4f2ec0674e5ecc3bdcdc40f82df2b75ca7061c9c33b547685de24262",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "stock-report",
+      "source": "high",
+      "runtime": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "5e53d5a35635ff51c4b785961a9a550f001c70b9afc9c2c96b249bd8d8f2877e",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "stock-report",
+      "source": "low",
+      "runtime": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "abede024874e0383a4f5030b4709f6821475f074bbeda905dd332e3fba88ec76",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "device-settings",
+      "source": "high",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "697f8c331c298948a92b3609398ae09ffe50bd4bd34469c83251e438e577a622",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "device-settings",
+      "source": "low",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "3a7d6d09f544046413ae174f3929acf19606c5331b5f91a6b5a2fc01e235523d",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "device-settings",
+      "source": "high",
+      "runtime": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "40be2c229a91de725f356995a5fd49b7ee854758a52f3567e9bfdf5de85441a9",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "device-settings",
+      "source": "low",
+      "runtime": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "5b253950aa8d5abfba438747d022bae68fc61e66c520e12814e588db310a4434",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "seat-reservations",
+      "source": "high",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "b7c222bb5cfc7998c369a27c444e1611992cb5c3e1eb6603e3dd91c59a347c27",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "seat-reservations",
+      "source": "low",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "0c4f0574d4fc9036076475678f5b2cc94fdfc56410dc9f49d3f701b7858ef3e7",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "seat-reservations",
+      "source": "high",
+      "runtime": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "b5a1d29554f6fd7acca030fb124eacd280994dddc8f752ee5c64cc58204980ae",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "seat-reservations",
+      "source": "low",
+      "runtime": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "6c4b5b733bb6a1798c661338e8480c602e625a86969ca7f2223e592dc940e4ea",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "supervised-worker",
+      "source": "high",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "9b191c6c99609b8d78b3c1a17b5393b641ba7244186b3676aaeda35ebcabfc0f",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "supervised-worker",
+      "source": "low",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "38d1975eeddc18cd30cc0ba1bbda8411585c6cf1dc37ad7933e0a390ac7b2104",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "supervised-worker",
+      "source": "high",
+      "runtime": {
+        "reason": "rust_adapter",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "5ac57944ec3e072f8393c553712c97659e29fd861ec4c805def39bfdf06f2cce",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "supervised-worker",
+      "source": "low",
+      "runtime": {
+        "reason": "rust_adapter",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "1e02659e258b898a5e4421fe1ee17a6621b5f2e2a155761ffb77d820feadc65a",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "file-json",
+      "source": "high",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "1d6f2d95a414ce43d1b49a4b3c0d1b9917eb1665206d4afbc2a68f6ff69dd56b",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "file-json",
+      "source": "low",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "2de2ffd819b3117497f92ceae2e1a01a550d06bcd11698ec02849eaa8d7a03cc",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "file-json",
+      "source": "high",
+      "runtime": {
+        "reason": "rust_adapter",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "ba2a1ff3fe94afc257e53323211c91f4c7cfb54781745f11707c27aeb4c8ff70",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "file-json",
+      "source": "low",
+      "runtime": {
+        "reason": "rust_adapter",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "2eec80a2d978f568c3f6b6de5fa78fd5ca1a97d28c69ce06edaee2b4ff61cb07",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "auth-boundary",
+      "source": "high",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "7cf2aba43c2677355539e00cdb3d01c5d5d06486910f7796a756cf79cdab7fe0",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "auth-boundary",
+      "source": "low",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "21df0bd2fc57a7abb340d34ea41f61c987b6ff3520429fb0045895f41ac8019e",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "auth-boundary",
+      "source": "high",
+      "runtime": {
+        "reason": "rust_adapter",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "7713c8aa8fa5ed8d93bdb3b4de24b9c777d7e9b2cd2eef53feae86c1092b4c44",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "auth-boundary",
+      "source": "low",
+      "runtime": {
+        "reason": "rust_adapter",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "a888a81214122cf366d0c282136bf7db4d18e56520bca413f8a9ff6d8f726c64",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "order-quote",
+      "source": "low",
+      "runtime": {
+        "reason": "full_requested",
+        "requested": "full",
+        "selected": "full"
+      },
+      "executable_sha256": "dcb8ef5ed92c83f1d5a4da510aaee0d1b04e8d4a44b97d23cf862fff76df2767",
+      "checks": "full",
+      "cargo_always_invoked": true
+    },
+    {
+      "project": "order-quote",
+      "source": "low",
+      "runtime": {
+        "reason": "unsupported_ir",
+        "requested": "auto",
+        "selected": "full"
+      },
+      "executable_sha256": "9267073a3797ac29986719d94130bcc569354fa6408580982407fa091bfbb70f",
+      "checks": "full",
+      "cargo_always_invoked": true
+    }
+  ],
+  "vscode_node_tests": {
+    "node": "24.19.0",
+    "files": 22,
+    "trials": [
+      {
+        "trial": 1,
+        "wall_s": 1.286,
+        "user_s": 2.238,
+        "system_s": 1.075,
+        "passed": 196,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "trial": 2,
+        "wall_s": 1.13,
+        "user_s": 2.099,
+        "system_s": 0.773,
+        "passed": 196,
+        "failed": 0,
+        "skipped": 0
+      },
+      {
+        "trial": 3,
+        "wall_s": 1.171,
+        "user_s": 2.196,
+        "system_s": 0.722,
+        "passed": 196,
+        "failed": 0,
+        "skipped": 0
+      }
+    ],
+    "gui": false,
+    "initial_environment_errors": [
+      "ENOENT: compiler absent",
+      "EPERM: snippet subprocess in ordinary sandbox"
+    ],
+    "test_source_unchanged": true
+  },
+  "authoring": {
+    "source_commit": "22183d7233950bdb575b62a72393dac9b4aa0767",
+    "compiler_sha256": "49aa30fbf2b0eec6067755f1c1b72408e9a0d650d6862f2652b3fd4ecf887f9c",
+    "loc_definition": "Physical lines and nonblank lines excluding whole-line # or // comments; Rust test modules remain included; not equivalent Python comparison.",
+    "projects": [
+      {
+        "project": "stock-report",
+        "files": [
+          {
+            "file": "test-nagi-code/application-examples/stock-report/inventory.nagi",
+            "lines": 61,
+            "nonblank_noncomment_lines": 53,
+            "sha256": "c14f9d5fa8f338993c4a213c1b69b94e5a5ffbe923032276bfec4f098428fc4b"
+          },
+          {
+            "file": "test-nagi-code/application-examples/stock-report/main.nagi",
+            "lines": 10,
+            "nonblank_noncomment_lines": 9,
+            "sha256": "86f0be247152c9450923e7bc84d410601ed45a4d5c93a1ab2e7ce2ee85a539c8"
+          }
+        ]
+      },
+      {
+        "project": "device-settings",
+        "files": [
+          {
+            "file": "test-nagi-code/application-examples/device-settings/main.nagi",
+            "lines": 132,
+            "nonblank_noncomment_lines": 108,
+            "sha256": "319ab7a84912bfbf182f9d475c5f578f9ec734a12c40cb5fe481bfe38855731d"
+          }
+        ]
+      },
+      {
+        "project": "seat-reservations",
+        "files": [
+          {
+            "file": "test-nagi-code/application-examples/seat-reservations/main.nagi",
+            "lines": 142,
+            "nonblank_noncomment_lines": 130,
+            "sha256": "306a0ceebd5a91a3f552b5fbb79aebb1994d4040e53d7e313c098a91590b27e3"
+          }
+        ]
+      },
+      {
+        "project": "supervised-worker",
+        "files": [
+          {
+            "file": "test-nagi-code/application-examples/supervised-worker/main.nagi",
+            "lines": 210,
+            "nonblank_noncomment_lines": 190,
+            "sha256": "1863c019d8724f7d2316b76daeec2f56d24883b8750f242fc227b2b0ed14d561"
+          },
+          {
+            "file": "test-nagi-code/application-examples/supervised-worker/native.rs",
+            "lines": 39,
+            "nonblank_noncomment_lines": 30,
+            "sha256": "8ab99c98597199e505ed91107567d32fc3b638d0c1885497aa34c99f095eab7b"
+          }
+        ]
+      },
+      {
+        "project": "file-json",
+        "files": [
+          {
+            "file": "test-nagi-code/application-examples/file-json/main.nagi",
+            "lines": 22,
+            "nonblank_noncomment_lines": 19,
+            "sha256": "e9a875e0d6e12d2b447ea3bc77b4e80f2e504979981fa79a0707064e55c234ea"
+          },
+          {
+            "file": "test-nagi-code/application-examples/file-json/native.rs",
+            "lines": 16,
+            "nonblank_noncomment_lines": 14,
+            "sha256": "c191a37650865c9237920d5449a855a673b445e9d3b8638ad8ab6de312f2b6ae"
+          }
+        ]
+      },
+      {
+        "project": "auth-boundary",
+        "files": [
+          {
+            "file": "test-nagi-code/application-examples/auth-boundary/main.nagi",
+            "lines": 188,
+            "nonblank_noncomment_lines": 160,
+            "sha256": "63a0b31b051f44860143509105b54e7ca0ca2f2e76cfdd1862747a9907c87981"
+          },
+          {
+            "file": "test-nagi-code/application-examples/auth-boundary/native.rs",
+            "lines": 160,
+            "nonblank_noncomment_lines": 144,
+            "sha256": "90851686379f484d41b0f5ea40251254387ff0b44a4d31af798341aed88315d7"
+          }
+        ]
+      }
+    ],
+    "diagnostic": {
+      "exit": 1,
+      "wall_seconds": 0.0019535380000093028,
+      "source_lines": [
+        "def main():",
+        "    x: i32 = \"wrong\""
+      ],
+      "summary": "Original line 2; expected i32, got str; explicit conversion hint; check exit 1."
+    }
+  },
+  "security_alert_listing": {
+    "state": "denied",
+    "target": "repos/disnana/Nagi/dependabot/alerts",
+    "reason": "HTTP403 Resource not accessible by integration",
+    "alerts_obtained": false,
+    "retry": false
+  },
+  "lts_status": "proposal_only_not_designated",
+  "public_dependency_audit": {
+    "exit": 1,
+    "elapsed_s": 35.33313106499986,
+    "lock_sha256_before": "695d972caa4f4d340f9f19b2a893448d003b62e6736bdfa41232cfefe01ed319",
+    "lock_sha256_after": "695d972caa4f4d340f9f19b2a893448d003b62e6736bdfa41232cfefe01ed319",
+    "tool_version": "0.22.2",
+    "tool_sha256": "f97a191d62f4a1ebb0831a71471c6a188e5b1986e016dc668faa8df7e8bbf3aa",
+    "ignored_advisories": [],
+    "no_target_filter": true,
+    "stale_allowed": false,
+    "yanked_check_enabled": true,
+    "database": {
+      "advisory-count": 1352,
+      "last-commit": "21d909e4c8bd4e14c7aea58bf980c881a0053ab1",
+      "last-updated": "2026-10-24T10:30:13+02:00"
+    },
+    "known_version_matches": 6,
+    "static_triage_counts": {
+      "confirmed": 0,
+      "needs_review": 2,
+      "not_actionable": 4
+    },
+    "scope": "Original main22183 Cargo.lock; no dynamic exploitation or application-added dependency graph assessment.",
+    "patched_dependency_change": "Separate Draft PR162; local verification and independent review recorded below. Exact-source CI outcomes are recorded in its linked workflow and PR."
+  },
+  "security_candidate": {
+    "pull_request": "https://github.com/disnana/Nagi/pull/162",
+    "head": "55d785a145437be773cc139e57da3fbbdae636ff",
+    "tree": "53d2fa6986cee2e75133752a582d7f6ba80e4076",
+    "source_sha256": {
+      "runtime/Cargo.toml": "64b6937d3b5cfdb275a755589278dec62e1d194012c3e896b48e16c90dff50dd",
+      "Cargo.lock": "188ec08cffe7b08fa2836b09c7ba68e2a6df71e58e9627eb4ec09d7cd6bb47ce",
+      "tools/sf08-fixture-runtime/Cargo.lock": "760335cb42e47a45a3ce73199b2149c27239b3cb80e2eda3bb6de99bf738c4e7"
+    },
+    "tests": {
+      "root_runtime_check": "pass",
+      "sf08_fixture_locked_check": "pass",
+      "runtime_http_client": 221,
+      "runtime_public_api": 1,
+      "compiler_http_registry": 3,
+      "compiler_http_contracts": 11,
+      "compiler_http_native": 2,
+      "tls_specific_controls_in_http_group": 15,
+      "fmt": "pass",
+      "clippy_all_targets_deny_warnings": "pass",
+      "rust188_ed25519_core": 14,
+      "rust188_public_api": 1,
+      "workspace": {
+        "exit_code": 0,
+        "groups": 121,
+        "passed": 2026,
+        "failed": 0,
+        "ignored": 4,
+        "wall_s": 949.5909388699997,
+        "child_helpers": {
+          "invocations": 3,
+          "groups": 3,
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0,
+          "filtered_out": 24,
+          "note": "Three graph_render subprocess invocations rerun one helper test each. The 24 cumulative filtered slots are not omitted parent-suite cases. One child summary prefix is interleaved with a parent test-ok line in the unchanged raw log."
+        },
+        "count_definition": "groups and passed/failed/ignored count final unfiltered top-level Running/Doc-tests summaries only; graph_render child-helper results are separate."
+      },
+      "release_python": 160,
+      "official_upstream_distrusted_spki": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "filtered": 119,
+        "commit": "8ecdcc76f56b68fda67a6adf7976f5eed5006a4c"
+      }
+    },
+    "audits": {
+      "same_database_commit": "21d909e4c8bd4e14c7aea58bf980c881a0053ab1",
+      "old_root": 6,
+      "old_fixture": 6,
+      "new_root": 0,
+      "new_fixture": 0,
+      "ignore": [],
+      "target_filters": [],
+      "stale_flag": false,
+      "no_fetch_metadata_note": "cargo-audit JSON commit/time null under --no-fetch; actual DB HEAD and tracked clean state verified separately"
+    },
+    "old_user_lock": "ordinary Nagi generation upgraded exactly3 versions; all unrelated package records unchanged; old executable bytes/run and receipts preserved",
+    "source_and_assertions_unchanged_except_three_dependency_files": true,
+    "upstream_source_modified": false,
+    "performance_impact_not_measured": true,
+    "fresh_independent_review": "No findings",
+    "four_platform_ci": "https://github.com/disnana/Nagi/actions/runs/40154996082",
+    "merged": false,
+    "published": false,
+    "existing_runtime_and_executables_not_automatically_updated": true,
+    "local_validation_was_recorded_before_ci_completion": true,
+    "authoritative_ci_result_locations": [
+      "https://github.com/disnana/Nagi/actions/runs/40154996082",
+      "https://github.com/disnana/Nagi/pull/162"
+    ]
+  }
+}
