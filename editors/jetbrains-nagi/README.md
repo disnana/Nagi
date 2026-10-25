@@ -2,15 +2,15 @@
 
 [English](README.en.md)
 
-IntelliJ IDEA・PyCharm向けのNagiプラグインです。このソースは未リリースの0.1.6候補を対象としています。ID `com.disnana.nagi`と表示名**Nagi**を維持します。利用可能な版はGitHub ReleasesとMarketplaceの一覧で確認してください。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
+IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.6は[GitHub Releases](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6)で公開済みです。ID `com.disnana.nagi`と表示名**Nagi**を維持します。Marketplaceの提供状況は別途一覧で確認してください。コンパイラは[別途インストール](https://nagi.disnana.com/docs/getting-started/)してください。
 
 プラグインの版は`build.gradle.kts`で管理します。公開済み0.1.2には両IDE共通ZIPがあり、新しい利用可能な成果物はReleasesで確認してください。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
 
-## 0.1.6候補の編集動作（未リリース）
+## 0.1.6の編集動作
 
 連続Enterで空行の字下げを自動で1段戻す独自動作を撤去しました。Enterを繰り返しても現在の字下げを維持します。手動のBackspace・Shift+Tabと、通常のブロック・括弧内の字下げ補助は引き続き使えます。この変更は公開済み0.1.5には含まれません。
 
-入力・改行・解析の差し替えや取消の途中でも、未変更の名前の色を保持する修正候補を含みます。空白・Enterを名前の隣に入れた場合も、単語が同じと確認できれば色を保ちます。式や呼び出しが未完成の間も保持し、完全な解析結果で色を更新します。単語の変更やコメント・文字列への変更は再検証します。説明・型・診断・定義移動は従来どおり現在のsnapshotを使います。ホバーは利用者から正常に使えることを確認しています。[設計と検証範囲](../../docs/internal/jetbrains-semantic-presentation.md)も参照してください。
+入力・改行・解析の差し替えや取消の途中でも、未変更の名前の色を保持します。空白・Enterを名前の隣に入れた場合も、単語が同じと確認できれば色を保ちます。式や呼び出しが未完成の間も保持し、完全な解析結果で色を更新します。単語の変更やコメント・文字列への変更は再検証します。説明・型・診断・定義移動は従来どおり現在のsnapshotを使います。ホバーは利用者から正常に使えることを確認しています。[設計と検証範囲](../../docs/internal/jetbrains-semantic-presentation.md)も参照してください。
 
 ## 0.1.5: 末尾空行の色付け・補助情報
 
@@ -63,7 +63,7 @@ plugin候補版は、マウスhoverの説明とQuick Documentationで、compiler
 
 | plugin | compiler | 対応範囲 |
 |---|---|---|
-| 0.1.6候補（未リリース） | 公開Nagi 0.2.1 | 入力中の色保持を改善し、連続Enterの独自退出を撤去 |
+| 公開済み0.1.6 | 公開Nagi 0.2.1 | 入力中の色保持を改善し、連続Enterの独自退出を撤去 |
 | 0.1.5 | 公開Nagi 0.2.1で確認 | 0.1.4の機能と、末尾空行のシンボル情報欠落への互換処理 |
 | 0.1.4 | 公開Nagi 0.2.0 | 0.1.3の機能に加え、ホバー説明・初回解析待ち・色保持・編集補助の改善 |
 | 公開済み0.1.2 | 公開Nagi 0.2.0 / 0.1.11 | 手動Check/Runと基本編集。semantic assistance・標準Run Configuration・世代回収は0.1.2に含まれません |

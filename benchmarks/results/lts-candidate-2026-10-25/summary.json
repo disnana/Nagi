@@ -792,5 +792,95 @@
     "alerts_obtained": false,
     "retry": false
   },
-  "lts_status": "proposal_only_not_designated"
+  "lts_status": "proposal_only_not_designated",
+  "public_dependency_audit": {
+    "exit": 1,
+    "elapsed_s": 35.33313106499986,
+    "lock_sha256_before": "695d972caa4f4d340f9f19b2a893448d003b62e6736bdfa41232cfefe01ed319",
+    "lock_sha256_after": "695d972caa4f4d340f9f19b2a893448d003b62e6736bdfa41232cfefe01ed319",
+    "tool_version": "0.22.2",
+    "tool_sha256": "f97a191d62f4a1ebb0831a71471c6a188e5b1986e016dc668faa8df7e8bbf3aa",
+    "ignored_advisories": [],
+    "no_target_filter": true,
+    "stale_allowed": false,
+    "yanked_check_enabled": true,
+    "database": {
+      "advisory-count": 1352,
+      "last-commit": "21d909e4c8bd4e14c7aea58bf980c881a0053ab1",
+      "last-updated": "2026-10-24T10:30:13+02:00"
+    },
+    "known_version_matches": 6,
+    "static_triage_counts": {
+      "confirmed": 0,
+      "needs_review": 2,
+      "not_actionable": 4
+    },
+    "scope": "Original main22183 Cargo.lock; no dynamic exploitation or application-added dependency graph assessment.",
+    "patched_dependency_change": "Separate Draft PR162; local verification and independent review recorded below. Exact-source CI outcomes are recorded in its linked workflow and PR."
+  },
+  "security_candidate": {
+    "pull_request": "https://github.com/disnana/Nagi/pull/162",
+    "head": "55d785a145437be773cc139e57da3fbbdae636ff",
+    "tree": "53d2fa6986cee2e75133752a582d7f6ba80e4076",
+    "source_sha256": {
+      "runtime/Cargo.toml": "64b6937d3b5cfdb275a755589278dec62e1d194012c3e896b48e16c90dff50dd",
+      "Cargo.lock": "188ec08cffe7b08fa2836b09c7ba68e2a6df71e58e9627eb4ec09d7cd6bb47ce",
+      "tools/sf08-fixture-runtime/Cargo.lock": "760335cb42e47a45a3ce73199b2149c27239b3cb80e2eda3bb6de99bf738c4e7"
+    },
+    "tests": {
+      "root_runtime_check": "pass",
+      "sf08_fixture_locked_check": "pass",
+      "runtime_http_client": 221,
+      "runtime_public_api": 1,
+      "compiler_http_registry": 3,
+      "compiler_http_contracts": 11,
+      "compiler_http_native": 2,
+      "tls_specific_controls_in_http_group": 15,
+      "fmt": "pass",
+      "clippy_all_targets_deny_warnings": "pass",
+      "rust188_ed25519_core": 14,
+      "rust188_public_api": 1,
+      "workspace": {
+        "exit_code": 0,
+        "groups": 124,
+        "passed": 2029,
+        "failed": 0,
+        "ignored": 4,
+        "wall_s": 949.5909388699997
+      },
+      "release_python": 160,
+      "official_upstream_distrusted_spki": {
+        "passed": 1,
+        "failed": 0,
+        "ignored": 0,
+        "filtered": 119,
+        "commit": "8ecdcc76f56b68fda67a6adf7976f5eed5006a4c"
+      }
+    },
+    "audits": {
+      "same_database_commit": "21d909e4c8bd4e14c7aea58bf980c881a0053ab1",
+      "old_root": 6,
+      "old_fixture": 6,
+      "new_root": 0,
+      "new_fixture": 0,
+      "ignore": [],
+      "target_filters": [],
+      "stale_flag": false,
+      "no_fetch_metadata_note": "cargo-audit JSON commit/time null under --no-fetch; actual DB HEAD and tracked clean state verified separately"
+    },
+    "old_user_lock": "ordinary Nagi generation upgraded exactly3 versions; all unrelated package records unchanged; old executable bytes/run and receipts preserved",
+    "source_and_assertions_unchanged_except_three_dependency_files": true,
+    "upstream_source_modified": false,
+    "performance_impact_not_measured": true,
+    "fresh_independent_review": "No findings",
+    "four_platform_ci": "https://github.com/disnana/Nagi/actions/runs/40154996082",
+    "merged": false,
+    "published": false,
+    "existing_runtime_and_executables_not_automatically_updated": true,
+    "local_validation_was_recorded_before_ci_completion": true,
+    "authoritative_ci_result_locations": [
+      "https://github.com/disnana/Nagi/actions/runs/40154996082",
+      "https://github.com/disnana/Nagi/pull/162"
+    ]
+  }
 }

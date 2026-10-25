@@ -35,4 +35,4 @@ The row counts in `authoring` include physical blank/comment lines of Nagi/Rust 
 
 ## Limits
 
-No new release-profile app replay, cross-OS local replay, long-running load/soak, real credentials, external TLS deployment, current IDE GUI/IME/rendering measurement or broad dependency-advisory scan. L3 CI status is recorded separately in the validation pages. CodeQL/test success does not establish absence of vulnerabilities. Historical Windows SF06 failure still lacks a confirmed root cause. See the validation pages for remaining designation decisions.
+No new release-profile app replay, cross-OS local replay, long-running load/soak, real credentials, external TLS deployment, current IDE GUI/IME/rendering measurement or general security scan. A separate public RustSec lockfile audit found six known-version matches; static triage and the separate dependency-update requirement are recorded in the validation pages, alongside L3 status. CodeQL/test success does not establish absence of vulnerabilities. Historical Windows SF06 failure still lacks a confirmed root cause. See the validation pages for remaining designation decisions.

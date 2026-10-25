@@ -2,15 +2,15 @@
 
 [日本語](README.md)
 
-Nagi support for IntelliJ IDEA and PyCharm. This source targets the unreleased 0.1.6 candidate, preserving plugin ID `com.disnana.nagi` and display name **Nagi**. Check GitHub Releases and the Marketplace listing for available versions. [Install the compiler separately](https://nagi.disnana.com/en/docs/getting-started/).
+Nagi support for IntelliJ IDEA and PyCharm. Version 0.1.6 is published on [GitHub Releases](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6), preserving plugin ID `com.disnana.nagi` and display name **Nagi**. Check the Marketplace listing separately for availability there. [Install the compiler separately](https://nagi.disnana.com/en/docs/getting-started/).
 
 The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release includes a common ZIP for both IDEs; check Releases for newer available assets. For Marketplace installs, check the existing listing's Versions view for available versions and compatible IDE builds. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download one common ZIP for both IDEs from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
-## 0.1.6 candidate editing changes (unreleased)
+## 0.1.6 editing changes
 
 The custom gesture that reduces indentation on consecutive Enter presses has been removed. Repeated Enter keeps the current blank-line indentation. Manual Backspace and Shift+Tab, ordinary block indentation and delimiter continuation remain available. This change is not in the published 0.1.5 ZIP.
 
-This candidate keeps colors for unchanged names through typing, Enter, and replacement or cancellation of background analysis. Spaces and Enter beside a name preserve its color when the complete token is unchanged. Unfinished expressions and calls keep those colors until complete analysis refreshes them. Edits that change a word or turn it into a comment or string are revalidated. Documentation, types, diagnostics and navigation retain their current-snapshot requirements. The user has confirmed that hover documentation works. See the [design and validation scope](../../docs/internal/jetbrains-semantic-presentation.md).
+Version 0.1.6 keeps colors for unchanged names through typing, Enter, and replacement or cancellation of background analysis. Spaces and Enter beside a name preserve its color when the complete token is unchanged. Unfinished expressions and calls keep those colors until complete analysis refreshes them. Edits that change a word or turn it into a comment or string are revalidated. Documentation, types, diagnostics and navigation retain their current-snapshot requirements. The user has confirmed that hover documentation works. See the [design and validation scope](../../docs/internal/jetbrains-semantic-presentation.md).
 
 ## 0.1.5: final-blank-line colors and source facts
 
@@ -63,7 +63,7 @@ This section describes 0.1.3 features and their limits, separately from 0.1.2. I
 
 | Plugin | Compiler | Supported behavior |
 |---|---|---|
-| 0.1.6 candidate (unreleased) | Public Nagi 0.2.1 | Improves typing-time color retention and removes the custom repeated-Enter exit gesture |
+| Published 0.1.6 | Public Nagi 0.2.1 | Improves typing-time color retention and removes the custom repeated-Enter exit gesture |
 | 0.1.5 | Verified with public Nagi 0.2.1 | Inherits 0.1.4 and recovers missing symbol facts at a final blank line |
 | 0.1.4 | Public Nagi 0.2.0 | Inherits 0.1.3 and improves documentation, initial-analysis waits, color retention and editing assistance |
 | Published 0.1.2 | Public Nagi 0.2.0 / 0.1.11 | Manual Check/Run and basic editing; no semantic assistance, standard Run Configuration, or generation cleanup in 0.1.2 |

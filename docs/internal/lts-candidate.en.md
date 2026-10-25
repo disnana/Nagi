@@ -6,7 +6,7 @@ This is an **unadopted proposal**, dated 2026-10-25. It does not designate 0.2.2
 
 ## Sustainable scope
 
-Maintain one series at a time. Propose **six months** from an explicitly approved LTS designation, with no automatic extension. Decide extensions separately using operational history, dependency maintenance and available maintainers. A successor may have up to three months of overlap within the old series' remaining term; its publication must not shorten the old end date.
+Normally maintain one series. Propose **six months** from an explicitly approved LTS designation, with no automatic extension. Decide extensions separately using operational history, dependency maintenance and available maintainers. Only during migration, and after approval of additional maintenance capacity, a successor may overlap for at most three months within the old series' remaining term, with at most two maintained series. Without that capacity, adjust the successor's start to avoid overlap. Its publication must not shorten the old end date.
 
 Before designation, approve an owner and backup, resources for dependency monitoring and four-platform validation, exact dates and distribution targets. Without these resources, use an ordinary stable release. Do not promise multi-year coverage or an always-on SLA in advance.
 
