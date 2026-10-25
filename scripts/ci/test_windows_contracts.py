@@ -17,6 +17,7 @@ import test_publish_conditions
 import windows_contract_projection as shard
 import parallel_cache_projection
 import sf06_failure_projection
+import browser_failure_projection
 
 ROOT = Path(__file__).resolve().parents[2]
 # Immutable Linux-only commit 0e233491; its workflow must be restored exactly.
@@ -73,7 +74,8 @@ def effective_inventory(source, platform):
 
 
 def prove(source):
-    restored = sf06_failure_projection.inverse_workflow(shard.inverse_workflow(source))
+    restored = sf06_failure_projection.inverse_workflow(shard.inverse_workflow(
+        browser_failure_projection.inverse_workflow(source)))
     if hashlib.sha256(restored.encode()).hexdigest() != LINUX_WORKFLOW_SHA256:
         raise AssertionError('Linux-only workflow identity changed')
     current = parallel_cache_projection.apply_workflow(source)

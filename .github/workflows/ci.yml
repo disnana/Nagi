@@ -192,6 +192,7 @@ jobs:
         with:
           node-version: '22'
       - name: Compare BrowserLogin failure cases alone and with the parallel public suite
+        id: browser_counter_comparison
         shell: bash
         run: |
           set +e
@@ -516,6 +517,9 @@ jobs:
           if-no-files-found: ignore
       - name: Capture bounded Session deadline public tests
         id: session_deadline_diag
+        if: >-
+          !cancelled() && ((success() && steps.browser_counter_comparison.outcome == 'success') ||
+          (failure() && steps.browser_counter_comparison.outcome == 'failure'))
         continue-on-error: true
         shell: bash
         run: |
