@@ -89,7 +89,7 @@ scope所属の非Copy・非Clone・非shared Taskを一回await consumeし、sco
 
 [設計と接続候補](task-result-handle-design.md)、[独立レビュー](task-result-handle-review.md)、[S1/S2実装順](value-task-implementation-plan.md#s1s2-task結果の境界)へ根拠・不採用案・先行oracleを残す。API名、binding構文、故障診断操作と生成bridgeは[接続判断](task-handle-implementation.md)に沿い実装した。[接続結果](task-handles-s1-results.md)へ段階別契約、三構文native、Drop/actual join、allocation/保持、4 OS、独立レビューの範囲を記録する。S2は既存awaitの内側Resultを親tryへ接続する[サービス移行](task-handles-s2-results.md)を用い、新しい公開故障昇格APIを追加しない。公開Pool/Txは別工程を維持する。
 
-旧statement spawnのfail-on-ErrとSupervisor terminal→HTTP取消をS1で維持し、S2で明示的に接続する。依存順はS1→S2→公開Pool/Txで、公開capacityブロッカーを解決済みにしない。merge/版更新/releaseは別に扱う。
+**S1/S2設計時点の履歴:** 旧statement spawnのfail-on-ErrとSupervisor terminal→HTTP取消をS1で維持し、S2で明示的に接続する順序を採った。当時の依存順はS1→S2→公開Pool/Txで、S1/S2だけで公開capacityブロッカーを解決済みとは扱わなかった。その後のPool/Tx公開状態は本ページ冒頭を参照する。各差分のmerge/版更新/releaseは別に判断する。
 
 ### Q-007: actorの条件付きshared message
 
