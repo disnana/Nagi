@@ -905,11 +905,11 @@ async fn finite_origin_and_header_refusals_preserve_existing_token_and_capacity(
             == 403
     );
     assert!(request(&s, "HEAD", "/csrf", "", b"").await.status == 401);
-    assert!(
+    assert_eq!(
         request(&s, "POST", "/write", &guarded(&cookie, &token), b"owned")
             .await
-            .status
-            == 200
+            .status,
+        200
     );
     s.stop().await;
     f.stop().await;
