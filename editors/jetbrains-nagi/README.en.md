@@ -6,6 +6,10 @@ Nagi support for IntelliJ IDEA and PyCharm. Version 0.1.6 is published on [GitHu
 
 The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release includes a common ZIP for both IDEs; check Releases for newer available assets. For Marketplace installs, check the existing listing's Versions view for available versions and compatible IDE builds. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download one common ZIP for both IDEs from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
+## In development: keyword and type assistance
+
+Keyword lookup, including `try`, and builtin type hints in annotations work without the compiler. Class and enum declaration names receive type coloring while editing. The expanded builtin function catalog requires the matching development compiler. These additions are not part of published 0.1.6.
+
 ## 0.1.6 editing changes
 
 The custom gesture that reduces indentation on consecutive Enter presses has been removed. Repeated Enter keeps the current blank-line indentation. Manual Backspace and Shift+Tab, ordinary block indentation and delimiter continuation remain available. This change is not in the published 0.1.5 ZIP.

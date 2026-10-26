@@ -35,7 +35,6 @@ const builtinRows = [
   ['env', 'name: str, fallback: str', 'str', '環境変数がなければ既定値を返します。'],
   ['assert_true', 'condition: bool', 'unit', 'Falseならpanicします。'],
   ['range', 'end: i64', 'Range', 'forで0から終端未満まで走査します。'],
-  ['html', 'text: str', 'Html', '所有文字列をHTML応答にします。'],
   ['include_text', 'path: str', 'str', '文字列リテラルの相対パスをコンパイル時に埋め込みます。'],
   ['read_line', '', 'Result[str, Error]', 'コンソールから同期的に1行読みます。'],
   ['sleep', 'milliseconds: i64', 'unit', 'ミリ秒単位で待ちます。', true],
@@ -82,10 +81,10 @@ readLine.overloads = [
 ];
 readLine.signature = readLine.overloads.map(item => item.signature).join('; ');
 readLine.description = '同期入力。引数がある場合はその文字列を改行なしで表示し、flushしてから1行読みます。I/O失敗はResultで返します。';
-const types = ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'str', 'bytes', 'unit', 'Error', 'Html', 'UUID', 'timestamp', 'List', 'Result', 'view', 'shared', 'Option', 'fn'];
+const types = ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'str', 'bytes', 'unit', 'Error', 'UUID', 'timestamp', 'List', 'Result', 'view', 'shared', 'Option', 'Map', 'fn'];
 const typeInsertions = {
   List: 'List[${1:T}]', Result: 'Result[${1:T}, ${2:Error}]', view: 'view[${1:str}]', shared: 'shared[${1:T}]',
-  Option: 'Option[${1:T}]', fn: 'fn[${1:i64}, ${2:i64}]',
+  Map: 'Map[${1:K}, ${2:V}]', Option: 'Option[${1:T}]', fn: 'fn[${1:i64}, ${2:i64}]',
 };
 const matchPatterns = [
   { name: 'Ok', kind: 'pattern', signature: 'case Ok(value)', parameters: [{ name: 'value', type: 'T' }],

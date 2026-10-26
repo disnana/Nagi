@@ -29,7 +29,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Declaration keywords are lexical; names and members come only from current compiler facts. */
+/** Keywords and builtin type spellings are lexical; names/members require current compiler facts. */
 public final class NagiAssistCompletionContributor extends CompletionContributor implements DumbAware {
     private static final int MAX_EXISTING_LIST_LOOKAHEAD = 1024;
 
@@ -44,10 +44,15 @@ public final class NagiAssistCompletionContributor extends CompletionContributor
                         || (file.getLanguage() != NagiLanguage.HIGH && file.getLanguage() != NagiLanguage.LOW)
                         || !isCodeContext(file, editor.getCaretModel().getOffset())) return;
                 // A partial declaration is not a compiler-checkable program. Offer
-                // only the existing High/Low declaration keyword here, including
-                // for a new local file or an untrusted project. The exact `def` /
+                // lexical keyword/type spellings even for a new local file or
+                // an untrusted project. The exact `def` /
                 // `fn` live templates remain explicit and are never auto-expanded.
                 offerDeclarationKeyword(file, editor, result);
+                for (String keyword : NagiLexicalCompletion.candidates(editor.getDocument().getCharsSequence(),
+                        editor.getCaretModel().getOffset(), file.getLanguage() == NagiLanguage.LOW)) {
+                    result.addElement(AutoCompletionPolicy.NEVER_AUTOCOMPLETE.applyPolicy(
+                            LookupElementBuilder.create(keyword)));
+                }
                 if (!NagiCompilerAction.isSourceFile(file.getVirtualFile())) return;
                 NagiAssistService service = file.getProject().getService(NagiAssistService.class);
                 if (service == null) return;
@@ -265,9 +270,11 @@ public final class NagiAssistCompletionContributor extends CompletionContributor
         int length = offset - start;
         // Only a top-level, incomplete declaration token is unambiguous. Do
         // not offer Python's nested definitions or a member named `def`/`fn`.
-        if (length < 1 || length >= keyword.length()) return;
+        if (length < 1 || length > 32) return;
         CharSequence text = document.getCharsSequence();
-        String prefix = text.subSequence(start, offset).toString();
+        String prefix = text.subSequence(start, offset).toString()
+                .replaceFirst("^(?:(?:async|extern) +)+", "");
+        if (prefix.isEmpty() || prefix.length() >= keyword.length()) return;
         if (!keyword.startsWith(prefix)
                 || (offset < document.getLineEndOffset(line) && !Character.isWhitespace(text.charAt(offset)))) return;
         // A column-zero token may still be inside a continuation or a Low
