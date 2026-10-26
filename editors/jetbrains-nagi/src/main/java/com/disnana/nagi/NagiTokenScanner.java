@@ -13,12 +13,23 @@ public final class NagiTokenScanner {
     private static final Set<String> HIGH = Set.of("def", "class");
     private static final Set<String> LOW = Set.of("fn", "record", "let");
     private static final Set<String> TYPES = Set.of("i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64",
-            "f32", "f64", "bool", "str", "bytes", "unit", "List", "Result", "Error", "view", "shared");
+            "f32", "f64", "bool", "str", "bytes", "unit", "List", "Result", "Error", "view", "shared",
+            "UUID", "timestamp", "Option", "Map", "fn");
+    static final int MAX_DECLARATION_GAP = 8192;
+    static final int CODE = 0;
+    static final int TYPE_NAME = 1;
+    static final int ADJACENT_PREFIX = 2;
     private static final Set<String> OPERATORS = Set.of("->", "==", "!=", "<=", ">=", "+=", "-=", "*=");
 
     private NagiTokenScanner() {}
 
     public static Token next(CharSequence text, int start, int end, boolean low) {
+        if (start >= end) return null;
+        return next(text, start, end, low, contextAt(text, start, low));
+    }
+
+    /** Stateful path: classification depends only on the current token and saved context. */
+    static Token next(CharSequence text, int start, int end, boolean low, int state) {
         if (start >= end) return null;
         int offset = start + 1;
         char first = text.charAt(start);
@@ -52,7 +63,7 @@ public final class NagiTokenScanner {
             while (offset < end && (isLetter(text.charAt(offset)) || isDigit(text.charAt(offset)) || text.charAt(offset) == '_')) offset++;
             String word = text.subSequence(start, offset).toString();
             Kind kind = COMMON.contains(word) || (low ? LOW : HIGH).contains(word) ? Kind.KEYWORD
-                    : TYPES.contains(word) ? Kind.TYPE : Kind.IDENTIFIER;
+                    : TYPES.contains(word) || state == TYPE_NAME ? Kind.TYPE : Kind.IDENTIFIER;
             return new Token(kind, start, offset);
         }
         Kind kind = switch (first) {
@@ -68,6 +79,53 @@ public final class NagiTokenScanner {
             if (OPERATORS.contains(pair)) offset++;
         }
         return new Token(kind, start, offset);
+    }
+    /** Context transition shared by the editor lexer; no lookbehind or restart history is needed. */
+    static int followingState(CharSequence text, Token token, int state, boolean low) {
+        if (token.kind() == Kind.SPACE) {
+            if (state != TYPE_NAME || token.end() - token.start() > MAX_DECLARATION_GAP) return CODE;
+            for (int index = token.start(); index < token.end(); index++) {
+                if (!horizontalSpace(text.charAt(index))) return CODE;
+            }
+            return TYPE_NAME;
+        }
+        if (token.kind() == Kind.KEYWORD && state != ADJACENT_PREFIX
+                && typeDeclarationKeyword(text.subSequence(token.start(), token.end()).toString(), low)) return TYPE_NAME;
+        return switch (token.kind()) {
+            // These complete word tokens consume all adjacent identifier parts.
+            // A subsequent keyword can only follow a separator, so CODE is a
+            // safe restart boundary, including in a long dotted identifier chain.
+            case IDENTIFIER, KEYWORD, TYPE, COMMENT, STRING -> CODE;
+            // Numeric/punctuation tokens may end immediately before a keyword
+            // (1class, 1_class, .class). Preserve the same prefix predicate used
+            // by the bounded context restoration for stateless scanner clients.
+            default -> blocksDeclarationPrefix(text.charAt(token.end() - 1)) ? ADJACENT_PREFIX : CODE;
+        };
+    }
+
+    /** Restore only the bounded context required by stateless scanner clients. */
+    private static int contextAt(CharSequence text, int start, boolean low) {
+        if (start == 0) return CODE;
+        int end = start;
+        while (end > 0 && horizontalSpace(text.charAt(end - 1))) {
+            if (start - end >= MAX_DECLARATION_GAP) return CODE;
+            end--;
+        }
+        if (end == start) return blocksDeclarationPrefix(text.charAt(start - 1)) ? ADJACENT_PREFIX : CODE;
+        int begin = end;
+        while (begin > 0 && isLetter(text.charAt(begin - 1))) {
+            if (end - begin > 6) return CODE;
+            begin--;
+        }
+        if (begin > 0 && blocksDeclarationPrefix(text.charAt(begin - 1))) return CODE;
+        return typeDeclarationKeyword(text.subSequence(begin, end).toString(), low) ? TYPE_NAME : CODE;
+    }
+    private static boolean horizontalSpace(char value) { return value == ' ' || value == '\t'; }
+    private static boolean blocksDeclarationPrefix(char value) {
+        return isLetter(value) || isDigit(value) || value == '_' || value == '.';
+    }
+    private static boolean typeDeclarationKeyword(String word, boolean low) {
+        return word.equals("enum") || word.equals(low ? "record" : "class");
     }
     private static boolean isDigit(char value) { return value >= '0' && value <= '9'; }
     private static boolean isLetter(char value) { return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'; }

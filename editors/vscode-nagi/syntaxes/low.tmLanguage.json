@@ -1,7 +1,35 @@
 {
-  "name": "Nagi Low", "scopeName": "source.nagi.low",
+  "name": "Nagi Low",
+  "scopeName": "source.nagi.low",
   "patterns": [
-    { "include": "source.nagi" },
-    { "name": "keyword.control.nagi.low", "match": "\\b(?:fn|record|let)\\b" }
+    {
+      "match": "\\b(fn)([\\t ]+)([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.nagi.low"
+        },
+        "3": {
+          "name": "entity.name.function.nagi.low"
+        }
+      }
+    },
+    {
+      "match": "\\b(record)([\\t ]+)([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.control.nagi.low"
+        },
+        "3": {
+          "name": "entity.name.type.nagi.low"
+        }
+      }
+    },
+    {
+      "name": "keyword.control.nagi.low",
+      "match": "\\b(?:fn|record|let)\\b"
+    },
+    {
+      "include": "source.nagi#common"
+    }
   ]
 }

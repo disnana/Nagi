@@ -118,12 +118,12 @@ fn builtin_arity(name: &str) -> Option<usize> {
     Some(match name {
         "clock_ns" | "supervisor_demo" | "read_line" => 0,
         "size_of" => 0,
-        "print" | "write" | "html" | "include_text" | "view" | "copy" | "share"
-        | "clone_shared" | "len" | "range" | "sleep" | "json_decode" | "json_encode" | "ok"
-        | "some" | "error" | "not_found" | "internal_error" | "fail" | "error_kind"
-        | "error_message" | "assert_true" | "parse_i64" | "parse_f64" | "make_ints"
-        | "actor_demo" | "actor_pair_demo" | "queue_demo" | "task_demo" | "cpu_sum" | "i64"
-        | "i32" | "uuid_parse" | "uuid_format" => 1,
+        "print" | "write" | "include_text" | "view" | "copy" | "share" | "clone_shared" | "len"
+        | "range" | "sleep" | "json_decode" | "json_encode" | "ok" | "some" | "error"
+        | "not_found" | "internal_error" | "fail" | "error_kind" | "error_message"
+        | "assert_true" | "parse_i64" | "parse_f64" | "make_ints" | "actor_demo"
+        | "actor_pair_demo" | "queue_demo" | "task_demo" | "cpu_sum" | "i64" | "i32"
+        | "uuid_parse" | "uuid_format" => 1,
         "append" | "env" => 2,
         "slice" | "bench_i64" | "bench_f64" | "bench_scalar" => 3,
         _ => return None,
@@ -134,14 +134,55 @@ fn builtin_accepts_arity(name: &str, arity: usize) -> bool {
     builtin_arity(name) == Some(arity) || name == "read_line" && arity == 1
 }
 fn editor_builtin_candidates() -> impl Iterator<Item = EditorBuiltinCandidate> {
+    // Call-form hints only: these intrinsics are not first-class function values.
+    // Eligibility still comes from the current checker scope and taint state.
     [
-        ("print", 1, print_completion_signature()),
-        ("read_line", 0, "read_line() -> Result[str, Error]; read_line(prompt: str | view[str]) -> Result[str, Error]".into()),
+        ("print", print_completion_signature()),
+        ("read_line", "read_line() -> Result[str, Error]; read_line(prompt: str | view[str]) -> Result[str, Error]".into()),
+        ("write", "write(value) -> unit".into()),
+        ("len", "len(value) -> i64".into()),
+        ("view", "view(value) -> view[T]".into()),
+        ("copy", "copy(borrowed) -> T".into()),
+        ("share", "share(value: T) -> shared[T]".into()),
+        ("clone_shared", "clone_shared(value: shared[T]) -> shared[T]".into()),
+        ("append", "append(list, value) -> unit".into()),
+        ("parse_i64", "parse_i64(text: str | view[str]) -> Result[i64, Error]".into()),
+        ("parse_f64", "parse_f64(text: str | view[str]) -> Result[f64, Error]".into()),
+        ("i64", "i64(value: i8 | i16 | i32 | u8 | u16 | u32) -> i64".into()),
+        ("i32", "i32(value: i64) -> Result[i32, Error]".into()),
+        ("uuid_parse", "uuid_parse(text: str | view[str]) -> Result[UUID, Error]".into()),
+        ("uuid_format", "uuid_format(value: UUID) -> str".into()),
+        ("ok", "ok(value: T) -> Result[T, E]".into()),
+        ("error", "error(message: str) -> Result[T, Error]".into()),
+        ("not_found", "not_found(message: str) -> Result[T, Error]".into()),
+        ("internal_error", "internal_error(message: str) -> Result[T, Error]".into()),
+        ("fail", "fail(problem: E) -> Result[T, E]".into()),
+        ("error_kind", "error_kind(problem: Error) -> str".into()),
+        ("error_message", "error_message(problem: Error) -> str".into()),
+        ("some", "some(value: T) -> T?".into()),
+        ("env", "env(name: str, fallback: str) -> str".into()),
+        ("assert_true", "assert_true(condition: bool) -> unit".into()),
+        ("range", "range(end: i64) -> Range".into()),
+        ("include_text", "include_text(path: str) -> str".into()),
+        ("sleep", "async sleep(milliseconds: i64) -> unit".into()),
+        ("json_decode", "json_decode[T](input: str | bytes | view[str] | view[bytes]) -> Result[T, Error]".into()),
+        ("json_encode", "json_encode(value: T) -> Result[str, Error]".into()),
+        ("slice", "slice(borrowed: view[T], start: i64, end: i64) -> Result[view[T], Error]".into()),
+        ("size_of", "size_of[T]() -> i64".into()),
+        ("clock_ns", "clock_ns() -> i64".into()),
+        ("make_ints", "make_ints(count: i64) -> List[i64]".into()),
+        ("bench_i64", "bench_i64(name: str, count: i64, kernel: fn[view[i64], i64]) -> unit".into()),
+        ("bench_f64", "bench_f64(name: str, count: i64, kernel: fn[view[f64], f64]) -> unit".into()),
+        ("bench_scalar", "bench_scalar(name: str, count: i64, kernel: fn[i64, i64]) -> unit".into()),
+        ("actor_demo", "async actor_demo(count: i64) -> Result[i64, Error]".into()),
+        ("actor_pair_demo", "async actor_pair_demo(count: i64) -> Result[i64, Error]".into()),
+        ("queue_demo", "async queue_demo(count: i64) -> Result[i64, Error]".into()),
+        ("task_demo", "async task_demo(count: i64) -> Result[i64, Error]".into()),
+        ("cpu_sum", "async cpu_sum(count: i64) -> Result[i64, Error]".into()),
+        ("supervisor_demo", "async supervisor_demo() -> Result[i64, Error]".into()),
     ]
     .into_iter()
-    .filter_map(|(name, arity, signature)| {
-        (builtin_arity(name) == Some(arity)).then_some(EditorBuiltinCandidate { name, signature })
-    })
+    .map(|(name, signature)| EditorBuiltinCandidate { name, signature })
 }
 fn result(t: Type) -> Type {
     Type::generic("Result", vec![t, Type::named("Error")])

@@ -90,6 +90,38 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
                 info.getDescription() != null && info.getDescription().contains(diagnostic.message())));
     }
 
+    public void testAllIntrinsicCandidatesReachTheRegisteredHighLowLookup() throws Exception {
+        String[] expected = ("print write read_line include_text view copy share clone_shared len range sleep "
+                + "json_decode json_encode ok some error not_found internal_error fail error_kind error_message "
+                + "assert_true parse_i64 parse_f64 make_ints actor_demo actor_pair_demo queue_demo task_demo cpu_sum "
+                + "i64 i32 uuid_parse uuid_format append env slice bench_i64 bench_f64 bench_scalar clock_ns size_of supervisor_demo").split(" ");
+        for (boolean low : new boolean[] { false, true }) {
+            String text = low ? "fn inspect() {\n    \n}\n" : "def inspect():\n    \n";
+            open(low ? "catalog.low" : "catalog.nagi", text);
+            var file = myFixture.getFile();
+            var editor = myFixture.getEditor();
+            editor.getCaretModel().moveToOffset(text.indexOf("    ") + 4);
+            var service = getProject().getService(NagiAssistService.class);
+            service.requestCompletion(file, editor);
+            waitFor(() -> service.fresh(file, editor) != null);
+            var variants = myFixture.completeBasic();
+            assertNotNull(variants);
+            for (String name : expected) {
+                var item = java.util.Arrays.stream(variants).filter(candidate -> candidate.getLookupString().equals(name))
+                        .findFirst().orElse(null);
+                assertNotNull((low ? "Low " : "High ") + name, item);
+                var presentation = new com.intellij.codeInsight.lookup.LookupElementPresentation();
+                item.renderElement(presentation);
+                assertNotNull(name, presentation.getTypeText());
+                assertTrue(name, presentation.getTypeText().contains("->"));
+            }
+            for (String name : new String[] { "html", "serve", "db_open", "db_query" }) {
+                assertFalse(name, java.util.Arrays.stream(variants).anyMatch(item -> item.getLookupString().equals(name)));
+            }
+            if (myFixture.getLookup() != null) myFixture.getLookup().hideLookup(true);
+        }
+    }
+
     public void testReadLineCompletionUsesCompilerSignatureAndExistingCallInsertionInHighAndLow() throws Exception {
         var smartKeys = com.intellij.codeInsight.CodeInsightSettings.getInstance();
         boolean previous = smartKeys.AUTOINSERT_PAIR_BRACKET;

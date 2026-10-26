@@ -6,6 +6,9 @@ import org.jetbrains.annotations.NotNull;
 
 public final class NagiLexer extends LexerBase {
     private final boolean low;
+    // State before the current token, as required by Lexer.start/getState.
+    // It also participates in the editor highlighter's convergence check.
+    private int state;
     private CharSequence buffer = "";
     private int end;
     private NagiTokenScanner.Token token;
@@ -13,13 +16,18 @@ public final class NagiLexer extends LexerBase {
     @Override public void start(@NotNull CharSequence buffer, int startOffset, int endOffset, int initialState) {
         this.buffer = buffer;
         this.end = endOffset;
-        token = NagiTokenScanner.next(buffer, startOffset, endOffset, low);
+        state = initialState;
+        token = NagiTokenScanner.next(buffer, startOffset, endOffset, low, state);
     }
-    @Override public int getState() { return 0; }
+    @Override public int getState() { return state; }
     @Override public IElementType getTokenType() { return token == null ? null : NagiTokens.get(token.kind()); }
     @Override public int getTokenStart() { return token == null ? end : token.start(); }
     @Override public int getTokenEnd() { return token == null ? end : token.end(); }
-    @Override public void advance() { if (token != null) token = NagiTokenScanner.next(buffer, token.end(), end, low); }
+    @Override public void advance() {
+        if (token == null) return;
+        state = NagiTokenScanner.followingState(buffer, token, state, low);
+        token = NagiTokenScanner.next(buffer, token.end(), end, low, state);
+    }
     @Override public @NotNull CharSequence getBufferSequence() { return buffer; }
     @Override public int getBufferEnd() { return end; }
 }
