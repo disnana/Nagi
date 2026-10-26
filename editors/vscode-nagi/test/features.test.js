@@ -81,6 +81,17 @@ test('signature argument tracking ignores nested calls, strings, arrays and gene
   ]) assert.deepEqual(f.activeCall(text, text.length), expected, text);
 });
 
+test('read_line advertises both exact call forms and retains zero-argument insertion', () => {
+  const items = f.completionCandidates(undefined, 'read_li', 7);
+  const item = items.find(item => item.name === 'read_line');
+  assert.equal(f.insertion(item, ''), 'read_line()');
+  assert.equal(item.signature, 'def read_line() -> Result[str, Error]; def read_line(prompt: str | view[str]) -> Result[str, Error]');
+  const call = f.signatureAt(undefined, 'read_line(', 10);
+  assert.deepEqual(call.item.overloads.map(item => item.parameters.length), [0, 1]);
+  assert.deepEqual(call.item.overloads[1].parameters, [{ name: 'prompt', type: 'str | view[str]' }]);
+  assert.equal(f.signatureAt(undefined, 'read_line = 1\nread_line(', 24), undefined);
+});
+
 test('local hovers use the exact UTF-16 occurrence and file rather than a shared name', () => {
   const text = 'print("😀"); value = 7; print(value)\r\nprint(value)';
   const declaration = text.indexOf('value');

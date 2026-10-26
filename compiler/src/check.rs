@@ -129,10 +129,14 @@ fn builtin_arity(name: &str) -> Option<usize> {
         _ => return None,
     })
 }
+// read_line has two explicit call forms; all other builtins keep their exact arity.
+fn builtin_accepts_arity(name: &str, arity: usize) -> bool {
+    builtin_arity(name) == Some(arity) || name == "read_line" && arity == 1
+}
 fn editor_builtin_candidates() -> impl Iterator<Item = EditorBuiltinCandidate> {
     [
         ("print", 1, print_completion_signature()),
-        ("read_line", 0, "read_line() -> Result[str, Error]".into()),
+        ("read_line", 0, "read_line() -> Result[str, Error]; read_line(prompt: str | view[str]) -> Result[str, Error]".into()),
     ]
     .into_iter()
     .filter_map(|(name, arity, signature)| {
@@ -4687,11 +4691,16 @@ impl Checker {
             return Err(error(line, "SF01 migration: 旧serve/htmlは廃止しました。std.http.serverの明示Policy付きrouteとserveを使用してください。raw HTMLはSF04のtyped HTMLへ移行してください"));
         }
         let arity = builtin_arity(n).ok_or_else(|| error(line, format!("未定義の関数: {n}")))?;
-        if arity != args.len() {
+        if !builtin_accepts_arity(n, args.len()) {
+            let expected = if n == "read_line" {
+                "0または1".to_owned()
+            } else {
+                arity.to_string()
+            };
             return Err(error(
                 line,
                 format!(
-                    "{n} は{arity}引数です（期待: {arity}個、実際: {}個）",
+                    "{n} は{expected}引数です（期待: {expected}個、実際: {}個）",
                     args.len()
                 ),
             ));
@@ -4764,7 +4773,18 @@ impl Checker {
                 }
                 Ok(Type::named("unit"))
             }
-            "read_line" => Ok(result(Type::named("str"))),
+            "read_line" => {
+                if !types.is_empty() && !is_string(&types[0]) {
+                    return Err(error(
+                        line,
+                        format!(
+                            "read_lineのpromptはstrまたはview[str]が必要です: got {}",
+                            types[0]
+                        ),
+                    ));
+                }
+                Ok(result(Type::named("str")))
+            }
             "html" => {
                 require(0, Type::named("str"))?;
                 self.consume(&args[0])?;

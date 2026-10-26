@@ -458,7 +458,7 @@ function activate(context) {
 
   function displayItem(item, language) {
     if (language !== 'nagi-low') return item;
-    let signature = item.signature.replace(/^((?:(?:extern|async)\s+)*)def\b/, '$1fn');
+    let signature = item.signature.replace(/(^|;\s*)((?:(?:extern|async)\s+)*)def\b/g, '$1$2fn');
     if (['class', 'enum'].includes(item.kind) && /^(?:class|record|enum)\s/.test(signature) && !signature.includes('{')) {
       const [head, ...members] = signature.split('\n');
       const rows = members.filter(line => line.trim()).map(line => {
@@ -520,18 +520,21 @@ function activate(context) {
     const found = features.signatureAt(snapshot?.index, document.getText(), document.offsetAt(position), { file: document.uri.fsPath, saved: snapshot?.saved });
     if (!found) return;
     const item = displayItem(found.item, document.languageId);
-    const parameters = item.kind === 'class' ? item.fields || [] : item.parameters || [];
-    const constructor = item.callName || item.name;
-    const label = item.kind === 'class' ? `${constructor}(${parameters.map(p => `${p.name}: ${p.type}`).join(', ')}) -> ${constructor}` : item.signature;
-    const signature = new vscode.SignatureInformation(label, documentation(item, snapshot, document.languageId));
-    signature.parameters = parameters.map(p => {
-      const typed = `${p.name}: ${p.type}`;
-      return new vscode.ParameterInformation(label.includes(typed) ? typed : p.name);
-    });
+    const variants = item.overloads?.length ? item.overloads.map(overload => displayItem({ ...item, ...overload }, document.languageId)) : [item];
     const help = new vscode.SignatureHelp();
-    help.signatures = [signature];
-    help.activeSignature = 0;
-    help.activeParameter = Math.min(found.argument, Math.max(0, parameters.length - 1));
+    help.signatures = variants.map(variant => {
+      const parameters = variant.kind === 'class' ? variant.fields || [] : variant.parameters || [];
+      const constructor = variant.callName || variant.name;
+      const label = variant.kind === 'class' ? `${constructor}(${parameters.map(p => `${p.name}: ${p.type}`).join(', ')}) -> ${constructor}` : variant.signature;
+      const signature = new vscode.SignatureInformation(label, documentation(variant, snapshot, document.languageId));
+      signature.parameters = parameters.map(p => {
+        const typed = `${p.name}: ${p.type}`;
+        return new vscode.ParameterInformation(label.includes(typed) ? typed : p.name);
+      });
+      return signature;
+    });
+    help.activeSignature = found.activeSignature || 0;
+    help.activeParameter = Math.min(found.argument, Math.max(0, help.signatures[help.activeSignature].parameters.length - 1));
     return help;
   }
 

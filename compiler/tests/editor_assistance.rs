@@ -942,7 +942,7 @@ fn compiler_offers_print_for_intrinsic_name_prefixes_across_source_forms() {
 }
 
 #[test]
-fn compiler_offers_zero_argument_read_line_with_explicit_result_signature() {
+fn compiler_offers_both_read_line_call_forms_with_explicit_result_signature() {
     let f = Fixture::new();
     for (entry, text, needle) in [
         ("main.nagi", "def inspect():\n    read_li\n", "read_li"),
@@ -966,7 +966,7 @@ fn compiler_offers_zero_argument_read_line_with_explicit_result_signature() {
         assert_eq!(candidates[0]["kind"], "function");
         assert_eq!(
             candidates[0]["signature"],
-            "read_line() -> Result[str, Error]"
+            "read_line() -> Result[str, Error]; read_line(prompt: str | view[str]) -> Result[str, Error]"
         );
         assert_eq!(candidates[0]["access"], "read");
         assert!(candidates[0].get("target").is_none(), "{v}");
@@ -1047,18 +1047,18 @@ fn read_line_intrinsic_does_not_leak_into_members_imports_or_tainted_contexts() 
 }
 
 #[test]
-fn read_line_stays_zero_argument_and_requires_explicit_result_handling() {
+fn read_line_preserves_zero_arguments_and_requires_explicit_result_handling() {
     let f = Fixture::new();
     for (entry, accepted, discarded, prompt, implicit) in [
         ("main.nagi",
          "def inspect() -> Result[str, Error]:\n    text = try read_line()\n    return ok(text)\n",
          "def inspect():\n    read_line()\n",
-         "def inspect() -> Result[str, Error]:\n    return read_line(\"prompt\")\n",
+         "def inspect() -> Result[str, Error]:\n    return read_line(\"prompt\", \"extra\")\n",
          "def inspect() -> str:\n    return read_line()\n"),
         ("manual.low",
          "fn inspect() -> Result[str, Error] { let text = try read_line(); return ok(text); }\n",
          "fn inspect() { read_line(); }\n",
-         "fn inspect() -> Result[str, Error] { return read_line(\"prompt\"); }\n",
+         "fn inspect() -> Result[str, Error] { return read_line(\"prompt\", \"extra\"); }\n",
          "fn inspect() -> str { return read_line(); }\n"),
     ] {
         f.write(entry, accepted);

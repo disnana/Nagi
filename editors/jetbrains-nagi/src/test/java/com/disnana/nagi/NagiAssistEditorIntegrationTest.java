@@ -113,12 +113,19 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
                 assertNotNull(candidate);
                 var presentation = new com.intellij.codeInsight.lookup.LookupElementPresentation();
                 candidate.renderElement(presentation);
-                assertEquals("read_line() -> Result[str, Error]", presentation.getTypeText());
+                assertEquals("read_line() -> Result[str, Error]; read_line(prompt: str | view[str]) -> Result[str, Error]", presentation.getTypeText());
                 assertNotNull(myFixture.getLookup());
                 myFixture.getLookup().setCurrentItem(candidate);
                 myFixture.finishLookup('(');
                 assertEquals(text.replace("read_li", "read_line()"), editor.getDocument().getText());
 
+                PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+                service.requestBaseline(file, editor);
+                waitFor(() -> service.fresh(file, editor) != null);
+                assertTrue(service.fresh(file).response().frontendAccepted());
+                int start = editor.getDocument().getText().indexOf("read_line()");
+                com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(getProject(),
+                        () -> editor.getDocument().insertString(start + "read_line(".length(), "\"名前: \""));
                 PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
                 service.requestBaseline(file, editor);
                 waitFor(() -> service.fresh(file, editor) != null);
