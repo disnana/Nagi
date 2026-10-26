@@ -38,6 +38,20 @@ def cargo_text(failed=None):
 
 
 class DiagnosticTests(unittest.TestCase):
+    def test_updated_source_boundaries_accept_exact_final_line_and_refuse_next_line(self):
+        paths = ("runtime/src/auth/session_deadline_observer.rs", "runtime/src/auth/session_native_finish.rs",
+                 "runtime/src/http_server/browser_login.rs", "runtime/src/sqlite/mod.rs")
+        name = diag.INVENTORY["tests"]["runtime-http-client"][0]
+        for path in paths:
+            end = len((ROOT / path).read_text().splitlines())
+            self.assertEqual(diag.INVENTORY["panic_sources"][path], end)
+            for line, accepted in ((end, True), (end + 1, False)):
+                text = cargo_text(name) + f"thread 'owned' (123) panicked at /private/{path}:{line}:1:\n"
+                record = diag.analyze("runtime-http-client", 101, 1, text, "ok")
+                self.assertEqual(bool(record["panic_sources"]), accepted, (path, line))
+                self.assertEqual(record["unknown_panics"], int(not accepted))
+                self.assertNotIn("/private/", json.dumps(record))
+
     def test_inventory_is_closed_and_preserves_the_existing_guard(self):
         source = WORKFLOW.read_text()
         tree = ast.parse(guard_source(source))

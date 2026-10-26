@@ -26,6 +26,11 @@ REQUIRED = (
     "auth::session::http_bridge::delivery_tests::expiry_after_real_commit_retires_applied_material_without_cookie",
     "http_server::tests::security_tests::authorizer_timeout_shares_budget_and_invalidates_intermediate_scope",
     "http_server::tests::security_tests::late_verifier_failure_uses_the_exhausted_security_budget",
+    "http_server::browser_login::handler_diagnostic_tests::original_handler_timer_preserves_pending_issue_witness",
+    "http_server::browser_login::handler_diagnostic_tests::original_handler_late_ready_preserves_committed_issue_witness",
+    "http_server::browser_login::handler_diagnostic_tests::released_native_startup_preserves_success_without_terminal_record",
+    "auth::session_deadline_observer::tests::browser_request_key_and_guarded_scope_remain_independent",
+    "auth::session_deadline_observer::tests::browser_terminal_copy_survives_later_native_metadata_and_cancellation",
 )
 SUMMARY = re.compile(
     r"^test result: ok\. ([1-9][0-9]*) passed; 0 failed; [0-9]+ ignored; "
