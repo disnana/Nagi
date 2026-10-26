@@ -606,6 +606,28 @@ test('missing compiler keeps prefix completion, hover and signatures available',
   assert.equal(h.diagnostics.size, 0);
 });
 
+test('read_line signature provider exposes zero and one prompt argument in High and Low', async t => {
+  const h = host(t, false);
+  for (const language of ['nagi', 'nagi-low']) {
+    const doc = h.document('read_line(', 'untitled', language);
+    const help = await h.providers.SignatureHelp.provideSignatureHelp(doc, doc.positionAt(10), h.token);
+    const keyword = language === 'nagi-low' ? 'fn' : 'def';
+    assert.deepEqual(help.signatures.map(item => item.label), [
+      `${keyword} read_line() -> Result[str, Error]`,
+      `${keyword} read_line(prompt: str | view[str]) -> Result[str, Error]`,
+    ]);
+    assert.deepEqual(help.signatures.map(item => item.parameters.length), [0, 1]);
+    assert.equal(help.signatures[1].parameters[0].label, 'prompt: str | view[str]');
+    assert.equal(help.activeSignature, 0);
+    const prompt = h.document('read_line("Name: ', 'untitled', language);
+    const promptHelp = await h.providers.SignatureHelp.provideSignatureHelp(prompt, prompt.positionAt(prompt.getText().length), h.token);
+    assert.equal(promptHelp.activeSignature, 1);
+    assert.equal(promptHelp.activeParameter, 0);
+    const hover = await h.providers.Hover.provideHover(doc, doc.positionAt(2), h.token);
+    assert.ok(hover.contents.value.includes(`; ${keyword} read_line(prompt:`));
+  }
+});
+
 test('borrowed local providers annotate hover and detail while keeping variable kind and insertion', async t => {
   const text = 'print(item)';
   const h = host(t, true, 1, folder => ({ format: 'nagi-symbols-v1', definitions: [], bindings: [], references: [], files: [], expressions: [],

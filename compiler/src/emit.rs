@@ -722,7 +722,8 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             match n.as_str() {
                 "print" => format!("println!(\"{{}}\", {})", string_or_value(&a[0], types)),
                 "write" => format!("print!(\"{{}}\", {})", string_or_value(&a[0], types)),
-                "read_line" => "::nagi_runtime::read_line()".into(),
+                "read_line" if a.is_empty() => "::nagi_runtime::read_line()".into(),
+                "read_line" => format!("::nagi_runtime::read_line_prompt({})", string_arg(&a[0], types)),
                 "include_text" => format!("include_str!({}).to_owned()", string_arg(&a[0], types)),
                 "assert_true" => format!("assert!({})", args[0]),
                 "view" => {
