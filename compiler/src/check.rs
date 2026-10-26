@@ -129,13 +129,14 @@ fn builtin_arity(name: &str) -> Option<usize> {
         _ => return None,
     })
 }
-fn editor_builtin_candidate(name: &str) -> Option<EditorBuiltinCandidate> {
-    if name != "print" || builtin_arity(name) != Some(1) {
-        return None;
-    }
-    Some(EditorBuiltinCandidate {
-        name: "print",
-        signature: print_completion_signature(),
+fn editor_builtin_candidates() -> impl Iterator<Item = EditorBuiltinCandidate> {
+    [
+        ("print", 1, print_completion_signature()),
+        ("read_line", 0, "read_line() -> Result[str, Error]".into()),
+    ]
+    .into_iter()
+    .filter_map(|(name, arity, signature)| {
+        (builtin_arity(name) == Some(arity)).then_some(EditorBuiltinCandidate { name, signature })
     })
 }
 fn result(t: Type) -> Type {
@@ -1000,15 +1001,16 @@ impl Checker {
             }
             self.editor_query = Some(query);
         }
-        let builtin_candidates = if !query.members
-            && !self.editor_tainted
-            && !self.vars.contains_key("print")
-            && !self.functions.contains_key("print")
-            && !self.classes.contains_key("print")
-            && !self.enums.contains_key("print")
-            && !self.registered.contains("print")
-        {
-            editor_builtin_candidate("print").into_iter().collect()
+        let builtin_candidates = if !query.members && !self.editor_tainted {
+            editor_builtin_candidates()
+                .filter(|candidate| {
+                    !self.vars.contains_key(candidate.name)
+                        && !self.functions.contains_key(candidate.name)
+                        && !self.classes.contains_key(candidate.name)
+                        && !self.enums.contains_key(candidate.name)
+                        && !self.registered.contains(candidate.name)
+                })
+                .collect()
         } else {
             Vec::new()
         };

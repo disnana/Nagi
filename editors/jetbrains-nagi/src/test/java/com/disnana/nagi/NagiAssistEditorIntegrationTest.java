@@ -90,6 +90,48 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
                 info.getDescription() != null && info.getDescription().contains(diagnostic.message())));
     }
 
+    public void testReadLineCompletionUsesCompilerSignatureAndExistingCallInsertionInHighAndLow() throws Exception {
+        var smartKeys = com.intellij.codeInsight.CodeInsightSettings.getInstance();
+        boolean previous = smartKeys.AUTOINSERT_PAIR_BRACKET;
+        try {
+            smartKeys.AUTOINSERT_PAIR_BRACKET = true;
+            for (boolean low : new boolean[] { false, true }) {
+                String text = low
+                        ? "fn inspect() -> Result[str, Error] { let text = try read_li; return ok(text); }\n"
+                        : "def inspect() -> Result[str, Error]:\n    text = try read_li\n    return ok(text)\n";
+                open(low ? "input.low" : "input.nagi", text);
+                var file = myFixture.getFile();
+                var editor = myFixture.getEditor();
+                editor.getCaretModel().moveToOffset(text.indexOf("read_li") + "read_li".length());
+                var service = getProject().getService(NagiAssistService.class);
+                service.requestCompletion(file, editor);
+                waitFor(() -> service.fresh(file, editor) != null);
+                var variants = myFixture.completeBasic();
+                assertNotNull(variants);
+                var candidate = java.util.Arrays.stream(variants)
+                        .filter(item -> item.getLookupString().equals("read_line")).findFirst().orElse(null);
+                assertNotNull(candidate);
+                var presentation = new com.intellij.codeInsight.lookup.LookupElementPresentation();
+                candidate.renderElement(presentation);
+                assertEquals("read_line() -> Result[str, Error]", presentation.getTypeText());
+                assertNotNull(myFixture.getLookup());
+                myFixture.getLookup().setCurrentItem(candidate);
+                myFixture.finishLookup('(');
+                assertEquals(text.replace("read_li", "read_line()"), editor.getDocument().getText());
+
+                PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+                service.requestBaseline(file, editor);
+                waitFor(() -> service.fresh(file, editor) != null);
+                assertTrue(service.fresh(file).response().frontendAccepted());
+                var callee = file.findElementAt(file.getText().indexOf("read_line"));
+                // Intrinsic signatures are completion metadata. The protocol
+                // supplies no definition target for parameter info or docs.
+                assertNull(service.functionDefinition(file, callee));
+                assertNull(new NagiDocumentationProvider().generateDoc(callee, callee));
+            }
+        } finally { smartKeys.AUTOINSERT_PAIR_BRACKET = previous; }
+    }
+
     /** Run against both the matching compiler and published 0.2.1 (NAGI_TEST_COMPILER). */
     public void testPointFactsReturnAfterMalformedTypingAtTheFinalUnindentedBlankLine() throws Exception {
         open("point.nagi", "def main():\n    print(1)\n");

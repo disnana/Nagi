@@ -942,6 +942,138 @@ fn compiler_offers_print_for_intrinsic_name_prefixes_across_source_forms() {
 }
 
 #[test]
+fn compiler_offers_zero_argument_read_line_with_explicit_result_signature() {
+    let f = Fixture::new();
+    for (entry, text, needle) in [
+        ("main.nagi", "def inspect():\n    read_li\n", "read_li"),
+        (
+            "main.nagi",
+            "def inspect() -> Result[str, Error]:\n    text = try read_li\n    return ok(text)\n",
+            "read_li",
+        ),
+        ("manual.low", "fn inspect() { read_li; }\n", "read_li"),
+    ] {
+        f.write(entry, text);
+        let v = call_name_response(&f, entry, text, needle);
+        assert_eq!(v["semantic_status"], "editor-partial", "{v}");
+        let candidates = v["completion"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|item| item["name"] == "read_line")
+            .collect::<Vec<_>>();
+        assert_eq!(candidates.len(), 1, "{v}");
+        assert_eq!(candidates[0]["kind"], "function");
+        assert_eq!(
+            candidates[0]["signature"],
+            "read_line() -> Result[str, Error]"
+        );
+        assert_eq!(candidates[0]["access"], "read");
+        assert!(candidates[0].get("target").is_none(), "{v}");
+        assert!(!v["symbols"]["definitions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|definition| definition["name"] == "read_line"));
+    }
+}
+
+#[test]
+fn read_line_completion_respects_local_global_and_import_shadowing() {
+    let f = Fixture::new();
+    f.write("main.nagi", "");
+    f.write("helper.nagi", "def replacement() -> i64:\n    return 1\n");
+    for (text, kind) in [
+        ("def inspect():\n    read_line = 1\n    read_li\n", "local"),
+        (
+            "def read_line() -> i64:\n    return 1\ndef inspect():\n    read_li\n",
+            "function",
+        ),
+        (
+            "class read_line:\n    value: i64\ndef inspect():\n    read_li\n",
+            "class",
+        ),
+        (
+            "enum read_line:\n    Empty\ndef inspect():\n    read_li\n",
+            "enum",
+        ),
+        (
+            "from \"helper.nagi\" import replacement as read_line\ndef inspect():\n    read_li\n",
+            "function",
+        ),
+        (
+            "from std.result import map_error as read_line\ndef inspect():\n    read_li\n",
+            "function",
+        ),
+        (
+            "import \"helper.nagi\" as read_line\ndef inspect():\n    read_li\n",
+            "module",
+        ),
+    ] {
+        let v = call_name_response(&f, "main.nagi", text, "read_li");
+        let candidates = v["completion"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|item| item["name"] == "read_line")
+            .collect::<Vec<_>>();
+        assert_eq!(candidates.len(), 1, "{text}: {v}");
+        assert_eq!(candidates[0]["kind"], kind, "{text}: {v}");
+        assert!(candidates[0]["target"].is_object(), "{text}: {v}");
+        assert_ne!(
+            candidates[0]["signature"], "read_line() -> Result[str, Error]",
+            "{text}: {v}"
+        );
+    }
+}
+
+#[test]
+fn read_line_intrinsic_does_not_leak_into_members_imports_or_tainted_contexts() {
+    let f = Fixture::new();
+    f.write("main.nagi", "");
+    f.write("helper.nagi", "def replacement() -> i64:\n    return 1\n");
+    for text in [
+        "class User:\n    name: str\ndef inspect(user: User):\n    user.read_li\n",
+        "import \"helper.nagi\" as helper\ndef inspect():\n    helper.read_li\n",
+        "from \"helper.nagi\" import read_li",
+        "def inspect():\n    unknown_call()\n    read_li\n",
+        "from std.ownership import move\ndef inspect():\n    read_line = \"owned\"\n    saved = move(read_line)\n    read_li\n",
+        "def inspect():\n    read_line(\n",
+    ] {
+        let needle = if text.ends_with("(\n") { "read_line(" } else { "read_li" };
+        let v = call_name_response(&f, "main.nagi", text, needle);
+        assert!(!names(&v).contains(&"read_line"), "{text}: {v}");
+    }
+}
+
+#[test]
+fn read_line_stays_zero_argument_and_requires_explicit_result_handling() {
+    let f = Fixture::new();
+    for (entry, accepted, discarded, prompt, implicit) in [
+        ("main.nagi",
+         "def inspect() -> Result[str, Error]:\n    text = try read_line()\n    return ok(text)\n",
+         "def inspect():\n    read_line()\n",
+         "def inspect() -> Result[str, Error]:\n    return read_line(\"prompt\")\n",
+         "def inspect() -> str:\n    return read_line()\n"),
+        ("manual.low",
+         "fn inspect() -> Result[str, Error] { let text = try read_line(); return ok(text); }\n",
+         "fn inspect() { read_line(); }\n",
+         "fn inspect() -> Result[str, Error] { return read_line(\"prompt\"); }\n",
+         "fn inspect() -> str { return read_line(); }\n"),
+    ] {
+        f.write(entry, accepted);
+        let v = f.request_entry(entry, serde_json::json!({"files":[{"file":entry,"text":accepted}]}));
+        assert_eq!(v["frontend_accepted"], true, "{entry}: {v}");
+        for (text, diagnostic) in [(discarded, "Resultを無視できません"), (prompt, "引数"), (implicit, "型が一致しません")] {
+            let v = f.request_entry(entry, serde_json::json!({"files":[{"file":entry,"text":text}]}));
+            assert_eq!(v["frontend_checked"], true, "{entry}: {v}");
+            assert_eq!(v["frontend_accepted"], false, "{entry}: {v}");
+            assert!(v["diagnostics"][0]["message"].as_str().unwrap().contains(diagnostic), "{text}: {v}");
+        }
+    }
+}
+
+#[test]
 fn local_print_is_the_only_print_candidate_when_it_shadows_the_intrinsic() {
     let f = Fixture::new();
     f.write("main.nagi", "def main():\n    print(0)\n");
