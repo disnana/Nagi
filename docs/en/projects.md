@@ -101,7 +101,7 @@ Try the [Rust integration example](../../test-nagi-code/rust-bridge/nagi.toml) f
 .\target\release\nagic.exe run --project test-nagi-code/rust-bridge
 ```
 
-It calls CRC32, JSON formatting, and an async Rust function. The [task management demo](web-demo.md) also has an entry configured.
+It calls CRC32, JSON formatting, and an async Rust function. The [task management JSON API](web-demo.md) also has an entry configured.
 
 ## Command-line precedence
 

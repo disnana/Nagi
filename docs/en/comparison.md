@@ -53,3 +53,5 @@ Generating native code through Rust alone does not establish parity with handwri
 Existing [HTTP measurements](http-stdlib-performance.md), [build comparisons](../../benchmarks/results/smart-build-2026-10-20/README.md), and [function-unit measurements](../../benchmarks/results/function-unit-reuse-2026-10-21/README.md) include conditions and results. Function partitioning improved unchanged builds in the measured case while some edited builds became slower. Initial builds compile Cargo dependencies, unlike simply starting a Python application.
 
 This page does not present a comprehensive matched Nagi/FastAPI/Axum/Go benchmark. Follow the [measurement guide](performance.md) to compare build time, response time, memory, and required code/tests for your own application.
+
+The [concrete task API comparison](task-api-comparison.md) aligns a SQLite-backed JSON API across Nagi, FastAPI, and Quart, including validation, servers, dependencies, and distribution. It is not a load benchmark.

@@ -8,7 +8,7 @@
 
 ## 今すぐ探す
 
-[開発・デバッグの早見表](developer-workflow.md) · [特徴と他言語との比較](comparison.md) · [devビルド](development-builds.md) · [アプリCI](user-ci.md) · [AI向けDocs・Skill](../ai/README.md)
+[何を作れるか](use-cases.md) · [タスク管理APIの通し教材](task-api-tutorial.md) · [FastAPI・Quartとの具体比較](task-api-comparison.md) · [開発・デバッグの早見表](developer-workflow.md) · [特徴と他言語との比較](comparison.md) · [AI向けDocs・Skill](../ai/README.md)
 
 日々のコマンド、症状別の修正先、APIの入口を早見表にまとめています。0.2.2の改善は開発中として区別します。
 
@@ -17,7 +17,7 @@
 1. [準備と最初の実行](getting-started.md)でcompilerを用意し、Hello Worldを動かす。
 2. [コードを書きながら学ぶ](language-guide.md)で値・関数・配列・borrow・Resultを試す。
 3. [最初の小さなCLIアプリ](first-app.md)で、入力・型付きの失敗・境界値の手動確認を一続きで行う。
-4. [HTTP](http.md)でAPIを作り、[SQLite](database.md)でデータを保存する。
+4. [タスク管理APIの通し教材](task-api-tutorial.md)でHTTP、JSON、SQLite、テスト、release buildを一続きで試す。
 
 [VS Codeの使い方](editor.md)と[JetBrains版の導入・Release ZIPの選び方](../editors/jetbrains-nagi/README.md)も確認できます。
 
@@ -61,6 +61,8 @@
 | やりたいこと | ページ |
 |---|---|
 | DBなしのHTTP、ヘッダー、応答status | [HTTP](http.md)、[APIリファレンス](http-server.md) |
+| JSON APIを作りSQLiteへ保存する | [タスク管理APIの通し教材](task-api-tutorial.md) |
+| Nagi・FastAPI・Quartで同じAPIを比べる | [具体的な比較](task-api-comparison.md) |
 | JSONを読み書きする | [JSON](json.md) |
 | 旧SQLite APIとSQLの事前検査 | [SQLite](database.md)、[SQLの事前検査](sql-check.md) |
 | 型付きparameters・Pool・transactionを使う | [SQLite PoolとTransaction](sqlite-pool.md) |
