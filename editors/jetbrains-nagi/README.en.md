@@ -99,6 +99,8 @@ To install a GitHub Release ZIP, select it in **Settings → Plugins → ⚙ →
 
 Set the compiler executable in **Settings → Languages & Frameworks → Nagi**. An empty value uses `nagic` from `PATH`. Relative paths resolve from the IDE project root.
 
+The next plugin version under development can color matching `()` and `[]` pairs (`{}` in Low too) by nesting depth when **Color matching brackets by nesting depth** is enabled on the same page. This feature is not included in the published 0.1.6 release and is disabled by default. Customize all six depth colors under **Settings → Editor → Color Scheme → Nagi**. Brackets in strings or comments and unmatched brackets keep their normal syntax color.
+
 Open a Nagi file and choose **Nagi: Check** or **Nagi: Run** in its context menu or the Tools menu. These actions save open files before execution. The compiler does not run in untrusted projects.
 
 In 0.1.2, the button beside `main` invokes the same **Nagi: Run** action. It does not use the Python or other run configuration selected in the top toolbar. When a nearby `nagi.toml` exists, it runs that project's entry point. Version 0.1.3 also exposes this Nagi run through a standard IDE Run Configuration with normal Run/Stop controls.

@@ -28,6 +28,9 @@
         <lang.parserDefinition language="NagiLow" implementationClass="com.disnana.nagi.NagiParserDefinition$Low"/>
         <lang.syntaxHighlighterFactory language="Nagi" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$Factory"/>
         <lang.syntaxHighlighterFactory language="NagiLow" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$LowFactory"/>
+        <colorSettingsPage implementation="com.disnana.nagi.NagiColorSettingsPage"/>
+        <annotator language="Nagi" implementationClass="com.disnana.nagi.NagiBracketDepthAnnotator"/>
+        <annotator language="NagiLow" implementationClass="com.disnana.nagi.NagiBracketDepthAnnotator"/>
         <projectService serviceImplementation="com.disnana.nagi.NagiAssistService"/>
         <notificationGroup id="Nagi compiler assistance" displayType="BALLOON" isLogByDefault="true"/>
         <completion.contributor language="Nagi" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>
