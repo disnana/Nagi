@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-26: 0.3.0 Go backendの段階計画
+
+[計画](go-backend-0.3-plan.md)。0.2.2のrelease候補作業から分離し、Rust実装の単一`nagic`、共有High/Low・checker・意味論、Rust既定、CLI > project > Rustのbackend選択、target別native資産と不一致の依存chain診断を採用方向として整理した。現行`CheckedProgram`は封印済みだが`EmissionPlan`、stdlib `rust_path`、conformance runnerにRust固有情報が残るため、target-neutral checked planの抽出とRust byte-for-byte無回帰をG0とする。Go backend数値は未計測であり、現executorの`/usr/bin/go`はtoolchainではない。G1以降は公式toolchainのprovenanceを固定してcold/warm/edit/test compile/test execution/runtimeを分けて測る。cross-backend FFI・Pythonは初版対象外。実装、版更新、releaseは未実施。
+
 ## 2026-10-23: 完成コードの末尾空行でeditor情報を失う不具合
 
 [設計](jetbrains-empty-line-assistance.md)。#148の利用者GUI確認・main `6214c5d6`へのmerge後、正常なPoint record例でも末尾空行の先頭へcaretを置くと色・説明が消える報告を受けた。公開0.2.1のHigh/Low・保存/overlay/serveで、original frontendは受理済みだがquery recoveryのload失敗によりsymbolsが省略される応答を再現した。compilerは元ASTへ戻してqueryなしindexを生成し、元diagnostic/verdictを維持する。pluginは公開0.2.1向けにsymbols省略と明示emptyを区別し、限定条件で同snapshotのqueryなし解析を1回だけ行い、source事実だけを合成してpublishする。通常の応答に追加解析はない。型・ownership・Policy・stale/cancel/identity検査は維持。compiler37件・Clippy・fmt、公開0.2.1実CLIを使うplugin43件、matching compilerのplugin全278件・ZIP build成功。環境はJDK25.0.4/IU263.7031.23で、Windows GUI/他SDK・全workspace・独立最終review・exact-head CIは別gateとして残す。
