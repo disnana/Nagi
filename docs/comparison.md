@@ -53,3 +53,5 @@ Rustからネイティブコードを作ることだけで、手書きRustと同
 既存の[HTTP測定](http-stdlib-performance.md)、[ビルド比較](../benchmarks/results/smart-build-2026-10-20/README.md)、[関数分割の測定](../benchmarks/results/function-unit-reuse-2026-10-21/README.md)には条件と結果があります。関数分割は変更なしで改善する一方、編集時に遅くなったケースもあります。初回ビルドにはCargo依存のコンパイルが必要で、Pythonの起動時間と同じ条件にはなりません。
 
 Nagi・FastAPI・Axum・Goを同一仕様で比較した総合ベンチマークは、ここでは提示していません。採用時は[測定方法](performance.md)に沿って、自分のアプリのビルド時間、応答時間、メモリ、必要なコードとテストを比較してください。
+
+SQLiteを使う同じタスクJSON APIについて、Nagi・FastAPI・Quartのコード、validation、server、依存、配布条件を揃えた[具体的な比較](task-api-comparison.md)も参照できます。これは負荷benchmarkではありません。
