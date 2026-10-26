@@ -942,6 +942,106 @@ fn compiler_offers_print_for_intrinsic_name_prefixes_across_source_forms() {
 }
 
 #[test]
+fn all_supported_intrinsics_are_completion_candidates_in_high_and_low() {
+    let f = Fixture::new();
+    // Independent supported-language inventory, including diagnostic/benchmark intrinsics.
+    let expected = [
+        "print",
+        "write",
+        "read_line",
+        "include_text",
+        "view",
+        "copy",
+        "share",
+        "clone_shared",
+        "len",
+        "range",
+        "sleep",
+        "json_decode",
+        "json_encode",
+        "ok",
+        "some",
+        "error",
+        "not_found",
+        "internal_error",
+        "fail",
+        "error_kind",
+        "error_message",
+        "assert_true",
+        "parse_i64",
+        "parse_f64",
+        "make_ints",
+        "actor_demo",
+        "actor_pair_demo",
+        "queue_demo",
+        "task_demo",
+        "cpu_sum",
+        "i64",
+        "i32",
+        "uuid_parse",
+        "uuid_format",
+        "append",
+        "env",
+        "slice",
+        "bench_i64",
+        "bench_f64",
+        "bench_scalar",
+        "clock_ns",
+        "size_of",
+        "supervisor_demo",
+    ];
+    for (entry, text) in [
+        ("main.nagi", "def inspect():\n    candidate\n"),
+        ("manual.low", "fn inspect() { candidate; }\n"),
+    ] {
+        f.write(entry, text);
+        let v = call_name_response(&f, entry, text, "candidate");
+        let actual = v["completion"]["items"].as_array().unwrap();
+        for name in expected {
+            let candidates = actual
+                .iter()
+                .filter(|item| item["name"] == name)
+                .collect::<Vec<_>>();
+            assert_eq!(candidates.len(), 1, "{entry} {name}: {v}");
+            assert_eq!(candidates[0]["kind"], "function");
+            assert_eq!(candidates[0]["access"], "read");
+            assert!(
+                candidates[0]["signature"].as_str().unwrap().contains("->"),
+                "{name}"
+            );
+            assert!(candidates[0].get("target").is_none(), "{name}");
+        }
+        for retired in [
+            "html",
+            "serve",
+            "db_open",
+            "db_exec",
+            "db_all",
+            "db_query",
+            "db_insert",
+            "db_update",
+            "db_write",
+        ] {
+            assert!(!names(&v).contains(&retired), "{entry} {retired}: {v}");
+        }
+    }
+    // Every intrinsic passes through the same scope/taint gates, including
+    // moved locals, imports and namespace/member contexts tested below.
+    for name in expected {
+        let text = format!("def inspect():\n    {name} = 1\n    candidate\n");
+        let v = call_name_response(&f, "main.nagi", &text, "candidate");
+        assert!(
+            !v["completion"]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["name"] == name && item["kind"] == "function"),
+            "{name}: {v}"
+        );
+    }
+}
+
+#[test]
 fn compiler_offers_both_read_line_call_forms_with_explicit_result_signature() {
     let f = Fixture::new();
     for (entry, text, needle) in [

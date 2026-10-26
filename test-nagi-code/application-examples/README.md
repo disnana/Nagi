@@ -16,7 +16,7 @@
 
 手書きLowから始める場合は、[注文見積もりCLI](../low-examples/order-quote/README.md)を使ってください。Low同士のimport、型付きJSON、入力検証と整数の価格計算を試せます。
 
-バイト列APIにはNagi 0.1.10以降が必要で、Axum見積APIは0.1.10で検証しています。認証例はこのbranchの標準HTTP request-bound auth APIを使います。その他の既存例はNagi 0.1.9でも動きます。新APIの公開配布での利用可否は公式Release記録を確認してください。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
+一覧全体を試す場合は公開Nagi 0.2.1を使ってください。機器設定APIと認証例は0.2.0のQuery/Pool/Txまたはrequest-bound auth APIを必要とします。バイト列APIには0.1.10以降が必要で、Axum見積APIは0.1.10、見積APIと監督付きworkerは0.1.9で検証しています。古いcompilerで残りの例も動くと一括して保証しません。サンプルはリポジトリ一式を取得し、そのルートで各フォルダの`nagi.toml`を指定して実行してください。Rust/CargoとOSごとのビルド環境は[セットアップ](../../docs/getting-started.md)で確認できます。
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report

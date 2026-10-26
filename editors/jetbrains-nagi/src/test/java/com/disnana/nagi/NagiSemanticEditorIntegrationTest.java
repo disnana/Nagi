@@ -149,6 +149,16 @@ public final class NagiSemanticEditorIntegrationTest extends BasePlatformTestCas
             var response = service.fresh(file);
             assertTrue(response.response().frontendAccepted());
             assertEquals("none", response.response().semanticStatus());
+            for (int point = text.indexOf("Point"); point >= 0; point = text.indexOf("Point", point + 5)) {
+                int offset = point;
+                int line = editor.getDocument().getLineNumber(offset);
+                int column = offset - editor.getDocument().getLineStartOffset(line);
+                assertTrue("declaration, parameter type and constructor use have exact class roles",
+                        service.semanticColors(file, response).stream().anyMatch(color ->
+                                color.location().line() == line + 1 && color.location().column() == column + 1
+                                        && color.location().length() == 5
+                                        && color.attributes() == DefaultLanguageHighlighterColors.CLASS_NAME));
+            }
             var definition = service.functionDefinition(file, file.findElementAt(calleeOffset));
             assertNotNull("accepted typed symbols must not depend on completion context", definition);
             assertEquals("add", definition.name());
