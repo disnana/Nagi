@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
-    paths: ['website/**', 'docs/**', 'ai/**', 'editors/vscode-nagi/README.md', 'test-nagi-code/**/README.md', 'PERFORMANCE.md', '.github/workflows/pages.yml']
+    paths: ['website/**', 'docs/**', 'ai/**', 'editors/vscode-nagi/README.md', 'test-nagi-code/**/README.md', 'test-nagi-code/result-try-tutorial/**', 'scripts/verify_result_try_tutorial.py', 'PERFORMANCE.md', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
