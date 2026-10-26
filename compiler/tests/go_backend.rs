@@ -1,0 +1,652 @@
+use serde_json::Value;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::{Command, Output},
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static NEXT: AtomicU64 = AtomicU64::new(0);
+
+struct Fixture(PathBuf);
+impl Fixture {
+    fn new() -> Self {
+        loop {
+            let path = std::env::temp_dir().join(format!(
+                "nagi-go-backend-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            match fs::create_dir(&path) {
+                Ok(()) => return Self(path),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => panic!("cannot create {}: {error}", path.display()),
+            }
+        }
+    }
+
+    fn write(&self, name: &str, text: &str) {
+        let path = self.0.join(name);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, text).unwrap();
+    }
+
+    fn command(&self, args: &[&str]) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .args(args)
+            .current_dir(&self.0)
+            .env_remove("NAGI_RUN_RETENTION")
+            .output()
+            .unwrap()
+    }
+
+    fn go(&self, command: &str, source: &str, out: &str) -> Output {
+        self.command(&[
+            command,
+            source,
+            "--no-project",
+            "--backend",
+            "go",
+            "--profile",
+            "dev",
+            "--out",
+            out,
+        ])
+    }
+
+    fn latest(&self, out: &str) -> (PathBuf, Value) {
+        let apps = self.0.join(out).join(".nagi/apps");
+        let app = fs::read_dir(apps)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("nagi-go-")
+            })
+            .unwrap();
+        let value: Value =
+            serde_json::from_slice(&fs::read(app.join("latest.json")).unwrap()).unwrap();
+        (app, value)
+    }
+}
+impl Drop for Fixture {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+const PROGRAM: &str = r#"class Point:
+    x: f64
+    y: f64
+
+def parse_plus(text: str) -> Result[i64, Error]:
+    value = try parse_i64(text)
+    return ok(value + 1)
+
+def main() -> Result[unit, Error]:
+    point = Point(x=1.5, y=2.5)
+    print(point.x + point.y)
+    answer = try parse_plus("41")
+    print(answer)
+    return ok(print("go-ok"))
+"#;
+
+#[test]
+fn go_backend_runs_checked_high_and_independent_saved_low() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", PROGRAM);
+    let high = fixture.go("run", "main.nagi", "out-high");
+    assert!(
+        high.status.success(),
+        "{}",
+        String::from_utf8_lossy(&high.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&high.stdout), "4\n42\ngo-ok\n");
+    let generated = fs::read_to_string(fixture.0.join("out-high/generated.low")).unwrap();
+    fixture.write("saved.low", &generated);
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    let low = fixture.go("run", "saved.low", "out-low");
+    assert!(
+        low.status.success(),
+        "{}",
+        String::from_utf8_lossy(&low.stderr)
+    );
+    assert_eq!(low.stdout, high.stdout);
+
+    let (app, latest) = fixture.latest("out-low");
+    assert_eq!(latest["backend"], "go");
+    let generation = app.join(latest["executable"].as_str().unwrap());
+    assert!(generation.is_file());
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(app.join(latest["receipt"].as_str().unwrap())).unwrap())
+            .unwrap();
+    assert_eq!(receipt["environment"]["GOTOOLCHAIN"], "local");
+    assert_eq!(receipt["toolchain_auto_download"], false);
+    assert!(fixture.0.join("out-low/go/main.go").is_file());
+    assert!(!fixture.0.join("out-low/Cargo.toml").exists());
+}
+
+#[test]
+fn cli_overrides_project_backend_and_rust_remains_default() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", "def main():\n    print(1)\n");
+    fixture.write("nagi.toml", "entry = \"main.nagi\"\nbackend = \"go\"\n");
+
+    let project_go = fixture.command(&["check", "--project", "."]);
+    assert!(
+        project_go.status.success(),
+        "{}",
+        String::from_utf8_lossy(&project_go.stderr)
+    );
+    let override_rust = fixture.command(&["check", "--project", ".", "--backend", "rust"]);
+    assert!(override_rust.status.success());
+
+    fixture.write("nagi.toml", "entry = \"main.nagi\"\n");
+    let default_rust = fixture.command(&["check", "--project", "."]);
+    assert!(default_rust.status.success());
+    let unknown = fixture.command(&["check", "main.nagi", "--no-project", "--backend", "java"]);
+    assert!(!unknown.status.success());
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("--backend requires rust or go"));
+}
+
+#[test]
+fn unsupported_go_feature_fails_before_toolchain_and_keeps_last_good() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", "def main():\n    print(7)\n");
+    let good = fixture.go("build", "main.nagi", "out");
+    assert!(
+        good.status.success(),
+        "{}",
+        String::from_utf8_lossy(&good.stderr)
+    );
+    let (app, before) = fixture.latest("out");
+    let old_binary = fs::read(app.join(before["executable"].as_str().unwrap())).unwrap();
+
+    fixture.write(
+        "main.nagi",
+        "def main():\n    values = make_ints(2)\n    print(len(values))\n",
+    );
+    let failed = fixture.go("build", "main.nagi", "out");
+    assert!(!failed.status.success());
+    let diagnostic = String::from_utf8_lossy(&failed.stderr);
+    assert!(diagnostic.contains("Go backend"), "{diagnostic}");
+    assert!(diagnostic.contains("make_ints"), "{diagnostic}");
+    assert!(diagnostic.contains("main.nagi:2"), "{diagnostic}");
+    let (_, after) = fixture.latest("out");
+    assert_eq!(after, before);
+    assert_eq!(
+        fs::read(app.join(after["executable"].as_str().unwrap())).unwrap(),
+        old_binary
+    );
+}
+
+#[test]
+fn reachable_rust_native_dependency_reports_the_chain() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        "@rust(\"native::digest\")\nextern def digest(value: i64) -> i64\n\ndef create(value: i64) -> i64:\n    return digest(value)\n\ndef main():\n    print(create(1))\n",
+    );
+    let output = fixture.command(&[
+        "check",
+        "main.nagi",
+        "--no-project",
+        "--backend",
+        "go",
+        "--out",
+        "out",
+    ]);
+    assert!(!output.status.success());
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(diagnostic.contains("selected backend go cannot provide native function"));
+    assert!(diagnostic.contains("main.nagi::digest"), "{diagnostic}");
+    assert!(diagnostic.contains("required by main -> "), "{diagnostic}");
+    assert!(diagnostic.contains("main.nagi::create -> "), "{diagnostic}");
+    assert!(
+        diagnostic.contains("available binding: rust (native::digest)"),
+        "{diagnostic}"
+    );
+}
+
+#[test]
+fn go_specific_options_are_not_silently_ignored() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", "def main():\n    print(1)\n");
+    for option in ["--runtime-profile", "--seed-lock", "--incremental"] {
+        let mut args = vec!["build", "main.nagi", "--no-project", "--backend", "go"];
+        if option == "--runtime-profile" {
+            args.extend([option, "auto"]);
+        } else if option == "--incremental" {
+            args.extend(["--profile", "dev", option]);
+        } else {
+            args.push(option);
+        }
+        let output = fixture.command(&args);
+        assert!(!output.status.success(), "{option}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("supported only by the rust backend"),
+            "{option}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+fn declared_go_adapter_is_rejected_until_the_audited_adapter_abi_exists() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", "def main():\n    print(1)\n");
+    fixture.write("native/bridge.go", "package native\n");
+    fixture.write(
+        "nagi.toml",
+        "entry = \"main.nagi\"\nbackend = \"go\"\n[go]\nfiles = [\"native/bridge.go\"]\n",
+    );
+    let output = fixture.command(&["check", "--project", "."]);
+    assert!(!output.status.success());
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        diagnostic.contains("Go native adapter files are not supported"),
+        "{diagnostic}"
+    );
+    assert!(
+        diagnostic.contains(
+            &Path::new("native")
+                .join("bridge.go")
+                .to_string_lossy()
+                .to_string()
+        ),
+        "{diagnostic}"
+    );
+}
+
+#[test]
+fn preserves_evaluation_order_short_circuiting_and_distinct_identifiers() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        r#"def left() -> i64:
+    print(1)
+    return 1
+
+def right() -> Result[i64, Error]:
+    print(2)
+    return ok(2)
+
+def should_not_run() -> Result[bool, Error]:
+    print(99)
+    return ok(true)
+
+def add(left_value: i64, right_value: i64) -> i64:
+    return left_value + right_value
+
+def main() -> Result[unit, Error]:
+    go = 4
+    nagi_go = 5
+    print(add(left(), try right()))
+    if false and try should_not_run():
+        print(100)
+    print(go + nagi_go)
+    return ok(print("done"))
+"#,
+    );
+    let output = fixture.go("run", "main.nagi", "out");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "1\n2\n3\n9\ndone\n"
+    );
+}
+
+#[test]
+fn opposite_backend_assets_are_rejected_instead_of_ignored() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", "def main():\n    print(1)\n");
+    fixture.write("native/bridge.go", "package native\n");
+    fixture.write("native/bridge.rs", "pub fn bridge() {}\n");
+
+    fixture.write(
+        "nagi.toml",
+        "entry = \"main.nagi\"\nbackend = \"rust\"\n[go]\nfiles = [\"native/bridge.go\"]\n",
+    );
+    let rust = fixture.command(&["check", "--project", "."]);
+    assert!(!rust.status.success());
+    assert!(
+        String::from_utf8_lossy(&rust.stderr)
+            .contains("selected backend rust cannot use Go native assets"),
+        "{}",
+        String::from_utf8_lossy(&rust.stderr)
+    );
+
+    fixture.write(
+        "nagi.toml",
+        "entry = \"main.nagi\"\nbackend = \"go\"\n[rust]\nfile = \"native/bridge.rs\"\n",
+    );
+    let go = fixture.command(&["check", "--project", "."]);
+    assert!(!go.status.success());
+    assert!(
+        String::from_utf8_lossy(&go.stderr)
+            .contains("selected backend go cannot use Rust native assets"),
+        "{}",
+        String::from_utf8_lossy(&go.stderr)
+    );
+}
+
+#[test]
+fn missing_go_toolchain_is_actionable_and_does_not_publish_latest() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", "def main():\n    print(1)\n");
+    let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .args([
+            "build",
+            "main.nagi",
+            "--no-project",
+            "--backend",
+            "go",
+            "--profile",
+            "dev",
+            "--out",
+            "out",
+        ])
+        .current_dir(&fixture.0)
+        .env("NAGI_GO", fixture.0.join("missing-go"))
+        .env_remove("NAGI_RUN_RETENTION")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        diagnostic.contains("Go toolchain was not found"),
+        "{diagnostic}"
+    );
+    let apps = fixture.0.join("out/.nagi/apps");
+    if apps.exists() {
+        for app in fs::read_dir(apps).unwrap() {
+            let app = app.unwrap().path();
+            assert!(!app.join("latest.json").exists());
+            let generations = app.join("generations");
+            if generations.exists() {
+                assert_eq!(fs::read_dir(generations).unwrap().count(), 0);
+            }
+        }
+    }
+}
+
+#[test]
+fn imported_functions_share_frontend_resolution_with_the_go_backend() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "library.nagi",
+        "def answer(value: i64) -> i64:\n    return value + 1\n",
+    );
+    fixture.write(
+        "main.nagi",
+        "import \"library.nagi\" as library\ndef main():\n    print(library.answer(41))\n",
+    );
+    let output = fixture.go("run", "main.nagi", "out");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "42\n");
+}
+
+#[test]
+fn exhaustive_matches_and_float_console_contract_compile_and_run() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        r#"def option_value(value: i64?) -> i64:
+    match value:
+        case Some(number):
+            return number
+        case None:
+            return 0
+
+def result_value(value: Result[i64, Error]) -> i64:
+    match value:
+        case Ok(number):
+            return number
+        case Err(_):
+            return 0
+
+def inverse_f32(value: f32) -> f32:
+    one: f32 = 1.0
+    return one / value
+
+def main():
+    print("os.")
+    print(option_value(some(4)))
+    print(result_value(ok(5)))
+    print(5.5 % 2.0)
+    negative_zero: f64 = -0.0
+    print(1.0 / negative_zero)
+    print(inverse_f32(-0.0))
+    print(1000000.0)
+    rounded: f32 = 1952495.25
+    print(rounded)
+"#,
+    );
+    let output = fixture.go("run", "main.nagi", "out");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "os.\n4\n5\n1.5\n-inf\n-inf\n1000000\n1952495.3\n"
+    );
+}
+
+#[test]
+fn integer_profile_and_signed_division_overflow_match_the_rust_contract() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "decimal.nagi",
+        r#"def main():
+    ten: i64 = 010
+    eight: i64 = 08
+    minimum: i8 = -0128
+    print(ten)
+    print(eight)
+    print(minimum)
+"#,
+    );
+    let decimal = fixture.go("run", "decimal.nagi", "decimal");
+    assert!(
+        decimal.status.success(),
+        "{}",
+        String::from_utf8_lossy(&decimal.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&decimal.stdout), "10\n8\n-128\n");
+
+    fixture.write(
+        "wrap.nagi",
+        r#"def main():
+    added: u8 = 255 + 1
+    subtracted: u8 = 0 - 1
+    multiplied: u8 = 200 * 2
+    print(added)
+    print(subtracted)
+    print(multiplied)
+"#,
+    );
+    let release = fixture.command(&[
+        "run",
+        "wrap.nagi",
+        "--no-project",
+        "--backend",
+        "go",
+        "--profile",
+        "release",
+        "--out",
+        "release",
+    ]);
+    assert!(
+        release.status.success(),
+        "{}",
+        String::from_utf8_lossy(&release.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&release.stdout), "0\n255\n144\n");
+    let development = fixture.go("run", "wrap.nagi", "development");
+    assert!(!development.status.success());
+    assert!(
+        String::from_utf8_lossy(&development.stderr).contains("integer overflow"),
+        "{}",
+        String::from_utf8_lossy(&development.stderr)
+    );
+
+    for (name, ty, value, expression) in [
+        ("unsigned-add", "u8", "255", "value + 1"),
+        ("unsigned-subtract", "u8", "0", "value - 1"),
+        ("unsigned-multiply", "u8", "200", "value * 2"),
+        ("signed-add", "i8", "127", "value + 1"),
+        ("signed-subtract", "i8", "-128", "value - 1"),
+        ("signed-multiply", "i8", "100", "value * 2"),
+    ] {
+        fixture.write(
+            "checked.nagi",
+            &format!(
+                "def operation(value: {ty}) -> {ty}:\n    return {expression}\n\ndef main():\n    print(operation({value}))\n"
+            ),
+        );
+        let out = format!("checked-{name}");
+        let output = fixture.go("run", "checked.nagi", &out);
+        assert!(!output.status.success(), "{name} unexpectedly succeeded");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("integer overflow"),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    for (name, expression) in [
+        ("negate", "-value"),
+        ("divide", "value / -1"),
+        ("remainder", "value % -1"),
+    ] {
+        fixture.write(
+            "overflow.nagi",
+            &format!(
+                "def operation(value: i64) -> i64:\n    return {expression}\n\ndef main():\n    print(operation(-9223372036854775808))\n"
+            ),
+        );
+        for profile in ["dev", "release"] {
+            let out = format!("{name}-{profile}");
+            let output = fixture.command(&[
+                "run",
+                "overflow.nagi",
+                "--no-project",
+                "--backend",
+                "go",
+                "--profile",
+                profile,
+                "--out",
+                &out,
+            ]);
+            let should_panic = profile == "dev" || name != "negate";
+            assert_eq!(
+                !output.status.success(),
+                should_panic,
+                "{name}/{profile}: stdout={} stderr={}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            if should_panic {
+                assert!(
+                    String::from_utf8_lossy(&output.stderr).contains("integer overflow"),
+                    "{name}/{profile}: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            } else {
+                assert_eq!(
+                    String::from_utf8_lossy(&output.stdout),
+                    "-9223372036854775808\n"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn compatibility_projection_cannot_mutate_retained_generations() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", "def main():\n    print(1)\n");
+    let first = fixture.go("build", "main.nagi", "out");
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let (app, initial) = fixture.latest("out");
+    let old = app.join(initial["executable"].as_str().unwrap());
+    let old_bytes = fs::read(&old).unwrap();
+    let projection = fixture.0.join("out/go/main.go");
+    fs::remove_file(&projection).unwrap();
+    fs::hard_link(&old, &projection).unwrap();
+
+    fixture.write("main.nagi", "def main():\n    print(2)\n");
+    let second = fixture.go("build", "main.nagi", "out");
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    assert_eq!(fs::read(&old).unwrap(), old_bytes);
+    let old_output = Command::new(&old).output().unwrap();
+    assert!(old_output.status.success());
+    assert_eq!(String::from_utf8_lossy(&old_output.stdout), "1\n");
+    assert!(fs::read_to_string(&projection)
+        .unwrap()
+        .contains("Code generated by nagic"));
+}
+
+#[cfg(unix)]
+#[test]
+fn compatibility_projection_symlink_fails_without_mutating_or_advancing_latest() {
+    use std::os::unix::fs::symlink;
+
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", "def main():\n    print(1)\n");
+    let first = fixture.go("build", "main.nagi", "out");
+    assert!(first.status.success());
+    let (app, initial) = fixture.latest("out");
+    let retained = app.join(initial["go"].as_str().unwrap());
+    let retained_bytes = fs::read(&retained).unwrap();
+    let projection = fixture.0.join("out/go/main.go");
+    fs::remove_file(&projection).unwrap();
+    symlink(&retained, &projection).unwrap();
+
+    fixture.write("main.nagi", "def main():\n    print(2)\n");
+    let failed = fixture.go("build", "main.nagi", "out");
+    assert!(!failed.status.success());
+    assert!(
+        String::from_utf8_lossy(&failed.stderr).contains("cannot replace a symlink"),
+        "{}",
+        String::from_utf8_lossy(&failed.stderr)
+    );
+    assert_eq!(fixture.latest("out").1, initial);
+    assert_eq!(fs::read(&retained).unwrap(), retained_bytes);
+
+    fs::remove_file(&projection).unwrap();
+    fs::remove_file(fixture.0.join("out/go/go.mod")).unwrap();
+    fs::remove_dir(fixture.0.join("out/go")).unwrap();
+    symlink(retained.parent().unwrap(), fixture.0.join("out/go")).unwrap();
+    let directory_alias = fixture.go("build", "main.nagi", "out");
+    assert!(!directory_alias.status.success());
+    assert!(
+        String::from_utf8_lossy(&directory_alias.stderr).contains("plain directory"),
+        "{}",
+        String::from_utf8_lossy(&directory_alias.stderr)
+    );
+    assert_eq!(fixture.latest("out").1, initial);
+    assert_eq!(fs::read(retained).unwrap(), retained_bytes);
+}

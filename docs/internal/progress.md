@@ -1,5 +1,13 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-26: 0.3.0向け最小Go backend候補
+
+0.2.2の公開準備と分離した開発branchで、単一のRust製`nagic`へ実験的なGo targetを追加した。Rustを既定に保ち、CLI `--backend`、project設定、Rust既定の順で選ぶ。Highから保存Lowを経由して独立parserとfinalizeを通る共通検査を維持し、Go固有のlowering/buildだけを分離した。同期関数、基本型、値class、`Option`/`Result`/`try`、基本演算とconsoleを実Go toolchainでbuild/runする。未対応のasync/task/actor、HTTP/DB/auth、enum/List等と逆backendのnative資産は、自動fallbackせずGo起動前にsource位置・到達chain付きで拒否する。
+
+独立Sol High監査が、retained実行ファイルを壊せるhardlink投影、整数overflow、完全matchのreturn、文字列による誤import、浮動小数剰余・負のゼロ・console表示の7件を検出した。temporaryからdirectory entryを置換する投影、profile別整数helper、完全matchのfinal `else`、型に基づくimport、`math.Mod`とbit表現、Rust表示互換formatterへ修正した。再監査で先頭ゼロ整数のGo八進解釈と最短浮動表示の中点差を追加検出し、10進正規化とexact rationalによるRust側候補選択へ修正した。親の有限f32 199,219件・f64 199,903件と、独立監査の境界f32 1,804件・f64 14,386件でRust Displayとの差分0。全値の形式証明ではない。Linux実Go integrationは14件へ拡張し、最終sourceの`cargo test --locked`、all-target Clippy、fmt、Python CI 211件をgateとした。独立再監査は未解決P1/P2なしで承認し、exact-head CIはDraft PRのgateとして残す。
+
+Linux x86_64、AMD EPYC 9V74割当5 CPU、Go 1.27.3、Rust 1.99.1、release buildした`nagic`で、Point・関数・Result/try・consoleの小規模appを測った。Goはclean 4.330秒、変更なし中央値0.180秒、関数本体変更0.186秒。Rust dev/full-runtime incrementalは45.283秒、0.570秒、0.638秒。機能・依存量が同等でないためbuild feedbackの観測に限り、native性能や本番優位性は主張しない。Windows/macOS、HTTP等、output lock競合、power-loss、同機能appのRSS/throughputは未検証。build receiptは監査用で完全なcache keyではなく、独自native cache再利用には使わない。詳細と受入条件は[最小backend記録](go-backend-0.3-minimum.md)を参照する。merge、version、tag、releaseは行っていない。
+
 ## 2026-10-23: 完成コードの末尾空行でeditor情報を失う不具合
 
 [設計](jetbrains-empty-line-assistance.md)。#148の利用者GUI確認・main `6214c5d6`へのmerge後、正常なPoint record例でも末尾空行の先頭へcaretを置くと色・説明が消える報告を受けた。公開0.2.1のHigh/Low・保存/overlay/serveで、original frontendは受理済みだがquery recoveryのload失敗によりsymbolsが省略される応答を再現した。compilerは元ASTへ戻してqueryなしindexを生成し、元diagnostic/verdictを維持する。pluginは公開0.2.1向けにsymbols省略と明示emptyを区別し、限定条件で同snapshotのqueryなし解析を1回だけ行い、source事実だけを合成してpublishする。通常の応答に追加解析はない。型・ownership・Policy・stale/cancel/identity検査は維持。compiler37件・Clippy・fmt、公開0.2.1実CLIを使うplugin43件、matching compilerのplugin全278件・ZIP build成功。環境はJDK25.0.4/IU263.7031.23で、Windows GUI/他SDK・全workspace・独立最終review・exact-head CIは別gateとして残す。

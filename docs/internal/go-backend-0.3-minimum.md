@@ -1,0 +1,117 @@
+# Go backend 0.3.0: 最小実装の契約と実測
+
+この文書は、Rustを既定のまま保つ単一の`nagic`へ、Goコード生成を段階的に追加する最初の実装記録である。Go backendは実験段階であり、Nagi 0.2.2へ含めない。ここにない機能を対応済みとは扱わない。
+
+## 選択と互換性
+
+選択順は次で固定する。
+
+1. CLIの`--backend rust|go`
+2. `nagi.toml`の`backend = "rust"|"go"`
+3. 指定がなければ`rust`
+
+```toml
+entry = "main.nagi"
+backend = "go"
+```
+
+```console
+nagic check --project .
+nagic run --project . --profile dev
+nagic build main.nagi --no-project --backend go --profile dev
+```
+
+既存の`read_line()`を含むNagi構文やHigh/Low frontendは分岐しない。Highは従来どおり正規Low文字列へ変換し、その文字列を独立したLow parserへ通してfinalizeした後だけGoを生成する。手書きLowも同じfinalize境界を通る。型・所有権・capability検査をGo側の都合で省略しない。
+
+`--backend`はproject設定より優先する。Goを指定しない既存projectは引き続きRustを使う。`--runtime-profile`、`--seed-lock`、`--incremental`、`--rust-diagnostics`はRust固有なので、Go選択時には無視せずエラーにする。
+
+Rust backendで`[go].files`を宣言した場合と、Go backendでRust adapter/dependencyを宣言した場合もエラーにする。到達可能な`@rust` extern関数は、`main`からの関数依存chain、利用可能なRust binding、修正候補を表示してGo toolchain起動前に拒否する。Go native adapter ABIはまだないため、`[go].files`自体も明示的に拒否する。逆backendの資産を黙って捨てたり、backendを自動切替したりしない。
+
+## 最小対応範囲
+
+現在の実行可能な範囲は次のとおり。
+
+- 整数、浮動小数、`bool`、`str`、`bytes`、`unit`
+- 同期関数、import済み関数、local変数、`if`、`while`
+- 値classの生成とfield参照
+- `Option`、`Result`、`try`、Option/Resultの`match`
+- 算術・比較・論理演算（Nagiの評価順序と`and`/`or`の短絡を維持）
+- `print`、`write`、`assert_true`、`parse_i64`、`error_message`、`i64`とResult/Option constructor
+- Highと保存済みLowの`check`、`lower`、`build`、`run`
+
+Nagiの名前はUTF-8 byte列をGo identifierへ一意に符号化する。Go keyword、module修飾、Unicode、生成temporaryとの衝突で別のNagi名を同じGo名へ潰さない。関数引数や式はNagiの左から右の評価順を保持し、`try`の前処理が左operandより先に走らない。論理右辺の`try`も短絡時には実行しない。
+
+整数literalはNagiの10進規則で正規化してからGoへ渡す。整数演算は既存profile契約を維持し、devの加減乗算と符号反転overflowをpanicにし、releaseではwrapする。符号付き最小値の`-1`による除算・剰余は両profileでpanicにする。浮動小数剰余、負のゼロ、有限値・無限大・NaNの`print`/`write`表示もRust backendの現在の結果に合わせる。GoとRustで最短10進表現の中点選択が異なる場合は、exact rationalで中点を確認してRust側の候補を選ぶ。
+
+次は未対応で、Go起動前にsource位置付きで失敗する。
+
+- enum、List/index、`for`
+- async/await、task、scope、actor
+- HTTP、DB、auth/session、WebSocketなどRust runtimeの標準操作
+- Go native adapter、Rust/Go間FFI、混成backend
+- IDE管理runの`NAGI_RUN_RETENTION=latest`
+
+この段階をHTTP等の本番対応やRust backendとの完全同等とは呼ばない。
+対応する整数境界ではpanicするかwrapするかを揃えるが、panic本文、stack trace、process exit codeはbackend固有であり、現段階ではbyte単位の一致を保証しない。
+
+## Buildと失敗時の保護
+
+Go buildはapplication IDとgeneration namespaceをRustから分離し、選択した実行ファイルが実Go toolchainであることを`go version`で先に確認してから、staging directoryで`CGO_ENABLED=0 GOWORK=off GOTOOLCHAIN=local go build -trimpath -buildvcs=false -mod=readonly`を実行する。Goによる暗黙のtoolchain downloadは許可しない。成功後にimmutable generationを公開し、最後に`latest.json`を更新する。失敗したstagingは削除し、以前の`latest.json`と実行ファイルを維持する。
+
+`out/go/main.go`と`go.mod`は互換表示用で、既存fileへ書き込まず、専用temporaryを作ってdirectory entryを置き換える。既存hardlinkを通じて旧generationを書き換えず、symlinkやplain directoryでない投影先は失敗させる。投影失敗時は新generationが孤立する場合があるが、旧`latest.json`と旧実行ファイルは変えない。
+
+generationには次を保存する。
+
+- `generated.low`、`main.go`、`go.mod`、source snapshot
+- compiler、入力、生成物、実行ファイルのSHA-256とbyte数
+- Go version、GOOS/GOARCH/GOVERSION/GOROOT、module graph、profile、CGO無効化
+
+これはbuild receiptであり、まだGo成果物の独自cache hit判定には使わない。source snapshotはcheckerが読んだtextだが、外部入力fileのhashはbuild後の観測なので、build中に変更されたfileまで同一snapshotだったと証明する完全なinput keyではない。Go自身のbuild cacheを使い、入力条件を証明できないNagi独自cacheでnative成果物を再利用しない。
+
+## 実行検証
+
+専用integration testは実Go toolchainを使い、Linuxでは次の14件を検査する。WindowsではUnix symlink固有の1件を除く。
+
+- Highと独立保存Lowが同じ出力になる
+- CLI &gt; project &gt; Rust既定
+- import済み関数
+- Result/try、class、評価順序、短絡、identifier衝突
+- Option/Resultの完全matchが全armからreturnする場合
+- 先頭ゼロを含む10進整数literal、dev/releaseの整数overflow、符号付き最小値の除算・剰余
+- 浮動小数剰余、負のゼロ、最短表示の中点、console表示、文字列内容によらないimport
+- 未対応機能がGo起動前に失敗する
+- Rust externの到達chain
+- Rust/Go資産の逆指定を拒否する
+- Go adapter未対応を明示する
+- Rust固有optionを黙って無視しない
+- Go toolchain不在ではgenerationを公開しない
+- compatibility projectionのhardlink/symlinkから旧generationを変更しない
+
+frontend/backend拒否後のlast-good維持は検査した。成功generation後に外部Go process自体を意図的に失敗させるportableな注入test、output lockの並行競合、power-loss耐性はこの段階では未検査であり、last-good保証をその範囲まで一般化しない。
+
+`cargo test --locked`がこのtest binaryを含むため、compiler/runtime変更に対する既存のcomprehensive Linux gateで実行される。専用3 OS jobと差分routingは次段階で行う。追加時は既存の`Ready to merge`期待job契約も更新し、Go jobのmissing/skip/0件実行を成功扱いしない。shared frontend変更は両backend、target固有変更はそのbackendとshared invariant、未知pathとselector/gate変更は広いcoverageへfail safeする。
+
+## 2026-10-26の小規模build実測
+
+同じPoint、関数、`Result/try`、console出力を含む小規模programを、release buildした`nagic`で測定した。hostはLinux x86_64、AMD EPYC 9V74の割当5 CPU、Go 1.27.3、Rust 1.99.1。`nagic`自体のcompileとdependency downloadは時間に含めず、`nagic build`開始からapplication executable完成までを測った。Go cleanは空のoutputとprivateで空の`GOCACHE`から始め、以後同じcacheを再利用した。Rust cleanは空のoutput/targetから始めたが、registry sourceは既にlocalにありnetwork取得はない。Rustは`--profile dev --runtime-profile auto --incremental`で、今回のprogramではfull runtimeが選ばれた。wall timeはprocess外から、backend内訳は`--build-stats`から取得した。
+
+| ケース | Go wall | Go tool | Rust wall | Cargo |
+|---|---:|---:|---:|---:|
+| clean 1回 | 4.330 s | 4.309 s | 45.283 s | 45.168 s |
+| 変更なし | 0.180 s中央値（4回、0.167〜0.315 s） | 0.157 s中央値（0.145〜0.293 s） | 0.570 s中央値（3回、0.545〜0.571 s） | 0.449 s中央値（0.428〜0.454 s） |
+| 関数本体1箇所変更 | 0.186 s | 0.166 s | 0.638 s | 0.532 s |
+
+Go integration test 14件は最近の実行で42.37〜86.63秒だった。toolchainとbuild cacheの状態を固定したbenchmarkではなく、overflow profile、projection保護、浮動小数境界を含むため、この時間や修正前の10件版5.541秒をbackend速度の比較に使わない。
+
+この比較は最小subsetのbuild feedbackだけを示す。Go側にはRust runtimeのHTTP/DB/auth/task等がまだなく、依存量が同じではない。native実行性能、throughput、latency、長時間安定性、Windows/macOS、release profile、最大RSSはこの測定で比較していない。process-tree RSSの簡易observer値は妥当性を確立できなかったため採用しなかった。機能同等のbackendができるまで、本番性能の優位性をこの値から主張しない。
+
+## 次段階の受入条件
+
+1. 3 OSで最小backendの実build/runとlast-good保護を必須CI化する。
+2. shared conformance oracleとbackend別driverを分離し、同じ対応Nagi programの結果・診断を比較する。
+3. Go native adapter ABIを設計してから、標準runtimeをconsole以外へ広げる。
+4. task/auth/admission/cancellationはgoroutine/contextやGC cleanupへの単純置換をせず、Rust側のlease・join・error propagation契約を個別に証明する。
+5. HTTP、DB、auth、task/actorの順に機能同等性、race、cancel、resource limit、soakを通す。
+6. 機能同等の実用appでcold/warm/edit/test compile/test execution、disk、RSS、runtime latency/throughputを複数回測る。
+
+各段階で未対応機能は明示エラーのまま保ち、安全性や意味論が証明できない境界ではRust backendへ自動fallbackしない。
