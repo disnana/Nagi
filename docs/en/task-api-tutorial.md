@@ -134,4 +134,3 @@ In a fresh-lock test of published Nagi 0.2.1 on 2026-10-26, dependency resolutio
 - Nagi 0.2.1 has no standard WebSocket, HTTP/2, streaming, or server-side TLS API.
 
 Continue to the [FastAPI and Quart comparison](task-api-comparison.md) for the same API in Python.
-

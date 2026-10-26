@@ -53,4 +53,3 @@ Nagi 0.2.1 has no standard PostgreSQL, WebSocket, HTTP/2, streaming, or server-s
 - No matched-load benchmark was run. Native code generation alone does not establish that Nagi is faster, smaller, or safer than FastAPI or Quart.
 
 Official references: [FastAPI request bodies and Pydantic](https://fastapi.tiangolo.com/tutorial/body/), [FastAPI SQL database tutorial](https://fastapi.tiangolo.com/tutorial/sql-databases/), [running a FastAPI server manually](https://fastapi.tiangolo.com/deployment/manually/), [Quart quickstart](https://quart.palletsprojects.com/en/latest/tutorials/quickstart/), [handling synchronous code in Quart](https://quart.palletsprojects.com/en/latest/how_to_guides/sync_code/), [Quart deployment](https://quart.palletsprojects.com/en/latest/tutorials/deployment/), and the [Python 3.13.18 release notice](https://blog.python.org/2026/10/python-3152-31410-31318-31216-31118/).
-

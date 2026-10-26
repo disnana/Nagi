@@ -28,4 +28,3 @@ Nagi 0.2.1 is a language in development for small backends whose inputs, outputs
 - Account for Nagi's current development stage when established large-scale operations, broad middleware, or long-term compatibility are adoption requirements.
 
 The [concrete task API comparison](task-api-comparison.md) implements the same service in Nagi, FastAPI, and Quart. It compares code, dependencies, validation, operation, and current limits rather than presenting a speed ranking.
-

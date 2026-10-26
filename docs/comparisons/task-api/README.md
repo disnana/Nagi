@@ -23,4 +23,3 @@ uv pip install --python .venv\Scripts\python.exe -r requirements.txt
 `test_apps.py`はFastAPIをUvicorn、QuartをHypercornで空いているloopback portへ起動し、実際のHTTPで同じ検査を行います。DBは一時folderに作り、各serverを停止・再起動して保存を確認します。
 
 比較の解説は[同じタスクAPIをNagi・FastAPI・Quartで比べる](../../task-api-comparison.md)を参照してください。
-

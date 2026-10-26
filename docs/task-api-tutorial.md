@@ -134,4 +134,3 @@ nagic build --project test-nagi-code/web-demo --profile release
 - Nagi 0.2.1の標準HTTP APIにはWebSocket、HTTP/2、streaming、server-side TLSがありません。
 
 同じAPIをPythonで書いた場合は[FastAPI・Quartとの比較](task-api-comparison.md)へ進んでください。
-

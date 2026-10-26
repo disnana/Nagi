@@ -53,4 +53,3 @@ Nagi 0.2.1には標準PostgreSQL、WebSocket、HTTP/2、streaming、server-side 
 - 同一負荷・同一machineの性能benchmarkは実施していません。native生成だけを根拠に、NagiがFastAPI/Quartより高速・省memory・安全だとは主張しません。
 
 公式資料: [FastAPI request bodyとPydantic](https://fastapi.tiangolo.com/tutorial/body/)、[FastAPI SQL database tutorial](https://fastapi.tiangolo.com/tutorial/sql-databases/)、[FastAPI serverの手動起動](https://fastapi.tiangolo.com/deployment/manually/)、[Quart quickstart](https://quart.palletsprojects.com/en/latest/tutorials/quickstart/)、[Quartで同期処理を扱う方法](https://quart.palletsprojects.com/en/latest/how_to_guides/sync_code/)、[Quart deployment](https://quart.palletsprojects.com/en/latest/tutorials/deployment/)、[Python 3.13.18の公開情報](https://blog.python.org/2026/10/python-3152-31410-31318-31216-31118/)。
-
