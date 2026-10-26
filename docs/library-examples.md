@@ -38,7 +38,7 @@ nagic run --project test-nagi-code/library-examples/rust-json
 
 | プロジェクト | 内容 |
 | --- | --- |
-| [タスク管理](../test-nagi-code/web-demo/README.md) | ブラウザー画面、JSON API、SQLiteへの保存 |
+| [タスク管理JSON API](../test-nagi-code/web-demo/README.md) | JSON CRUD、入力検証、SQLiteへの保存。ブラウザーUIと認証は含まない |
 | [Result API](../test-nagi-code/result-api/README.md) | 入力不正、対象なし、DB失敗、代替データへの回復 |
 | [在庫管理](../test-nagi-code/README.md#在庫管理api) | 型付きJSON入力、DBのCRUD、集計 |
 | [在庫JSONの集計](../test-nagi-code/application-examples/stock-report/README.md) | stdinから型付きJSONを読み、独自エラーで入力を検証する |

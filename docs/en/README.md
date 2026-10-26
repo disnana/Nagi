@@ -8,7 +8,7 @@ See [About Nagi](introduction.md) for its purpose and current scope. The referen
 
 ## Find it quickly
 
-[Development and debugging](developer-workflow.md) · [Strengths and comparisons](comparison.md) · [Dev builds](development-builds.md) · [Application CI](user-ci.md) · [Agent docs and skill](../../ai/README.md)
+[What you can build](use-cases.md) · [End-to-end task API](task-api-tutorial.md) · [Concrete FastAPI/Quart comparison](task-api-comparison.md) · [Development and debugging](developer-workflow.md) · [Strengths and comparisons](comparison.md) · [Agent docs and skill](../../ai/README.md)
 
 The quick reference routes everyday commands, symptoms, and API questions to the relevant guide. Version 0.2.2 improvements are still in development.
 
@@ -17,7 +17,7 @@ The quick reference routes everyday commands, symptoms, and API questions to the
 1. [Setup and first run](getting-started.md): install the compiler and run Hello World.
 2. [Learn by writing code](language-guide.md): try values, functions, lists, borrowing, and Results.
 3. [Your first small CLI app](first-app.md): connect input, typed failures, and a manual boundary check.
-4. [HTTP and HTML](http.md): build an API, then store data with [SQLite](database.md).
+4. [End-to-end task API](task-api-tutorial.md): connect HTTP, JSON, SQLite, tests, and a release build.
 
 See the [VS Code guide](editor.md) for editor support. See [JetBrains installation and Release ZIP selection](../../editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm.
 
@@ -61,6 +61,8 @@ Each detail page describes current behavior and release scope, then provides or 
 | Task | Page |
 |---|---|
 | HTTP without a database, headers, and response statuses | [HTTP](http.md), [API reference](http-server.md) |
+| Build a JSON API backed by SQLite | [End-to-end task API](task-api-tutorial.md) |
+| Compare the same API in Nagi, FastAPI, and Quart | [Concrete comparison](task-api-comparison.md) |
 | Read and write JSON | [JSON](json.md) |
 | Use the existing SQLite API and preflight SQL | [SQLite](database.md), [SQL checks](sql-check.md) |
 | Use typed parameters, a Pool, and transactions | [SQLite Pools and Transactions](sqlite-pool.md) |

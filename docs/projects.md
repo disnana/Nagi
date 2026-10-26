@@ -101,7 +101,7 @@ Cargoは同じpackageへの依存経路でfeatureを統合します。`default-f
 .\target\release\nagic.exe run --project test-nagi-code/rust-bridge
 ```
 
-CRC32、JSON整形、asyncのRust関数を呼びます。[タスク管理サイト](../test-nagi-code/web-demo/README.md)も入口を設定済みです。
+CRC32、JSON整形、asyncのRust関数を呼びます。[タスク管理JSON API](../test-nagi-code/web-demo/README.md)も入口を設定済みです。
 
 ## コマンド引数との優先順位
 
