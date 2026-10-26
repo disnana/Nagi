@@ -103,6 +103,8 @@ GitHub ReleasesのZIPを使う場合は、IDEの **Settings → Plugins → ⚙ 
 
 **Settings → Languages & Frameworks → Nagi** でコンパイラのパスを設定できます。空欄なら`PATH`の`nagic`を使います。相対パスはIDEプロジェクトのルートから解決します。
 
+開発中の次版では、同じ画面の **Color matching brackets by nesting depth** を有効にすると、対応する`()`・`[]`（Lowでは`{}`も）を入れ子の深さごとに色分けできます。この機能は公開版0.1.6には未収録で、既定は無効です。6段階の色は **Settings → Editor → Color Scheme → Nagi** でthemeに合わせて変更できます。文字列・コメント内と対応しない括弧は通常のsyntax色を維持します。
+
 Nagiファイルを開き、右クリックまたはToolsメニューから **Nagi: Check** / **Nagi: Run** を選びます。実行前に開いているファイルを保存します。信頼していないプロジェクトではコンパイラを起動しません。
 
 0.1.2では`main`の左の▶が **Nagi: Run** を起動します。IDE上部で選ばれているPythonなどの実行設定は使いません。近くに`nagi.toml`がある場合は、そのプロジェクトのentryを実行します。0.1.3では同じNagi実行をIDE標準のRun ConfigurationからRun/Stopできます。
