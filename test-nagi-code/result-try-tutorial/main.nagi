@@ -1,0 +1,40 @@
+# Nagi 0.2.1で動くResult / try入門です。
+
+class Quote:
+    amount: i64
+    doubled: i64
+
+def parse_amount(text: view[str]) -> Result[i64, Error]:
+    # Pythonでは int(text) が成功値を返し、失敗すると ValueError を送出します。
+    # Nagiでは parse_i64(text) は Result[i64, Error] を返します。
+    # Nagi独自の仕様として、tryはOkの値を取り出し、Errならこの関数の呼出元へ返します。
+    amount = try parse_i64(text)
+    if amount < 0:
+        # Nagiでは error(...) もResultのErrを作ります。Result型そのものはNagi発祥ではありません。
+        return error("金額は0以上で入力してください")
+    return ok(amount)
+
+def make_quote(text: view[str]) -> Result[Quote, Error]:
+    # parse_amount内で失敗した場合、まずErrがこの呼出し元（make_quote）へ戻ります。
+    # このtryがErrを受け取ると、次はmake_quoteの呼出元へそのまま返します。
+    # 成功時には amount にOkの中身（i64）が入り、Resultではありません。
+    amount = try parse_amount(text)
+    return ok(Quote(amount=amount, doubled=amount * 2))
+
+def main() -> Result[unit, Error]:
+    # Pythonでは input(prompt) が文字列を返します。EOFならEOFErrorです。
+    # Nagi 0.2.1ではプロンプトを書いてから、引数なしのread_line()を呼びます。
+    write("金額を入力してください > ")
+    text = try read_line()
+
+    # ここではtryで伝播させず、Ok / Errを両方matchして手動で処理します。
+    match make_quote(view(text)):
+        case Ok(quote):
+            # Quoteはclass型。フィールド値を名前付きで作り、ここで読み出します。
+            print(quote.amount)
+            print(quote.doubled)
+            return ok(print("完了"))
+        case Err(problem):
+            # Pythonならexcept ValueErrorで回復する場所です。
+            print(error_message(problem))
+            return ok(print("入力を直して再実行してください"))
