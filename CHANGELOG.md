@@ -2,6 +2,8 @@
 
 ## 未リリース / Unreleased
 
+- VS Codeでclass/record呼び出しの名前付きフィールド名を補完し、引数ヒントは入力順ではなくフィールド名に合わせます。既存の`=`、供給済みフィールド、shadowing、保存済み宣言の警告を維持します。公開0.1.13には未収録です。
+- Complete named class/record field labels in VS Code and select signature parameters by field name. Preserve existing equals signs, supplied fields, shadowing guards and saved-declaration warnings. This is not included in published extension 0.1.13.
 - `build/run --runtime-profile full|auto`を明示opt-inで追加。既定fullと既存Rust API（default-features無効時を含む）を保持し、完全検査済みの小さな同期プログラムだけ共有ソースの軽量packageを選択します。unknown/async/adapter/追加Rust依存/incrementalはfullへ戻し、Cargoのnative再判定と旧成功世代の保護を維持します。[計測条件と限界](benchmarks/results/runtime-profiles-2026-10-24/README.md)。
 - Add opt-in runtime dependency selection from checked IR, preserving complete High/Low/type/ownership/Policy checks and the existing full runtime API. Include the shared-source core package and its dependency notices in distributions. Keep release settings and receipt/CAS compatibility; the measured gains apply to supported small synchronous programs, not arbitrary HTTP/SQL backends.
 - Keep changes limited to discoverable root-level website tests on the existing documentation CI path. Preserve full validation for unknown files and mixed compiler, runtime, security or dependency changes. This optimizes Nagi's repository CI; application build behavior is unchanged.
