@@ -65,7 +65,7 @@ finalizer/GCやcancel通知をcleanup成功の代わりにしない。
 
 ## 検査と有限測定
 
-12 native testをGoのJSON test結果で名前集合まで照合する。zero/skip/fail/重複/欠落を
+13 native testをGoのJSON test結果で名前集合まで照合する。zero/skip/fail/重複/欠落を
 成功にせず、既存Go integrationと同じ3 OS gateへ接続する。Linux/macOSは27件、
 WindowsはUnix symlink固有1件を除く26件。raceは対応C compilerがある環境で別実行し、
 CGO無効の通常実行と混同しない。既存Rust actor/lifecycle testは削除しない。
@@ -94,9 +94,18 @@ Rust側も同じ入力と停止条件で再測定して初めて比較し、既�
 
 ## ローカル観測（最終CIとは別）
 
-Linuxで実Go integration27件、compiler library192件、Go native12件、native race、
+Linuxで実Go integration27件、compiler library192件、初回Go native12件、native race、
 go vet、nagic all-targets Clippy、fmtが成功した。64/1024 childの有限benchmarkは
 入口のsmokeとして実行できたが、固定CPU/GCやRust同条件比較の性能値ではない。
 CI policy223件の初回は古い25/24件の手書きmatrixを持つ15 assertionが失敗した。
-matrix期待を27/26へ同期し、検査の緩和はしていない。同期後の再検査と独立最終review、
-3 OS exact-head CIを完了条件とする。
+matrix期待を27/26へ同期し、検査の緩和はしていない。同期後は223件成功した。
+
+独立final reviewは、queued completionのcontext.Canceledを後発Stopで取消へ再分類する
+P2と、短い登録名が巨大なbacking stringを保持するP3を検出した。worker境界で
+self-cancel前に取消outcomeを確定してcompletionへ運び、後のmanager phaseから判定し直さない。
+登録名は独立copyする。旧kernelと新回帰の組合せで両問題のREDを確認し、修正後は
+13 native testのrace実行が成功した。取消回帰は実launch/completionをbarrierで遅延し、
+保持量回帰は8MiB backingの中間12-byte sliceと保存名のpointer範囲を照合する。
+GCやRSSの変動をcleanupの証拠にはしない。修正後はGo integration27件、Python CI policy223件、
+nagic all-targets Clippy、vet/fmtも成功した。更新差分の再reviewと3 OS exact-head CIを
+完了条件とする。

@@ -65,6 +65,7 @@ type completion struct {
 	generation uint64
 	err        error
 	panicked   bool
+	canceled   bool
 }
 
 // Snapshot counts owned logical obligations, not GC reachability or physical
@@ -117,7 +118,7 @@ func (g *Group) Register(name string, policy Policy, factory Factory) error {
 			return errors.New("duplicate child name")
 		}
 	}
-	g.slots = append(g.slots, slot{name: name, policy: policy, factory: factory})
+	g.slots = append(g.slots, slot{name: strings.Clone(name), policy: policy, factory: factory})
 	return nil
 }
 
@@ -260,9 +261,13 @@ func (g *Group) launch(index int) {
 		if err == nil {
 			err, panicked = invoke(factory, ctx)
 		}
+		// Freeze the outcome before our own cancel and before manager queueing.
+		// A later stop must not turn an already finished worker error into a
+		// cancellation merely because its record has not been drained yet.
+		canceled := err == context.Canceled && ctx.Err() != nil && !panicked
 		cancel()
 		// invoke has returned after all user defers, including panic unwinding.
-		g.finished <- completion{index, generation, err, panicked}
+		g.finished <- completion{index, generation, err, panicked, canceled}
 	}()
 }
 
@@ -291,12 +296,7 @@ func (g *Group) receive(result completion) {
 	child.active = false
 	child.cancel = nil
 	g.active--
-	failed := result.err != nil
-	// Only requested group cancellation is a non-failure cancellation outcome.
-	canceled := g.phase == Stopping && result.err == context.Canceled && !result.panicked
-	if canceled {
-		failed = false
-	}
+	failed := result.err != nil && !result.canceled
 	if result.panicked {
 		g.panics++
 	}

@@ -10,10 +10,15 @@ retained recordを維持し、別waiterによる実終了確認後だけ完了�
 business結果とworker failureの境界はnative例で分けるが、Turn/mailbox/READY/events/chargeは
 未実装。public owner/shared cleanupや任意native資源の保証も追加しない。
 
-Go integrationの追加2件はnative Go test12件の完全な名前集合とHigh/手書きLowのactor事前拒否を
+Go integrationの追加2件はnative Go test13件の完全な名前集合とHigh/手書きLowのactor事前拒否を
 確認し、3 OS件数gateをLinux/macOS27・Windows26へ更新する。実行結果と独立final review、
 exact-head CIは下記の追記とPRで区別する。merge/releaseは行わない。
 [契約と有限測定条件](go-lifecycle-kernel.md)、[native module](../../compiler/go-runtime/README.md)。
+
+独立監査でqueued context.Canceledの後発Stopによる再分類P2、登録名substringの巨大backing保持P3を
+検出した。worker境界で取消outcomeをself-cancel前に封印し、登録名を独立copyする修正と、barrier/
+8MiB backingの保持量回帰を追加した。旧kernel＋新回帰は両方RED、修正後native13件race・Go27件・
+Python CI policy223件・Clippy/vet/fmtは成功した。更新HEADの独立再reviewと3 OS CIは別gateである。
 
 ## 2026-10-27: Go backendのpayloadなしenum段階
 

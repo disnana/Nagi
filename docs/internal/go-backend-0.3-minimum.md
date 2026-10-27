@@ -95,7 +95,7 @@ generationには次を保存する。
 専用integration testは実Go toolchainを使い、private lifecycle初段ではLinux/macOSで27件、WindowsでUnix symlink固有の1件を除く26件を検査する。
 
 - Highと独立保存Lowが同じ出力になる
-- private std-only lifecycle kernelの12 native testを名前集合まで検査し、public std.actorのHigh/手書きLow事前拒否を維持する
+- private std-only lifecycle kernelの13 native testを名前集合まで検査し、public std.actorのHigh/手書きLow事前拒否を維持する
 - CLI &gt; project &gt; Rust既定
 - import済み関数
 - List literal/index/append/len、Copy要素Listとrangeの反復、左から右へ一度だけの評価

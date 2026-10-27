@@ -76,6 +76,7 @@ pub fn private_lifecycle_contracts(directory: &Path) -> Result<(), String> {
     }
     let expected = std::collections::BTreeSet::from([
         "TestRegistrationAndColdStart",
+        "TestQueuedWorkerFailureCannotBecomeLateCancellation",
         "TestOneForOnePanicRestart",
         "TestTemporaryFailureIsStickyUntilHealthySiblingJoins",
         "TestBusinessReplyIsNotAWorkerFailure",

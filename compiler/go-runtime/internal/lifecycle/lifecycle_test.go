@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+	"unsafe"
 )
 
 type unformattablePanic struct{ formatted *atomic.Bool }
@@ -102,6 +104,17 @@ func assertComplete(t *testing.T, g *Group) {
 }
 
 func TestRegistrationAndColdStart(t *testing.T) {
+	// A short slice must not keep an unrelated multi-MiB source allocation.
+	large := strings.Repeat("x", 8<<20)
+	name := large[4<<20 : (4<<20)+12]
+	named := group(t, options(), nil)
+	register(t, named, name, Temporary, func(context.Context) error { return nil })
+	stored := named.slots[0].name
+	base, pointer := uintptr(unsafe.Pointer(unsafe.StringData(large))), uintptr(unsafe.Pointer(unsafe.StringData(stored)))
+	if stored != name || (pointer >= base && pointer-base < uintptr(len(large))) {
+		t.Fatal("registered name retained the large source backing allocation")
+	}
+	runtime.KeepAlive(large)
 	var called atomic.Int64
 	g := group(t, options(), nil)
 	register(t, g, "once", Temporary, func(context.Context) error { called.Add(1); return nil })
@@ -127,6 +140,39 @@ func TestRegistrationAndColdStart(t *testing.T) {
 			t.Fatal("invalid limits accepted")
 		}
 	}
+}
+
+func TestQueuedWorkerFailureCannotBecomeLateCancellation(t *testing.T) {
+	g := group(t, options(), nil)
+	register(t, g, "queued", Temporary, func(ctx context.Context) error {
+		if ctx.Err() != nil {
+			t.Error("worker was canceled before completion boundary")
+		}
+		return context.Canceled // An uncanceled worker returning this is failure.
+	})
+	// Park the manager before it drains a real launch/completion, so the late
+	// RequestStop is deterministic rather than a scheduler-dependent sleep.
+	g.mu.Lock()
+	g.started = true
+	g.phase = Running
+	g.mu.Unlock()
+	g.launch(0)
+	var result completion
+	select {
+	case result = <-g.finished:
+	case <-time.After(2 * time.Second):
+		t.Fatal("completion barrier deadline exceeded")
+	}
+	g.RequestStop()
+	g.receive(result)
+	go g.manage()
+	if err := wait(t, g); err != context.Canceled {
+		t.Fatalf("late stop erased worker failure: %v", err)
+	}
+	if s := g.Snapshot(); s.WorkerFailures != 1 || s.Starts != 1 || s.ScheduledRestarts != 0 {
+		t.Fatalf("queued failure reclassified: %+v", s)
+	}
+	assertComplete(t, g)
 }
 
 func TestOneForOnePanicRestart(t *testing.T) {
