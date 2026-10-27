@@ -1,0 +1,806 @@
+{
+  "active_clients": 128,
+  "actors": 129,
+  "iterations_per_client": 5000,
+  "round": 2,
+  "cpu_quota_count": 2,
+  "cpuset_cpus": [
+    0,
+    1
+  ],
+  "status": "passed",
+  "checkpoints": [
+    {
+      "memory_current_bytes": 4653056,
+      "memory_peak_bytes": 4657152,
+      "pids_current": 3,
+      "cpu_usage_usec": 26760,
+      "cpu_user_usec": 21366,
+      "cpu_system_usec": 5393,
+      "memory_events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "memory_max": "1073741824",
+      "memory_swap_max": "0",
+      "cpu_max": "200000 100000",
+      "cpuset_cpus_effective": "0-1",
+      "pids_max": "512",
+      "checkpoint": 0,
+      "alive_tasks": 0
+    },
+    {
+      "memory_current_bytes": 5439488,
+      "memory_peak_bytes": 5439488,
+      "pids_current": 3,
+      "cpu_usage_usec": 27603,
+      "cpu_user_usec": 22039,
+      "cpu_system_usec": 5563,
+      "memory_events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "memory_max": "1073741824",
+      "memory_swap_max": "0",
+      "cpu_max": "200000 100000",
+      "cpuset_cpus_effective": "0-1",
+      "pids_max": "512",
+      "checkpoint": 1,
+      "alive_tasks": 131
+    },
+    {
+      "memory_current_bytes": 89358336,
+      "memory_peak_bytes": 203403264,
+      "pids_current": 3,
+      "cpu_usage_usec": 922443,
+      "cpu_user_usec": 807242,
+      "cpu_system_usec": 115200,
+      "memory_events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "memory_max": "1073741824",
+      "memory_swap_max": "0",
+      "cpu_max": "200000 100000",
+      "cpuset_cpus_effective": "0-1",
+      "pids_max": "512",
+      "checkpoint": 2,
+      "alive_tasks": 1
+    },
+    {
+      "memory_current_bytes": 89358336,
+      "memory_peak_bytes": 203403264,
+      "pids_current": 3,
+      "cpu_usage_usec": 922738,
+      "cpu_user_usec": 807501,
+      "cpu_system_usec": 115237,
+      "memory_events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "memory_max": "1073741824",
+      "memory_swap_max": "0",
+      "cpu_max": "200000 100000",
+      "cpuset_cpus_effective": "0-1",
+      "pids_max": "512",
+      "checkpoint": 3,
+      "alive_tasks": 0
+    }
+  ],
+  "phases": [
+    {
+      "phase": 0,
+      "successes": 640000,
+      "failures": 0,
+      "elapsed_ns": 284219887,
+      "process_cpu_ns": 556811245,
+      "completed_successes_per_second": 2251777.687885718,
+      "process_cpu_ns_per_success": 870.0175703125,
+      "cpu_clock_positive": true,
+      "latency_p50_ns": 1562,
+      "latency_p95_ns": 124126,
+      "latency_p99_ns": 265609,
+      "clients": [
+        {
+          "successes": 5000,
+          "latency_p99_ns": 20040
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 18738
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266220
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265729
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265960
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 270717
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 270347
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269996
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266901
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266510
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266621
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269295
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269915
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268184
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268133
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 275915
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 276115
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 277357
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 278388
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 279050
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268744
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269004
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268845
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264387
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269205
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269365
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 267191
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 263426
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 263837
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264177
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264437
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 246511
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 248774
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 251158
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 253791
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 251619
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 254442
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 251158
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 249815
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 249946
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 252310
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 252760
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 252740
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 253030
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 253642
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 255184
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 258108
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 259590
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 267493
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269976
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 272680
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 272570
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269335
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269605
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269736
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269625
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 272650
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 272339
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268924
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 273752
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 274032
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 273792
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 273741
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269525
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269686
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269756
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268954
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265249
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269035
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 269094
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 271758
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266571
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268834
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 261803
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 257567
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264889
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 262444
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 261263
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 258979
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 257027
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 256936
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 256867
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 256907
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 255935
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 256195
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 257107
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 253931
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 254052
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 254082
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 254173
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 254764
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 252309
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 246620
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 242664
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264557
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265630
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 262765
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266400
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 263606
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 263897
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 263466
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 267031
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268244
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268043
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268353
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268714
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 268414
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266180
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266751
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266080
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 262134
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264378
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 266010
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264327
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 262094
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265349
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265799
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 267122
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 267061
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265599
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265710
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264768
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265699
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265720
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264668
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 264608
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265730
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 265309
+        }
+      ],
+      "common_active_interval_ns": [
+        518866,
+        10212221
+      ],
+      "common_interval_completions": [
+        4646,
+        4647,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        74,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        72,
+        73
+      ],
+      "common_interval_jain_index": 0.06039907002168218,
+      "fault_interval_ns": [
+        195039,
+        10948668
+      ],
+      "fault_duration_ns": 10753629,
+      "healthy_completions_during_fault": 20478,
+      "healthy_successes_per_second_during_fault": 1904287.3805670624,
+      "healthy_latency_p99_ns_during_fault": 489305,
+      "public_failure_count": 1,
+      "public_restart_count": 1,
+      "recovered_generation": 2,
+      "recovered_state": 0
+    }
+  ],
+  "container_id": "9f6506199e412f231209a2b75a5ddcae4815a8e64ef5a1e3eb36d723325035d7",
+  "container_pid": 1029682,
+  "docker_image_id": "sha256:e77fe059ccc555603adc87bac908be6acd362d8fa5aefdd41f4852796e2a187e",
+  "host_config": {
+    "Memory": 1073741824,
+    "MemorySwap": 1073741824,
+    "NanoCpus": 2000000000,
+    "CpusetCpus": "0,1",
+    "PidsLimit": 512,
+    "ReadonlyRootfs": true,
+    "NetworkMode": "none",
+    "CapDrop": [
+      "ALL"
+    ],
+    "SecurityOpt": [
+      "no-new-privileges"
+    ]
+  },
+  "released_task_delta": 0,
+  "final_memory_current_delta_bytes": 84705280,
+  "cleanup": {
+    "rm_returncode": 0,
+    "residual_container_ids": []
+  }
+}

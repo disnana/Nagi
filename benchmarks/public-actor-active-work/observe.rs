@@ -41,7 +41,7 @@ pub fn checkpoint(stage: i64) {
     assert_eq!(line.trim(), "continue");
 }
 pub fn begin_phase(clients: i64) {
-    assert!((1..=64).contains(&clients));
+    assert!((1..=128).contains(&clients));
     let mut state = PHASE.lock().unwrap();
     *state = Phase { started: Some(Instant::now()), cpu: cpu_ns(),
         clients: (0..clients).map(|_| None).collect(), fault: [None, None], recovery: None };

@@ -146,7 +146,7 @@ async def drive(workers: List[actor.Actor[i64, i64, Error]], fault: actor.Actor[
 async def main() -> Result[unit, Error]:
     clients = try parse_i64(env("NAGI_PROBE_CLIENTS", "16"))
     iterations = try parse_i64(env("NAGI_PROBE_ITERATIONS", "5000"))
-    assert_true(clients >= 1 and clients <= 64 and iterations >= 1 and iterations <= 5000)
+    assert_true(clients >= 1 and clients <= 128 and iterations >= 1 and iterations <= 5000)
     checkpoint(0)
     group = actor.supervisor[unit](assert_true(True), try actor.options(clients + 1, 1024, 2, 60000, 2000))
     fault = try actor.register[i64, i64, i64, Error](view(group), "fault", factory, handler, try actor.actor_options(32, 4096, 4096, 5000, actor.RestartPolicy.TRANSIENT))

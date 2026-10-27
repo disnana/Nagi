@@ -1,0 +1,185 @@
+{
+  "active_clients": 4,
+  "actors": 5,
+  "iterations_per_client": 5000,
+  "round": 1,
+  "cpu_quota_count": 1,
+  "cpuset_cpus": [
+    0
+  ],
+  "status": "passed",
+  "checkpoints": [
+    {
+      "memory_current_bytes": 1589248,
+      "memory_peak_bytes": 4677632,
+      "pids_current": 2,
+      "cpu_usage_usec": 31490,
+      "cpu_user_usec": 21853,
+      "cpu_system_usec": 9636,
+      "memory_events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "memory_max": "1073741824",
+      "memory_swap_max": "0",
+      "cpu_max": "100000 100000",
+      "cpuset_cpus_effective": "0",
+      "pids_max": "512",
+      "checkpoint": 0,
+      "alive_tasks": 0
+    },
+    {
+      "memory_current_bytes": 1589248,
+      "memory_peak_bytes": 4677632,
+      "pids_current": 2,
+      "cpu_usage_usec": 31669,
+      "cpu_user_usec": 21977,
+      "cpu_system_usec": 9691,
+      "memory_events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "memory_max": "1073741824",
+      "memory_swap_max": "0",
+      "cpu_max": "100000 100000",
+      "cpuset_cpus_effective": "0",
+      "pids_max": "512",
+      "checkpoint": 1,
+      "alive_tasks": 7
+    },
+    {
+      "memory_current_bytes": 4313088,
+      "memory_peak_bytes": 7876608,
+      "pids_current": 2,
+      "cpu_usage_usec": 60180,
+      "cpu_user_usec": 43049,
+      "cpu_system_usec": 17131,
+      "memory_events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "memory_max": "1073741824",
+      "memory_swap_max": "0",
+      "cpu_max": "100000 100000",
+      "cpuset_cpus_effective": "0",
+      "pids_max": "512",
+      "checkpoint": 2,
+      "alive_tasks": 1
+    },
+    {
+      "memory_current_bytes": 4313088,
+      "memory_peak_bytes": 7876608,
+      "pids_current": 2,
+      "cpu_usage_usec": 60344,
+      "cpu_user_usec": 43166,
+      "cpu_system_usec": 17178,
+      "memory_events": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "memory_max": "1073741824",
+      "memory_swap_max": "0",
+      "cpu_max": "100000 100000",
+      "cpuset_cpus_effective": "0",
+      "pids_max": "512",
+      "checkpoint": 3,
+      "alive_tasks": 0
+    }
+  ],
+  "phases": [
+    {
+      "phase": 0,
+      "successes": 20000,
+      "failures": 0,
+      "elapsed_ns": 16926580,
+      "process_cpu_ns": 16826532,
+      "completed_successes_per_second": 1181573.5960837924,
+      "process_cpu_ns_per_success": 841.3266,
+      "cpu_clock_positive": true,
+      "latency_p50_ns": 3425,
+      "latency_p95_ns": 6040,
+      "latency_p99_ns": 26400,
+      "clients": [
+        {
+          "successes": 5000,
+          "latency_p99_ns": 26531
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 26281
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 26350
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 26111
+        }
+      ],
+      "common_active_interval_ns": [
+        31678,
+        16901591
+      ],
+      "common_interval_completions": [
+        4999,
+        4998,
+        4998,
+        4999
+      ],
+      "common_interval_jain_index": 0.9999999899939974,
+      "fault_interval_ns": [
+        60,
+        10364688
+      ],
+      "fault_duration_ns": 10364628,
+      "healthy_completions_during_fault": 15110,
+      "healthy_successes_per_second_during_fault": 1457842.9635873088,
+      "healthy_latency_p99_ns_during_fault": 10816,
+      "public_failure_count": 1,
+      "public_restart_count": 1,
+      "recovered_generation": 2,
+      "recovered_state": 0
+    }
+  ],
+  "container_id": "d522499ff42430a6a999c20c25aaa544e6b8111c587d9c6fdbd4ff7312a247be",
+  "container_pid": 1027213,
+  "docker_image_id": "sha256:e77fe059ccc555603adc87bac908be6acd362d8fa5aefdd41f4852796e2a187e",
+  "host_config": {
+    "Memory": 1073741824,
+    "MemorySwap": 1073741824,
+    "NanoCpus": 1000000000,
+    "CpusetCpus": "0",
+    "PidsLimit": 512,
+    "ReadonlyRootfs": true,
+    "NetworkMode": "none",
+    "CapDrop": [
+      "ALL"
+    ],
+    "SecurityOpt": [
+      "no-new-privileges"
+    ]
+  },
+  "released_task_delta": 0,
+  "final_memory_current_delta_bytes": 2723840,
+  "cleanup": {
+    "rm_returncode": 0,
+    "residual_container_ids": []
+  }
+}
