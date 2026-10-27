@@ -24,13 +24,13 @@ use std::os::windows::io::AsRawHandle as _;
 
 #[cfg(windows)]
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, HANDLE},
+    Foundation::{CloseHandle, HANDLE, STILL_ACTIVE},
     System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
         SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     },
-    System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
+    System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
 };
 
 #[cfg(unix)]
@@ -1034,8 +1034,22 @@ pub fn deadline_reaps_descendant() -> Result<(), String> {
         if handle.is_null() {
             return Ok(());
         }
+        let mut exit_code = 0;
+        let inspected = unsafe { GetExitCodeProcess(handle, &mut exit_code) };
         unsafe {
             CloseHandle(handle);
+        }
+        if inspected == 0 {
+            return Err(format!(
+                "cannot inspect descendant {pid}: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        // Windows can still open a terminated process while another handle
+        // keeps its process object alive. Only STILL_ACTIVE proves that the
+        // descendant escaped Job cleanup.
+        if exit_code != STILL_ACTIVE as u32 {
+            return Ok(());
         }
         std::thread::sleep(Duration::from_millis(10));
     }
