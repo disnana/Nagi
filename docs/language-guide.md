@@ -117,7 +117,18 @@ nagic run basics.nagi
 - `for value in values`は要素を順に読みます。数値などの要素は値をコピーし、文字列やそれを持つclassは読み取り専用で借ります。暗黙にコピーできる性質をCopyと呼びます。借用中は元の配列を変更できません。[所有権](ownership.md)に詳しい例があります。
 - `range(3)`は`0, 1, 2`です。引数は1つで、終端を含みません。
 - `while`は条件が`True`の間繰り返します。`break` / `continue`は未対応です。
-- `and` / `or` / `not`で条件を組み合わせます。`elif`はないため、必要なら`else`の中に`if`を書きます。
+- `and` / `or` / `not`で条件を組み合わせます。開発版のHighでは、次の条件を同じ字下げの`elif`で追加できます（未リリース）。公開済み版では`else`の中へ`if`を書きます。
+
+開発版で複数の条件を試す例です。上から調べて最初に当てはまる枝だけを実行します。`else`は省略できます。[完成コード](../examples/tutorial/branches.nagi)は負・ゼロ・正の3通りを実行します。
+
+```nagi
+if total < 0:
+    print("negative")
+elif total == 0:
+    print("zero")
+else:
+    print("positive")
+```
 
 `values.append(4)`はNagiでは使えません。`append(values, 4)`に直します。一言でいうと、配列を繰り返し読み、classで名前付きの値をまとめます。[分岐とループ](syntax.md#分岐とループ)と[型](types.md)で詳しく調べられます。
 

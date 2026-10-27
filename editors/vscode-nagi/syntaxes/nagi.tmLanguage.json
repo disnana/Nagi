@@ -25,6 +25,14 @@
       }
     },
     {
+      "match": "^([\\t ]*)(elif)(?=[\\t ]+.+:[\\t ]*(?:#.*)?$)",
+      "captures": {
+        "2": {
+          "name": "keyword.control.nagi"
+        }
+      }
+    },
+    {
       "name": "keyword.control.nagi",
       "match": "\\b(?:def|class)\\b"
     },

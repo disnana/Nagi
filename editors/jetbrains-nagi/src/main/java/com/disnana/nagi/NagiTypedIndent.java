@@ -191,6 +191,8 @@ final class NagiTypedIndent {
         String word = text.substring(first.start(), first.end());
         return switch (word) {
             case "else" -> new Header(Branch.ELSE, null);
+            // A bare `elif:` is also the start of an existing local annotation.
+            case "elif" -> statement.size() > 2 ? new Header(Branch.ELSE, "if") : null;
             case "case" -> new Header(Branch.CASE, null);
             case "if", "match", "def", "class", "enum", "while", "for", "with", "scope", "try" ->
                     new Header(Branch.NONE, word);

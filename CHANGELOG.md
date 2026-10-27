@@ -2,6 +2,8 @@
 
 ## 未リリース / Unreleased
 
+- High構文にPythonと同じ`elif condition:`を追加し、既存の入れ子`else:` + `if`と同じ検査済み`if`へloweringします。Low構文と従来の`elif`識別子は維持し、VS Code / JetBrainsの補完・色・字下げも文脈に限定します。
+- Add contextual High `elif condition:` branches, lowered through the existing checked `if` representation. Preserve Low syntax and existing `elif` identifiers, with context-aware completion, coloring and indentation in both editor plugins.
 - `build/run --runtime-profile full|auto`を明示opt-inで追加。既定fullと既存Rust API（default-features無効時を含む）を保持し、完全検査済みの小さな同期プログラムだけ共有ソースの軽量packageを選択します。unknown/async/adapter/追加Rust依存/incrementalはfullへ戻し、Cargoのnative再判定と旧成功世代の保護を維持します。[計測条件と限界](benchmarks/results/runtime-profiles-2026-10-24/README.md)。
 - Add opt-in runtime dependency selection from checked IR, preserving complete High/Low/type/ownership/Policy checks and the existing full runtime API. Include the shared-source core package and its dependency notices in distributions. Keep release settings and receipt/CAS compatibility; the measured gains apply to supported small synchronous programs, not arbitrary HTTP/SQL backends.
 - Keep changes limited to discoverable root-level website tests on the existing documentation CI path. Preserve full validation for unknown files and mixed compiler, runtime, security or dependency changes. This optimizes Nagi's repository CI; application build behavior is unchanged.

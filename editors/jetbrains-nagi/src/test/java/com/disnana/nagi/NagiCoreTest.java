@@ -29,6 +29,18 @@ public class NagiCoreTest {
         assertTrue(tokens("http sqlite Supervisor requests json User", false).stream()
                 .allMatch(token -> token.kind() == NagiTokenScanner.Kind.IDENTIFIER || token.kind() == NagiTokenScanner.Kind.SPACE));
     }
+    @Test public void elifIsAHighOnlyLexicalKeyword() {
+        assertEquals(NagiTokenScanner.Kind.KEYWORD, tokens("elif ready:", false).getFirst().kind());
+        assertEquals(NagiTokenScanner.Kind.IDENTIFIER, tokens("elif", true).getFirst().kind());
+        for (String compatible : List.of("elif", "elif(2)", "elif = 2", "elif: i64 = 2", "def elif(value: i64):", "object.elif")) {
+            assertEquals(compatible, NagiTokenScanner.Kind.IDENTIFIER, tokens(compatible, false).stream()
+                    .filter(token -> token.start() == compatible.indexOf("elif")).findFirst().orElseThrow().kind());
+        }
+        assertEquals(NagiTokenScanner.Kind.KEYWORD, tokens("    elif ready: # branch", false).stream()
+                .filter(token -> token.kind() != NagiTokenScanner.Kind.SPACE).findFirst().orElseThrow().kind());
+        assertEquals(NagiTokenScanner.Kind.KEYWORD, tokens("    elif (\n        not ready\n    ):\n        print(1)", false).stream()
+                .filter(token -> token.kind() != NagiTokenScanner.Kind.SPACE).findFirst().orElseThrow().kind());
+    }
     @Test public void builtinTypesAndTypeDeclarationsHaveThemeTypeKeysWithoutGuessingReferences() {
         for (boolean low : new boolean[] {false, true}) {
             for (String type : NagiLexicalCompletion.TYPES) {

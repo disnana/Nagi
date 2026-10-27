@@ -28,6 +28,8 @@
 
 ## コンパイラ
 
+開発中のHigh `elif`（未リリース）は、直前の`if`/`elif`と同じ字下げに置く条件分岐で、共通ASTの`else`内の`if`へlowerする。最初に真となった枝だけを実行し、後続条件を評価しない。`else`は任意。Lowと同一行`else if`の文法は追加しない。lexerは`elif`を引き続き識別子として読み、Highの`elif 条件:`見出しだけを文脈認識する。既存の同名変数・型注釈付き代入・関数呼出しを維持し、合成した各`if`の元行は対応する`elif`行とする。連鎖もlower後の既存ブロック64段上限に数え、受理したHighが保存Lowの構文上限を超えないようにする。根拠: `compiler/tests/high_elif.rs`、`editor_assistance.rs`。
+
 | 項目 | 契約・境界 | 実装と検査 |
 |---|---|---|
 | parse | 対応する構文・型の形・入力上限を満たす入力をASTへ変換する。parse成功は型や所有権の受理ではない。不正入力は診断で失敗し、panicで終わらないことを目標にする | `compiler/src/lexer.rs`, `parser.rs`; `compiler/tests/frontend_contracts.rs`, `literal_contracts.rs` |

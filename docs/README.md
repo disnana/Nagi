@@ -29,7 +29,7 @@
 |---|---|---|---|
 | 値、型注釈、代入・再代入 | [入門 #1：値と型](language-guide.md#1-値と型)で数値を更新し`11`を表示 | 型は最初の値から決まり、別の型へは再代入できない | [型](types.md)、[値と変数](syntax.md#値と変数) |
 | 関数、引数、return、関数値 | [入門 #2：関数を定義する](language-guide.md#2-関数を定義する)で`42`を返す | 引数と戻り値の型を書き、実行文は`main`から呼ぶ | [関数構文](syntax.md#関数とreturn)、[関数型](types.md#関数を値として渡す) |
-| if、match、for、while、演算子 | [入門 #3：配列・class・分岐・繰り返し](language-guide.md#3-配列class分岐繰り返し)で`OK`と反復結果を表示 | bool以外を条件にできない。`break`、`continue`、`elif`は未対応 | [分岐・loop・演算子](syntax.md#分岐とループ)、[match](error-handling.md#成功と失敗を分ける) |
+| if、match、for、while、演算子 | [入門 #3：配列・class・分岐・繰り返し](language-guide.md#3-配列class分岐繰り返し)で`OK`と反復結果を表示 | 条件はbool。`elif`は開発版Highで追加（未リリース）。`break`、`continue`は未対応 | [分岐・loop・演算子](syntax.md#分岐とループ)、[match](error-handling.md#成功と失敗を分ける) |
 | List、class、field、enum | [入門 #3：配列・class・分岐・繰り返し](language-guide.md#3-配列class分岐繰り返し)と[class例](classes.md)で合計・field値を表示 | Listは要素型を揃える。classは名前付きfieldで作り、method・継承・field再代入は未対応 | [型とenum](types.md#enumで種類を分ける)、[class](classes.md) |
 | nullable `T?` / `Option[T]` | [値がない場合の例](error-handling.md#値がない場合を扱う)で`Some`と`None`を処理 | 両方を`match`する。`unwrap`や`if value is not None`の型絞り込みはない | [型](types.md)、[match構文](syntax.md#resultasyncscope) |
 | `Result[T, E]`、`try`、`match`、独自Error | [最初のCLI](first-app.md)で入力失敗を伝え、[入門 #5：失敗をResultで返す](language-guide.md#5-失敗する処理はresultで返す)で回復例を読む | `try`はErrを呼出元へ返す。局所回復には`match`でOk/Err両方を書く | [失敗の種類と例](error-handling.md)、[組み込み関数](builtins.md#変換成功失敗) |

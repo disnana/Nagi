@@ -75,6 +75,8 @@ This is a function-body fragment:
 score = 80
 if score >= 80:
     print("Passed")
+elif score >= 60:
+    print("Almost there")
 else:
     print("Try again")
 
@@ -86,7 +88,11 @@ while count < 3:
     count += 1
 ```
 
-Conditions require bool. `range(n)` takes one argument and runs from zero up to but excluding n. List/view iteration copies Copy elements and borrows non-Copy elements for reading. See [ownership](ownership.md) for the restrictions. `elif`, `break`, `continue`, and `pass` are unavailable.
+`elif` is an unreleased addition to High in the development compiler. With a released compiler, indent another `if` inside `else`.
+
+Conditions in `if`/`elif` are evaluated from top to bottom. Only the first true branch runs; later conditions are skipped. Multiple `elif` clauses are allowed, and the final `else` is optional. Align each header with its `if`. Same-line `else if` and Low `elif` are unsupported. Low output uses the existing nested `if` inside `else`. The compiler recognizes `elif` only as a clause header, preserving existing variables and functions with that name.
+
+Conditions require bool. `range(n)` takes one argument and runs from zero up to but excluding n. List/view iteration copies Copy elements and borrows non-Copy elements for reading. See [ownership](ownership.md) for the restrictions. `break`, `continue`, and `pass` are unavailable.
 
 ## Operators
 
