@@ -23,7 +23,7 @@ class GoBackendCIContractTests(unittest.TestCase):
             self.assertEqual({row["os"] for row in matrix[:3]}, {
                 "ubuntu-latest", "windows-latest", "macos-15",
             })
-            self.assertEqual([row["go_tests"] for row in matrix[:3]], ["25", "24", "25"])
+            self.assertEqual([row["go_tests"] for row in matrix[:3]], ["27", "26", "27"])
 
     def test_exact_job_uses_pinned_local_go_and_real_execution_guard(self):
         source = self.source()
@@ -75,7 +75,7 @@ class GoBackendCIContractTests(unittest.TestCase):
             self.assertTrue(gate.errors(broken))
 
     def test_unknown_and_shared_paths_select_go_while_target_only_paths_skip(self):
-        for path in ("compiler/src/lib.rs", "Cargo.lock", ".github/workflows/ci.yml", "new/unknown"):
+        for path in ("compiler/src/lib.rs", "compiler/go-runtime/internal/lifecycle/lifecycle.go", "compiler/go-runtime/go.mod", "Cargo.lock", ".github/workflows/ci.yml", "new/unknown"):
             self.assertTrue(changes.requires_go(path), path)
         for path in ("runtime/src/lib.rs", "runtime-core/src/lib.rs", "docs/http.md", "editors/vscode-nagi/src/features.js"):
             self.assertFalse(changes.requires_go(path), path)

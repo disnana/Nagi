@@ -1,5 +1,20 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-27: Go private lifecycle kernel
+
+#186の`3c0ad0d`から独立stackとしてstd-only Go kernelを追加した。生成applicationへは
+組み込まず、public std.actor/async/scope/taskの未対応拒否を維持する。private Factory(ctx)、
+generation/manager状態、global sliding-window再起動予算、one-for-one、停止要求と実join、
+lock外の明示cleanupをnative testへ接続した。blocked worker/defer/cleanupはIncompleteと
+retained recordを維持し、別waiterによる実終了確認後だけ完了する。finalizer/GCを根拠にしない。
+business結果とworker failureの境界はnative例で分けるが、Turn/mailbox/READY/events/chargeは
+未実装。public owner/shared cleanupや任意native資源の保証も追加しない。
+
+Go integrationの追加2件はnative Go test12件の完全な名前集合とHigh/手書きLowのactor事前拒否を
+確認し、3 OS件数gateをLinux/macOS27・Windows26へ更新する。実行結果と独立final review、
+exact-head CIは下記の追記とPRで区別する。merge/releaseは行わない。
+[契約と有限測定条件](go-lifecycle-kernel.md)、[native module](../../compiler/go-runtime/README.md)。
+
 ## 2026-10-27: Go backendのpayloadなしenum段階
 
 明示move段階のstack上で、全variantがpayloadなしのenumを追加した。共有checkerはconstructorとenum matchのcanonical identityをRust固有名とは別の私有factsへ封印し、Go emitterはsource spellingやaliasを再解決しない。Goではenumごとの固有整数型とvariant定数を生成し、match subjectを一度だけ評価してchecked arm identityでswitchする。Goで比較可能な表現を使ってもNagiのenum比較は新たに受理しない。

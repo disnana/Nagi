@@ -46,6 +46,87 @@ pub enum Backend {
     Go,
 }
 
+/// Execute the private std-only Go kernel without exposing a Nagi runtime API.
+/// Require every named native test, not merely a successful `go test` process.
+pub fn private_lifecycle_contracts(directory: &Path) -> Result<(), String> {
+    let fixture = Fixture::new("private-lifecycle").map_err(|error| error.to_string())?;
+    let toolchains = Toolchains::current();
+    let mut command = Command::new(&toolchains.go);
+    command
+        .current_dir(directory)
+        .args(["test", "-json", "-p=1", "-count=1", "-timeout=30s", "./..."])
+        .env("GOTOOLCHAIN", "local")
+        .env("GOWORK", "off")
+        .env("CGO_ENABLED", "0");
+    let output = capture(
+        &mut command,
+        Backend::Go,
+        Stage::Compile,
+        Duration::from_secs(90),
+        &fixture,
+        "private-lifecycle",
+    )
+    .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(format!(
+            "private Go lifecycle native tests failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+    let expected = std::collections::BTreeSet::from([
+        "TestRegistrationAndColdStart",
+        "TestOneForOnePanicRestart",
+        "TestTemporaryFailureIsStickyUntilHealthySiblingJoins",
+        "TestBusinessReplyIsNotAWorkerFailure",
+        "TestPermanentCompletionUsesGlobalRestartBudget",
+        "TestRestartBudgetIsSharedAndExactBoundaryExpires",
+        "TestStopCancelsPendingRestartAndNeverRestartsCancellation",
+        "TestStopRacesRestartRepeatedly",
+        "TestBlockedWorkerRetainsRecordUntilActualReturn",
+        "TestBlockedCleanupRunsOutsideLocksAndRetainsCompletion",
+        "TestDeferredCleanupPrecedesJoinAndFailureSurvivesStop",
+        "TestCleanupPanicAndUnstartedStop",
+    ]);
+    let mut passed = std::collections::BTreeSet::new();
+    let mut package_passes = 0;
+    for line in output
+        .stdout
+        .split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+    {
+        let row: Value = serde_json::from_slice(line)
+            .map_err(|error| format!("invalid Go test JSON: {error}"))?;
+        match row["Action"].as_str() {
+            Some("skip" | "fail") => {
+                return Err(format!(
+                    "private native test did not run successfully: {row}"
+                ))
+            }
+            Some("pass") => {
+                if let Some(test) = row["Test"].as_str() {
+                    if !passed.insert(test.to_owned()) {
+                        return Err(format!("duplicate Go native test: {test}"));
+                    }
+                } else {
+                    package_passes += 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    if package_passes != 1
+        || passed
+            .iter()
+            .map(String::as_str)
+            .collect::<std::collections::BTreeSet<_>>()
+            != expected
+    {
+        return Err(format!("private Go lifecycle execution incomplete: packages={package_passes}, passed={passed:?}"));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub enum EntryKind {
     High,

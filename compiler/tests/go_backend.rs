@@ -6,6 +6,36 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+#[test]
+fn private_go_lifecycle_kernel_reaches_native_contracts() {
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("go-runtime");
+    backend_conformance::private_lifecycle_contracts(&directory)
+        .unwrap_or_else(|error| panic!("{error}"));
+}
+
+#[test]
+fn private_lifecycle_does_not_enable_public_actor_operations() {
+    let fixture = Fixture::new();
+    for (file, source) in [
+        ("main.nagi", "import std.actor as actor\ndef main():\n    options = actor.default_options()\n    print(0)\n"),
+        ("manual.low", "import std.actor as actor;\nfn main() -> unit {\n let options: actor.Options = actor.default_options();\n print(0);\n}\n"),
+    ] {
+        fixture.write(file, source);
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .current_dir(&fixture.0)
+            .args(["build", file, "--no-project", "--backend", "go", "--out", "out"])
+            .env("NAGI_GO", fixture.0.join("missing-go"))
+            .env_remove("NAGI_RUN_RETENTION")
+            .output().unwrap();
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "public std.actor unexpectedly enabled");
+        assert!(diagnostic.contains("operation stdlib:std.actor::default_options is not supported"), "{diagnostic}");
+        assert!(diagnostic.contains(&format!("{file}:3")), "{diagnostic}");
+        assert!(!diagnostic.contains("Go toolchain was not found"), "{diagnostic}");
+        assert!(!fixture.0.join("out/.nagi/apps").exists());
+    }
+}
+
 #[path = "support/backend_conformance.rs"]
 mod backend_conformance;
 

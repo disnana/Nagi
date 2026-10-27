@@ -92,9 +92,10 @@ generationには次を保存する。
 
 ## 実行検証
 
-専用integration testは実Go toolchainを使い、共有conformance初段ではLinux/macOSで25件、WindowsでUnix symlink固有の1件を除く24件を検査する。
+専用integration testは実Go toolchainを使い、private lifecycle初段ではLinux/macOSで27件、WindowsでUnix symlink固有の1件を除く26件を検査する。
 
 - Highと独立保存Lowが同じ出力になる
+- private std-only lifecycle kernelの12 native testを名前集合まで検査し、public std.actorのHigh/手書きLow事前拒否を維持する
 - CLI &gt; project &gt; Rust既定
 - import済み関数
 - List literal/index/append/len、Copy要素Listとrangeの反復、左から右へ一度だけの評価
@@ -136,6 +137,12 @@ Go integration test 14件は最近の実行で42.37〜86.63秒だった。toolch
 この比較は最小subsetのbuild feedbackだけを示す。Go側にはRust runtimeのHTTP/DB/auth/task等がまだなく、依存量が同じではない。native実行性能、throughput、latency、長時間安定性、Windows/macOS、release profile、最大RSSはこの測定で比較していない。process-tree RSSの簡易observer値は妥当性を確立できなかったため採用しなかった。機能同等のbackendができるまで、本番性能の優位性をこの値から主張しない。
 
 ## 次段階の受入条件
+
+#186後の最初の並行実行sliceは[private lifecycle kernel](go-lifecycle-kernel.md)。
+std-only Go moduleでgeneration・one-for-one再起動・global予算・実joinと明示cleanupを
+native検査する。生成applicationへの組込みとpublic std.actor受理はまだ行わない。
+mailbox/READY/events/charge、cold async/borrow/callback/owner cleanupは後続gateである。
+このsliceを含むGo integrationの必須件数はLinux/macOS 27、Windows 26。
 
 1. 3 OSで最小backendの実build/runとlast-good保護を必須CI化する。
 2. shared conformance oracleとbackend別driverを分離し、同じ対応Nagi programの結果・診断を比較する。
