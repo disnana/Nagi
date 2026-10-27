@@ -4,11 +4,32 @@
 
 - VS Codeでclass/record呼び出しの名前付きフィールド名を補完し、引数ヒントは入力順ではなくフィールド名に合わせます。既存の`=`、供給済みフィールド、shadowing、保存済み宣言の警告を維持します。公開0.1.13には未収録です。
 - Complete named class/record field labels in VS Code and select signature parameters by field name. Preserve existing equals signs, supplied fields, shadowing guards and saved-declaration warnings. This is not included in published extension 0.1.13.
+
+## Nagi 0.2.2 — 2026-10-27
+
+- 0.2.1との互換性、既定のfull runtime・release build、完全なHigh/Low・型・所有権・Policy検査、Cargoのnative再判定、旧成功成果物の保護を維持しながら、小さな変更の開発待ち時間と初回依存解決の再現性を改善します。IDEプラグインは別の版・公開工程です。
+- Preserve 0.2.1 compatibility, the default full runtime and release build, complete High/Low/type/ownership/Policy checks, Cargo's native freshness decisions, and previous successful artifacts while improving supported edit loops and reproducible first dependency resolution. Editor plugins remain separately versioned and released.
+
+### Build and dependency selection
+
 - `build/run --runtime-profile full|auto`を明示opt-inで追加。既定fullと既存Rust API（default-features無効時を含む）を保持し、完全検査済みの小さな同期プログラムだけ共有ソースの軽量packageを選択します。unknown/async/adapter/追加Rust依存/incrementalはfullへ戻し、Cargoのnative再判定と旧成功世代の保護を維持します。[計測条件と限界](benchmarks/results/runtime-profiles-2026-10-24/README.md)。
 - Add opt-in runtime dependency selection from checked IR, preserving complete High/Low/type/ownership/Policy checks and the existing full runtime API. Include the shared-source core package and its dependency notices in distributions. Keep release settings and receipt/CAS compatibility; the measured gains apply to supported small synchronous programs, not arbitrary HTTP/SQL backends.
+- Add explicit `--seed-lock` for `build` and `run`. A supporting distribution can provide the initial Cargo lock when the output has none; existing or invalid output locks are never replaced. The seed is an integrity-checked resolution input, not a native artifact cache or signature. Cold full builds were slower in the recorded comparison, so the option remains off by default.
+- `build`/`run`へ明示`--seed-lock`を追加。出力にlockがない場合だけ対応配布物の初期lockを使い、既存・破損lockは置換しません。seedは整合性付きの依存解決入力であり、native成果物cacheや署名ではありません。記録したcold full比較では遅かったため既定化しません。
+- Update `rustls`, `rustls-webpki`, and `webpki-roots` to fixed releases and require the corrected WebPKI dependency when old application locks are re-resolved. Existing generated locks and executables are not changed automatically; rebuild deployed applications with the new runtime.
+
+### Development and feedback
+
 - Keep changes limited to discoverable root-level website tests on the existing documentation CI path. Preserve full validation for unknown files and mixed compiler, runtime, security or dependency changes. This optimizes Nagi's repository CI; application build behavior is unchanged.
 - 利用者向けCI generatorに`--build-profile dev|release`を追加。既定releaseと完全検査を維持し、Nagi 0.2.1以上の開発用buildをWindows/Unixで選択できます。profile別cacheと0.2.0向けrelease互換を維持し、未対応の組合せは出力前に拒否します。
 - Add explicit development/release profile selection to the next user-project CI generator, defaulting to release and targeting published Nagi 0.2.1 by default. Keep full checks, trusted-branch cache writes and older CLI release compatibility; separate profile caches under a new key namespace. Published 0.2.1 archives are unchanged.
+- Add backward-compatible `read_line(prompt)` alongside `read_line()`. The prompt is borrowed, written and flushed before input, and write/flush/read failures remain explicit `Result` errors. Compiler-owned editor metadata now includes `read_line` and the supported builtin vocabulary; compatible editor releases consume that metadata independently.
+- Add runnable Japanese/English Result/`try` lessons and an end-to-end task-management JSON/SQLite API tutorial, including a concrete FastAPI/Quart comparison with tested versions and stated limits.
+
+### Stability and release limits
+
+- Improve bounded CI diagnostics after BrowserLogin and Session deadline failures without changing the failing request's result or relaxing the test. An intermittent valid-request 504 observed in release-level CI is not proven fixed; a later retry succeeded, and the retained diagnostics remain investigation evidence rather than a runtime remedy.
+- Keep runtime-profile and lock-seed modes explicit. They do not skip Nagi checks, restore native artifacts, make every backend use the core runtime, or establish general build/runtime performance gains. Measurements, unsupported cases and fallback reasons are documented with the respective features.
 
 ## Nagi 0.2.1
 
