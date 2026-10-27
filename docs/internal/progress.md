@@ -1,5 +1,13 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-27: 有限ローカル過負荷・接続回復・Supervisor検証
+
+[実測条件とraw evidence](../../benchmarks/results/local-resilience-2026-10-27/README.md)。外部へ送信しないloopback限定・有限時間/要求数/worker/connection/RSS/cgroup上限で、通常通信、10,000 request/sの模擬過負荷、別routeの継続、回復、低速/途中送信/keep-alive/RST、actor lifecycleと合成restart規則を検証した。Go backendはHTTP/actor未対応のためRust結果をGoへ一般化しない。Internet DDoS、回線、TLS、複数host、BEAM/Elixir相当の保証ではない。
+
+計測基盤ではVegeta v12.13に存在しないreport option、keep-alive EOF時のCPU loop、無制限Content-Length/総読取待ち、redirect/request/resource上限と証拠hash不足を修正した。修正前の追加負荷試行で200×655、429×29,295に加えて500×50を検出。通常応答容量の`Busy`後に既定mapperも同じ通常枠で失敗し、一律500へ変換される経路だった。全public/CSRF/BrowserLogin dispatchでmapperの`Busy`だけを独立fallbackの503として保持し、他のmapper失敗は詳細非公開500を維持。固定容量回帰は503と解放後の再利用を確認した。
+
+修正後3試行は各通常300/300、過負荷200×705・429×29,295・500/503/transport失敗0、別route全200、有限時間内のroute回復、回復後FD10–11。低速接続100本中全件EOF、許可authorityへ送った途中body25件は408、同時の通常15件は全200、close/RST後FD10。Python測定基盤43件、runtime869件成功/1計測専用ignored、全workspace `cargo test --locked`、runtime all-target Clippyとfmtが成功した。短時間RSSだけでmemory leak不在とは断定せず、過去のBrowserLogin 504根因も解決扱いにしない。独立最終再監査はP0/P1/P2なし。最新HEAD CIはPR gateとして残す。
+
 ## 2026-10-23: 完成コードの末尾空行でeditor情報を失う不具合
 
 [設計](jetbrains-empty-line-assistance.md)。#148の利用者GUI確認・main `6214c5d6`へのmerge後、正常なPoint record例でも末尾空行の先頭へcaretを置くと色・説明が消える報告を受けた。公開0.2.1のHigh/Low・保存/overlay/serveで、original frontendは受理済みだがquery recoveryのload失敗によりsymbolsが省略される応答を再現した。compilerは元ASTへ戻してqueryなしindexを生成し、元diagnostic/verdictを維持する。pluginは公開0.2.1向けにsymbols省略と明示emptyを区別し、限定条件で同snapshotのqueryなし解析を1回だけ行い、source事実だけを合成してpublishする。通常の応答に追加解析はない。型・ownership・Policy・stale/cancel/identity検査は維持。compiler37件・Clippy・fmt、公開0.2.1実CLIを使うplugin43件、matching compilerのplugin全278件・ZIP build成功。環境はJDK25.0.4/IU263.7031.23で、Windows GUI/他SDK・全workspace・独立最終review・exact-head CIは別gateとして残す。

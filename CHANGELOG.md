@@ -2,6 +2,8 @@
 
 ## 未リリース / Unreleased
 
+- HTTP応答容量不足が既定error mapperでも容量不足になった場合、内部障害500へ変換せず、独立fallback枠から503を返します。他のmapper失敗の非公開500、既存認証・期限・応答上限を維持します。有限loopback過負荷、低速接続、異常切断、回復、actor/Supervisor補助検証の再現可能な証拠を追加します。
+- Preserve typed HTTP load shedding when both a handler response and its error mapper exhaust the ordinary response pool: return a bounded fallback 503 while keeping other mapper failures as opaque 500 responses. Add finite loopback-only overload, slow-connection, disconnect, recovery and actor/supervision evidence without claiming Internet DDoS or BEAM equivalence.
 - `build/run --runtime-profile full|auto`を明示opt-inで追加。既定fullと既存Rust API（default-features無効時を含む）を保持し、完全検査済みの小さな同期プログラムだけ共有ソースの軽量packageを選択します。unknown/async/adapter/追加Rust依存/incrementalはfullへ戻し、Cargoのnative再判定と旧成功世代の保護を維持します。[計測条件と限界](benchmarks/results/runtime-profiles-2026-10-24/README.md)。
 - Add opt-in runtime dependency selection from checked IR, preserving complete High/Low/type/ownership/Policy checks and the existing full runtime API. Include the shared-source core package and its dependency notices in distributions. Keep release settings and receipt/CAS compatibility; the measured gains apply to supported small synchronous programs, not arbitrary HTTP/SQL backends.
 - Keep changes limited to discoverable root-level website tests on the existing documentation CI path. Preserve full validation for unknown files and mixed compiler, runtime, security or dependency changes. This optimizes Nagi's repository CI; application build behavior is unchanged.
