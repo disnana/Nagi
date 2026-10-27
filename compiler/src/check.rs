@@ -5477,6 +5477,47 @@ def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
     }
 
     #[test]
+    fn sealed_enum_constructor_and_match_identities_are_revalidated() {
+        let source = "enum State:\n    Ready\n    Busy\ndef select(value: State) -> i64:\n    match value:\n        case State.Ready:\n            return 1\n        case State.Busy:\n            return 2\ndef main():\n    print(select(State.Ready))\n";
+        let mut program = resolved_high(source);
+        check(&mut program).unwrap();
+        let main = root_function(&program, "main").name.clone();
+        let select = root_function(&program, "select").name.clone();
+        let mut checked = checked::CheckedProgram::seal_rechecked(
+            program,
+            crate::source::SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        checked.validate_for_emission().unwrap();
+
+        let constructor = checked.enums.functions[&main].constructors.clone();
+        checked
+            .enums
+            .functions
+            .get_mut(&main)
+            .unwrap()
+            .constructors
+            .clear();
+        assert!(checked
+            .validate_for_emission()
+            .unwrap_err()
+            .contains("checked enum facts"));
+        checked.enums.functions.get_mut(&main).unwrap().constructors = constructor;
+
+        checked
+            .enums
+            .functions
+            .get_mut(&select)
+            .unwrap()
+            .matches
+            .clear();
+        assert!(checked
+            .validate_for_emission()
+            .unwrap_err()
+            .contains("checked enum facts"));
+    }
+
+    #[test]
     fn flow_collection_is_gated_to_view_return_dependencies() {
         let source = r#"from std.ownership import move
 def ordinary() -> i64:

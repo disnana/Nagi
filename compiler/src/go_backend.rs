@@ -6,7 +6,7 @@
 //! semantics.
 use crate::{
     ast::{Expr, Function, MatchPattern, NameResolution, Program, Stmt, Type, E, S},
-    checked::{CheckedProgram, ExpressionKey, OperationPlan},
+    checked::{CheckedProgram, EnumFacts, EnumVariantFact, ExpressionKey, OperationPlan},
     project::BuildProfile,
     source::Sources,
 };
@@ -64,6 +64,18 @@ fn class_name(name: &str) -> String {
     format!("nagiType_{}", ident(name))
 }
 
+fn enum_name(name: &str) -> String {
+    format!("nagiEnum_{}", ident(name))
+}
+
+fn enum_variant_name(fact: &EnumVariantFact) -> String {
+    format!(
+        "nagiVariant_{}_{}",
+        ident(&fact.enumeration),
+        ident(&fact.variant)
+    )
+}
+
 fn integer_type(ty: &Type) -> Option<(bool, &'static str)> {
     Some(match ty.0.as_str() {
         "i8" => (true, "int8(-128)"),
@@ -104,7 +116,12 @@ fn float_type(ty: &Type) -> Option<u8> {
     }
 }
 
-fn go_type(ty: &Type, classes: &BTreeSet<String>, line: usize) -> Result<String, String> {
+fn go_type(
+    ty: &Type,
+    classes: &BTreeSet<String>,
+    enums: &BTreeSet<String>,
+    line: usize,
+) -> Result<String, String> {
     let primitive = match ty.0.as_str() {
         "i8" => Some("int8"),
         "i16" => Some("int16"),
@@ -132,14 +149,20 @@ fn go_type(ty: &Type, classes: &BTreeSet<String>, line: usize) -> Result<String,
     if classes.contains(&ty.0) && ty.1.is_empty() {
         return Ok(class_name(&ty.0));
     }
+    if enums.contains(&ty.0) && ty.1.is_empty() {
+        return Ok(enum_name(&ty.0));
+    }
     match (ty.0.as_str(), ty.1.as_slice()) {
         ("Range", []) => Ok("nagiRange".into()),
-        ("List", [item]) => Ok(format!("[]{}", go_type(item, classes, line)?)),
-        ("Option", [item]) => Ok(format!("nagiOption[{}]", go_type(item, classes, line)?)),
+        ("List", [item]) => Ok(format!("[]{}", go_type(item, classes, enums, line)?)),
+        ("Option", [item]) => Ok(format!(
+            "nagiOption[{}]",
+            go_type(item, classes, enums, line)?
+        )),
         ("Result", [value, problem]) => Ok(format!(
             "nagiResult[{}, {}]",
-            go_type(value, classes, line)?,
-            go_type(problem, classes, line)?
+            go_type(value, classes, enums, line)?,
+            go_type(problem, classes, enums, line)?
         )),
         _ => Err(error(
             line,
@@ -261,6 +284,8 @@ fn reachable(program: &Program) -> Result<Vec<(&Function, Vec<String>)>, String>
 struct Emitter<'a> {
     program: &'a Program,
     classes: BTreeSet<String>,
+    enums: BTreeSet<String>,
+    enum_facts: &'a EnumFacts,
     reachable: Vec<(&'a Function, Vec<String>)>,
     operations: BTreeMap<String, BTreeMap<ExpressionKey, OperationPlan>>,
     current_function: Option<String>,
@@ -282,19 +307,15 @@ impl<'a> Emitter<'a> {
             ));
         }
         let program = checked.program();
-        if let Some(enumeration) = program.enums.first() {
-            return Err(error(
-                enumeration.line,
-                format!(
-                    "enum {} is not supported by the initial Go backend",
-                    enumeration.name
-                ),
-            ));
-        }
         let classes = program
             .classes
             .iter()
             .map(|class| class.name.clone())
+            .collect();
+        let enums = program
+            .enums
+            .iter()
+            .map(|enumeration| enumeration.name.clone())
             .collect();
         let reachable = reachable(program)?;
         if program.functions.len() != checked.emission.functions.len() {
@@ -327,6 +348,8 @@ impl<'a> Emitter<'a> {
         let mut emitter = Self {
             program,
             classes,
+            enums,
+            enum_facts: &checked.enums,
             reachable,
             operations,
             current_function: None,
@@ -344,9 +367,24 @@ impl<'a> Emitter<'a> {
     }
 
     fn validate(&mut self) -> Result<(), String> {
+        for enumeration in &self.program.enums {
+            if let Some(variant) = enumeration
+                .variants
+                .iter()
+                .find(|variant| !variant.fields.is_empty())
+            {
+                return Err(error(
+                    variant.line,
+                    format!(
+                        "enum {} has payload variant {}; the initial Go enum stage supports only payload-free variants",
+                        enumeration.name, variant.name
+                    ),
+                ));
+            }
+        }
         for class in &self.program.classes {
             for (_, ty) in &class.fields {
-                go_type(ty, &self.classes, class.line)?;
+                go_type(ty, &self.classes, &self.enums, class.line)?;
             }
         }
         let reachable = self.reachable.clone();
@@ -382,9 +420,22 @@ impl<'a> Emitter<'a> {
                 ));
             }
             for (_, ty) in &function.params {
-                go_type(ty, &self.classes, function.line)?;
+                go_type(ty, &self.classes, &self.enums, function.line)?;
             }
-            go_type(&function.ret, &self.classes, function.line)?;
+            go_type(&function.ret, &self.classes, &self.enums, function.line)?;
+            if function.name == "main"
+                && function.ret.0 == "Result"
+                && function
+                    .ret
+                    .1
+                    .get(1)
+                    .is_some_and(|problem| self.type_contains_enum(problem))
+            {
+                return Err(error(
+                    function.line,
+                    "main Result error types containing enum are not supported by the initial Go enum stage",
+                ));
+            }
             for statement in &function.body {
                 self.validate_statement(statement, &function.ret)?;
             }
@@ -413,6 +464,77 @@ impl<'a> Emitter<'a> {
             })
     }
 
+    fn constructor_fact(&self, expression: &Expr) -> Result<&EnumVariantFact, String> {
+        let function = self.current_function.as_ref().ok_or_else(|| {
+            error(
+                expression.line,
+                "internal compiler error: Go backend has no active function",
+            )
+        })?;
+        self.enum_facts
+            .functions
+            .get(function)
+            .and_then(|facts| facts.constructors.get(&ExpressionKey::of(expression)))
+            .ok_or_else(|| {
+                error(
+                    expression.line,
+                    format!(
+                        "internal compiler error: Go backend is missing the sealed enum constructor identity for {function}"
+                    ),
+                )
+            })
+    }
+
+    fn match_facts(&self, value: &Expr) -> Result<&[EnumVariantFact], String> {
+        let function = self.current_function.as_ref().ok_or_else(|| {
+            error(
+                value.line,
+                "internal compiler error: Go backend has no active function",
+            )
+        })?;
+        self.enum_facts
+            .functions
+            .get(function)
+            .and_then(|facts| facts.matches.get(&ExpressionKey::of(value)))
+            .map(Vec::as_slice)
+            .ok_or_else(|| {
+                error(
+                    value.line,
+                    format!(
+                        "internal compiler error: Go backend is missing the sealed enum match identities for {function}"
+                    ),
+                )
+            })
+    }
+
+    fn type_contains_enum(&self, ty: &Type) -> bool {
+        fn visit(emitter: &Emitter<'_>, ty: &Type, classes: &mut BTreeSet<String>) -> bool {
+            if emitter.enums.contains(&ty.0)
+                || ty.1.iter().any(|item| visit(emitter, item, classes))
+            {
+                return true;
+            }
+            let Some(class) = emitter
+                .program
+                .classes
+                .iter()
+                .find(|class| class.name == ty.0)
+            else {
+                return false;
+            };
+            if !classes.insert(class.name.clone()) {
+                return false;
+            }
+            let found = class
+                .fields
+                .iter()
+                .any(|(_, field)| visit(emitter, field, classes));
+            classes.remove(&class.name);
+            found
+        }
+        visit(self, ty, &mut BTreeSet::new())
+    }
+
     fn validate_statement(&self, statement: &Stmt, ret: &Type) -> Result<(), String> {
         match &statement.kind {
             S::Assign { value, .. } => self.validate_expr(value, ret),
@@ -430,25 +552,54 @@ impl<'a> Emitter<'a> {
             }
             S::Match(value, arms) => {
                 self.validate_expr(value, ret)?;
-                if !matches!(
-                    value.ty.as_ref().map(|ty| ty.0.as_str()),
-                    Some("Option" | "Result")
-                ) {
+                let subject = value.ty.as_ref().expect("checked match type");
+                if self.enums.contains(&subject.0) {
+                    let facts = self.match_facts(value)?;
+                    if facts.len() != arms.len()
+                        || facts.iter().any(|fact| fact.enumeration != subject.0)
+                    {
+                        return Err(error(
+                            statement.line,
+                            "internal compiler error: inconsistent sealed enum match identities",
+                        ));
+                    }
+                    for (arm, fact) in arms.iter().zip(facts) {
+                        let MatchPattern::Enum { bindings, .. } = &arm.pattern else {
+                            return Err(error(
+                                arm.line,
+                                "internal compiler error: mixed sealed enum match",
+                            ));
+                        };
+                        if !bindings.is_empty() {
+                            return Err(error(
+                                arm.line,
+                                format!(
+                                    "enum {} variant {} has a payload unsupported by the initial Go enum stage",
+                                    fact.enumeration, fact.variant
+                                ),
+                            ));
+                        }
+                    }
+                } else if matches!(subject.0.as_str(), "Option" | "Result") {
+                    if arms.len() != 2 {
+                        return Err(error(
+                            statement.line,
+                            "Option/Result match must have exactly two exhaustive arms",
+                        ));
+                    }
+                    if arms
+                        .iter()
+                        .any(|arm| matches!(arm.pattern, MatchPattern::Enum { .. }))
+                    {
+                        return Err(error(statement.line, "invalid checked Option/Result match"));
+                    }
+                } else {
                     return Err(error(
                         statement.line,
-                        "only Option/Result match is supported",
-                    ));
-                }
-                if arms.len() != 2 {
-                    return Err(error(
-                        statement.line,
-                        "Option/Result match must have exactly two exhaustive arms",
+                        "only Option/Result/payload-free enum match is supported",
                     ));
                 }
                 for arm in arms {
-                    if matches!(arm.pattern, MatchPattern::Enum { .. }) {
-                        return Err(error(arm.line, "enum match is not supported"));
-                    }
                     for statement in &arm.body {
                         self.validate_statement(statement, ret)?;
                     }
@@ -514,7 +665,7 @@ impl<'a> Emitter<'a> {
                 format!("operation {name} is not supported by the initial Go backend"),
             ));
         }
-        go_type(ty, &self.classes, expression.line)?;
+        go_type(ty, &self.classes, &self.enums, expression.line)?;
         match &expression.kind {
             E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null => Ok(()),
             E::Name(_) => match expression.resolution {
@@ -558,6 +709,19 @@ impl<'a> Emitter<'a> {
                 self.validate_expr(value, ret)
             }
             E::Call(name, _, arguments) => {
+                if expression.resolution == Some(NameResolution::Enum) {
+                    let fact = self.constructor_fact(expression)?;
+                    if !arguments.is_empty() {
+                        return Err(error(
+                            expression.line,
+                            format!(
+                                "enum {} variant {} has a payload unsupported by the initial Go enum stage",
+                                fact.enumeration, fact.variant
+                            ),
+                        ));
+                    }
+                    return Ok(());
+                }
                 for argument in arguments {
                     self.validate_expr(argument, ret)?;
                 }
@@ -596,6 +760,17 @@ impl<'a> Emitter<'a> {
                                 | "append"
                         ) =>
                     {
+                        if matches!(name.as_str(), "print" | "write")
+                            && arguments
+                                .first()
+                                .and_then(|argument| argument.ty.as_ref())
+                                .is_some_and(|ty| self.type_contains_enum(ty))
+                        {
+                            return Err(error(
+                                expression.line,
+                                "printing enum values is not supported by the initial Go enum stage",
+                            ));
+                        }
                         Ok(())
                     }
                     _ => Err(error(
@@ -614,6 +789,10 @@ impl<'a> Emitter<'a> {
                 for (_, value) in fields {
                     self.validate_expr(value, ret)?;
                 }
+                Ok(())
+            }
+            E::Field(_, _) if expression.resolution == Some(NameResolution::Enum) => {
+                self.constructor_fact(expression)?;
                 Ok(())
             }
             E::Field(value, _) => self.validate_expr(value, ret),
@@ -680,7 +859,7 @@ impl<'a> Emitter<'a> {
                 let item = &expression.ty.as_ref().expect("validated type").1[0];
                 format!(
                     "nagiNone[{}]()",
-                    go_type(item, &self.classes, expression.line)?
+                    go_type(item, &self.classes, &self.enums, expression.line)?
                 )
             }
             E::Name(name) => ident(name),
@@ -717,7 +896,7 @@ impl<'a> Emitter<'a> {
                         let division_overflow = signed && matches!(operator.as_str(), "/" | "%");
                         if checked || division_overflow {
                             let result = self.temp("arithmetic");
-                            let go_ty = go_type(ty, &self.classes, expression.line)?;
+                            let go_ty = go_type(ty, &self.classes, &self.enums, expression.line)?;
                             if division_overflow {
                                 before.push(format!(
                                     "if {left} == {minimum} && {right} == -1 {{ panic(\"integer overflow\") }}"
@@ -789,6 +968,18 @@ impl<'a> Emitter<'a> {
                 )
             }
             E::Call(name, _, arguments) => {
+                if expression.resolution == Some(NameResolution::Enum) {
+                    if !arguments.is_empty() {
+                        return Err(error(
+                            expression.line,
+                            "internal compiler error: validated payload-free enum constructor has arguments",
+                        ));
+                    }
+                    return Ok((
+                        before,
+                        enum_variant_name(self.constructor_fact(expression)?),
+                    ));
+                }
                 if expression.resolution == Some(NameResolution::Standard) {
                     return match self.operation_plan(expression)?.clone() {
                         OperationPlan::IdentityTransfer { argument }
@@ -840,8 +1031,8 @@ impl<'a> Emitter<'a> {
                             let ty = expression.ty.as_ref().expect("validated result");
                             format!(
                                 "nagiOk[{}, {}]({})",
-                                go_type(&ty.1[0], &self.classes, expression.line)?,
-                                go_type(&ty.1[1], &self.classes, expression.line)?,
+                                go_type(&ty.1[0], &self.classes, &self.enums, expression.line)?,
+                                go_type(&ty.1[1], &self.classes, &self.enums, expression.line)?,
                                 values[0]
                             )
                         }
@@ -849,8 +1040,8 @@ impl<'a> Emitter<'a> {
                             let ty = expression.ty.as_ref().expect("validated result");
                             format!(
                                 "nagiErr[{}, {}]({})",
-                                go_type(&ty.1[0], &self.classes, expression.line)?,
-                                go_type(&ty.1[1], &self.classes, expression.line)?,
+                                go_type(&ty.1[0], &self.classes, &self.enums, expression.line)?,
+                                go_type(&ty.1[1], &self.classes, &self.enums, expression.line)?,
                                 values[0]
                             )
                         }
@@ -858,7 +1049,7 @@ impl<'a> Emitter<'a> {
                             let ty = expression.ty.as_ref().expect("validated result");
                             format!(
                                 "nagiErr[{}, nagiError](nagiError{{message: {}}})",
-                                go_type(&ty.1[0], &self.classes, expression.line)?,
+                                go_type(&ty.1[0], &self.classes, &self.enums, expression.line)?,
                                 values[0]
                             )
                         }
@@ -876,6 +1067,9 @@ impl<'a> Emitter<'a> {
                 }
                 format!("{}{{{}}}", class_name(name), rendered.join(", "))
             }
+            E::Field(_, _) if expression.resolution == Some(NameResolution::Enum) => {
+                enum_variant_name(self.constructor_fact(expression)?)
+            }
             E::Field(value, field) => {
                 let (value_before, value) = self.evaluated(value, ret)?;
                 before.extend(value_before);
@@ -886,8 +1080,8 @@ impl<'a> Emitter<'a> {
                 before.extend(value_before);
                 let result = self.temp("try");
                 before.push(format!("{result} := {value}"));
-                let ret_value = go_type(&ret.1[0], &self.classes, expression.line)?;
-                let ret_error = go_type(&ret.1[1], &self.classes, expression.line)?;
+                let ret_value = go_type(&ret.1[0], &self.classes, &self.enums, expression.line)?;
+                let ret_error = go_type(&ret.1[1], &self.classes, &self.enums, expression.line)?;
                 before.push(format!(
                     "if !{result}.ok {{ return nagiErr[{ret_value}, {ret_error}]({result}.problem) }}"
                 ));
@@ -913,7 +1107,7 @@ impl<'a> Emitter<'a> {
                 let item = &expression.ty.as_ref().expect("validated List type").1[0];
                 format!(
                     "[]{}{{{}}}",
-                    go_type(item, &self.classes, expression.line)?,
+                    go_type(item, &self.classes, &self.enums, expression.line)?,
                     rendered.join(", ")
                 )
             }
@@ -932,6 +1126,7 @@ impl<'a> Emitter<'a> {
         let ty = go_type(
             expression.ty.as_ref().expect("validated expression type"),
             &self.classes,
+            &self.enums,
             expression.line,
         )?;
         before.push(format!("var {name} {ty} = {value}"));
@@ -969,6 +1164,7 @@ impl<'a> Emitter<'a> {
                         let ty = go_type(
                             annotation.as_ref().expect("checked declaration type"),
                             &self.classes,
+                            &self.enums,
                             statement.line,
                         )?;
                         Self::line(output, indent, format!("var {name} {ty} = {value}"));
@@ -1021,12 +1217,33 @@ impl<'a> Emitter<'a> {
                     Self::line(output, indent, "}");
                 }
                 S::Match(value, arms) => {
+                    let enum_facts = value
+                        .ty
+                        .as_ref()
+                        .is_some_and(|ty| self.enums.contains(&ty.0))
+                        .then(|| self.match_facts(value).map(<[_]>::to_vec))
+                        .transpose()?;
                     let (before, value) = self.expression(value, ret)?;
                     for line in before {
                         Self::line(output, indent, line);
                     }
                     let matched = self.temp("match");
                     Self::line(output, indent, format!("{matched} := {value}"));
+                    if let Some(facts) = enum_facts {
+                        Self::line(output, indent, format!("switch {matched} {{"));
+                        for (arm, fact) in arms.iter().zip(facts) {
+                            Self::line(
+                                output,
+                                indent,
+                                format!("case {}:", enum_variant_name(&fact)),
+                            );
+                            self.statements(&arm.body, ret, indent + 1, output)?;
+                        }
+                        Self::line(output, indent, "default:");
+                        Self::line(output, indent + 1, "panic(\"invalid generated enum tag\")");
+                        Self::line(output, indent, "}");
+                        continue;
+                    }
                     for (index, arm) in arms.iter().enumerate() {
                         let (condition, projected) = match &arm.pattern {
                             MatchPattern::Result { ok, binding } => (
@@ -1109,6 +1326,33 @@ impl<'a> Emitter<'a> {
 
     fn generate(mut self) -> Result<String, String> {
         let mut body = String::new();
+        for enumeration in &self.program.enums {
+            Self::line(
+                &mut body,
+                0,
+                format!("type {} uint32", enum_name(&enumeration.name)),
+            );
+            Self::line(&mut body, 0, "const (");
+            for (ordinal, variant) in enumeration.variants.iter().enumerate() {
+                let fact = EnumVariantFact {
+                    enumeration: enumeration.name.clone(),
+                    variant: variant.name.clone(),
+                    ordinal,
+                };
+                Self::line(
+                    &mut body,
+                    1,
+                    format!(
+                        "{} {} = {}",
+                        enum_variant_name(&fact),
+                        enum_name(&enumeration.name),
+                        fact.ordinal + 1
+                    ),
+                );
+            }
+            Self::line(&mut body, 0, ")");
+            body.push('\n');
+        }
         for class in &self.program.classes {
             Self::line(
                 &mut body,
@@ -1122,7 +1366,7 @@ impl<'a> Emitter<'a> {
                     format!(
                         "{} {}",
                         ident(field),
-                        go_type(ty, &self.classes, class.line)?
+                        go_type(ty, &self.classes, &self.enums, class.line)?
                     ),
                 );
             }
@@ -1139,12 +1383,12 @@ impl<'a> Emitter<'a> {
                     Ok(format!(
                         "{} {}",
                         ident(name),
-                        go_type(ty, &self.classes, function.line)?
+                        go_type(ty, &self.classes, &self.enums, function.line)?
                     ))
                 })
                 .collect::<Result<Vec<_>, String>>()?
                 .join(", ");
-            let result = go_type(&function.ret, &self.classes, function.line)?;
+            let result = go_type(&function.ret, &self.classes, &self.enums, function.line)?;
             Self::line(
                 &mut body,
                 0,

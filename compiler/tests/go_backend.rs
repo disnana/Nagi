@@ -771,6 +771,315 @@ fn non_copy_list_iteration_is_rejected_before_the_go_toolchain() {
 }
 
 #[test]
+fn payload_free_enums_run_from_high_saved_and_handwritten_low() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "states.nagi",
+        r#"enum State:
+    Ready
+    Busy
+    Done
+
+def choose() -> State:
+    print(10)
+    return State.Busy
+"#,
+    );
+    fixture.write(
+        "other.nagi",
+        r#"enum State:
+    Ready
+    Busy
+    Done
+
+def score(value: State) -> i64:
+    match value:
+        case State.Ready:
+            return 10
+        case State.Busy:
+            return 20
+        case State.Done:
+            return 30
+"#,
+    );
+    fixture.write(
+        "main.nagi",
+        r#"from std.ownership import move
+import "states.nagi" as states
+import "other.nagi" as other
+from "states.nagi" import State as Choice
+
+class Envelope:
+    state: Choice
+
+def score(value: Choice) -> i64:
+    match value:
+        case states.State.Done:
+            return 3
+        case Choice.Ready:
+            return 1
+        case states.State.Busy:
+            return 2
+
+def once() -> Choice:
+    print(11)
+    return Choice.Ready
+
+def direct_score() -> i64:
+    match once():
+        case Choice.Ready:
+            return 1
+        case Choice.Busy:
+            return 2
+        case Choice.Done:
+            return 3
+
+def internal_error() -> Result[i64, Choice]:
+    pending: Result[Choice, Choice] = fail(Choice.Done)
+    value = try pending
+    return ok(score(value))
+
+def main():
+    selected = states.choose()
+    transferred = move(selected)
+    print(score(selected))
+    print(score(transferred))
+    values = [Choice.Ready(), states.State.Done]
+    for value in values:
+        print(score(value))
+    print(other.score(other.State.Done))
+    print(direct_score())
+    envelope = Envelope(state=Choice.Busy)
+    print(score(envelope.state))
+    optional: Choice? = some(Choice.Ready)
+    match optional:
+        case Some(value):
+            print(score(value))
+        case None:
+            print(0)
+    match internal_error():
+        case Ok(value):
+            print(value)
+        case Err(problem):
+            print(score(problem))
+"#,
+    );
+    let high = fixture.go("run", "main.nagi", "out-high-enum");
+    assert!(
+        high.status.success(),
+        "{}",
+        String::from_utf8_lossy(&high.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&high.stdout),
+        "10\n2\n2\n1\n3\n30\n11\n1\n2\n1\n3\n"
+    );
+    let go = fs::read_to_string(fixture.0.join("out-high-enum/go/main.go")).unwrap();
+    assert_eq!(go.matches("type nagiEnum_").count(), 2, "{go}");
+    assert!(go.contains("switch __nagi_match_"), "{go}");
+    assert!(!go.contains("interface{}"), "{go}");
+
+    let generated = fs::read_to_string(fixture.0.join("out-high-enum/generated.low")).unwrap();
+    fixture.write("saved.low", &generated);
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    fs::remove_file(fixture.0.join("states.nagi")).unwrap();
+    fs::remove_file(fixture.0.join("other.nagi")).unwrap();
+    let saved = fixture.go("run", "saved.low", "out-saved-enum");
+    assert!(
+        saved.status.success(),
+        "{}",
+        String::from_utf8_lossy(&saved.stderr)
+    );
+    assert_eq!(saved.stdout, high.stdout);
+
+    fixture.write(
+        "hand.low",
+        r#"from std.ownership import move;
+enum State { Ready; Busy; Done; }
+fn score(value: State) -> i64 {
+    match value {
+        case State.Ready { return 1; }
+        case State.Busy { return 2; }
+        case State.Done { return 3; }
+    }
+}
+fn main() -> unit {
+    selected = State.Busy;
+    transferred = move(selected);
+    print(score(selected));
+    print(score(transferred));
+}
+"#,
+    );
+    let handwritten = fixture.go("run", "hand.low", "out-hand-enum");
+    assert!(
+        handwritten.status.success(),
+        "{}",
+        String::from_utf8_lossy(&handwritten.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&handwritten.stdout), "2\n2\n");
+}
+
+#[test]
+fn enum_payload_and_observable_enum_output_fail_before_the_go_toolchain() {
+    for (name, source, expected_line, message) in [
+        (
+            "payload",
+            "enum State:\n    Ready\n    Busy(reason: str)\ndef main():\n    print(1)\n",
+            3,
+            "payload variant Busy",
+        ),
+        (
+            "print",
+            "enum State:\n    Ready\ndef main():\n    print(State.Ready)\n",
+            4,
+            "printに",
+        ),
+        (
+            "main-error",
+            "enum Problem:\n    Failed\ndef main() -> Result[unit, Problem]:\n    return fail(Problem.Failed)\n",
+            3,
+            "main Result error types containing enum",
+        ),
+        (
+            "nested-main-error",
+            "enum Code:\n    Failed\nclass Inner:\n    codes: List[Code?]\nclass Problem:\n    inner: Inner\ndef main() -> Result[unit, Problem]:\n    return fail(Problem(inner=Inner(codes=[some(Code.Failed)])))\n",
+            7,
+            "main Result error types containing enum",
+        ),
+        (
+            "comparison",
+            "enum State:\n    Ready\n    Busy\ndef main():\n    print(State.Ready == State.Busy)\n",
+            5,
+            "==による比較に対応していません",
+        ),
+    ] {
+        let fixture = Fixture::new();
+        fixture.write("main.nagi", source);
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .args([
+                "build",
+                "main.nagi",
+                "--no-project",
+                "--backend",
+                "go",
+                "--out",
+                "out",
+            ])
+            .current_dir(&fixture.0)
+            .env("NAGI_GO", fixture.0.join("missing-go"))
+            .env_remove("NAGI_RUN_RETENTION")
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{name} unexpectedly succeeded");
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(diagnostic.contains(message), "{name}: {diagnostic}");
+        assert!(
+            diagnostic.contains(&format!("main.nagi:{expected_line}")),
+            "{name}: {diagnostic}"
+        );
+        assert!(
+            !diagnostic.contains("Go toolchain was not found"),
+            "{name}: {diagnostic}"
+        );
+        assert!(!fixture.0.join("out/.nagi/apps").exists(), "{name}");
+    }
+
+    let fixture = Fixture::new();
+    fixture.write(
+        "payload.nagi",
+        "enum Imported:\n    Empty\n    Data(value: i64)\n",
+    );
+    fixture.write(
+        "main.nagi",
+        "import \"payload.nagi\" as unused\ndef main():\n    print(1)\n",
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .args([
+            "build",
+            "main.nagi",
+            "--no-project",
+            "--backend",
+            "go",
+            "--out",
+            "out",
+        ])
+        .current_dir(&fixture.0)
+        .env("NAGI_GO", fixture.0.join("missing-go"))
+        .env_remove("NAGI_RUN_RETENTION")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(diagnostic.contains("payload variant Data"), "{diagnostic}");
+    assert!(diagnostic.contains("payload.nagi:3"), "{diagnostic}");
+    assert!(!diagnostic.contains("Go toolchain was not found"));
+
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        "enum Code:\n    Failed\nclass Problem:\n    code: Code\ndef main() -> Result[unit, Problem]:\n    return fail(Problem(code=Code.Failed))\n",
+    );
+    let lower = fixture.command(&["lower", "main.nagi", "--no-project", "--out", "lowered"]);
+    assert!(
+        lower.status.success(),
+        "{}",
+        String::from_utf8_lossy(&lower.stderr)
+    );
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    let saved = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .args([
+            "build",
+            "lowered/generated.low",
+            "--no-project",
+            "--backend",
+            "go",
+            "--out",
+            "out-saved",
+        ])
+        .current_dir(&fixture.0)
+        .env("NAGI_GO", fixture.0.join("missing-go"))
+        .env_remove("NAGI_RUN_RETENTION")
+        .output()
+        .unwrap();
+    assert!(!saved.status.success());
+    let diagnostic = String::from_utf8_lossy(&saved.stderr);
+    assert!(
+        diagnostic.contains("main Result error types containing enum"),
+        "{diagnostic}"
+    );
+    assert!(!diagnostic.contains("Go toolchain was not found"));
+
+    fixture.write(
+        "manual.low",
+        "enum Code { Failed; }\nrecord Problem { code: Code; }\nfn main() -> Result[unit, Problem] { return fail(Problem(code=Code.Failed)); }\n",
+    );
+    let manual = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .args([
+            "build",
+            "manual.low",
+            "--no-project",
+            "--backend",
+            "go",
+            "--out",
+            "out-manual",
+        ])
+        .current_dir(&fixture.0)
+        .env("NAGI_GO", fixture.0.join("missing-go"))
+        .env_remove("NAGI_RUN_RETENTION")
+        .output()
+        .unwrap();
+    assert!(!manual.status.success());
+    let diagnostic = String::from_utf8_lossy(&manual.stderr);
+    assert!(
+        diagnostic.contains("main Result error types containing enum"),
+        "{diagnostic}"
+    );
+    assert!(diagnostic.contains("manual.low:3"), "{diagnostic}");
+    assert!(!diagnostic.contains("Go toolchain was not found"));
+}
+
+#[test]
 fn integer_profile_and_signed_division_overflow_match_the_rust_contract() {
     let fixture = Fixture::new();
     fixture.write(

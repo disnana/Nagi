@@ -1,5 +1,11 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-27: Go backendのpayloadなしenum段階
+
+明示move段階のstack上で、全variantがpayloadなしのenumを追加した。共有checkerはconstructorとenum matchのcanonical identityをRust固有名とは別の私有factsへ封印し、Go emitterはsource spellingやaliasを再解決しない。Goではenumごとの固有整数型とvariant定数を生成し、match subjectを一度だけ評価してchecked arm identityでswitchする。Goで比較可能な表現を使ってもNagiのenum比較は新たに受理しない。
+
+payload付きvariantは未使用でもenum宣言単位でGo起動前に拒否する。enumを含む`main`のResult error型とenumのconsole表示も、Rust DebugとGo表示の一致をまだ保証できないためfail-closedにした。High・生成保存Low・手書きLowの実Go実行ではimport alias、宣言順と異なる網羅match、List反復、Copy enumの明示move後再利用を確認する。封印したconstructor/match factsの欠落を再検証で検出するunit testと、payload・main error・表示の事前拒否を追加した。専用Go integrationはLinux/macOS 23件、Windows 22件をexact-head CIで要求する。payload enum、async/task/actor、HTTP/DB/auth、Go adapterは未対応であり、stacked Draftの依存解消・独立監査・CI完了前に本番対応とは扱わない。
+
 ## 2026-10-27: Go backendの明示move段階
 
 List・Range段階のstack上で、既存対応型に対する`std.ownership.move`を追加した。Go emitterは呼出名を特別扱いせず、共有checkerが封印した関数別`IdentityTransfer`計画だけを受理する。入力は型付きtemporaryへ一度だけ値として評価し、clone・deep copy・allocationを挿入しない。Copy値の再利用、非Copy値のuse-after-move・二重move、borrow等の所有権規則は共有checkerに残す。別名・module-qualified呼出しを受理し、同名のユーザー関数は通常関数のまま、`std.http.server.status`等の別の標準operationはGo起動前に未対応として拒否する。

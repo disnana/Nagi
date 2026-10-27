@@ -23,7 +23,7 @@ class GoBackendCIContractTests(unittest.TestCase):
             self.assertEqual({row["os"] for row in matrix[:3]}, {
                 "ubuntu-latest", "windows-latest", "macos-15",
             })
-            self.assertEqual([row["go_tests"] for row in matrix[:3]], ["21", "20", "21"])
+            self.assertEqual([row["go_tests"] for row in matrix[:3]], ["23", "22", "23"])
 
     def test_exact_job_uses_pinned_local_go_and_real_execution_guard(self):
         source = self.source()

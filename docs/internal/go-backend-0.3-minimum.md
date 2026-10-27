@@ -36,6 +36,7 @@ Rust backendで`[go].files`を宣言した場合と、Go backendでRust adapter/
 - 値classの生成とfield参照
 - `List[T]`のliteral・`len`・Copy要素のindex・`append`、`range`とCopy要素Listの`for`
 - `Option`、`Result`、`try`、Option/Resultの`match`
+- payloadなしenumのconstructor・型・網羅match。class、List、Option、Result内でも既存対応型の組合せに限り使用可能
 - `std.ownership.move`による既存対応型の明示的な所有権移動
 - 算術・比較・論理演算（Nagiの評価順序と`and`/`or`の短絡を維持）
 - `print`、`write`、`assert_true`、`parse_i64`、`error_message`、`i64`とResult/Option constructor
@@ -47,9 +48,11 @@ Nagiの名前はUTF-8 byte列をGo identifierへ一意に符号化する。Go ke
 
 `std.ownership.move`は関数名の文字列ではなく、共有checkerが封印した`IdentityTransfer`だけをGoへ渡す。入力を左から右へ一度だけ評価し、型付きtemporaryへ値として移す。clone・deep copy・allocationを追加せず、非Copyのsourceは共有checkerの規則どおり以後使用できない。Copy値は移動後も使用できる。`move`という名前のユーザー関数は通常関数のままであり、`std.http.server.status`等の別の標準operationはこの対応によって受理されない。Go backendがまだ扱えない型を`move`で包んでも、Go起動前の型検査を迂回できない。
 
+payloadなしenumは、共有checkerが封印したconstructorとmatch armのidentityをGo emitterへ渡す。Goではenumごとの固有整数型とvariant定数へ落とすが、数値変換や比較をNagiへ追加しない。matchの対象は一度だけ評価し、未知の内部tagはpanicする。payloadを一つでも持つenumは宣言単位で拒否する。enumを含む`main`のResult error型も、RustのDebug表示とGoの数値tag表示が一致しないため、この段階では拒否する。非`main`関数内のtyped Result/`try`/matchは既存対応範囲で使用できる。
+
 次は未対応で、Go起動前にsource位置付きで失敗する。
 
-- enum、非Copy要素のList index/反復、Listのslice・field/index代入
+- payload付きenum、enumのconsole表示、非Copy要素のList index/反復、Listのslice・field/index代入
 - async/await、task、scope、actor
 - HTTP、DB、auth/session、WebSocketなどRust runtimeの標準操作
 - Go native adapter、Rust/Go間FFI、混成backend
@@ -85,7 +88,7 @@ generationには次を保存する。
 
 ## 実行検証
 
-専用integration testは実Go toolchainを使い、明示move段階ではLinux/macOSで21件、WindowsでUnix symlink固有の1件を除く20件を検査する。
+専用integration testは実Go toolchainを使い、payloadなしenum段階ではLinux/macOSで23件、WindowsでUnix symlink固有の1件を除く22件を検査する。
 
 - Highと独立保存Lowが同じ出力になる
 - CLI &gt; project &gt; Rust既定
@@ -93,6 +96,8 @@ generationには次を保存する。
 - List literal/index/append/len、Copy要素Listとrangeの反復、左から右へ一度だけの評価
 - 非Copy要素Listの反復をGo toolchain起動前に拒否する
 - High・保存Low・手書きLowの明示move、alias/module-qualified呼出し、Copy/非Copy、`try`との合成
+- High・保存Low・手書きLowのpayloadなしenum、import alias、宣言順と異なる網羅match、Copy/move後の再利用、List反復
+- payload enum、enumを含むmain error型、enumの未対応表示をGo toolchain起動前に拒否する
 - use-after-move・二重moveと、未対応の別標準operationをGo toolchain起動前に拒否する
 - Result/try、class、評価順序、短絡、identifier衝突
 - Option/Resultの完全matchが全armからreturnする場合
