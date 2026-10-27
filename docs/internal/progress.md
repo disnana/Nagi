@@ -639,3 +639,9 @@ Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが�
 ### 2026-10-23: PR #150のauth-stage診断行境界
 
 #150のLinux通常検査は成功したが、補助診断gateがbroadのslot 1欠落で失敗した。rawが削除済みのため根因は未確定。改行のないlibtest出力にheaderが連結される可能な失敗を再現し、test-only producerの既存有限buffer内へ先頭改行を追加した。strict parser、必要slot、loss拒否、認証処理、期限、並列度を維持する。実encoderのRED/GREENとPython41件、workflowと同じ実採集で両slot・閉鎖46 records、runtime909成功/既存1 ignored、native coverage17件を確認。独立最終auditと新HEAD CIは別gateとしてPRへ集約する。[設計・限界](auth-stage-producer-framing.md)。
+
+## 2026-10-27: Go backend共有conformanceの第一段階
+
+payloadなしenum段階のHEAD `f9fe618`を基点に、既存Rust専用corpus・bounded生成・batch・fuzz・shrinkerを維持したまま、少数の共通同期programをRust/Goで直接実行するtyped観測runnerを追加した。High、独立保存Low、手書きLowを区別し、成功時はraw stdout/stderrとstatusを期待値へ個別照合してからbackend間も比較する。境界外List indexはnative build成功後のnon-zero、事前marker一回、backend別primary panicを要求し、stack traceとbackend固有exit codeを同一化しない。
+
+共通checkerによるu64符号反転拒否、Rustでは動くview programのGo validation拒否、rustc/Go toolchain欠落をそれぞれfrontend／backend unsupported／infrastructureとして分けた。timeout、compile failure、同じ誤stdout、CRLF差、警告内のpanic文字列を成功やruntime faultへ流さない。期限切れ時はUnix process group／Windows process treeを終了し、Unixでは停止しない孫processの消滅を実行確認する。`nagic run`のCLI stderrは比較せず、成功generationの実行ファイルを直接観測する。専用Go integrationはLinux/macOS 25件、Windows 24件へ増える。全42 corpusのRust-Go同等性、async/view/HTTP/DB/actor対応、backend共通shrinkerは未実装のまま明示する。

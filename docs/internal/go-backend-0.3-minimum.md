@@ -76,6 +76,10 @@ Gooseの複数実行方式テストは、同じ言語入力を複数targetで比
 
 時間、memory、schedule順序の一致は意味論一致へ含めない。actor/task/auth等をGoで対応するときは、それぞれのlifecycle・取消・resource契約を別途満たすまで共通対応に数えない。
 
+最初の共有runnerは、既存のRust専用42 corpus、bounded生成、batch、fuzz、shrinkerを変更せず、明示した少数の同期programだけをRustとGoで実行する。成功はstdoutとstderrのraw byte、終了statusを期待値へ個別に照合した後でbackend間も比較する。CRLF、Unicode、空白を正規化しない。High、Highから独立保存したLow、手書きLowを別入口として数え、欠落した入口を動的filterで成功扱いにしない。
+
+runtime faultはnative build成功後のnon-zeroだけを対象にし、事前に出したmarkerのraw stdoutとbackend別のprimary fault構造を要求する。RustとGoで異なるpanic exit codeやstack traceは同一bytesを要求しない。compile拒否、toolchain欠落、spawn失敗、timeoutはruntime faultへまとめない。期限切れではUnixの専用process groupまたはWindowsのprocess-tree終了を使い、直接childだけを止めてcompiler子孫を残さない。`nagic run`が追加するCLI stderrではなく、成功generationの実行ファイルを直接観測する。現段階の共有例は整数・Unicode文字列・List・明示move・payloadなしenum、境界外index、共通checker拒否、Goのview未対応拒否であり、全corpusのbackend同等性を達成したとは扱わない。
+
 `out/go/main.go`と`go.mod`は互換表示用で、既存fileへ書き込まず、専用temporaryを作ってdirectory entryを置き換える。既存hardlinkを通じて旧generationを書き換えず、symlinkやplain directoryでない投影先は失敗させる。投影失敗時は新generationが孤立する場合があるが、旧`latest.json`と旧実行ファイルは変えない。
 
 generationには次を保存する。
@@ -88,7 +92,7 @@ generationには次を保存する。
 
 ## 実行検証
 
-専用integration testは実Go toolchainを使い、payloadなしenum段階ではLinux/macOSで23件、WindowsでUnix symlink固有の1件を除く22件を検査する。
+専用integration testは実Go toolchainを使い、共有conformance初段ではLinux/macOSで25件、WindowsでUnix symlink固有の1件を除く24件を検査する。
 
 - Highと独立保存Lowが同じ出力になる
 - CLI &gt; project &gt; Rust既定
@@ -97,6 +101,8 @@ generationには次を保存する。
 - 非Copy要素Listの反復をGo toolchain起動前に拒否する
 - High・保存Low・手書きLowの明示move、alias/module-qualified呼出し、Copy/非Copy、`try`との合成
 - High・保存Low・手書きLowのpayloadなしenum、import alias、宣言順と異なる網羅match、Copy/move後の再利用、List反復
+- High・保存Low・手書きLowの小さな共通programをRust/Goで直接実行し、raw出力とstatusを一致させる
+- 両backendの境界外indexをruntime faultとして区別し、Goのview拒否とtoolchain欠落を別段階として扱う
 - payload enum、enumを含むmain error型、enumの未対応表示をGo toolchain起動前に拒否する
 - use-after-move・二重moveと、未対応の別標準operationをGo toolchain起動前に拒否する
 - Result/try、class、評価順序、短絡、identifier衝突

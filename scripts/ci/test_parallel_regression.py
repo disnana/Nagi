@@ -112,10 +112,10 @@ class RegressionGateTests(unittest.TestCase):
     def test_shard_result_tracks_handwritten_l1_l2_l3_profiles(self):
         # Handwritten matrix rows and selected outcomes, not values produced by levels.expected().
         rows = [
-            {'os':'ubuntu-latest','platform':'linux-x86_64','executable':'nagic','rust_host':'x86_64-unknown-linux-gnu','go_tests':'23'},
-            {'os':'windows-latest','platform':'windows-x86_64','executable':'nagic.exe','rust_host':'x86_64-pc-windows-msvc','go_tests':'22'},
-            {'os':'macos-15','platform':'macos-arm64','executable':'nagic','rust_host':'aarch64-apple-darwin','go_tests':'23'},
-            {'os':'macos-15-intel','platform':'macos-x86_64','executable':'nagic','rust_host':'x86_64-apple-darwin','go_tests':'23'},
+            {'os':'ubuntu-latest','platform':'linux-x86_64','executable':'nagic','rust_host':'x86_64-unknown-linux-gnu','go_tests':'25'},
+            {'os':'windows-latest','platform':'windows-x86_64','executable':'nagic.exe','rust_host':'x86_64-pc-windows-msvc','go_tests':'24'},
+            {'os':'macos-15','platform':'macos-arm64','executable':'nagic','rust_host':'aarch64-apple-darwin','go_tests':'25'},
+            {'os':'macos-15-intel','platform':'macos-x86_64','executable':'nagic','rust_host':'x86_64-apple-darwin','go_tests':'25'},
         ]
         for level, critical, comprehensive, count, expected in [
             ('1','true','false',3,'skipped'), ('2','false','true',3,'success'), ('3','false','true',4,'success')]:

@@ -6,6 +6,9 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
+#[path = "support/backend_conformance.rs"]
+mod backend_conformance;
+
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 struct Fixture(PathBuf);
@@ -1077,6 +1080,193 @@ fn enum_payload_and_observable_enum_output_fail_before_the_go_toolchain() {
     );
     assert!(diagnostic.contains("manual.low:3"), "{diagnostic}");
     assert!(!diagnostic.contains("Go toolchain was not found"));
+}
+
+#[test]
+fn shared_rust_go_success_and_runtime_faults_use_exact_typed_observations() {
+    use backend_conformance::{EntryKind, Expectation, FaultKind, SharedCase};
+
+    let success = SharedCase {
+        name: "shared-success",
+        high: r#"from std.ownership import move
+enum State:
+    Ready
+    Busy
+
+def score(value: State) -> i64:
+    match value:
+        case State.Ready:
+            return 1
+        case State.Busy:
+            return 2
+
+def main():
+    text = "凪"
+    moved = move(text)
+    values: List[i64] = [40, 2]
+    print(moved)
+    print(values[0] + values[1])
+    print(score(State.Busy))
+"#,
+        handwritten_low: r#"from std.ownership import move;
+enum State { Ready; Busy; }
+fn score(value: State) -> i64 {
+    match value {
+        case State.Ready { return 1; }
+        case State.Busy { return 2; }
+    }
+}
+fn main() -> unit {
+    let text: str = "凪";
+    let moved: str = move(text);
+    let values: List[i64] = [40, 2];
+    print(moved);
+    print(values[0] + values[1]);
+    print(score(State.Busy));
+}
+"#,
+        expectation: Expectation::RunSuccess {
+            stdout: "凪\n42\n2\n".as_bytes().to_vec(),
+            stderr: Vec::new(),
+        },
+    };
+    backend_conformance::assert_case(
+        &success,
+        &[
+            EntryKind::High,
+            EntryKind::SavedLow,
+            EntryKind::HandwrittenLow,
+        ],
+    )
+    .unwrap_or_else(|error| panic!("{error}"));
+
+    let bounds = SharedCase {
+        name: "shared-index-fault",
+        high: r#"def selected_index() -> i64:
+    print("marker")
+    return 2
+
+def main():
+    values: List[i64] = [1]
+    print(values[selected_index()])
+"#,
+        handwritten_low: r#"fn selected_index() -> i64 {
+    print("marker");
+    return 2;
+}
+fn main() -> unit {
+    let values: List[i64] = [1];
+    print(values[selected_index()]);
+}
+"#,
+        expectation: Expectation::RuntimeFault {
+            fault: FaultKind::IndexOutOfBounds,
+            stdout: b"marker\n".to_vec(),
+        },
+    };
+    backend_conformance::assert_case(&bounds, &[EntryKind::High, EntryKind::SavedLow])
+        .unwrap_or_else(|error| panic!("{error}"));
+}
+
+#[test]
+fn shared_oracle_rejects_wrong_results_and_keeps_unsupported_and_infra_distinct() {
+    use backend_conformance::{Backend, EntryKind, Expectation, FaultKind, SharedCase, Stage};
+
+    let success = Expectation::RunSuccess {
+        stdout: b"42\n".to_vec(),
+        stderr: Vec::new(),
+    };
+    for observation in [
+        backend_conformance::fake_observation(Backend::Rust, Stage::Runtime, Some(0), b"41\n", b""),
+        backend_conformance::fake_observation(Backend::Go, Stage::Runtime, Some(1), b"42\n", b""),
+        backend_conformance::fake_observation(Backend::Go, Stage::Compile, Some(0), b"42\n", b""),
+        backend_conformance::fake_observation(
+            Backend::Rust,
+            Stage::Runtime,
+            Some(0),
+            b"42\r\n",
+            b"",
+        ),
+    ] {
+        assert!(
+            backend_conformance::verify(&success, &observation).is_err(),
+            "wrong observation was accepted: {observation:?}"
+        );
+    }
+
+    let fault = Expectation::RuntimeFault {
+        fault: FaultKind::IndexOutOfBounds,
+        stdout: b"marker\n".to_vec(),
+    };
+    let merely_contains_words = backend_conformance::fake_observation(
+        Backend::Go,
+        Stage::Runtime,
+        Some(2),
+        b"marker\n",
+        b"warning: panic: index out of bounds\n",
+    );
+    assert!(backend_conformance::verify(&fault, &merely_contains_words).is_err());
+    for rust_stderr in [
+        "warning: index out of bounds: the len is 1 but the index is 2\n",
+        "thread 'main' panicked at main.rs:3:1:\nunrelated panic\nindex out of bounds: the len is 1 but the index is 2\n",
+    ] {
+        let not_a_primary_bounds_panic = backend_conformance::fake_observation(
+            Backend::Rust,
+            Stage::Runtime,
+            Some(101),
+            b"marker\n",
+            rust_stderr.as_bytes(),
+        );
+        assert!(
+            backend_conformance::verify(&fault, &not_a_primary_bounds_panic).is_err(),
+            "Rust diagnostic text was mistaken for the primary panic"
+        );
+    }
+
+    backend_conformance::assert_frontend_rejected(
+        "shared-unsigned-negation",
+        "def main():\n    value: u64 = 1\n    print(-value)\n",
+        "fn main() -> unit {\n    let value: u64 = 1;\n    print(-value);\n}\n",
+        "u64は符号反転できません",
+        3,
+    )
+    .unwrap_or_else(|error| panic!("{error}"));
+
+    let high_view = r#"def length(value: view[str]) -> i64:
+    return len(value)
+
+def main():
+    print(length(view("abc")))
+"#;
+    let low_view = r#"fn length(value: view[str]) -> i64 { return len(value); }
+fn main() -> unit { print(length(view("abc"))); }
+"#;
+    for (entry, line) in [
+        (EntryKind::High, 1),
+        (EntryKind::SavedLow, 3),
+        (EntryKind::HandwrittenLow, 1),
+    ] {
+        backend_conformance::assert_go_rejected(
+            "shared-view-unsupported",
+            high_view,
+            low_view,
+            entry,
+            "type view[str] is not supported by the initial Go backend",
+            line,
+        )
+        .unwrap_or_else(|error| panic!("{entry:?}: {error}"));
+    }
+
+    let valid = SharedCase {
+        name: "shared-missing-go",
+        high: "def main():\n    print(42)\n",
+        handwritten_low: "fn main() -> unit { print(42); }\n",
+        expectation: success,
+    };
+    backend_conformance::missing_toolchains_are_infrastructure(&valid)
+        .unwrap_or_else(|error| panic!("{error}"));
+    #[cfg(any(unix, windows))]
+    backend_conformance::deadline_reaps_descendant().unwrap_or_else(|error| panic!("{error}"));
 }
 
 #[test]
