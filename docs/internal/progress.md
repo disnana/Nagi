@@ -1,5 +1,11 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-27: Go backendの明示move段階
+
+List・Range段階のstack上で、既存対応型に対する`std.ownership.move`を追加した。Go emitterは呼出名を特別扱いせず、共有checkerが封印した関数別`IdentityTransfer`計画だけを受理する。入力は型付きtemporaryへ一度だけ値として評価し、clone・deep copy・allocationを挿入しない。Copy値の再利用、非Copy値のuse-after-move・二重move、borrow等の所有権規則は共有checkerに残す。別名・module-qualified呼出しを受理し、同名のユーザー関数は通常関数のまま、`std.http.server.status`等の別の標準operationはGo起動前に未対応として拒否する。
+
+High・生成保存Low・手書きLowの実Go実行、`str`・List・class・Result/`try`・整数Copy、評価順、同名shadowを追加検査した。負例はGo toolchainを欠損させた状態でもuse-after-move、二重move、別標準operationが先に拒否されることを確認する。専用Go integration 21件とcompiler library 191件がLinuxで成功した。Rust codegen/checkerは変更しておらず、既存の明示move回帰がRust側契約の基点である。全workspace、独立監査、3 OS exact-head CIはDraft PRのgateとして残す。enum、非Copy List反復、async/task/actor、HTTP/DB/auth、Go adapterは未対応であり、この段階を本番対応やRust完全同等とは扱わない。
+
 ## 2026-10-27: Go backendのList・Range段階
 
 0.3.0向け最小Go backendと3 OS必須gateのstack上で、`List[T]`のliteral・`len`・Copy要素index・`append`、`range`とCopy要素Listの`for`を追加した。class等の非Copy要素を反復する境界はGoの値copyへ置き換えず、Go toolchain起動前に明示的に拒否する。List生成、appendの値、indexのcontainerと添字はNagiの左から右の評価順で一度だけ評価する。負indexと範囲外indexはbackend固有stack traceを許容した実行時panicとし、既存Rust backendの失敗契約を維持する。

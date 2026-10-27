@@ -542,6 +542,175 @@ def main():
 }
 
 #[test]
+fn sealed_identity_moves_run_in_high_saved_and_handwritten_low() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "library.nagi",
+        "from std.ownership import move\ndef transfer_text(value: str) -> str:\n    return move(value)\n",
+    );
+    fixture.write(
+        "main.nagi",
+        r#"from std.ownership import move as transfer
+import std.ownership as ownership
+import "library.nagi" as library
+class Packet:
+    text: str
+
+def marked(value: str) -> str:
+    print(value)
+    return value
+
+def move(value: i64) -> i64:
+    return value + 10
+
+def parsed() -> Result[str, Error]:
+    return ok(marked("try"))
+
+def main() -> Result[unit, Error]:
+    copy_source: i8 = 7
+    copy_value: i8 = transfer(copy_source)
+    print(copy_source)
+    print(copy_value)
+    print(move(2))
+    text = marked("text")
+    moved_text = ownership.move(text)
+    print(moved_text)
+    imported = library.transfer_text(marked("library"))
+    print(imported)
+    values: List[i64] = [1, 2]
+    moved_values = transfer(values)
+    print(len(moved_values))
+    packet = Packet(text=marked("packet"))
+    moved_packet = transfer(packet)
+    print(moved_packet.text)
+    pending: Result[str, Error] = ok(marked("result"))
+    moved_result = transfer(pending)
+    match moved_result:
+        case Ok(value):
+            print(value)
+        case Err(_):
+            print("unexpected")
+    absent: i64? = transfer(None)
+    match absent:
+        case Some(value):
+            print(value)
+        case None:
+            print("none")
+    tried = transfer(try parsed())
+    print(tried)
+    return ok(print("done"))
+"#,
+    );
+    let expected = "7\n7\n12\ntext\ntext\nlibrary\nlibrary\n2\npacket\npacket\nresult\nresult\nnone\ntry\ntry\ndone\n";
+    let high = fixture.go("run", "main.nagi", "out-high");
+    assert!(
+        high.status.success(),
+        "{}",
+        String::from_utf8_lossy(&high.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&high.stdout), expected);
+    let generated = fs::read_to_string(fixture.0.join("out-high/generated.low")).unwrap();
+    fixture.write("saved.low", &generated);
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    fs::remove_file(fixture.0.join("library.nagi")).unwrap();
+    let saved = fixture.go("run", "saved.low", "out-saved");
+    assert!(
+        saved.status.success(),
+        "{}",
+        String::from_utf8_lossy(&saved.stderr)
+    );
+    assert_eq!(saved.stdout, high.stdout);
+
+    fixture.write(
+        "manual.low",
+        "from std.ownership import move;\nfn main() -> unit { let source: str = \"manual\"; let destination: str = move(source); print(destination); }\n",
+    );
+    let manual = fixture.go("run", "manual.low", "out-manual");
+    assert!(
+        manual.status.success(),
+        "{}",
+        String::from_utf8_lossy(&manual.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&manual.stdout), "manual\n");
+
+    let go = fs::read_to_string(fixture.0.join("out-high/go/main.go")).unwrap();
+    assert!(go.contains("var __nagi_value_"), "{go}");
+    assert!(!go.contains("ownership.move"), "{go}");
+}
+
+#[test]
+fn move_checker_rejections_happen_before_the_go_toolchain() {
+    let fixture = Fixture::new();
+    for source in [
+        "from std.ownership import move\ndef main():\n    source = \"value\"\n    destination = move(source)\n    print(source)\n",
+        "from std.ownership import move\ndef main():\n    source = \"value\"\n    first = move(source)\n    second = move(source)\n",
+    ] {
+        fixture.write("main.nagi", source);
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .args([
+                "build",
+                "main.nagi",
+                "--no-project",
+                "--backend",
+                "go",
+                "--profile",
+                "dev",
+                "--out",
+                "out",
+            ])
+            .current_dir(&fixture.0)
+            .env("NAGI_GO", fixture.0.join("missing-go"))
+            .env_remove("NAGI_RUN_RETENTION")
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(diagnostic.contains("move後"), "{diagnostic}");
+        assert!(diagnostic.contains("main.nagi:5"), "{diagnostic}");
+        assert!(!diagnostic.contains("Go toolchain was not found"), "{diagnostic}");
+        assert!(!fixture.0.join("out/.nagi/apps").exists());
+    }
+}
+
+#[test]
+fn other_standard_operations_stay_unsupported_before_the_go_toolchain() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        "import std.http.server as http\ndef main():\n    status = http.status(200)\n",
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .args([
+            "build",
+            "main.nagi",
+            "--no-project",
+            "--backend",
+            "go",
+            "--profile",
+            "dev",
+            "--out",
+            "out",
+        ])
+        .current_dir(&fixture.0)
+        .env("NAGI_GO", fixture.0.join("missing-go"))
+        .env_remove("NAGI_RUN_RETENTION")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        diagnostic.contains("operation stdlib:std.http.server::status is not supported"),
+        "{diagnostic}"
+    );
+    assert!(diagnostic.contains("main.nagi:3"), "{diagnostic}");
+    assert!(
+        !diagnostic.contains("Go toolchain was not found"),
+        "{diagnostic}"
+    );
+    assert!(!fixture.0.join("out/.nagi/apps").exists());
+}
+
+#[test]
 fn list_index_bounds_fail_at_runtime_without_re_evaluation() {
     let fixture = Fixture::new();
     for (name, index) in [("negative", -1), ("upper", 2)] {

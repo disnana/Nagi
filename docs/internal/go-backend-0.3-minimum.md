@@ -36,6 +36,7 @@ Rust backendで`[go].files`を宣言した場合と、Go backendでRust adapter/
 - 値classの生成とfield参照
 - `List[T]`のliteral・`len`・Copy要素のindex・`append`、`range`とCopy要素Listの`for`
 - `Option`、`Result`、`try`、Option/Resultの`match`
+- `std.ownership.move`による既存対応型の明示的な所有権移動
 - 算術・比較・論理演算（Nagiの評価順序と`and`/`or`の短絡を維持）
 - `print`、`write`、`assert_true`、`parse_i64`、`error_message`、`i64`とResult/Option constructor
 - Highと保存済みLowの`check`、`lower`、`build`、`run`
@@ -43,6 +44,8 @@ Rust backendで`[go].files`を宣言した場合と、Go backendでRust adapter/
 Nagiの名前はUTF-8 byte列をGo identifierへ一意に符号化する。Go keyword、module修飾、Unicode、生成temporaryとの衝突で別のNagi名を同じGo名へ潰さない。関数引数や式はNagiの左から右の評価順を保持し、`try`の前処理が左operandより先に走らない。論理右辺の`try`も短絡時には実行しない。
 
 整数literalはNagiの10進規則で正規化してからGoへ渡す。整数演算は既存profile契約を維持し、devの加減乗算と符号反転overflowをpanicにし、releaseではwrapする。符号付き最小値の`-1`による除算・剰余は両profileでpanicにする。浮動小数剰余、負のゼロ、有限値・無限大・NaNの`print`/`write`表示もRust backendの現在の結果に合わせる。GoとRustで最短10進表現の中点選択が異なる場合は、exact rationalで中点を確認してRust側の候補を選ぶ。
+
+`std.ownership.move`は関数名の文字列ではなく、共有checkerが封印した`IdentityTransfer`だけをGoへ渡す。入力を左から右へ一度だけ評価し、型付きtemporaryへ値として移す。clone・deep copy・allocationを追加せず、非Copyのsourceは共有checkerの規則どおり以後使用できない。Copy値は移動後も使用できる。`move`という名前のユーザー関数は通常関数のままであり、`std.http.server.status`等の別の標準operationはこの対応によって受理されない。Go backendがまだ扱えない型を`move`で包んでも、Go起動前の型検査を迂回できない。
 
 次は未対応で、Go起動前にsource位置付きで失敗する。
 
@@ -82,13 +85,15 @@ generationには次を保存する。
 
 ## 実行検証
 
-専用integration testは実Go toolchainを使い、List/Range段階ではLinux/macOSで18件、WindowsでUnix symlink固有の1件を除く17件を検査する。
+専用integration testは実Go toolchainを使い、明示move段階ではLinux/macOSで21件、WindowsでUnix symlink固有の1件を除く20件を検査する。
 
 - Highと独立保存Lowが同じ出力になる
 - CLI &gt; project &gt; Rust既定
 - import済み関数
 - List literal/index/append/len、Copy要素Listとrangeの反復、左から右へ一度だけの評価
 - 非Copy要素Listの反復をGo toolchain起動前に拒否する
+- High・保存Low・手書きLowの明示move、alias/module-qualified呼出し、Copy/非Copy、`try`との合成
+- use-after-move・二重moveと、未対応の別標準operationをGo toolchain起動前に拒否する
 - Result/try、class、評価順序、短絡、identifier衝突
 - Option/Resultの完全matchが全armからreturnする場合
 - 先頭ゼロを含む10進整数literal、dev/releaseの整数overflow、符号付き最小値の除算・剰余

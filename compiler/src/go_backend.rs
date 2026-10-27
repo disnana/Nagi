@@ -6,7 +6,7 @@
 //! semantics.
 use crate::{
     ast::{Expr, Function, MatchPattern, NameResolution, Program, Stmt, Type, E, S},
-    checked::CheckedProgram,
+    checked::{CheckedProgram, ExpressionKey, OperationPlan},
     project::BuildProfile,
     source::Sources,
 };
@@ -262,6 +262,8 @@ struct Emitter<'a> {
     program: &'a Program,
     classes: BTreeSet<String>,
     reachable: Vec<(&'a Function, Vec<String>)>,
+    operations: BTreeMap<String, BTreeMap<ExpressionKey, OperationPlan>>,
+    current_function: Option<String>,
     profile: BuildProfile,
     temporary: usize,
 }
@@ -295,10 +297,39 @@ impl<'a> Emitter<'a> {
             .map(|class| class.name.clone())
             .collect();
         let reachable = reachable(program)?;
+        if program.functions.len() != checked.emission.functions.len() {
+            return Err(
+                "internal compiler error: Go backend function plans do not match the checked program"
+                    .into(),
+            );
+        }
+        // Keep the frontend's original checked AST. The Rust emission copy may
+        // contain Rust-specific names, while these operation facts are the
+        // target-neutral proof that a standard call is the canonical move.
+        let operations = program
+            .functions
+            .iter()
+            .zip(&checked.emission.functions)
+            .map(|(function, plan)| {
+                let expressions = plan
+                    .expressions
+                    .iter()
+                    .filter_map(|(key, expression)| {
+                        expression
+                            .operation
+                            .clone()
+                            .map(|operation| (*key, operation))
+                    })
+                    .collect();
+                (function.name.clone(), expressions)
+            })
+            .collect();
         let mut emitter = Self {
             program,
             classes,
             reachable,
+            operations,
+            current_function: None,
             profile,
             temporary: 0,
         };
@@ -318,7 +349,9 @@ impl<'a> Emitter<'a> {
                 go_type(ty, &self.classes, class.line)?;
             }
         }
-        for (function, chain) in &self.reachable {
+        let reachable = self.reachable.clone();
+        for (function, chain) in reachable {
+            self.current_function = Some(function.name.clone());
             if function.external {
                 let available = function
                     .attrs
@@ -356,7 +389,28 @@ impl<'a> Emitter<'a> {
                 self.validate_statement(statement, &function.ret)?;
             }
         }
+        self.current_function = None;
         Ok(())
+    }
+
+    fn operation_plan(&self, expression: &Expr) -> Result<&OperationPlan, String> {
+        let function = self.current_function.as_ref().ok_or_else(|| {
+            error(
+                expression.line,
+                "internal compiler error: Go backend has no active function",
+            )
+        })?;
+        self.operations
+            .get(function)
+            .and_then(|expressions| expressions.get(&ExpressionKey::of(expression)))
+            .ok_or_else(|| {
+                error(
+                    expression.line,
+                    format!(
+                        "internal compiler error: Go backend is missing the sealed operation plan for {function}"
+                    ),
+                )
+            })
     }
 
     fn validate_statement(&self, statement: &Stmt, ret: &Type) -> Result<(), String> {
@@ -443,6 +497,23 @@ impl<'a> Emitter<'a> {
             .ty
             .as_ref()
             .ok_or_else(|| error(expression.line, "checked expression has no type"))?;
+        if expression.resolution == Some(NameResolution::Standard)
+            && matches!(
+                self.operation_plan(expression)?,
+                OperationPlan::NativeCall { .. }
+            )
+        {
+            let E::Call(name, _, _) = &expression.kind else {
+                return Err(error(
+                    expression.line,
+                    "internal compiler error: sealed standard operation is not a call",
+                ));
+            };
+            return Err(error(
+                expression.line,
+                format!("operation {name} is not supported by the initial Go backend"),
+            ));
+        }
         go_type(ty, &self.classes, expression.line)?;
         match &expression.kind {
             E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null => Ok(()),
@@ -492,6 +563,21 @@ impl<'a> Emitter<'a> {
                 }
                 match expression.resolution {
                     Some(NameResolution::Function) => Ok(()),
+                    Some(NameResolution::Standard) => match self.operation_plan(expression)? {
+                        OperationPlan::IdentityTransfer { argument }
+                            if *argument == 0 && arguments.len() == 1 =>
+                        {
+                            Ok(())
+                        }
+                        OperationPlan::IdentityTransfer { .. } => Err(error(
+                            expression.line,
+                            "internal compiler error: invalid sealed identity transfer shape",
+                        )),
+                        OperationPlan::NativeCall { .. } => Err(error(
+                            expression.line,
+                            format!("operation {name} is not supported by the initial Go backend"),
+                        )),
+                    },
                     Some(NameResolution::Builtin)
                         if matches!(
                             name.as_str(),
@@ -703,6 +789,23 @@ impl<'a> Emitter<'a> {
                 )
             }
             E::Call(name, _, arguments) => {
+                if expression.resolution == Some(NameResolution::Standard) {
+                    return match self.operation_plan(expression)?.clone() {
+                        OperationPlan::IdentityTransfer { argument }
+                            if argument == 0 && arguments.len() == 1 =>
+                        {
+                            self.evaluated(&arguments[argument], ret)
+                        }
+                        OperationPlan::IdentityTransfer { .. } => Err(error(
+                            expression.line,
+                            "internal compiler error: invalid sealed identity transfer shape",
+                        )),
+                        OperationPlan::NativeCall { .. } => Err(error(
+                            expression.line,
+                            format!("operation {name} is not supported by the initial Go backend"),
+                        )),
+                    };
+                }
                 if expression.resolution == Some(NameResolution::Builtin) && name == "append" {
                     let E::Name(receiver) = &arguments[0].kind else {
                         unreachable!("checker restricts append receiver to a local name")
@@ -1028,6 +1131,7 @@ impl<'a> Emitter<'a> {
         }
         let reachable = self.reachable.clone();
         for (function, _) in reachable {
+            self.current_function = Some(function.name.clone());
             let parameters = function
                 .params
                 .iter()
@@ -1059,6 +1163,7 @@ impl<'a> Emitter<'a> {
             Self::line(&mut body, 0, "}");
             body.push('\n');
         }
+        self.current_function = None;
         let main = self
             .program
             .functions
