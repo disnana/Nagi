@@ -58,6 +58,17 @@ Nagiの名前はUTF-8 byte列をGo identifierへ一意に符号化する。Go ke
 
 Go buildはapplication IDとgeneration namespaceをRustから分離し、選択した実行ファイルが実Go toolchainであることを`go version`で先に確認してから、staging directoryで`CGO_ENABLED=0 GOWORK=off GOTOOLCHAIN=local go build -trimpath -buildvcs=false -mod=readonly`を実行する。Goによる暗黙のtoolchain downloadは許可しない。成功後にimmutable generationを公開し、最後に`latest.json`を更新する。失敗したstagingは削除し、以前の`latest.json`と実行ファイルを維持する。
 
+### backend間conformanceの次段
+
+Gooseの複数実行方式テストは、同じ言語入力を複数targetで比較する方法の参考にする。ただしNagiへC/TinyCC backendや汎用backend plugin機構を追加する計画ではない。まずRust/Goの共通対応範囲に対して、次を同じoracleへ段階的に集約する。
+
+- 成功例はstdoutと終了statusを正規化せず完全一致させる。
+- compile failureは失敗stageと必須diagnostic部分、元source位置を照合する。
+- runtime failureはnon-zero statusと期待した構造化stderrを照合する。両targetが無関係な理由で失敗しただけでは一致としない。
+- High、保存Low、手書きLowのうち各機能が契約上必要とする入口を区別し、未対応targetは明示的なunsupported診断を期待する。
+
+時間、memory、schedule順序の一致は意味論一致へ含めない。actor/task/auth等をGoで対応するときは、それぞれのlifecycle・取消・resource契約を別途満たすまで共通対応に数えない。
+
 `out/go/main.go`と`go.mod`は互換表示用で、既存fileへ書き込まず、専用temporaryを作ってdirectory entryを置き換える。既存hardlinkを通じて旧generationを書き換えず、symlinkやplain directoryでない投影先は失敗させる。投影失敗時は新generationが孤立する場合があるが、旧`latest.json`と旧実行ファイルは変えない。
 
 generationには次を保存する。
