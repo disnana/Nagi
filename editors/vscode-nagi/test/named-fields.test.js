@@ -1,6 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const { spawnSync } = require('node:child_process');
 const features = require('../src/features');
 
 const point = { name: 'Point', kind: 'class', signature: 'class Point\n    x: f64\n    y: f64',
@@ -28,6 +29,9 @@ test('class field labels complete with values and keep an existing equals sign',
   assert.equal(item.signature, 'x: f64');
   assert.equal(features.insertion(item, ''), 'x=${1:x}');
   assert.equal(features.insertion(item, ' = 1.5)'), 'x');
+  const commented = 'Point(y=2.5, x # label comment\n =1.5)';
+  const [withEquals] = fields(commented, commented.indexOf('x #') + 1);
+  assert.equal(features.insertion(withEquals, commented.slice(commented.indexOf('x #') + 1)), 'x');
   assert.deepEqual(fields('Point(x=1.5, ').map(item => item.name), ['y']);
   const text = 'print("😀"); Point(x, y=2.5)';
   assert.deepEqual(fields(text, text.indexOf('Point(x') + 7).map(item => item.name), ['x'],
@@ -35,6 +39,27 @@ test('class field labels complete with values and keep an existing equals sign',
   const typo = 'Point(xx=1.5, y=2.5)';
   assert.deepEqual(fields(typo, typo.indexOf('xx') + 1).map(item => item.name), ['x'],
     'a partial prefix can replace an unknown field spelling without losing its value');
+});
+
+test('unfinished call exploration is finite and fails closed beyond its scan and depth budgets', () => {
+  const script = `
+    const assert = require('node:assert/strict');
+    const f = require(${JSON.stringify(require.resolve('../src/features'))});
+    const index = { definitions: [{name:'Point',kind:'class',signature:'class Point',fields:[{name:'x',type:'f64'}]}] };
+    for (const text of ['('.repeat(100000), ')'.repeat(100000), 'Point(' + ' '.repeat(100000)]) {
+      assert.equal(f.signatureAt(index, text, text.length), undefined);
+      assert.ok(!f.completionCandidates(index, text, text.length).some(item => item.namedField));
+    }
+    const forward = 'Point(' + '('.repeat(100000);
+    assert.ok(!f.completionCandidates(index, forward, 6).some(item => item.namedField));
+    for (const text of ['models.' + ' '.repeat(2000) + 'Point(', 'x'.repeat(2000) + 'Point(']) {
+      assert.equal(f.signatureAt(index, text, text.length), undefined);
+      assert.ok(!f.completionCandidates(index, text, text.length).some(item => item.namedField));
+    }
+  `;
+  const result = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 3000, maxBuffer: 4096 });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
 test('field label completion does not replace value expressions or nested calls', () => {

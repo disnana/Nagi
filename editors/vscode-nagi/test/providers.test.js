@@ -560,6 +560,24 @@ test('constructor field labels preserve the existing saved-declaration fallback 
   assert.match(items[0].documentation.value, /保存済みの宣言/);
   assert.equal(items[0].insertText.value, 'x=${1:x}');
 });
+
+test('High and Low field insertion preserves comments before an existing equals sign', async t => {
+  const point = { name: 'Point', kind: 'class', signature: 'class Point\n    x: f64\n    y: f64',
+    fields: [{ name: 'x', type: 'f64' }, { name: 'y', type: 'f64' }] };
+  const h = host(t, true, 0, () => ({ format: 'nagi-symbols-v1', definitions: [point], references: [], files: [] }));
+  for (const language of ['nagi', 'nagi-low']) {
+    const text = language === 'nagi' ? 'class Point:\n    x: f64\n    y: f64\ndef main():\n    p = Point(\n        y=2.5,\n        x # label comment 😀\n        =1.5\n    )\n'
+      : 'record Point { x: f64; y: f64; }\nfn main() { let p = Point(\n y=2.5,\n x # label comment 😀\n =1.5\n); }\n';
+    const doc = h.document(text, 'file', language);
+    const offset = text.indexOf('x #') + 1;
+    const items = await h.providers.CompletionItem.provideCompletionItems(doc, doc.positionAt(offset), h.token);
+    assert.deepEqual(Array.from(items, item => item.label), ['x']);
+    assert.equal(items[0].insertText.value, 'x');
+    const inserted = text.slice(0, doc.offsetAt(items[0].range.start)) + items[0].insertText.value
+      + text.slice(doc.offsetAt(items[0].range.end));
+    assert.equal(inserted, text, 'the existing comment, equals sign and argument value remain byte-identical');
+  }
+});
 const projectError = cwd => `error: line 2: expected i32\n --> ${path.join(cwd, 'main.nagi')}:2\n`;
 async function loadDependencyIndex(h, document) {
   return h.providers.Hover.provideHover(document, document.positionAt(document.getText().indexOf('print') + 2), h.token);

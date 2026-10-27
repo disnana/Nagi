@@ -28,6 +28,17 @@ for (const low of [false, true]) test(`real ${low ? 'Low' : 'High'} symbols reta
   const candidates = features.completionCandidates(index, text, offset, low, source);
   assert.deepEqual(candidates.map(item => [item.name, item.type, item.namedField]), [['x', 'f64', true]]);
   assert.equal(features.signatureAt(index, text, offset + 1, source).argument, 0);
+  const commented = text.replace('Point(y=2.5, x=1.5)', 'Point(\r\n y=2.5,\r\n x # label comment 😀\r\n =1.5\r\n)');
+  const checkedComment = await new Promise(resolve => compiler.runCheck(executable,
+    ['check', file, '--editor-input'], folder, 10000, resolve, 16 * 1024 * 1024,
+    JSON.stringify({ files: [{ file, text: commented }] })));
+  assert.equal(checkedComment.error, null, checkedComment.output);
+  const commentIndex = await query(commented);
+  assert.equal(commentIndex.error, null, commentIndex.output);
+  const commentOffset = commented.indexOf('x #') + 1;
+  const [commentField] = features.completionCandidates(JSON.parse(commentIndex.output), commented, commentOffset, low, source);
+  assert.equal(commentField.name, 'x');
+  assert.equal(features.insertion(commentField, commented.slice(commentOffset)), 'x');
   const partial = text.replace('x=1.5', 'x');
   const failed = await query(partial);
   assert.ok(failed.error, 'the compiler still rejects the original incomplete argument');

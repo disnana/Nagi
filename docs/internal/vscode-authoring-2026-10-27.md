@@ -31,6 +31,8 @@ argument expression, assignment, move or ownership operation.
 - For a compiler-described class/record constructor, offer only unsupplied field
   labels at direct argument-name positions. Check both sides of the caret;
   preserve an existing `=` and its value, and otherwise insert `name=${1:name}`.
+  Carry the existing-equals fact from the same comment-masked argument context
+  into insertion, so a comment/newline between label and `=` is preserved too.
 - Use the actual field name for the active signature parameter, including
   reordered fields, multiline calls and qualified current namespaces. An unknown
   explicit field label supplies no misleading parameter hint.
@@ -44,12 +46,22 @@ argument expression, assignment, move or ownership operation.
 - Keep existing cancellation/version/trust guards and process counts. No new
   analysis request, source recovery, compiler execution path or dependency is
   added. Compiler errors on incomplete input remain errors.
+- Bound call exploration to 16,384 UTF-16 code units, 128 delimiter levels or
+  unmatched opening-parenthesis probes, and 1,024 units for a callee prefix.
+  Forward field-label scanning uses the same scan/depth limits. Stop without
+  constructor candidates/signature facts when a limit is reached; never resolve
+  a truncated qualifier as a new global name. Reuse completion's masked source,
+  and inspect only the bounded prefix at each opening parenthesis. The existing
+  full-source string/comment masking remains linear in buffer size.
 
 ## Verification boundaries
 
 Focused cases cover reordered labels, supplied fields before/after the caret,
 existing equals signs, nested arguments, values/comparisons, shadowing, saved
 warnings, qualified classes, UTF-16/CRLF and High/Low registered providers.
+A finite child-process case exercises 100,000 unmatched delimiters and excessive
+call spacing, and checks that a bounded prefix cannot drop a qualifier. Legal
+High/Low comment-separated labels are checked by the real compiler and provider.
 Real compiler cases exercise both main and published 0.2.1 `symbols`, preserve
 the original parse rejection and leave the saved file unchanged. The existing
 full VS Code suite and VSIX packaging remain required. Headless provider tests
