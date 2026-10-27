@@ -447,6 +447,161 @@ def main():
 }
 
 #[test]
+fn list_index_append_and_copy_iteration_compile_and_run() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        r#"def make_rows() -> List[List[i64]]:
+    rows: List[List[i64]] = []
+    append(rows, [1, 2])
+    append(rows, [3])
+    return rows
+
+def main():
+    nested = make_rows()
+    print(len(nested))
+    values: List[i64] = [3, 4]
+    empty: List[i64] = []
+    append(empty, 9)
+    print(empty[0])
+    append(values, 5)
+    print(len(values))
+    print(values[0] + values[2])
+    total: i64 = 0
+    for value in values:
+        total = total + value
+    print(total)
+    skipped: i64 = 0
+    for index in range(-1):
+        skipped = skipped + index
+    for index in range(0):
+        skipped = skipped + index
+    print(skipped)
+    for index in range(3):
+        total = total + index
+    print(total)
+"#,
+    );
+    let output = fixture.go("run", "main.nagi", "out-high");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "2\n9\n3\n8\n12\n0\n15\n"
+    );
+
+    let generated = fs::read_to_string(fixture.0.join("out-high/generated.low")).unwrap();
+    fixture.write("saved.low", &generated);
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    let low = fixture.go("run", "saved.low", "out-low");
+    assert!(
+        low.status.success(),
+        "{}",
+        String::from_utf8_lossy(&low.stderr)
+    );
+    assert_eq!(low.stdout, output.stdout);
+}
+
+#[test]
+fn list_expressions_preserve_left_to_right_single_evaluation() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        r#"def marked(value: i64) -> i64:
+    print(value)
+    return value
+
+def values() -> List[i64]:
+    print("values")
+    return [7]
+
+def index() -> i64:
+    print("index")
+    return 0
+
+def main():
+    items: List[i64] = [marked(1), marked(2)]
+    append(items, marked(3))
+    print(values()[index()])
+    print(items[0] + items[1] + items[2])
+"#,
+    );
+    let output = fixture.go("run", "main.nagi", "out");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "1\n2\n3\nvalues\nindex\n7\n6\n"
+    );
+}
+
+#[test]
+fn list_index_bounds_fail_at_runtime_without_re_evaluation() {
+    let fixture = Fixture::new();
+    for (name, index) in [("negative", -1), ("upper", 2)] {
+        fixture.write(
+            &format!("{name}.nagi"),
+            &format!(
+                "def index() -> i64:\n    print(\"index\")\n    return {index}\ndef main():\n    values = [1]\n    print(values[index()])\n"
+            ),
+        );
+        let output = fixture.go("run", &format!("{name}.nagi"), &format!("out-{name}"));
+        assert!(
+            !output.status.success(),
+            "{name} index unexpectedly succeeded"
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "index\n");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("index out of bounds"),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+fn non_copy_list_iteration_is_rejected_before_the_go_toolchain() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        "class Item:\n    name: str\ndef main():\n    values = [Item(name=\"one\")]\n    for value in values:\n        print(value.name)\n",
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .args([
+            "build",
+            "main.nagi",
+            "--no-project",
+            "--backend",
+            "go",
+            "--out",
+            "out",
+        ])
+        .current_dir(&fixture.0)
+        .env("NAGI_GO", fixture.0.join("missing-go"))
+        .env_remove("NAGI_RUN_RETENTION")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        diagnostic.contains("non-Copy List elements"),
+        "{diagnostic}"
+    );
+    assert!(diagnostic.contains("main.nagi:5"), "{diagnostic}");
+    assert!(
+        !diagnostic.contains("Go toolchain was not found"),
+        "{diagnostic}"
+    );
+    assert!(!fixture.0.join("out/.nagi/apps").exists());
+}
+
+#[test]
 fn integer_profile_and_signed_division_overflow_match_the_rust_contract() {
     let fixture = Fixture::new();
     fixture.write(

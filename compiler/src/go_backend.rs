@@ -133,6 +133,8 @@ fn go_type(ty: &Type, classes: &BTreeSet<String>, line: usize) -> Result<String,
         return Ok(class_name(&ty.0));
     }
     match (ty.0.as_str(), ty.1.as_slice()) {
+        ("Range", []) => Ok("nagiRange".into()),
+        ("List", [item]) => Ok(format!("[]{}", go_type(item, classes, line)?)),
         ("Option", [item]) => Ok(format!("nagiOption[{}]", go_type(item, classes, line)?)),
         ("Result", [value, problem]) => Ok(format!(
             "nagiResult[{}, {}]",
@@ -406,10 +408,29 @@ impl<'a> Emitter<'a> {
                 }
                 Ok(())
             }
-            S::For(..) => Err(error(
-                statement.line,
-                "for is not supported by the initial Go backend",
-            )),
+            S::For(_, iterable, body) => {
+                self.validate_expr(iterable, ret)?;
+                match iterable.ty.as_ref().map(|ty| ty.0.as_str()) {
+                    Some("Range") => {}
+                    Some("List") if !statement.binding_borrowed => {}
+                    Some("List") => {
+                        return Err(error(
+                            statement.line,
+                            "for over non-Copy List elements is not supported by the Go backend yet",
+                        ));
+                    }
+                    _ => {
+                        return Err(error(
+                            statement.line,
+                            "Go backend for requires range or a List with Copy elements",
+                        ));
+                    }
+                }
+                for statement in body {
+                    self.validate_statement(statement, ret)?;
+                }
+                Ok(())
+            }
             S::SpawnBind { .. } | S::Spawn(_) | S::Scope(_) => Err(error(
                 statement.line,
                 "async task operations are not supported by the initial Go backend",
@@ -484,6 +505,9 @@ impl<'a> Emitter<'a> {
                                 | "parse_i64"
                                 | "error_message"
                                 | "i64"
+                                | "len"
+                                | "range"
+                                | "append"
                         ) =>
                     {
                         Ok(())
@@ -524,10 +548,16 @@ impl<'a> Emitter<'a> {
                 }
                 Ok(())
             }
-            E::Index(..) | E::List(_) => Err(error(
-                expression.line,
-                "List/index operations are not supported by the initial Go backend",
-            )),
+            E::Index(values, index) => {
+                self.validate_expr(values, ret)?;
+                self.validate_expr(index, ret)
+            }
+            E::List(values) => {
+                for value in values {
+                    self.validate_expr(value, ret)?;
+                }
+                Ok(())
+            }
             E::Await(_) => Err(error(
                 expression.line,
                 "await is not supported by the initial Go backend",
@@ -673,6 +703,16 @@ impl<'a> Emitter<'a> {
                 )
             }
             E::Call(name, _, arguments) => {
+                if expression.resolution == Some(NameResolution::Builtin) && name == "append" {
+                    let E::Name(receiver) = &arguments[0].kind else {
+                        unreachable!("checker restricts append receiver to a local name")
+                    };
+                    let (item_before, item) = self.evaluated(&arguments[1], ret)?;
+                    before.extend(item_before);
+                    let receiver = ident(receiver);
+                    before.push(format!("{receiver} = append({receiver}, {item})"));
+                    return Ok((before, "nagiUnit{}".into()));
+                }
                 let mut values = Vec::new();
                 for argument in arguments {
                     let (argument_before, argument) = self.evaluated(argument, ret)?;
@@ -691,6 +731,8 @@ impl<'a> Emitter<'a> {
                         "parse_i64" => format!("nagiParseI64({})", values[0]),
                         "error_message" => format!("({}).message", values[0]),
                         "i64" => format!("int64({})", values[0]),
+                        "len" => format!("int64(len({}))", values[0]),
+                        "range" => format!("nagiRange{{end: {}}}", values[0]),
                         "ok" => {
                             let ty = expression.ty.as_ref().expect("validated result");
                             format!(
@@ -748,7 +790,31 @@ impl<'a> Emitter<'a> {
                 ));
                 format!("{result}.value")
             }
-            E::Index(..) | E::List(_) | E::Await(_) => unreachable!("validated expression"),
+            E::Index(values, index) => {
+                let (values_before, values) = self.evaluated(values, ret)?;
+                before.extend(values_before);
+                let (index_before, index) = self.evaluated(index, ret)?;
+                before.extend(index_before);
+                before.push(format!(
+                    "if {index} < 0 || {index} >= int64(len({values})) {{ panic(\"index out of bounds\") }}"
+                ));
+                format!("{values}[int({index})]")
+            }
+            E::List(values) => {
+                let mut rendered = Vec::new();
+                for value in values {
+                    let (value_before, value) = self.evaluated(value, ret)?;
+                    before.extend(value_before);
+                    rendered.push(value);
+                }
+                let item = &expression.ty.as_ref().expect("validated List type").1[0];
+                format!(
+                    "[]{}{{{}}}",
+                    go_type(item, &self.classes, expression.line)?,
+                    rendered.join(", ")
+                )
+            }
+            E::Await(_) => unreachable!("validated expression"),
         };
         Ok((before, value))
     }
@@ -905,7 +971,32 @@ impl<'a> Emitter<'a> {
                     }
                     Self::line(output, indent, "}");
                 }
-                S::For(..) | S::SpawnBind { .. } | S::Spawn(_) | S::Scope(_) => {
+                S::For(name, iterable, body) => {
+                    let (before, iterable_value) = self.evaluated(iterable, ret)?;
+                    for line in before {
+                        Self::line(output, indent, line);
+                    }
+                    let name = ident(name);
+                    if iterable.ty.as_ref().is_some_and(|ty| ty.0 == "Range") {
+                        Self::line(
+                            output,
+                            indent,
+                            format!(
+                                "for {name} := int64(0); {name} < {iterable_value}.end; {name}++ {{"
+                            ),
+                        );
+                    } else {
+                        Self::line(
+                            output,
+                            indent,
+                            format!("for _, {name} := range {iterable_value} {{"),
+                        );
+                    }
+                    Self::line(output, indent + 1, format!("_ = {name}"));
+                    self.statements(body, ret, indent + 1, output)?;
+                    Self::line(output, indent, "}");
+                }
+                S::SpawnBind { .. } | S::Spawn(_) | S::Scope(_) => {
                     unreachable!("validated statement")
                 }
             }
@@ -1002,6 +1093,7 @@ impl<'a> Emitter<'a> {
 type nagiUnit struct{{}}\n\
 type nagiError struct{{ message string }}\n\
 func (problem nagiError) Error() string {{ return problem.message }}\n\
+type nagiRange struct{{ end int64 }}\n\
 type nagiOption[T any] struct{{ some bool; value T }}\n\
 func nagiSome[T any](value T) nagiOption[T] {{ return nagiOption[T]{{some: true, value: value}} }}\n\
 func nagiNone[T any]() nagiOption[T] {{ return nagiOption[T]{{}} }}\n\

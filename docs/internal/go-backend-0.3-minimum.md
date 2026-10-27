@@ -34,6 +34,7 @@ Rust backendで`[go].files`を宣言した場合と、Go backendでRust adapter/
 - 整数、浮動小数、`bool`、`str`、`bytes`、`unit`
 - 同期関数、import済み関数、local変数、`if`、`while`
 - 値classの生成とfield参照
+- `List[T]`のliteral・`len`・Copy要素のindex・`append`、`range`とCopy要素Listの`for`
 - `Option`、`Result`、`try`、Option/Resultの`match`
 - 算術・比較・論理演算（Nagiの評価順序と`and`/`or`の短絡を維持）
 - `print`、`write`、`assert_true`、`parse_i64`、`error_message`、`i64`とResult/Option constructor
@@ -45,7 +46,7 @@ Nagiの名前はUTF-8 byte列をGo identifierへ一意に符号化する。Go ke
 
 次は未対応で、Go起動前にsource位置付きで失敗する。
 
-- enum、List/index、`for`
+- enum、非Copy要素のList index/反復、Listのslice・field/index代入
 - async/await、task、scope、actor
 - HTTP、DB、auth/session、WebSocketなどRust runtimeの標準操作
 - Go native adapter、Rust/Go間FFI、混成backend
@@ -81,11 +82,13 @@ generationには次を保存する。
 
 ## 実行検証
 
-専用integration testは実Go toolchainを使い、Linuxでは次の14件を検査する。WindowsではUnix symlink固有の1件を除く。
+専用integration testは実Go toolchainを使い、List/Range段階ではLinux/macOSで18件、WindowsでUnix symlink固有の1件を除く17件を検査する。
 
 - Highと独立保存Lowが同じ出力になる
 - CLI &gt; project &gt; Rust既定
 - import済み関数
+- List literal/index/append/len、Copy要素Listとrangeの反復、左から右へ一度だけの評価
+- 非Copy要素Listの反復をGo toolchain起動前に拒否する
 - Result/try、class、評価順序、短絡、identifier衝突
 - Option/Resultの完全matchが全armからreturnする場合
 - 先頭ゼロを含む10進整数literal、dev/releaseの整数overflow、符号付き最小値の除算・剰余
@@ -100,7 +103,7 @@ generationには次を保存する。
 
 frontend/backend拒否後のlast-good維持は検査した。成功generation後に外部Go process自体を意図的に失敗させるportableな注入test、output lockの並行競合、power-loss耐性はこの段階では未検査であり、last-good保証をその範囲まで一般化しない。
 
-`cargo test --locked`がこのtest binaryを含むため、compiler/runtime変更に対する既存のcomprehensive Linux gateで実行される。専用3 OS jobと差分routingは次段階で行う。追加時は既存の`Ready to merge`期待job契約も更新し、Go jobのmissing/skip/0件実行を成功扱いしない。shared frontend変更は両backend、target固有変更はそのbackendとshared invariant、未知pathとselector/gate変更は広いcoverageへfail safeする。
+`cargo test --locked`がこのtest binaryを含むため、compiler/runtime変更に対する既存のcomprehensive Linux gateでも実行される。専用3 OS jobと差分routingはDraft PR #179で追加し、Go jobのmissing/skip/0件実行を`Ready to merge`で拒否する。shared frontend変更は両backend、target固有変更はそのbackendとshared invariant、未知pathとselector/gate変更は広いcoverageへfail safeする。#179は未マージであり、この文書の実装branchはそのHEADをbaseにしている。
 
 ## 2026-10-26の小規模build実測
 

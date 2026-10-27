@@ -1,5 +1,11 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-27: Go backendのList・Range段階
+
+0.3.0向け最小Go backendと3 OS必須gateのstack上で、`List[T]`のliteral・`len`・Copy要素index・`append`、`range`とCopy要素Listの`for`を追加した。class等の非Copy要素を反復する境界はGoの値copyへ置き換えず、Go toolchain起動前に明示的に拒否する。List生成、appendの値、indexのcontainerと添字はNagiの左から右の評価順で一度だけ評価する。負indexと範囲外indexはbackend固有stack traceを許容した実行時panicとし、既存Rust backendの失敗契約を維持する。
+
+Linux実Goの追加実行検査3件（正常2件・index境界失敗1件）と事前拒否1件を含む専用18件が成功した。正常例はliteral/index/append/len、List/range反復、関数呼出しを含む各要素とindexの評価順・一回性を実行結果で照合する。Windowsはsymlink固有1件を除く17件、macOSは18件をstacked CIで確認する。enum、非Copy Listのindex/反復、async/task/actor、HTTP/DB/auth、native adapterは引き続き未対応で、自動fallbackしない。独立最終監査とexact-head CIはこの段階のDraft PR gateとして残す。
+
 ## 2026-10-26: 0.3.0向け最小Go backend候補
 
 0.2.2の公開準備と分離した開発branchで、単一のRust製`nagic`へ実験的なGo targetを追加した。Rustを既定に保ち、CLI `--backend`、project設定、Rust既定の順で選ぶ。Highから保存Lowを経由して独立parserとfinalizeを通る共通検査を維持し、Go固有のlowering/buildだけを分離した。同期関数、基本型、値class、`Option`/`Result`/`try`、基本演算とconsoleを実Go toolchainでbuild/runする。未対応のasync/task/actor、HTTP/DB/auth、enum/List等と逆backendのnative資産は、自動fallbackせずGo起動前にsource位置・到達chain付きで拒否する。
