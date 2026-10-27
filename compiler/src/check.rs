@@ -184,6 +184,81 @@ fn editor_builtin_candidates() -> impl Iterator<Item = EditorBuiltinCandidate> {
     .into_iter()
     .map(|(name, signature)| EditorBuiltinCandidate { name, signature })
 }
+
+// Extract source-level parameter names from the same signatures exposed to
+// editors. Bracket depth keeps generic/function types from splitting at their
+// internal commas. A builtin such as read_line may publish more than one call
+// form; `arity` selects the form that is actually being checked.
+fn signature_parameter_names(signature: &str, arity: usize) -> Option<Vec<String>> {
+    signature.split(';').find_map(|form| {
+        let open = form.find('(')?;
+        let close = form.rfind(") ->")?;
+        let text = &form[open + 1..close];
+        let mut parts = vec![];
+        let mut depth = 0usize;
+        let mut start = 0usize;
+        for (index, ch) in text.char_indices() {
+            match ch {
+                '[' => depth += 1,
+                ']' => depth = depth.saturating_sub(1),
+                ',' if depth == 0 => {
+                    parts.push(text[start..index].trim());
+                    start = index + 1;
+                }
+                _ => {}
+            }
+        }
+        if !text.trim().is_empty() {
+            parts.push(text[start..].trim());
+        }
+        (parts.len() == arity).then(|| {
+            parts
+                .into_iter()
+                .map(|part| {
+                    part.split_once(':')
+                        .map_or(part, |(name, _)| name)
+                        .trim()
+                        .to_owned()
+                })
+                .collect()
+        })
+    })
+}
+
+#[cfg(test)]
+mod named_argument_signature_tests {
+    use super::*;
+
+    #[test]
+    fn every_builtin_completion_signature_exposes_its_checked_argument_names() {
+        for candidate in editor_builtin_candidates() {
+            let arity = if candidate.name == "read_line" {
+                1
+            } else {
+                builtin_arity(candidate.name).expect("candidate is a checked builtin")
+            };
+            let names = signature_parameter_names(&candidate.signature, arity)
+                .unwrap_or_else(|| panic!("missing argument names for {}", candidate.name));
+            assert_eq!(names.len(), arity, "{}", candidate.name);
+            assert!(
+                names.iter().all(|name| !name.is_empty()),
+                "{}",
+                candidate.name
+            );
+        }
+    }
+
+    #[test]
+    fn every_standard_operation_signature_exposes_its_checked_argument_names() {
+        for &operation in crate::stdlib::OPERATIONS {
+            let info = crate::stdlib::operation_info(operation);
+            let names = signature_parameter_names(info.signature, info.arity)
+                .unwrap_or_else(|| panic!("missing argument names for {}", info.name));
+            assert_eq!(names.len(), info.arity, "{}", info.name);
+            assert!(names.iter().all(|name| !name.is_empty()), "{}", info.name);
+        }
+    }
+}
 fn result(t: Type) -> Type {
     Type::generic("Result", vec![t, Type::named("Error")])
 }
@@ -4092,6 +4167,7 @@ impl Checker {
         expected: Option<&Type>,
         projection: bool,
     ) -> Result<Type, String> {
+        self.normalize_named_call(e)?;
         let retains_values = matches!(
             e.kind,
             E::Call(_, _, _) | E::List(_) | E::Binary(_, _, _) | E::Index(_, _)
@@ -4155,6 +4231,122 @@ impl Checker {
             }
         }
         checked
+    }
+
+    // The parser intentionally keeps `name = value` calls in the existing
+    // record shape until names are resolved. Class and enum construction keep
+    // their established unordered field semantics. Function calls are lowered
+    // to the existing positional AST before ownership checking and backend
+    // lowering, so every backend observes the same checked argument order.
+    //
+    // Named function arguments currently use an all-named, declaration-order
+    // form. This preserves left-to-right evaluation exactly without adding
+    // backend-specific temporary lowering. Positional calls remain unchanged.
+    fn normalize_named_call(&mut self, e: &mut Expr) -> Result<(), String> {
+        let E::Record(name, fields) = &e.kind else {
+            return Ok(());
+        };
+        if self.classes.contains_key(name) || self.enum_variant(name, e.line)?.is_some() {
+            return Ok(());
+        }
+
+        let expected = if let Some(variable) = self.vars.get(name) {
+            if variable.ty.0 == "fn" {
+                return Err(error(
+                    e.line,
+                    "関数値の引数名は型に含まれません。位置引数を使用してください",
+                ));
+            }
+            return Err(error(e.line, "この値は呼び出せる関数ではありません"));
+        } else if let Some(function) = self.functions.get(name) {
+            function
+                .params
+                .iter()
+                .map(|(name, _)| name.clone())
+                .collect::<Vec<_>>()
+        } else if self.registered.contains(name) {
+            if let Some(operation) = crate::stdlib::operation(name) {
+                let info = crate::stdlib::operation_info(operation);
+                signature_parameter_names(info.signature, info.arity).ok_or_else(|| {
+                    error(
+                        e.line,
+                        format!("internal compiler error: {name} の引数名を解決できません"),
+                    )
+                })?
+            } else {
+                return Ok(());
+            }
+        } else if let Some(arity) = builtin_arity(name) {
+            let arity = if name == "read_line" { 1 } else { arity };
+            let signature = editor_builtin_candidates()
+                .find(|candidate| candidate.name == name)
+                .map(|candidate| candidate.signature)
+                .ok_or_else(|| {
+                    error(
+                        e.line,
+                        format!("internal compiler error: {name} の引数情報がありません"),
+                    )
+                })?;
+            signature_parameter_names(&signature, arity).ok_or_else(|| {
+                error(
+                    e.line,
+                    format!("internal compiler error: {name} の引数名を解決できません"),
+                )
+            })?
+        } else {
+            return Ok(());
+        };
+
+        let mut seen = HashSet::new();
+        for (name, _) in fields {
+            if !seen.insert(name.as_str()) {
+                return Err(error(
+                    e.line,
+                    format!("名前付き引数 {name} が重複しています"),
+                ));
+            }
+            if !expected.iter().any(|expected| expected == name) {
+                return Err(error(
+                    e.line,
+                    format!(
+                        "不明な名前付き引数 {name} です（使用可能: {}）",
+                        expected.join(", ")
+                    ),
+                ));
+            }
+        }
+        if fields.len() != expected.len() {
+            let missing = expected
+                .iter()
+                .filter(|name| !seen.contains(name.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
+            return Err(error(
+                e.line,
+                format!("名前付き引数が不足しています: {}", missing.join(", ")),
+            ));
+        }
+        for (index, ((actual, _), expected)) in fields.iter().zip(&expected).enumerate() {
+            if actual != expected {
+                return Err(error(
+                    e.line,
+                    format!(
+                        "名前付き引数は宣言順に指定してください（{}番目は {expected}、実際は {actual}）",
+                        index + 1
+                    ),
+                ));
+            }
+        }
+
+        let E::Record(name, fields) = std::mem::replace(&mut e.kind, E::Null) else {
+            unreachable!()
+        };
+        e.kind = E::Call(
+            name,
+            vec![],
+            fields.into_iter().map(|(_, value)| value).collect(),
+        );
+        Ok(())
     }
     fn expr_scoped(
         &mut self,

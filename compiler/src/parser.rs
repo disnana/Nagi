@@ -834,10 +834,10 @@ impl Parser {
                     }
                 }
                 if !args.is_empty() && !fields.is_empty() {
-                    return Err(self.err("位置引数とclassフィールドは混在できません"));
+                    return Err(self.err("位置引数と名前付き引数は混在できません"));
                 }
                 if !fields.is_empty() && !generics.is_empty() {
-                    return Err(self.err("classの型引数は未対応です"));
+                    return Err(self.err("名前付きフィールドまたは名前付き引数を使う呼出しに明示型引数は指定できません"));
                 }
                 e = Expr {
                     line,

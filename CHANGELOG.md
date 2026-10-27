@@ -2,6 +2,8 @@
 
 ## 未リリース / Unreleased
 
+- 関数・組み込み・標準APIの呼び出しで、全引数を`name=value`として宣言順に指定できるようにする。既存の位置引数とclass/enum構築を維持し、混在、重複、未知、不足、順序違いはbuild時に拒否する。checked frontendで既存の位置呼び出しへ正規化し、評価順・所有権検査・backend出力を変えない。
+- Allow function, builtin, and registered standard-API calls to name every argument in declaration order with `name=value`. Preserve positional calls and class/enum construction; reject mixed, duplicate, unknown, missing, and out-of-order arguments at build time. Normalize through the checked frontend so source-order evaluation, ownership checks, and backend lowering stay unchanged.
 - `build/run --runtime-profile full|auto`を明示opt-inで追加。既定fullと既存Rust API（default-features無効時を含む）を保持し、完全検査済みの小さな同期プログラムだけ共有ソースの軽量packageを選択します。unknown/async/adapter/追加Rust依存/incrementalはfullへ戻し、Cargoのnative再判定と旧成功世代の保護を維持します。[計測条件と限界](benchmarks/results/runtime-profiles-2026-10-24/README.md)。
 - Add opt-in runtime dependency selection from checked IR, preserving complete High/Low/type/ownership/Policy checks and the existing full runtime API. Include the shared-source core package and its dependency notices in distributions. Keep release settings and receipt/CAS compatibility; the measured gains apply to supported small synchronous programs, not arbitrary HTTP/SQL backends.
 - Keep changes limited to discoverable root-level website tests on the existing documentation CI path. Preserve full validation for unknown files and mixed compiler, runtime, security or dependency changes. This optimizes Nagi's repository CI; application build behavior is unchanged.

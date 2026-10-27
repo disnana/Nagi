@@ -1,5 +1,13 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-27: 宣言順の名前付き関数引数（独立開発・未リリース）
+
+base `origin/main` `0d1884c`、branch `feat/named-call-args-20261027`。従来の`f(a, b)`を維持したまま、通常関数・組み込み・登録済み標準APIを`f(first=a, second=b)`の全名前付き形式でも呼べるようにした。parserが既存class/enum構築と同じ一時形を保持し、checkerが対象名を解決してから既存の位置`E::Call`へ正規化する。backend固有ASTを増やさず、型・move・borrow・Policy・async captureとRust/将来Go loweringは既存経路を通る。
+
+初版は評価順を曖昧にしないため、位置引数との混在、名前の並べ替え、明示型引数との組合せ、引数名を型に持たない関数値を拒否する。全引数を宣言順に名前付きで書き、各式をソース順に一度だけ評価する。重複・未知・不足・順序違いを個別診断し、class/enum payloadの既存の順不同named fieldは変更しない。公開0.2.1で動くと約束したREADME・既存examplesは位置引数のまま維持し、未リリースsource checkout専用の`http.response_limits`完成例を別tutorialとして追加した。
+
+ローカルLinuxでは名前付き引数14件、builtin/標準API署名在庫2件、frontend contracts 23件、conformance 6件、codegen 16件、editor assistance 42件、all-target Clippy `-D warnings`、fmtが成功した。frontend nativeの初回4失敗は通常sandboxからcrates.io proxyへ接続不能だったためで、同じsourceを既存lock/cacheの`CARGO_NET_OFFLINE=true`で再実行し23件すべて成功した。独立reviewで、同名global関数がlocal関数値/データを迂回するmodule解決、内部canonical名を診断へ出す経路、non-function localの誤誘導、公開0.2.1例の先行更新を検出した。resolverでlocalを優先しつつ既存class/enum constructor優先規則を保持し、利用者向け固定診断と回帰へ修正した。修正後の独立最終再監査は重大・中程度の追加所見なし。全workspaceの記録可能な最終終了コード、最新HEAD CI、Windows/macOS、Go branchとの実結合は未確認。commit/push/PR・merge・版更新・tag/releaseは行っていない。
+
 ## 2026-10-23: 完成コードの末尾空行でeditor情報を失う不具合
 
 [設計](jetbrains-empty-line-assistance.md)。#148の利用者GUI確認・main `6214c5d6`へのmerge後、正常なPoint record例でも末尾空行の先頭へcaretを置くと色・説明が消える報告を受けた。公開0.2.1のHigh/Low・保存/overlay/serveで、original frontendは受理済みだがquery recoveryのload失敗によりsymbolsが省略される応答を再現した。compilerは元ASTへ戻してqueryなしindexを生成し、元diagnostic/verdictを維持する。pluginは公開0.2.1向けにsymbols省略と明示emptyを区別し、限定条件で同snapshotのqueryなし解析を1回だけ行い、source事実だけを合成してpublishする。通常の応答に追加解析はない。型・ownership・Policy・stale/cancel/identity検査は維持。compiler37件・Clippy・fmt、公開0.2.1実CLIを使うplugin43件、matching compilerのplugin全278件・ZIP build成功。環境はJDK25.0.4/IU263.7031.23で、Windows GUI/他SDK・全workspace・独立最終review・exact-head CIは別gateとして残す。
