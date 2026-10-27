@@ -24,6 +24,8 @@ def main():
     total = 0
     for case in summary['cases']:
         assert case['status'] == 'passed' and case['exit_code'] == 0
+        assert case['actors'] == case['active_clients'] + 1
+        assert case['iterations_per_client'] == 5000
         assert case['released_fd_delta'] == case['released_task_delta'] == 0
         cpus = len(case['cpu_affinity'])
         label = f'cpus-{cpus}-actors-{case["actors"]}-round-{case["round"]}'
@@ -53,6 +55,7 @@ def main():
             cases = [c for c in summary['cases']
                      if len(c['cpu_affinity']) == cpus and c['active_clients'] == clients]
             assert len(cases) == 3
+            assert {c['round'] for c in cases} == {1, 2, 3}
             row = {'cpu_affinity_count': cpus, 'active_clients': clients, 'total_actors': clients + 1}
             for field in fields:
                 values = [c['phases'][0][field] for c in cases]

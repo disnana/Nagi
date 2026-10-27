@@ -11,7 +11,7 @@
     "scripts/public_actor_active_probe.py": "a3a0e1da8faf7dfaa282605c0754176f19c1e7b1fa9875bc5cf6e10ad854acfa",
     "scripts/public_supervisor_probe.py": "52869d9db6508281d104850b58199e5db4a5a43d438b286d021560ed551b5655",
     "scripts/tests/test_public_supervisor_probe.py": "5493664522754332f660e8c8a398e8dca13f6c64711ca9790264469c67a95c03",
-    "benchmarks/public-actor-active-work/verify_results.py": "547f711e229a3580a21a4af0ba3a34cc224c0dd68351bd4f64a3ab6023b8d07b"
+    "benchmarks/public-actor-active-work/verify_results.py": "4412e955457bd2e5820f985998cd4d419fd83378bd0465b61fe0dd466c2276f2"
   },
   "binary_sha256": "6a435d9852cadfe93365da92bdaf353d56f6685ab14a17352e11db783478ab34",
   "native_cargo_lock_sha256": "5745dc926807b08282f4ba11be28ceeac610221f024bfacb2e3f54ec59424a9a",
