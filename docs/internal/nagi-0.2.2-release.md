@@ -1,8 +1,8 @@
 # Nagi 0.2.2 正式公開準備
 
-2026-10-26。0.2.1以降にmainへ統合した互換性維持のbuild・依存・入力・教材改善を0.2.2候補として固定する。workspace版と稼働するlock内のlocal package版、正式CHANGELOGを揃える。JetBrains・VS Codeの版、既定release/full、High/Low意味論、安全検査をこの版更新の都合で変えない。
+2026-10-27。0.2.1以降にmainへ統合した互換性維持のbuild・依存・入力・教材改善を0.2.2候補として固定する。workspace版と稼働するlock内のlocal package版、正式CHANGELOGを揃える。JetBrains・VS Codeの版、既定release/full、High/Low意味論、安全検査をこの版更新の都合で変えない。
 
-この準備branchはResult/`try`教材PR #176をbaseに積んでいる。#176がmainへ入るまで依存を解消した扱いにしない。BrowserLoginの期限診断PR #169は原因修正ではなく、別Draftのため候補へ含めない。既にmainへ入った限定診断は、間欠504を修正済みとする根拠に使わない。
+Result/`try`教材PR #176はmainへ統合済みで、この候補はその統合後のmainをbaseに最終検証する。BrowserLoginの期限診断PR #169は原因修正ではなく、別Draftのため候補へ含めない。既にmainへ入った限定診断は、間欠504を修正済みとする根拠に使わない。
 
 ## 対象と保証
 

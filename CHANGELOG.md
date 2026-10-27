@@ -2,7 +2,7 @@
 
 ## 未リリース / Unreleased
 
-## Nagi 0.2.2 — 2026-10-26
+## Nagi 0.2.2 — 2026-10-27
 
 - 0.2.1との互換性、既定のfull runtime・release build、完全なHigh/Low・型・所有権・Policy検査、Cargoのnative再判定、旧成功成果物の保護を維持しながら、小さな変更の開発待ち時間と初回依存解決の再現性を改善します。IDEプラグインは別の版・公開工程です。
 - Preserve 0.2.1 compatibility, the default full runtime and release build, complete High/Low/type/ownership/Policy checks, Cargo's native freshness decisions, and previous successful artifacts while improving supported edit loops and reproducible first dependency resolution. Editor plugins remain separately versioned and released.
