@@ -20,8 +20,9 @@ import sf06_failure_projection
 import browser_failure_projection
 
 ROOT = Path(__file__).resolve().parents[2]
-# Immutable Linux-only commit 0e233491; its workflow must be restored exactly.
-LINUX_WORKFLOW_SHA256 = '8dd517948186a68b37130190d75fc2e843e74a7230622f310150723038609720'
+# Frozen Linux-only projection with the reviewed 9863a387 HTTP source identity;
+# Windows relocation must restore this workflow exactly.
+LINUX_WORKFLOW_SHA256 = '2e5f26def5402fb752b48670621d3ed49fe1916f634693b9435c6ce2374d260f'
 COMMON = (
     'Check bounded SF01 diagnostic observer',
     'Check SF01 High, saved Low, handwritten Low and native policy contracts',

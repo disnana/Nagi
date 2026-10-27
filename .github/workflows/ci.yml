@@ -2339,7 +2339,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
+              'runtime/src/http_server.rs': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
               'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
               'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
@@ -2610,7 +2610,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
+              'runtime/src/http_server.rs': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
               'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
               'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
