@@ -17,4 +17,3 @@ test spawning_borrowing_native_futures_requires_an_owned_named_wrapper ... ok
 test turn_inline_layout_generics_and_left_to_right_moves_are_not_erased ... ok
 
 test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 260.31s
-

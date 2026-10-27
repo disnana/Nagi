@@ -32,5 +32,15 @@
     ]
   },
   "measured_runner_sha256": "e777b0615998ea7a8fc64013aed87a6ca6b020fb83ffca9bcb8624fbdb3ba948",
-  "post_measurement_runner_change": "Moved resource import inside Linux-only child_limits so accounting tests can import on Windows; no measurement semantics change. Exact executed runner archived as measured-runner.py.txt."
+  "post_measurement_runner_change": "Moved resource import inside Linux-only child_limits so accounting tests can import on Windows; no measurement semantics change. Exact executed runner archived as measured-runner.py.txt.",
+  "log_normalization": {
+    "change": "Removed extra blank lines at EOF only; original ignored source logs remain at local-only/public-supervisor-contract",
+    "original_sha256": {
+      "contract-run.log": "6dc084887bddde71b648114b61e8c6e3393e4eca9a2252b89c7ec1c34b3bfe72",
+      "contract-actor-stdlib.log": "82b366d4c29930936d4670d11316182d391dd5254e64f6c2708ac8b6256f072d",
+      "explicit-move-public-supervisor-resilience-saved-low.stdout": "21789f0f3b2703a4cac76f8f6beafd6c9eb096fcfca099cd46131bbe1208d0a8",
+      "explicit-move-public-supervisor-resilience-handwritten-low.stdout": "21789f0f3b2703a4cac76f8f6beafd6c9eb096fcfca099cd46131bbe1208d0a8",
+      "explicit-move-public-supervisor-resilience-high.stdout": "21789f0f3b2703a4cac76f8f6beafd6c9eb096fcfca099cd46131bbe1208d0a8"
+    }
+  }
 }

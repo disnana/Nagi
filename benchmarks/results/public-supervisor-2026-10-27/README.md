@@ -43,3 +43,5 @@ Rust backend 0.2.1の実Nagiアプリを最適化releaseで実行した。裸Tok
 build.logは初回4m08s、後の2buildは起動準備観測と回数上限更新を反映したwarm buildで、速度比較ではない。
 contractログはHigh/保存Low/手書きLowのnative結果と期待panic、既存harnessの成功summaryを保存する。
 Linux x86_64のみ実行。4OS新回帰・exact-head CI・別担当の独立最終reviewは別gate。
+
+検証logの末尾の余分な空行だけを正規化し、元bytesのSHAをprovenance.jsonに保存した。raw gzipは未変更。
