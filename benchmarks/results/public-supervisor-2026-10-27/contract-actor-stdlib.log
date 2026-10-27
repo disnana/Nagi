@@ -1,0 +1,20 @@
+    Finished `test` profile [unoptimized] target(s) in 0.07s
+     Running tests/actor_stdlib.rs (/workspace/.cache/nagi-go-conformance-target/debug/deps/actor_stdlib-a43bcf47a638cf1d)
+
+running 13 tests
+test actor_and_http_aliases_keep_distinct_registry_identity_without_fake_classes ... ok
+test callback_shapes_and_custom_error_identity_are_checked_before_native_build ... ok
+test explicit_task_readiness_and_typed_event_deadlines_execute_from_high_and_low ... ok
+test lifecycle_text_views_follow_their_native_owner_and_cannot_serialize ... ok
+test messages_replies_and_business_errors_reject_unaccounted_nested_payloads ... ok
+test named_task_factory_aliases_require_shared_context_async_unit_and_builtin_error ... ok
+test owned_custom_class_replies_and_errors_execute_without_clone_or_serde_bounds ... ok
+test pending_owned_state_business_failure_and_restart_execute_from_high_and_low ... ok
+test public_supervisor_resilience::public_supervisor_restart_budget_and_cleanup_in_three_forms ... ok
+test readiness_factory_and_wait_error_contracts_are_checked_before_native_build ... ok
+test saved_low_cannot_invent_actor_types_capabilities_or_standard_implementations ... ok
+test spawning_borrowing_native_futures_requires_an_owned_named_wrapper ... ok
+test turn_inline_layout_generics_and_left_to_right_moves_are_not_erased ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 260.31s
+

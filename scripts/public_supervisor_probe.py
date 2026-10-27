@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""Bounded Linux observations of the compiled benchmarks/public-supervisor app.
+
+No actor implementation lives here. JSON checkpoints come from the real Nagi
+program; only completed successful call replies count as useful work.
+"""
+from __future__ import annotations
+
+import argparse
+import gzip
+from functools import partial
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import platform
+import selectors
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+MIN_FREE = 8 * 1024**3
+MAX_RSS = 512 * 1024**2
+MAX_LINE = 2 * 1024**2
+WALL_SECONDS = 30
+CPU_SECONDS = 15
+
+
+def capacity(path: Path) -> int:
+    free = shutil.disk_usage(path).free
+    if free < MIN_FREE:
+        raise RuntimeError(f"disk guard: {free} bytes free, need {MIN_FREE}")
+    return free
+
+
+def percentile(samples: list[int], fraction: float) -> int | None:
+    return sorted(samples)[max(0, math.ceil(len(samples) * fraction) - 1)] if samples else None
+
+
+def summarize_phase(value: dict, iterations: int, expect_fault: bool) -> dict:
+    if value["elapsed_ns"] <= 0 or value["cpu_ns"] < 0:
+        raise ValueError("invalid clocks")
+    clients = value["clients"]
+    if len(clients) != 2 or any(len(c) != iterations for c in clients):
+        raise ValueError("missing completed client records")
+    for c in clients:
+        for start, end, success in c:
+            if type(start) is not int or type(end) is not int or end < start or type(success) is not bool:
+                raise ValueError("invalid call observation")
+    successful = [[s for s in c if s[2]] for c in clients]
+    successes = sum(map(len, successful))
+    failures = 2 * iterations - successes
+    # Refusal, business Err, timeout and queue admission are not successes.
+    latency = [end - start for c in successful for start, end, _ in c]
+    overlap_start = max(c[0][0] for c in clients)
+    overlap_end = min(c[-1][1] for c in clients)
+    overlap = [sum(overlap_start <= end <= overlap_end for _, end, _ in c) for c in successful]
+    squares = sum(n * n for n in overlap)
+    fault = value["fault_interval_ns"]
+    if len(fault) != 2 or (expect_fault and (any(type(n) is not int for n in fault) or fault[1] < fault[0])):
+        raise ValueError("missing/invalid fault interval")
+    if not expect_fault and fault != [None, None]:
+        raise ValueError("unexpected fault interval")
+    during = [s for c in successful for s in c if expect_fault and fault[0] <= s[1] <= fault[1]]
+    duration = fault[1] - fault[0] if expect_fault else None
+    return {
+        "phase": value["phase"], "successes": successes, "failures": failures,
+        "elapsed_ns": value["elapsed_ns"], "process_cpu_ns": value["cpu_ns"],
+        "completed_successes_per_second": successes * 1e9 / value["elapsed_ns"],
+        "process_cpu_ns_per_success": value["cpu_ns"] / successes if successes and value["cpu_ns"] > 0 else None,
+        "cpu_clock_positive": value["cpu_ns"] > 0,
+        "latency_p50_ns": percentile(latency, .5), "latency_p99_ns": percentile(latency, .99),
+        "clients": [{"successes": len(c), "latency_p99_ns": percentile([b-a for a,b,_ in c], .99)} for c in successful],
+        "common_active_interval_ns": [overlap_start, overlap_end],
+        "common_interval_completions": overlap,
+        "common_interval_jain_index": sum(overlap)**2 / (2 * squares) if squares else None,
+        "fault_interval_ns": fault, "fault_duration_ns": duration,
+        "healthy_completions_during_fault": len(during),
+        "healthy_successes_per_second_during_fault": len(during)*1e9/duration if duration else None,
+        "healthy_latency_p99_ns_during_fault": percentile([b-a for a,b,_ in during], .99),
+    }
+
+
+def process_snapshot(pid: int) -> dict:
+    root = Path('/proc') / str(pid)
+    fields = dict(line.split(':', 1) for line in (root/'status').read_text().splitlines() if ':' in line)
+    return {"rss_bytes": int(fields['VmRSS'].split()[0])*1024,
+            "high_water_rss_bytes": int(fields['VmHWM'].split()[0])*1024,
+            "fd_count": len(list((root/'fd').iterdir())),
+            "os_threads": len(list((root/'task').iterdir()))}
+
+
+def child_limits(cpus: list[int]) -> None:
+    import resource  # Linux-only; analysis helpers remain importable on Windows.
+    os.sched_setaffinity(0, cpus)
+    resource.setrlimit(resource.RLIMIT_CPU, (CPU_SECONDS, CPU_SECONDS + 1))
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+
+
+def run_case(binary: Path, output: Path, actors: int, iterations: int, repeat: int, cpus: list[int]) -> dict:
+    capacity(output)
+    label = f"cpus-{len(cpus)}-actors-{actors}-round-{repeat}"
+    result = {"actors": actors, "round": repeat, "cpu_affinity": cpus, "runtime_threads": len(cpus), "iterations_per_client": iterations,
+              "status": "failed", "checkpoints": [], "phases": []}
+    env = dict(os.environ, NAGI_THREADS=str(len(cpus)), NAGI_PROBE_ACTORS=str(actors), NAGI_PROBE_ITERATIONS=str(iterations))
+    started = time.monotonic()
+    process = None
+    with (output/f'{label}.stderr').open('wb') as stderr, gzip.open(output/f'{label}.jsonl.gz', 'wt', encoding='utf-8') as raw:
+        try:
+            process = subprocess.Popen([str(binary)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                       stderr=stderr, env=env, start_new_session=True, preexec_fn=partial(child_limits, cpus))
+            assert process.stdout is not None and process.stdin is not None
+            selector = selectors.DefaultSelector()
+            selector.register(process.stdout, selectors.EVENT_READ)
+            buffer = b''
+            peak = 0
+            eof = False
+            while not eof:
+                if time.monotonic() - started > WALL_SECONDS:
+                    raise RuntimeError('wall guard')
+                capacity(output)
+                try:
+                    rss = process_snapshot(process.pid)['rss_bytes']
+                    peak = max(peak, rss)
+                    if rss > MAX_RSS:
+                        raise RuntimeError('RSS guard')
+                except (FileNotFoundError, ProcessLookupError, KeyError):
+                    pass  # Process exit is checked below, never counted as success.
+                for key, _ in selector.select(.02):
+                    chunk = os.read(key.fd, 65536)
+                    if not chunk:
+                        eof = True
+                        break
+                    buffer += chunk
+                    if len(buffer) > MAX_LINE:
+                        raise RuntimeError('bounded JSON line exceeded')
+                    while b'\n' in buffer:
+                        line, buffer = buffer.split(b'\n', 1)
+                        raw.write(line.decode('utf-8')+'\n')
+                        value = json.loads(line)
+                        if 'checkpoint' in value:
+                            expected = len(result['checkpoints'])
+                            if value['checkpoint'] != expected or expected > 3:
+                                raise ValueError('checkpoint order')
+                            snap = process_snapshot(process.pid)
+                            snap.update(checkpoint=expected, alive_tasks=value['alive_tasks'])
+                            result['checkpoints'].append(snap)
+                            process.stdin.write(b'continue\n')
+                            process.stdin.flush()
+                        else:
+                            phase = len(result['phases'])
+                            if value['phase'] != phase or phase > 2:
+                                raise ValueError('phase order')
+                            summary = summarize_phase(value, iterations, phase == 1 and actors >= 3)
+                            result['phases'].append(summary)
+                            if summary['failures']:
+                                raise RuntimeError('benchmark call did not complete successfully')
+            selector.close()
+            code = process.wait(timeout=max(.1, WALL_SECONDS-(time.monotonic()-started)))
+            if code or buffer or len(result['checkpoints']) != 4 or len(result['phases']) != 3:
+                raise RuntimeError(f'incomplete native run, exit={code}')
+            before, idle, stopped, released = result['checkpoints']
+            result['idle_rss_delta_bytes'] = idle['rss_bytes'] - before['rss_bytes']
+            result['idle_rss_delta_bytes_per_actor'] = result['idle_rss_delta_bytes'] / actors
+            result['retained_rss_delta_bytes_after_release'] = released['rss_bytes'] - before['rss_bytes']
+            result['released_fd_delta'] = released['fd_count'] - before['fd_count']
+            result['released_task_delta'] = released['alive_tasks'] - before['alive_tasks']
+            # RSS high-water retention is reported, not mistaken for live tasks.
+            if result['released_fd_delta'] or result['released_task_delta']:
+                raise RuntimeError('FD/task observation did not return to baseline')
+            result.update(status='passed', sampled_peak_rss_bytes=peak,
+                          observed_peak_rss_bytes=max([peak]+[s['high_water_rss_bytes'] for s in result['checkpoints']]))
+        except Exception as problem:
+            result['error'] = f'{type(problem).__name__}: {problem}'
+        finally:
+            if process is not None:
+                if process.poll() is None:
+                    try:
+                        os.killpg(process.pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+                    try:
+                        process.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        os.killpg(process.pid, signal.SIGKILL)
+                        process.wait(timeout=1)
+                result['exit_code'] = process.returncode
+                process.stdin.close()
+                process.stdout.close()
+            result['process_wall_seconds'] = time.monotonic()-started
+    (output/f'{label}.json').write_text(json.dumps(result, indent=2)+'\n')
+    return result
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--binary', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--actors', type=int, nargs='+', default=[1, 32, 128, 512])
+    parser.add_argument('--cpus', type=int, nargs='+', default=[1, 2])
+    parser.add_argument('--iterations', type=int, default=20000)
+    parser.add_argument('--rounds', type=int, default=3)
+    args = parser.parse_args()
+    if platform.system() != 'Linux' or platform.architecture()[0] != '64bit':
+        parser.error('Linux 64-bit observations only')
+    if not 1 <= args.iterations <= 20000 or not 1 <= args.rounds <= 3 or len(set(args.actors)) != len(args.actors) or len(args.actors)>4 or any(n != 1 and not 3 <= n <= 512 for n in args.actors):
+        parser.error('bounded actors=1 or3..512 (max4 stages), iterations1..20000, rounds1..3')
+    available_cpus = sorted(os.sched_getaffinity(0))
+    if not args.cpus or len(set(args.cpus)) != len(args.cpus) or any(n not in (1, 2) or n > len(available_cpus) for n in args.cpus):
+        parser.error('cpus must be available 1 and/or2')
+    binary = args.binary.resolve(strict=True)
+    capacity(args.output.parent)
+    args.output.mkdir()  # Exclusive ownership: never overwrite an older measurement.
+    result = {"schema": 1, "status": "failed", "binary": str(binary),
+              "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+              "platform": platform.platform(), "cpu_count": os.cpu_count(),
+              "limits": {"wall_seconds": WALL_SECONDS, "cpu_seconds": CPU_SECONDS,
+                         "rss_bytes": MAX_RSS, "minimum_free_bytes": MIN_FREE},
+              "host_cpu_affinity": available_cpus, "cpu_quota": Path("/sys/fs/cgroup/cpu.max").read_text().strip() if Path("/sys/fs/cgroup/cpu.max").exists() else None, "disk_free_before": capacity(args.output), "cases": []}
+    try:
+        for cpu_count in args.cpus:
+            for actors in args.actors:
+                for repeat in range(1, args.rounds+1):
+                    case = run_case(binary, args.output, actors, args.iterations, repeat, available_cpus[:cpu_count])
+                    result['cases'].append(case)
+                    print(f"cpus={cpu_count} actors={actors} round={repeat}: {case['status']}", flush=True)
+                    if case['status'] != 'passed':
+                        raise RuntimeError(case['error'])
+        result['status'] = 'passed'
+    except Exception as problem:
+        result['error'] = f'{type(problem).__name__}: {problem}'
+    result['disk_free_after'] = shutil.disk_usage(args.output).free
+    (args.output/'summary.json').write_text(json.dumps(result, indent=2)+'\n')
+    return 0 if result['status'] == 'passed' else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

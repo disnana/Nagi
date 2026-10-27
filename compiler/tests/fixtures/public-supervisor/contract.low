@@ -1,0 +1,334 @@
+# Hand-maintained Low companion. No compiler-generated module metadata.
+import std.actor as actor;
+
+record Context {
+    slot: i64;
+    mode: i64;
+    seed: i64;
+    owned: str;
+
+}
+record State {
+    slot: i64;
+    count: i64;
+    owned: str;
+
+}
+record Events {
+    failed: i64;
+    panicked: i64;
+    restarts: i64;
+    intensity: i64;
+    sibling_starts: i64;
+
+}
+@rust("native::attempt")
+extern async fn attempt(slot: i64, mode: i64) -> Result[unit, Error];
+@rust("native::hold")
+extern async fn hold(slot: i64) -> Result[unit, Error];
+@rust("native::parent_failure")
+extern async fn parent_failure(slot: i64) -> Result[unit, Error];
+@rust("native::factory_started")
+extern fn factory_started(slot: i64) -> unit;
+@rust("native::check_clean")
+extern fn check_clean(slot: i64, attempts: i64, siblings: i64, factories: i64, states: i64) -> unit;
+
+async fn failing(context: shared[Context]) -> Result[unit, Error] {
+    return await attempt(context.slot, context.mode);
+
+}
+async fn sibling(context: shared[Context], signal: actor.TaskReady) -> Result[unit, Error] {
+    try actor.mark_ready(view(signal));
+    return await hold(context.slot);
+
+}
+async fn monitor(group: actor.Supervisor[Context]) -> Result[unit, Error] {
+    return await actor.run(group);
+
+}
+async fn events(control: view[actor.Control]) -> Result[Events, Error] {
+    let failed = 0;
+    let panicked = 0;
+    let restarts = 0;
+    let intensity = 0;
+    let sibling_starts = 0;
+    let reading = true;
+    let count = 0;
+    while reading and count < 64 {
+        count = count + 1;
+        match await actor.next_event_timeout(control, 1000) {
+            case Ok(next) {
+                match next {
+                    case Some(event) {
+                        assert_true(event.kind != actor.EventKind.LAGGED);
+                        if event.kind == actor.EventKind.FAILED {
+                            failed = failed + 1;
+                        }
+                        if event.kind == actor.EventKind.PANICKED {
+                            panicked = panicked + 1;
+                        }
+                        if event.kind == actor.EventKind.RESTART_SCHEDULED {
+                            restarts = restarts + 1;
+                        }
+                        if event.kind == actor.EventKind.INTENSITY_EXCEEDED {
+                            intensity = intensity + 1;
+                        }
+                        if event.kind == actor.EventKind.STARTED and event.child_name == "sibling" {
+                            sibling_starts = sibling_starts + 1;
+                    }
+                    }
+                    case None {
+                        reading = false;
+            }
+            }
+            }
+            case Err(_) {
+                return error("event stream did not finish after cleanup");
+    }
+    }
+    }
+    assert_true(not reading);
+    return ok(Events(failed=failed, panicked=panicked, restarts=restarts, intensity=intensity, sibling_starts=sibling_starts));
+
+}
+async fn restart_budget(slot: i64, budget: i64, mode: i64) -> Result[unit, Error] {
+    let options = try actor.restart_delay(try actor.options(2, 64, budget, 60000, 1000), 0);
+    let group = actor.supervisor[Context](Context(slot=slot, mode=mode, seed=7, owned="context"), options);
+    try actor.task_with_ready(view(group), "sibling", sibling, actor.RestartPolicy.TEMPORARY);
+    let policy = actor.RestartPolicy.TRANSIENT;
+    if mode == 2 {
+        policy = actor.RestartPolicy.PERMANENT;
+    }
+    try actor.task(view(group), "failing", failing, policy);
+    let control = actor.control(view(group));
+    match await actor.run(group) {
+        case Ok(_) {
+            return error("restart budget exhaustion returned success");
+        }
+        case Err(_) {
+            assert_true(true);
+    }
+    }
+    let report = try await events(view(control));
+    assert_true(report.restarts == budget and report.intensity == 1 and report.sibling_starts == 1);
+    if mode == 0 {
+        assert_true(report.failed == budget + 1 and report.panicked == 0);
+    }
+    if mode == 1 {
+        assert_true(report.panicked == budget + 1 and report.failed == 0);
+    }
+    if mode == 2 {
+        assert_true(report.failed == 0 and report.panicked == 0);
+    }
+    check_clean(slot, budget + 1, 1, 0, 0);
+    return ok(assert_true(true));
+
+}
+async fn factory(context: shared[Context]) -> Result[State, Error] {
+    factory_started(context.slot);
+    return ok(State(slot=context.slot, count=context.seed, owned="state"));
+
+}
+async fn handler(state: State, message: i64) -> Result[actor.Turn[State, i64, i64], Error] {
+    if message == -2 {
+        return error("controlled worker failure");
+    }
+    if message == -1 {
+        return ok(actor.turn[State, i64, i64](state, fail(99)));
+    }
+    if message == 0 {
+        let count = state.count;
+        return ok(actor.turn[State, i64, i64](state, ok(count)));
+    }
+    let count = state.count + message;
+    return ok(actor.turn[State, i64, i64](State(slot=state.slot, count=count, owned="state"), ok(count)));
+
+}
+async fn query(worker: view[actor.Actor[i64, i64, i64]], message: i64) -> Result[i64, Error] {
+    match await actor.call(worker, message, 1000, 1000) {
+        case Ok(reply) {
+            match reply {
+                case Ok(value) {
+                    return ok(value);
+                }
+                case Err(_) {
+                    return error("unexpected business reply");
+        }
+        }
+        }
+        case Err(_) {
+            return error("unexpected actor refusal");
+
+}
+}
+}
+async fn reset_and_shutdown(first: actor.Actor[i64, i64, i64], second: actor.Actor[i64, i64, i64], control: actor.Control) -> Result[unit, Error] {
+    match await actor.ready(view(first), 1000) {
+        case Ok(_) {
+            assert_true(true);
+        }
+        case Err(_) {
+            return error("first actor not ready");
+    }
+    }
+    match await actor.ready(view(second), 1000) {
+        case Ok(_) {
+            assert_true(true);
+        }
+        case Err(_) {
+            return error("second actor not ready");
+    }
+    }
+    assert_true(try await query(view(first), 5) == 12);
+    assert_true(try await query(view(second), 3) == 10);
+    match await actor.call(view(first), -1, 1000, 1000) {
+        case Ok(reply) {
+            match reply {
+                case Ok(_) {
+                    return error("business refusal became success");
+                }
+                case Err(value) {
+                    assert_true(value == 99);
+        }
+        }
+        }
+        case Err(_) {
+            return error("business refusal became worker failure");
+    }
+    }
+    assert_true(try await query(view(first), 0) == 12);
+    match await actor.call(view(first), -2, 1000, 1000) {
+        case Ok(_) {
+            return error("failed worker replied successfully");
+        }
+        case Err(problem) {
+            assert_true(problem.kind == actor.CallKind.REPLY_LOST);
+    }
+    }
+    let restarted = false;
+    let count = 0;
+    while not restarted and count < 32 {
+        count = count + 1;
+        match await actor.next_event_timeout(view(control), 1000) {
+            case Ok(next) {
+                match next {
+                    case Some(event) {
+                        assert_true(event.kind != actor.EventKind.LAGGED);
+                        if event.kind == actor.EventKind.STARTED and event.child_name == "first" and event.generation == 2 {
+                            restarted = true;
+                        }
+                        if event.kind == actor.EventKind.STARTED and event.child_name == "second" {
+                            assert_true(event.generation == 1);
+                    }
+                    }
+                    case None {
+                        return error("stopped before restart");
+            }
+            }
+            }
+            case Err(_) {
+                return error("restart event deadline");
+    }
+    }
+    }
+    assert_true(restarted);
+    assert_true(try await query(view(first), 0) == 7);
+    assert_true(try await query(view(second), 0) == 10);
+    try await actor.shutdown(view(control));
+    return ok(assert_true(true));
+
+}
+async fn state_reset() -> Result[unit, Error] {
+    let group = actor.supervisor[Context](Context(slot=3, mode=0, seed=7, owned="context"), try actor.options(2, 64, 2, 60000, 1000));
+    let first = try actor.register[State, i64, i64, i64](view(group), "first", factory, handler, actor.default_actor_options());
+    let second = try actor.register[State, i64, i64, i64](view(group), "second", factory, handler, actor.default_actor_options());
+    let control = actor.control(view(group));
+    scope {
+        spawn monitor(group);
+        spawn reset_and_shutdown(first, second, control);
+    }
+    check_clean(3, 0, 0, 3, 5);
+    return ok(assert_true(true));
+
+}
+async fn stop_ready(control: actor.Control) -> Result[unit, Error] {
+    let reading = true;
+    let count = 0;
+    while reading and count < 8 {
+        count = count + 1;
+        match await actor.next_event_timeout(view(control), 1000) {
+            case Ok(next) {
+                match next {
+                    case Some(event) {
+                        if event.kind == actor.EventKind.READY {
+                            reading = false;
+                    }
+                    }
+                    case None {
+                        return error("stopped before ready");
+            }
+            }
+            }
+            case Err(_) {
+                return error("ready event deadline");
+    }
+    }
+    }
+    assert_true(not reading);
+    try await actor.shutdown(view(control));
+    return ok(assert_true(true));
+
+}
+async fn normal_shutdown() -> Result[unit, Error] {
+    let group = actor.supervisor[Context](Context(slot=4, mode=0, seed=0, owned="context"), try actor.options(1, 16, 2, 60000, 1000));
+    try actor.task_with_ready(view(group), "sibling", sibling, actor.RestartPolicy.PERMANENT);
+    let control = actor.control(view(group));
+    scope {
+        spawn monitor(group);
+        spawn stop_ready(control);
+    }
+    check_clean(4, 0, 1, 0, 0);
+    return ok(assert_true(true));
+
+}
+async fn cancelled_owner(group: actor.Supervisor[Context]) -> Result[unit, Error] {
+    scope {
+        spawn monitor(group);
+        try await parent_failure(5);
+    }
+    return ok(assert_true(true));
+
+}
+async fn parent_cancel() -> Result[unit, Error] {
+    let group = actor.supervisor[Context](Context(slot=5, mode=0, seed=0, owned="context"), try actor.options(1, 16, 2, 60000, 1000));
+    try actor.task_with_ready(view(group), "sibling", sibling, actor.RestartPolicy.PERMANENT);
+    let control = actor.control(view(group));
+    match await cancelled_owner(group) {
+        case Ok(_) {
+            return error("parent failure was swallowed");
+        }
+        case Err(_) {
+            assert_true(true);
+    }
+    }
+    try await actor.shutdown(view(control));
+    let report = try await events(view(control));
+    assert_true(report.restarts == 0 and report.sibling_starts == 1);
+    check_clean(5, 0, 1, 0, 0);
+    return ok(assert_true(true));
+
+}
+async fn exercise() -> Result[unit, Error] {
+    try await restart_budget(0, 0, 0);
+    try await restart_budget(1, 2, 0);
+    try await restart_budget(2, 2, 1);
+    try await restart_budget(6, 2, 2);
+    try await state_reset();
+    try await normal_shutdown();
+    try await parent_cancel();
+    return ok(print("public Supervisor restart, state and cleanup contracts passed"));
+
+}
+async fn main() -> Result[unit, Error] {
+    return await exercise();
+}

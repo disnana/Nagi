@@ -611,3 +611,8 @@ Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが�
 ### 2026-10-23: PR #150のauth-stage診断行境界
 
 #150のLinux通常検査は成功したが、補助診断gateがbroadのslot 1欠落で失敗した。rawが削除済みのため根因は未確定。改行のないlibtest出力にheaderが連結される可能な失敗を再現し、test-only producerの既存有限buffer内へ先頭改行を追加した。strict parser、必要slot、loss拒否、認証処理、期限、並列度を維持する。実encoderのRED/GREENとPython41件、workflowと同じ実採集で両slot・閉鎖46 records、runtime909成功/既存1 ignored、native coverage17件を確認。独立最終auditと新HEAD CIは別gateとしてPRへ集約する。[設計・限界](auth-stage-producer-framing.md)。
+
+
+### 2026-10-27: 公開Nagi Supervisorの有限回帰・実測
+
+Rust backendの実std.actor APIをHigh・独立保存Low・手書きLowから実runtimeへ通す7シナリオを追加した。予算0/2、worker Err/panic/PERMANENT正常終了、業務Err、兄弟と状態再初期化、明示shutdown・親scope取消、重複generationとguard/state/context破棄を確認。compiler/runtime/既定/CIは変更しない。新native3forms成功、既存actor_stdlib13成功、focusedclippy/fmt、Python集計10成功。実Nagi benchmarkは1/2 CPU affinity×1/32/128/512actors×3round、全72phaseの2,880,000正常返信と18故障、全caseの最終FD/task baselineを確認しrawを固定した。RSS/CPU/公平性は条件付き実測で、BEAM同等・最大容量・長期安定性・Go実装を主張しない。別担当の独立reviewとexact-head CIは未完、Draftを維持する。[詳細](public-supervisor-validation.md)。

@@ -1,0 +1,36 @@
+{
+  "base_commit": "0d1884cb5a24235a440811a9f5d16be1bf5a664a",
+  "compiler_src_tree": "ff3e20e4328fc286b5812cce6722d3eb42600a5e",
+  "runtime_src_tree": "5d9d5db36403db640a716c0ed960b988c1cdd49d",
+  "toolchain": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "source_sha256": {
+    "benchmarks/public-supervisor/main.nagi": "bd7f3463a17b37918b4c7d805cf7159e3f3e00875f5595a8301c781e8c2ebb40",
+    "benchmarks/public-supervisor/observe.rs": "c9d8f071397c02cac2206b2cc4182c2b1a2c036596db410b16eec8d2e79d5b51",
+    "scripts/public_supervisor_probe.py": "a22d252b0ade50f4be7ba595b54f36d1bd76ba96f9ac69f8f3c62243990fa059",
+    "scripts/tests/test_public_supervisor_probe.py": "c4c08e935446f590d8d3a9760d53ddfb592d1494685a2434b77f8ed5f009f3c4",
+    "compiler/tests/support/public_supervisor_resilience.rs": "887bba1d230dd1dbffb1d9032ebd535e79657cb3094c902c2881dbc766857c24",
+    "compiler/tests/fixtures/public-supervisor/contract.nagi": "7f0e6d5c04a0749078adba298de7f04d79d93ec387f5092f3503ee5506acd9ec",
+    "compiler/tests/fixtures/public-supervisor/contract.low": "68ecd10c43314665c87c17923baf20f3dc6dd1463eb5756f1bacdb3d9cccafc6",
+    "compiler/tests/fixtures/public-supervisor/observer.rs": "4a8af158a3535473e9c0824404db76230ab8fd6c127e1bcba25895800ef99b0f"
+  },
+  "emitted_main_sha256": "c1e323639f0ae646ed75fcc24d6401e72d8aff47bcc4be5aaa5d6b91d7ceb3df",
+  "native_cargo_lock_sha256": "680d6f2d8d9942a899e2f3a178c902a579b9fd6fb3c99518313c7cd61ac4daba",
+  "binary_sha256": "aa8d4dd0bef1dafd6c3b74fb26cfa779b333666d34fc12944edb2d1bce6097d1",
+  "smoke_excluded_from_measurement": [
+    "local-only/public-supervisor-benchmark/smoke",
+    "local-only/public-supervisor-benchmark/smoke-final"
+  ],
+  "instrumentation_retained_at_final_checkpoint": {
+    "reply_samples": 40000,
+    "note": "Phase static vectors remain live; RSS after shutdown includes observation buffers and allocator retention"
+  },
+  "validation": {
+    "public_contract": "High/saved Low/handwritten Low native pass",
+    "raw_phases_recomputed": 72,
+    "platforms_executed": [
+      "linux-x86_64"
+    ]
+  },
+  "measured_runner_sha256": "e777b0615998ea7a8fc64013aed87a6ca6b020fb83ffca9bcb8624fbdb3ba948",
+  "post_measurement_runner_change": "Moved resource import inside Linux-only child_limits so accounting tests can import on Windows; no measurement semantics change. Exact executed runner archived as measured-runner.py.txt."
+}
