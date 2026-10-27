@@ -2,7 +2,7 @@
 import importlib.util
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 SPEC = importlib.util.spec_from_file_location('public_supervisor_probe', Path(__file__).parents[1] / 'public_supervisor_probe.py')
 probe = importlib.util.module_from_spec(SPEC)
@@ -72,6 +72,33 @@ class MeasurementAccounting(unittest.TestCase):
     def test_nearest_rank_quantile_is_not_interpolated(self):
         self.assertEqual(probe.percentile(list(range(1, 101)), .99), 99)
         self.assertIsNone(probe.percentile([], .99))
+
+    def test_active_clients_count_and_p95_use_every_completed_reply(self):
+        value = self.phase()
+        value['clients'] = [[[1, 11, True]], [[1, 21, False]], [[1, 31, True]]]
+        result = probe.summarize_phase(value, 1, True, client_count=3)
+        self.assertEqual(result['successes'], 2)
+        self.assertEqual(result['failures'], 1)
+        self.assertEqual(result['process_cpu_ns_per_success'], 250)
+        self.assertEqual(result['latency_p95_ns'], 30)
+        self.assertEqual(len(result['clients']), 3)
+
+    def test_active_clients_cannot_silently_omit_a_worker(self):
+        with self.assertRaisesRegex(ValueError, 'missing completed'):
+            probe.summarize_phase(self.phase(), 2, True, client_count=3)
+
+    def test_live_process_permission_loss_remains_a_measurement_failure(self):
+        child = Mock(pid=123)
+        child.poll.return_value = None
+        with patch.object(probe, 'process_snapshot', side_effect=PermissionError):
+            with self.assertRaises(PermissionError):
+                probe.sampled_rss(child)
+
+    def test_exited_process_permission_loss_is_not_an_rss_observation(self):
+        child = Mock(pid=123)
+        child.poll.return_value = 0
+        with patch.object(probe, 'process_snapshot', side_effect=PermissionError):
+            self.assertIsNone(probe.sampled_rss(child))
 
 
 if __name__ == '__main__':

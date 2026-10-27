@@ -1,0 +1,28 @@
+{
+  "cases_recomputed": 18,
+  "successful_replies": 2520000,
+  "normal_failures": 0,
+  "injected_worker_failures": 18,
+  "public_restarts": 18,
+  "released_fd_task_deltas_zero": true,
+  "raw_sha256": {
+    "cpus-1-actors-17-round-1.jsonl.gz": "71198d0c3858e70c848c41ca3b977bd4afa0aa4cea630db1ec00620096aec69c",
+    "cpus-1-actors-17-round-2.jsonl.gz": "5e922a20fedc77bb7b85a952c78c3f7cdf42c322f1a245e837a5a05bf1ac05cc",
+    "cpus-1-actors-17-round-3.jsonl.gz": "19e9c423b3a99efece250e124bddcc39b3f69489339b7c799babf9cca2b9cc40",
+    "cpus-1-actors-5-round-1.jsonl.gz": "78d17b46b535d875d8328332501bf29ba4786ad5e06dd0b158b19a847efdc65d",
+    "cpus-1-actors-5-round-2.jsonl.gz": "7a672d1f80e6e1bbe9cf1b3be12b1865ab981951c316b8337bcbb887a1cade4f",
+    "cpus-1-actors-5-round-3.jsonl.gz": "577a5e3fb73de8d75d4ac97cf8ca3aa3502b1a8342d682407fea670b6714e512",
+    "cpus-1-actors-65-round-1.jsonl.gz": "6a22b5519f4defe8d6ebfde77ed2dd47907a539e41a3f72a4e84d61d6c57ee0a",
+    "cpus-1-actors-65-round-2.jsonl.gz": "efe1e42e944e89d81c23b78b45b4e85f3126595546b4a25d3d52ed167d6e54a0",
+    "cpus-1-actors-65-round-3.jsonl.gz": "cb3342b01779551fc50650354414528fd6f1c71159a1752e8000f36613b25506",
+    "cpus-2-actors-17-round-1.jsonl.gz": "0d971af2deba9beade278014320e39cdc652dc7b7cdcca40b6539fec49f0f0fc",
+    "cpus-2-actors-17-round-2.jsonl.gz": "5c090ed24a72a91eb92342d668781c9e37d91084a73b598058f2c69bc17c3baa",
+    "cpus-2-actors-17-round-3.jsonl.gz": "c4d4f77594c292543365493748f0f0107117a8ec3e541f71aadc7e6aabba13e6",
+    "cpus-2-actors-5-round-1.jsonl.gz": "933f08d09d3816b096c8e0f16fff29ae33197e8637bb32c85650f1228dfda405",
+    "cpus-2-actors-5-round-2.jsonl.gz": "aee51f68d5cced70daed39a69bcffddec3589866f2a94c19a82456cac9c5d544",
+    "cpus-2-actors-5-round-3.jsonl.gz": "c8efc2685b9c605cc62861030e6dbb22f7680aaf9bd2df4a70a921eadcda7e19",
+    "cpus-2-actors-65-round-1.jsonl.gz": "acf9054a11cf4d053ca2c3747b630c933266d979b82205f9ed5b05db0c62c5ff",
+    "cpus-2-actors-65-round-2.jsonl.gz": "27346ed745ee2089e99a3e96f77a043e28c9359085ac4bcdaca7f0fb3af253c8",
+    "cpus-2-actors-65-round-3.jsonl.gz": "e7414809e53b7b7b56ad2c0765c146d8ebc0f0b74233e0146a2651eebf0e2a73"
+  }
+}

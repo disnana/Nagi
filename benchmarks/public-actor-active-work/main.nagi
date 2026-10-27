@@ -1,0 +1,164 @@
+# All workers, message handlers, supervision, failure and recovery use std.actor.
+import std.actor as actor
+
+@rust("native::checkpoint")
+extern def checkpoint(stage: i64) -> unit
+@rust("native::begin_phase")
+extern def begin_phase(clients: i64) -> unit
+@rust("native::record_client")
+extern def record_client(client: i64, starts: List[i64], ends: List[i64], successes: List[bool]) -> unit
+@rust("native::end_phase")
+extern def end_phase() -> unit
+@rust("native::fault_mark")
+extern def fault_mark(complete: bool, time: i64) -> unit
+@rust("native::recovery")
+extern def recovery(failures: i64, restarts: i64, generation: i64, state: i64) -> unit
+
+async def factory(context: shared[unit]) -> Result[i64, Error]:
+    return ok(0)
+
+async def handler(state: i64, message: i64) -> Result[actor.Turn[i64, i64, Error], Error]:
+    if message < 0:
+        return error("finite public actor worker fault")
+    next = state + message
+    return ok(actor.turn[i64, i64, Error](next, ok(next)))
+
+async def monitor(group: actor.Supervisor[unit]) -> Result[unit, Error]:
+    return await actor.run(group)
+
+async def client(worker: actor.Actor[i64, i64, Error], index: i64, iterations: i64) -> Result[unit, Error]:
+    starts: List[i64] = []
+    ends: List[i64] = []
+    successes: List[bool] = []
+    for i in range(iterations):
+        start = clock_ns()
+        success = False
+        match await actor.call(view(worker), 1, 2000, 2000):
+            case Ok(reply):
+                match reply:
+                    case Ok(value):
+                        # Each public register owns an independent state0.
+                        assert_true(value == i + 1)
+                        success = True
+                    case Err(_):
+                        assert_true(True)
+            case Err(_):
+                assert_true(True)
+        end = clock_ns()
+        append(starts, start)
+        append(ends, end)
+        append(successes, success)
+    record_client(index, starts, ends, successes)
+    return ok(assert_true(True))
+
+async def fail_once(worker: actor.Actor[i64, i64, Error], control: actor.Control) -> Result[unit, Error]:
+    fault_mark(False, clock_ns())
+    match await actor.call(view(worker), -1, 2000, 2000):
+        case Ok(_):
+            return error("faulted worker returned a reply")
+        case Err(problem):
+            assert_true(problem.kind == actor.CallKind.REPLY_LOST)
+    restarted = False
+    count = 0
+    failures = 0
+    restarts = 0
+    while not restarted and count < 16:
+        count = count + 1
+        match await actor.next_event_timeout(view(control), 2000):
+            case Ok(next):
+                match next:
+                    case Some(event):
+                        assert_true(event.kind != actor.EventKind.LAGGED)
+                        assert_true(event.child_name == "fault")
+                        if event.kind == actor.EventKind.FAILED:
+                            assert_true(event.generation == 1)
+                            failures = failures + 1
+                        if event.kind == actor.EventKind.RESTART_SCHEDULED:
+                            restarts = restarts + 1
+                        if event.kind == actor.EventKind.STARTED and event.child_name == "fault" and event.generation == 2:
+                            restarted = True
+                    case None:
+                        return error("supervisor stopped before recovery")
+            case Err(_):
+                return error("recovery event deadline")
+    assert_true(restarted)
+    assert_true(failures == 1 and restarts == 1)
+    match await actor.call(view(worker), 0, 2000, 2000):
+        case Ok(reply):
+            match reply:
+                case Ok(value):
+                    assert_true(value == 0)
+                    recovery(failures, restarts, 2, value)
+                case Err(_):
+                    return error("recovered actor business failure")
+        case Err(_):
+            return error("recovered actor unavailable")
+    fault_mark(True, clock_ns())
+    return ok(assert_true(True))
+
+async def drive(workers: List[actor.Actor[i64, i64, Error]], fault: actor.Actor[i64, i64, Error], control: actor.Control, clients: i64, iterations: i64) -> Result[unit, Error]:
+    ready: List[actor.Actor[i64, i64, Error]] = []
+    for worker in workers:
+        match await actor.ready(view(worker), 5000):
+            case Ok(_):
+                assert_true(True)
+            case Err(_):
+                return error("active actor did not become ready")
+        append(ready, actor.clone_actor(view(worker)))
+    match await actor.ready(view(fault), 5000):
+        case Ok(_):
+            assert_true(True)
+        case Err(_):
+            return error("fault actor did not become ready")
+    starts = 0
+    started = 0
+    for i in range((clients + 1) * 2):
+        match await actor.next_event_timeout(view(control), 2000):
+            case Ok(next):
+                match next:
+                    case Some(event):
+                        assert_true(event.generation == 1)
+                        if event.kind == actor.EventKind.STARTING:
+                            starts = starts + 1
+                        else:
+                            if event.kind == actor.EventKind.STARTED:
+                                started = started + 1
+                            else:
+                                return error("unexpected initial event")
+                    case None:
+                        return error("startup stream closed")
+            case Err(_):
+                return error("startup event deadline")
+    assert_true(starts == clients + 1 and started == clients + 1)
+    checkpoint(1)
+    begin_phase(clients)
+    async with scope:
+        index = 0
+        for worker in ready:
+            spawn client(actor.clone_actor(view(worker)), index, iterations)
+            index = index + 1
+        spawn fail_once(fault, actor.clone_control(view(control)))
+    end_phase()
+    try await actor.shutdown(view(control))
+    checkpoint(2)
+    return ok(assert_true(True))
+
+async def main() -> Result[unit, Error]:
+    clients = try parse_i64(env("NAGI_PROBE_CLIENTS", "16"))
+    iterations = try parse_i64(env("NAGI_PROBE_ITERATIONS", "5000"))
+    assert_true(clients >= 1 and clients <= 64 and iterations >= 1 and iterations <= 5000)
+    checkpoint(0)
+    group = actor.supervisor[unit](assert_true(True), try actor.options(clients + 1, 1024, 2, 60000, 2000))
+    fault = try actor.register[i64, i64, i64, Error](view(group), "fault", factory, handler, try actor.actor_options(32, 4096, 4096, 5000, actor.RestartPolicy.TRANSIENT))
+    workers: List[actor.Actor[i64, i64, Error]] = []
+    for i in range(clients):
+        name = try json_encode(i)
+        worker = try actor.register[i64, i64, i64, Error](view(group), view(name), factory, handler, try actor.actor_options(32, 4096, 4096, 5000, actor.RestartPolicy.TRANSIENT))
+        append(workers, worker)
+    control = actor.control(view(group))
+    async with scope:
+        spawn monitor(group)
+        spawn drive(workers, fault, control, clients, iterations)
+    await sleep(50)
+    checkpoint(3)
+    return ok(assert_true(True))
