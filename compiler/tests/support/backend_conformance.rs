@@ -330,8 +330,33 @@ fn apply_windows_command_context(source: &Command, target: &mut Command) {
 #[cfg(windows)]
 fn validate_windows_program(original: &Command) -> Result<(), String> {
     // The gated child is cmd.exe, so its successful spawn cannot tell us that
-    // the requested rustc/go/native executable exists. Resolve it first with
-    // Windows' own PATH/PATHEXT search under the exact command context.
+    // the requested rustc/go/native executable exists. Explicit paths are
+    // checked directly because `where.exe` treats an existing absolute path as
+    // a search pattern and can return exit 2 (including 8.3 temp paths).
+    let program = Path::new(original.get_program());
+    if program.is_absolute() || program.components().count() > 1 {
+        let candidate = if program.is_absolute() {
+            program.to_path_buf()
+        } else {
+            original
+                .get_current_dir()
+                .map(Path::to_path_buf)
+                .or_else(|| std::env::current_dir().ok())
+                .ok_or_else(|| "cannot resolve the command working directory".to_owned())?
+                .join(program)
+        };
+        if candidate.is_file()
+            || (candidate.extension().is_none() && candidate.with_extension("exe").is_file())
+        {
+            return Ok(());
+        }
+        return Err(format!(
+            "cannot resolve explicit executable {:?} from command cwd",
+            original.get_program()
+        ));
+    }
+    // Bare names follow the wrapper's PATH/PATHEXT lookup under the exact
+    // command environment instead of reimplementing Windows search rules.
     let mut lookup = Command::new("where.exe");
     lookup.arg(original.get_program());
     apply_windows_command_context(original, &mut lookup);
