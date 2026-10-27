@@ -12,7 +12,8 @@ import browser_failure_projection
 from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 ROOT = Path(__file__).resolve().parents[2]
-PRE_POLICY_WORKFLOW_SHA256 = '11aff8b893594832c7b6b6e4697ed6badbb5c5952dd268c2433db09b900e7d09'
+# Frozen pre-policy projection with the reviewed 9863a387 HTTP source identity.
+PRE_POLICY_WORKFLOW_SHA256 = '0a0bfbbd4fa46ee3ef302c7f17a34b619e42de1748ef20231c6e4192f88b5cc4'
 
 
 def job(source, name):
