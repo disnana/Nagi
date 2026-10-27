@@ -128,6 +128,179 @@ def main() -> Result[unit, Error]:
     return ok(print("go-ok"))
 "#;
 
+const ASYNC_PROGRAM: &str = r#"def capture(value: i64) -> i64:
+    print(value)
+    return value
+
+async def work(value: i64) -> Result[i64, Error]:
+    print(value + 1)
+    return ok(value + 2)
+
+async def main() -> Result[unit, Error]:
+    answer = try await work(capture(10))
+    print(answer)
+    return ok(print(99))
+"#;
+
+const ASYNC_LOW: &str = r#"fn capture(value: i64) -> i64 {
+    print(value);
+    return value;
+}
+async fn work(value: i64) -> Result[i64, Error] {
+    print(value + 1);
+    return ok(value + 2);
+}
+async fn main() -> Result[unit, Error] {
+    let answer = try await work(capture(10));
+    print(answer);
+    return ok(print(99));
+}
+"#;
+
+const ASYNC_FAILURE_PROGRAM: &str = r#"def capture(value: i64) -> i64:
+    print(value)
+    return value
+
+async def fail_work(value: i64) -> Result[unit, Error]:
+    print(value + 1)
+    return error("async failure sentinel")
+
+async def main() -> Result[unit, Error]:
+    return await fail_work(capture(20))
+"#;
+
+#[test]
+fn go_backend_runs_cold_user_async_from_high_saved_low_and_main() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", ASYNC_PROGRAM);
+    let high = fixture.go("run", "main.nagi", "out-high-async");
+    assert!(
+        high.status.success(),
+        "{}",
+        String::from_utf8_lossy(&high.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&high.stdout), "10\n11\n12\n99\n");
+
+    let go = fs::read_to_string(fixture.0.join("out-high-async/go/main.go")).unwrap();
+    assert!(go.contains("*nagiFuture[nagiResult[int64, nagiError]]"));
+    assert!(go.contains("return nagiCold(func() nagiResult[int64, nagiError] {"));
+    assert!(go.contains("result := nagiMain().await()"));
+    assert!(go.contains("future.body = nil"));
+
+    fixture.write(
+        "out-high-async/go/future_test.go",
+        r#"package main
+
+import "testing"
+
+func TestColdFutureStartsAtAwaitAndRunsOnce(t *testing.T) {
+    starts := 0
+    future := nagiCold(func() int64 { starts++; return 7 })
+    if starts != 0 { t.Fatalf("body started before await: %d", starts) }
+    if value := future.await(); value != 7 { t.Fatalf("value = %d", value) }
+    if starts != 1 { t.Fatalf("body starts = %d", starts) }
+    if future.body != nil { t.Fatal("consumed future retained its body") }
+    defer func() {
+        if recover() == nil { t.Fatal("second await did not panic") }
+        if starts != 1 { t.Fatalf("second await reran body: %d", starts) }
+    }()
+    _ = future.await()
+}
+
+func TestPanickingFutureCannotBeRetried(t *testing.T) {
+    starts := 0
+    future := nagiCold(func() int64 { starts++; panic("sentinel") })
+    func() {
+        defer func() {
+            if recover() == nil { t.Fatal("body panic was lost") }
+        }()
+        _ = future.await()
+    }()
+    if starts != 1 { t.Fatalf("body starts after panic = %d", starts) }
+    defer func() {
+        if recover() == nil { t.Fatal("panicking future was retried") }
+        if starts != 1 { t.Fatalf("panic retry reran body: %d", starts) }
+    }()
+    _ = future.await()
+}
+"#,
+    );
+    let go_tool = std::env::var_os("NAGI_GO").unwrap_or_else(|| "go".into());
+    let helper = Command::new(go_tool)
+        .current_dir(fixture.0.join("out-high-async/go"))
+        .args(["test", "./..."])
+        .env("GOTOOLCHAIN", "local")
+        .output()
+        .unwrap();
+    assert!(
+        helper.status.success(),
+        "{}",
+        String::from_utf8_lossy(&helper.stderr)
+    );
+
+    let generated = fs::read_to_string(fixture.0.join("out-high-async/generated.low")).unwrap();
+    fixture.write("saved.low", &generated);
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    let low = fixture.go("run", "saved.low", "out-low-async");
+    assert!(
+        low.status.success(),
+        "{}",
+        String::from_utf8_lossy(&low.stderr)
+    );
+    assert_eq!(low.stdout, high.stdout);
+
+    fixture.write("manual.low", ASYNC_LOW);
+    let manual = fixture.go("run", "manual.low", "out-manual-async");
+    assert!(
+        manual.status.success(),
+        "{}",
+        String::from_utf8_lossy(&manual.stderr)
+    );
+    assert_eq!(manual.stdout, high.stdout);
+
+    fixture.write("failure.nagi", ASYNC_FAILURE_PROGRAM);
+    let failure = fixture.go("run", "failure.nagi", "out-failure-async");
+    assert!(!failure.status.success());
+    assert_eq!(String::from_utf8_lossy(&failure.stdout), "20\n21\n");
+    assert!(
+        String::from_utf8_lossy(&failure.stderr).contains("async failure sentinel"),
+        "{}",
+        String::from_utf8_lossy(&failure.stderr)
+    );
+}
+
+#[test]
+fn go_async_keeps_standard_operations_unsupported_before_toolchain() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", "async def main():\n    await sleep(1)\n");
+    let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&fixture.0)
+        .args([
+            "build",
+            "main.nagi",
+            "--no-project",
+            "--backend",
+            "go",
+            "--out",
+            "out",
+        ])
+        .env("NAGI_GO", fixture.0.join("missing-go"))
+        .env_remove("NAGI_RUN_RETENTION")
+        .output()
+        .unwrap();
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    assert!(
+        diagnostic.contains("operation sleep is not supported by the initial Go backend"),
+        "{diagnostic}"
+    );
+    assert!(diagnostic.contains("main.nagi:2"), "{diagnostic}");
+    assert!(
+        !diagnostic.contains("Go toolchain was not found"),
+        "{diagnostic}"
+    );
+}
+
 #[test]
 fn go_backend_runs_checked_high_and_independent_saved_low() {
     let fixture = Fixture::new();

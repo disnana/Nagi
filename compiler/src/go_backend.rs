@@ -164,6 +164,10 @@ fn go_type(
             go_type(value, classes, enums, line)?,
             go_type(problem, classes, enums, line)?
         )),
+        ("Future", [value]) => Ok(format!(
+            "*nagiFuture[{}]",
+            go_type(value, classes, enums, line)?
+        )),
         _ => Err(error(
             line,
             format!("type {ty} is not supported by the initial Go backend"),
@@ -407,15 +411,6 @@ impl<'a> Emitter<'a> {
                             .map(|name| display_symbol(name))
                             .collect::<Vec<_>>()
                             .join(" -> ")
-                    ),
-                ));
-            }
-            if function.asynchronous {
-                return Err(error(
-                    function.line,
-                    format!(
-                        "async function {} is not supported by the initial Go backend",
-                        function.name
                     ),
                 ));
             }
@@ -823,10 +818,7 @@ impl<'a> Emitter<'a> {
                 }
                 Ok(())
             }
-            E::Await(_) => Err(error(
-                expression.line,
-                "await is not supported by the initial Go backend",
-            )),
+            E::Await(value) => self.validate_expr(value, ret),
         }
     }
 
@@ -1111,7 +1103,11 @@ impl<'a> Emitter<'a> {
                     rendered.join(", ")
                 )
             }
-            E::Await(_) => unreachable!("validated expression"),
+            E::Await(value) => {
+                let (value_before, value) = self.evaluated(value, ret)?;
+                before.extend(value_before);
+                format!("({value}).await()")
+            }
         };
         Ok((before, value))
     }
@@ -1389,20 +1385,34 @@ impl<'a> Emitter<'a> {
                 .collect::<Result<Vec<_>, String>>()?
                 .join(", ");
             let result = go_type(&function.ret, &self.classes, &self.enums, function.line)?;
+            let signature_result = if function.asynchronous {
+                format!("*nagiFuture[{result}]")
+            } else {
+                result.clone()
+            };
             Self::line(
                 &mut body,
                 0,
                 format!(
-                    "func {}({parameters}) {result} {{",
+                    "func {}({parameters}) {signature_result} {{",
                     function_name(&function.name)
                 ),
             );
+            let body_indent = if function.asynchronous {
+                Self::line(&mut body, 1, format!("return nagiCold(func() {result} {{"));
+                2
+            } else {
+                1
+            };
             for (name, _) in &function.params {
-                Self::line(&mut body, 1, format!("_ = {}", ident(name)));
+                Self::line(&mut body, body_indent, format!("_ = {}", ident(name)));
             }
-            self.statements(&function.body, &function.ret, 1, &mut body)?;
+            self.statements(&function.body, &function.ret, body_indent, &mut body)?;
             if function.ret.0 == "unit" && !crate::ast::block_returns(&function.body) {
-                Self::line(&mut body, 1, "return nagiUnit{}");
+                Self::line(&mut body, body_indent, "return nagiUnit{}");
+            }
+            if function.asynchronous {
+                Self::line(&mut body, 1, "})");
             }
             Self::line(&mut body, 0, "}");
             body.push('\n');
@@ -1416,13 +1426,29 @@ impl<'a> Emitter<'a> {
             .expect("validated main");
         Self::line(&mut body, 0, "func main() {");
         if main.ret.0 == "Result" {
-            Self::line(&mut body, 1, "result := nagiMain()");
+            Self::line(
+                &mut body,
+                1,
+                if main.asynchronous {
+                    "result := nagiMain().await()"
+                } else {
+                    "result := nagiMain()"
+                },
+            );
             Self::line(&mut body, 1, "if !result.ok {");
             Self::line(&mut body, 2, "fmt.Fprintln(os.Stderr, result.problem)");
             Self::line(&mut body, 2, "os.Exit(1)");
             Self::line(&mut body, 1, "}");
         } else {
-            Self::line(&mut body, 1, "_ = nagiMain()");
+            Self::line(
+                &mut body,
+                1,
+                if main.asynchronous {
+                    "_ = nagiMain().await()"
+                } else {
+                    "_ = nagiMain()"
+                },
+            );
         }
         Self::line(&mut body, 0, "}");
 
@@ -1449,6 +1475,15 @@ func nagiNone[T any]() nagiOption[T] {{ return nagiOption[T]{{}} }}\n\
 type nagiResult[T any, E any] struct{{ ok bool; value T; problem E }}\n\
 func nagiOk[T any, E any](value T) nagiResult[T, E] {{ return nagiResult[T, E]{{ok: true, value: value}} }}\n\
 func nagiErr[T any, E any](problem E) nagiResult[T, E] {{ return nagiResult[T, E]{{problem: problem}} }}\n\
+type nagiFuture[T any] struct{{ body func() T; consumed bool }}\n\
+func nagiCold[T any](body func() T) *nagiFuture[T] {{ return &nagiFuture[T]{{body: body}} }}\n\
+func (future *nagiFuture[T]) await() T {{\n\
+    if future == nil || future.consumed {{ panic(\"future already consumed\") }}\n\
+    future.consumed = true\n\
+    body := future.body\n\
+    future.body = nil\n\
+    return body()\n\
+}}\n\
 func nagiFixedDecimal(digits string, scale int) string {{\n\
     if scale >= 0 {{ return digits + strings.Repeat(\"0\", scale) }}\n\
     point := len(digits) + scale\n\

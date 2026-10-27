@@ -53,7 +53,8 @@ payloadなしenumは、共有checkerが封印したconstructorとmatch armのide
 次は未対応で、Go起動前にsource位置付きで失敗する。
 
 - payload付きenum、enumのconsole表示、非Copy要素のList index/反復、Listのslice・field/index代入
-- async/await、task、scope、actor
+- 標準operationのasync/await、task、scope、actor。ユーザー定義async関数の直接awaitだけは
+  [cold asyncの最小段階](go-cold-async.md)で対応する
 - HTTP、DB、auth/session、WebSocketなどRust runtimeの標準操作
 - Go native adapter、Rust/Go間FFI、混成backend
 - IDE管理runの`NAGI_RUN_RETENTION=latest`
@@ -92,7 +93,7 @@ generationには次を保存する。
 
 ## 実行検証
 
-専用integration testは実Go toolchainを使い、private lifecycle初段ではLinux/macOSで27件、WindowsでUnix symlink固有の1件を除く26件を検査する。
+専用integration testは実Go toolchainを使い、cold user async段階ではLinux/macOSで29件、WindowsでUnix symlink固有の1件を除く28件を検査する。
 
 - Highと独立保存Lowが同じ出力になる
 - private std-only lifecycle kernelの13 native testを名前集合まで検査し、public std.actorのHigh/手書きLow事前拒否を維持する
@@ -142,7 +143,8 @@ Go integration test 14件は最近の実行で42.37〜86.63秒だった。toolch
 std-only Go moduleでgeneration・one-for-one再起動・global予算・実joinと明示cleanupを
 native検査する。生成applicationへの組込みとpublic std.actor受理はまだ行わない。
 mailbox/READY/events/charge、cold async/borrow/callback/owner cleanupは後続gateである。
-このsliceを含むGo integrationの必須件数はLinux/macOS 27、Windows 26。
+private lifecycle段階の必須件数はLinux/macOS 27、Windows 26だった。後続のcold user
+async 2件を含む現在の必須件数はLinux/macOS 29、Windows 28。
 
 1. 3 OSで最小backendの実build/runとlast-good保護を必須CI化する。
 2. shared conformance oracleとbackend別driverを分離し、同じ対応Nagi programの結果・診断を比較する。

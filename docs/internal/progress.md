@@ -1,5 +1,14 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-27: Go user async / awaitのcold最小段階
+
+#188のprivate lifecycle kernel上で、共有checkerが受理したユーザー定義async関数と
+直接awaitをGo生成へ接続した。呼出し引数はFuture作成前に一度だけ評価し、本文はawaitまで
+開始しない。async main、Result / try await、Highと保存Lowを実Go build/runで照合する。
+標準async operation、task/scope/spawn、actor/HTTP等はGo起動前の拒否を維持し、goroutine、
+cancel、joinを暗黙に追加しない。[契約と制限](go-cold-async.md)。Go integration必須件数は
+Linux/macOS 29、Windows 28へ増やし、zero/skip/欠落を成功にしない。
+
 ## 2026-10-27: Go private lifecycle kernel
 
 #186の`3c0ad0d`から独立stackとしてstd-only Go kernelを追加した。生成applicationへは
