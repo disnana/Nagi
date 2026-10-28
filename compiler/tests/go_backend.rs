@@ -157,6 +157,21 @@ async fn main() -> Result[unit, Error] {
 }
 "#;
 
+const SLEEP_PROGRAM: &str = r#"async def main():
+    print("before")
+    await sleep(-1)
+    await sleep(1)
+    print("after")
+"#;
+
+const SLEEP_LOW: &str = r#"async fn main() -> unit {
+    print("before");
+    await sleep(-1);
+    await sleep(1);
+    print("after");
+}
+"#;
+
 const ASYNC_FAILURE_PROGRAM: &str = r#"def capture(value: i64) -> i64:
     print(value)
     return value
@@ -577,9 +592,116 @@ fn go_borrow_stage_rejects_wider_views_before_the_toolchain() {
 }
 
 #[test]
-fn go_async_keeps_standard_operations_unsupported_before_toolchain() {
+fn go_backend_runs_cold_sleep_from_high_saved_low_and_manual_low() {
     let fixture = Fixture::new();
-    fixture.write("main.nagi", "async def main():\n    await sleep(1)\n");
+    fixture.write("main.nagi", SLEEP_PROGRAM);
+    let high = fixture.go("run", "main.nagi", "out-high-sleep");
+    assert!(
+        high.status.success(),
+        "{}",
+        String::from_utf8_lossy(&high.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&high.stdout), "before\nafter\n");
+
+    let go = fs::read_to_string(fixture.0.join("out-high-sleep/go/main.go")).unwrap();
+    assert!(go.contains("\"time\""), "{go}");
+    assert!(
+        go.contains("func nagiSleep(milliseconds int64) *nagiFuture[nagiUnit]"),
+        "{go}"
+    );
+    assert!(go.contains("return nagiCold(func() nagiUnit"), "{go}");
+    assert!(go.contains("= nagiSleep("), "{go}");
+
+    fixture.write(
+        "out-high-sleep/go/sleep_test.go",
+        r#"package main
+
+import (
+    "testing"
+    "time"
+)
+
+func TestSleepIsColdAndSingleUse(t *testing.T) {
+    future := nagiSleep(2)
+    if future.consumed { t.Fatal("sleep future was consumed before await") }
+    if future.body == nil { t.Fatal("sleep body was not retained until await") }
+    started := time.Now()
+    _ = future.await()
+    if time.Since(started) < time.Millisecond { t.Fatal("positive sleep returned early") }
+    if future.body != nil { t.Fatal("consumed sleep retained its body") }
+    defer func() {
+        if recover() == nil { t.Fatal("second sleep await did not panic") }
+    }()
+    _ = future.await()
+}
+
+func TestNegativeSleepCompletesWithoutDurationOverflow(t *testing.T) {
+    finished := make(chan struct{})
+    go func() { _ = nagiSleep(-1).await(); close(finished) }()
+    select {
+    case <-finished:
+    case <-time.After(time.Second):
+        t.Fatal("negative sleep did not complete")
+    }
+}
+"#,
+    );
+    let go_tool = std::env::var_os("NAGI_GO").unwrap_or_else(|| "go".into());
+    let helper = Command::new(go_tool)
+        .current_dir(fixture.0.join("out-high-sleep/go"))
+        .args(["test", "./..."])
+        .env("GOTOOLCHAIN", "local")
+        .output()
+        .unwrap();
+    assert!(
+        helper.status.success(),
+        "{}",
+        String::from_utf8_lossy(&helper.stderr)
+    );
+
+    let generated = fs::read_to_string(fixture.0.join("out-high-sleep/generated.low")).unwrap();
+    fixture.write("saved.low", &generated);
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    let low = fixture.go("run", "saved.low", "out-low-sleep");
+    assert!(
+        low.status.success(),
+        "{}",
+        String::from_utf8_lossy(&low.stderr)
+    );
+    assert_eq!(low.stdout, high.stdout);
+
+    fixture.write("manual.low", SLEEP_LOW);
+    let manual = fixture.go("run", "manual.low", "out-manual-sleep");
+    assert!(
+        manual.status.success(),
+        "{}",
+        String::from_utf8_lossy(&manual.stderr)
+    );
+    assert_eq!(manual.stdout, high.stdout);
+
+    fixture.write(
+        "shadow.nagi",
+        "def sleep(value: i64) -> i64:\n    return value + 1\ndef main():\n    print(sleep(41))\n",
+    );
+    let shadow = fixture.go("run", "shadow.nagi", "out-shadow-sleep");
+    assert!(
+        shadow.status.success(),
+        "{}",
+        String::from_utf8_lossy(&shadow.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&shadow.stdout), "42\n");
+    let shadow_go = fs::read_to_string(fixture.0.join("out-shadow-sleep/go/main.go")).unwrap();
+    assert!(!shadow_go.contains("\"time\""), "{shadow_go}");
+    assert!(!shadow_go.contains("func nagiSleep("), "{shadow_go}");
+}
+
+#[test]
+fn go_sleep_does_not_enable_task_scope_before_toolchain() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        "async def main() -> Result[unit, Error]:\n    async with scope:\n        spawn sleep(1)\n    return ok(print(\"done\"))\n",
+    );
     let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
         .current_dir(&fixture.0)
         .args([
@@ -598,7 +720,7 @@ fn go_async_keeps_standard_operations_unsupported_before_toolchain() {
     let diagnostic = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success());
     assert!(
-        diagnostic.contains("operation sleep is not supported by the initial Go backend"),
+        diagnostic.contains("async task operations are not supported by the initial Go backend"),
         "{diagnostic}"
     );
     assert!(diagnostic.contains("main.nagi:2"), "{diagnostic}");

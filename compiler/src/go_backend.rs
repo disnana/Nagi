@@ -271,6 +271,59 @@ fn walk_expr_calls(expr: &Expr, calls: &mut Vec<String>) {
     }
 }
 
+fn expression_uses_builtin_sleep(expression: &Expr) -> bool {
+    let nested = match &expression.kind {
+        E::Call(_, _, arguments) | E::List(arguments) => {
+            arguments.iter().any(expression_uses_builtin_sleep)
+        }
+        E::Binary(left, _, right) | E::Index(left, right) => {
+            expression_uses_builtin_sleep(left) || expression_uses_builtin_sleep(right)
+        }
+        E::Unary(_, value) | E::Field(value, _) | E::Await(value) | E::Try(value) => {
+            expression_uses_builtin_sleep(value)
+        }
+        E::Record(_, fields) => fields
+            .iter()
+            .any(|(_, value)| expression_uses_builtin_sleep(value)),
+        E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null | E::Name(_) => false,
+    };
+    nested
+        || matches!(
+            &expression.kind,
+            E::Call(name, _, _)
+                if name == "sleep" && expression.resolution == Some(NameResolution::Builtin)
+        )
+}
+
+fn statement_uses_builtin_sleep(statement: &Stmt) -> bool {
+    match &statement.kind {
+        S::Assign { value, .. } | S::SpawnBind { value, .. } | S::Expr(value) | S::Spawn(value) => {
+            expression_uses_builtin_sleep(value)
+        }
+        S::Return(value) => value.as_ref().is_some_and(expression_uses_builtin_sleep),
+        S::If(condition, yes, no) => {
+            expression_uses_builtin_sleep(condition)
+                || yes.iter().any(statement_uses_builtin_sleep)
+                || no.iter().any(statement_uses_builtin_sleep)
+        }
+        S::Match(value, arms) => {
+            expression_uses_builtin_sleep(value)
+                || arms
+                    .iter()
+                    .flat_map(|arm| &arm.body)
+                    .any(statement_uses_builtin_sleep)
+        }
+        S::While(condition, body) => {
+            expression_uses_builtin_sleep(condition)
+                || body.iter().any(statement_uses_builtin_sleep)
+        }
+        S::For(_, value, body) => {
+            expression_uses_builtin_sleep(value) || body.iter().any(statement_uses_builtin_sleep)
+        }
+        S::Scope(body) => body.iter().any(statement_uses_builtin_sleep),
+    }
+}
+
 fn walk_statement_calls(statement: &Stmt, calls: &mut Vec<String>) {
     match &statement.kind {
         S::Assign { value, .. } | S::SpawnBind { value, .. } | S::Expr(value) | S::Spawn(value) => {
@@ -376,6 +429,7 @@ struct Emitter<'a> {
     operations: BTreeMap<String, BTreeMap<ExpressionKey, OperationPlan>>,
     current_function: Option<String>,
     profile: BuildProfile,
+    uses_builtin_sleep: bool,
     temporary: usize,
 }
 
@@ -405,6 +459,9 @@ impl<'a> Emitter<'a> {
             .collect();
         let future_facts = checked.final_check_facts();
         let reachable = reachable(program, future_facts)?;
+        let uses_builtin_sleep = reachable
+            .iter()
+            .any(|(function, _)| function.body.iter().any(statement_uses_builtin_sleep));
         if program.functions.len() != checked.emission.functions.len() {
             return Err(
                 "internal compiler error: Go backend function plans do not match the checked program"
@@ -442,6 +499,7 @@ impl<'a> Emitter<'a> {
             operations,
             current_function: None,
             profile,
+            uses_builtin_sleep,
             temporary: 0,
         };
         emitter.validate()?;
@@ -875,6 +933,7 @@ impl<'a> Emitter<'a> {
                                 | "i64"
                                 | "len"
                                 | "range"
+                                | "sleep"
                                 | "append"
                                 | "view"
                         ) =>
@@ -1170,6 +1229,7 @@ impl<'a> Emitter<'a> {
                         "i64" => format!("int64({})", values[0]),
                         "len" => format!("int64(len({}))", values[0]),
                         "range" => format!("nagiRange{{end: {}}}", values[0]),
+                        "sleep" => format!("nagiSleep({})", values[0]),
                         "view" => values[0].clone(),
                         "ok" => {
                             let ty = expression.ty.as_ref().expect("validated result");
@@ -1614,6 +1674,22 @@ impl<'a> Emitter<'a> {
         if main.ret.0 == "Result" {
             imports.push("\"os\"");
         }
+        let sleep_runtime = if self.uses_builtin_sleep {
+            imports.push("\"time\"");
+            "const nagiMaxSleepMilliseconds int64 = 9223372036854\n\
+func nagiSleep(milliseconds int64) *nagiFuture[nagiUnit] {\n\
+    return nagiCold(func() nagiUnit {\n\
+        for milliseconds > nagiMaxSleepMilliseconds {\n\
+            time.Sleep(time.Duration(nagiMaxSleepMilliseconds) * time.Millisecond)\n\
+            milliseconds -= nagiMaxSleepMilliseconds\n\
+        }\n\
+        if milliseconds > 0 { time.Sleep(time.Duration(milliseconds) * time.Millisecond) }\n\
+        return nagiUnit{}\n\
+    })\n\
+}\n"
+        } else {
+            ""
+        };
         let imports = format!("import (\n    {}\n)\n\n", imports.join("\n    "));
         Ok(format!(
             "// Code generated by nagic for the experimental Go backend. DO NOT EDIT.\npackage main\n\n{imports}\
@@ -1636,6 +1712,7 @@ func (future *nagiFuture[T]) await() T {{\n\
     future.body = nil\n\
     return body()\n\
 }}\n\
+{sleep_runtime}\
 func nagiFixedDecimal(digits string, scale int) string {{\n\
     if scale >= 0 {{ return digits + strings.Repeat(\"0\", scale) }}\n\
     point := len(digits) + scale\n\
