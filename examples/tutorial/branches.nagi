@@ -1,0 +1,13 @@
+# High elif tutorial (development compiler; unreleased).
+def describe(value: i64):
+    if value < 0:
+        print("negative")
+    elif value == 0:
+        print("zero")
+    else:
+        print("positive")
+
+def main():
+    describe(-1)
+    describe(0)
+    describe(1)

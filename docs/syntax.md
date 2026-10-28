@@ -75,6 +75,8 @@ def show(value: i64):
 score = 80
 if score >= 80:
     print("合格")
+elif score >= 60:
+    print("もう少し")
 else:
     print("再挑戦")
 
@@ -86,7 +88,11 @@ while count < 3:
     count += 1
 ```
 
-条件は`bool`です。`range(n)`は`0`以上`n`未満で、引数は1つです。配列やviewの`for`は、Copy要素を値で読み、非Copy要素を読み取り専用で借ります。[所有権](ownership.md)で制約を確認できます。`elif`、`break`、`continue`、`pass`はありません。
+`elif`は開発版のHighに追加した未リリースの構文です。公開済み版では、`else`の中へ`if`を字下げして書いてください。
+
+`if`・`elif`の条件は上から順に評価し、最初に`True`となった枝だけを実行します。それ以降の条件は評価しません。`elif`は複数連ねられ、最後の`else`は省略できます。見出しは対応する`if`と同じ字下げにします。同じ行の`else if`やLowの`elif`は使えません。Lowには従来どおり`else`内の`if`として出力します。`elif`はこの見出しの位置だけで認識するため、既存の変数名・関数名としても使えます。
+
+条件は`bool`です。`range(n)`は`0`以上`n`未満で、引数は1つです。配列やviewの`for`は、Copy要素を値で読み、非Copy要素を読み取り専用で借ります。[所有権](ownership.md)で制約を確認できます。`break`、`continue`、`pass`はありません。
 
 ## 演算子
 

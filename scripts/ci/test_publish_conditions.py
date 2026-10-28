@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MAIN_REF = "refs/heads/main"
 COMPONENTS = ("nagi", "vscode", "jetbrains")
 SHA = "a" * 40
-JOBS = ("ready", "ci-plan", "critical", "changes", "linux", "linux-workspace", "rust-1-88", "sf08-browser", "release-plan",
+JOBS = ("ready", "ci-plan", "critical", "go-backend", "changes", "linux", "linux-workspace", "rust-1-88", "sf08-browser", "release-plan",
         "jetbrains", "vscode-package", "nagi-package", "nagi-regression", "windows-contracts")
 ALLOWED_NAMES = {
     "github.event_name", "github.ref", "needs.changes.result",
@@ -172,10 +172,10 @@ def evaluate(expression: str, context: dict) -> bool:
 
 # Handwritten platform contract, independent of the selector implementation.
 RELEASE_MATRIX = {'include': [
-    {'os':'ubuntu-latest', 'platform':'linux-x86_64', 'executable':'nagic', 'rust_host':'x86_64-unknown-linux-gnu'},
-    {'os':'windows-latest', 'platform':'windows-x86_64', 'executable':'nagic.exe', 'rust_host':'x86_64-pc-windows-msvc'},
-    {'os':'macos-15', 'platform':'macos-arm64', 'executable':'nagic', 'rust_host':'aarch64-apple-darwin'},
-    {'os':'macos-15-intel', 'platform':'macos-x86_64', 'executable':'nagic', 'rust_host':'x86_64-apple-darwin'},
+    {'os':'ubuntu-latest', 'platform':'linux-x86_64', 'executable':'nagic', 'rust_host':'x86_64-unknown-linux-gnu', 'go_tests':'32'},
+    {'os':'windows-latest', 'platform':'windows-x86_64', 'executable':'nagic.exe', 'rust_host':'x86_64-pc-windows-msvc', 'go_tests':'31'},
+    {'os':'macos-15', 'platform':'macos-arm64', 'executable':'nagic', 'rust_host':'aarch64-apple-darwin', 'go_tests':'32'},
+    {'os':'macos-15-intel', 'platform':'macos-x86_64', 'executable':'nagic', 'rust_host':'x86_64-apple-darwin', 'go_tests':'32'},
 ]}
 
 
@@ -188,6 +188,7 @@ def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None, cancelled=
     comprehensive = full or package
     selection = dict(level='3', critical_checks='false',
         comprehensive_checks=str(comprehensive).lower(), package_checks=str(comprehensive).lower(),
+        go_checks=str(full or package).lower(),
         matrix=json.dumps(RELEASE_MATRIX, separators=(',', ':')))
     plan = {'sha': SHA}
     for component, job in [('nagi','nagi-package'), ('vscode','vscode-package'), ('jetbrains','jetbrains')]:
@@ -198,12 +199,14 @@ def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None, cancelled=
         'ready': {'result': results.get('ready', 'success')},
         'critical': {'result': results.get('critical', 'skipped')},
         'changes': {'result': results.get('changes','success'),
-                    'outputs':{'full_checks':str(full).lower(), 'jetbrains_checks':'false'}},
+                    'outputs':{'full_checks':str(full).lower(), 'jetbrains_checks':'false',
+                               'go_checks':str(full or package).lower()}},
         'release-plan': {'result':results.get('release-plan','success'), 'outputs':plan},
     }
     for job in ['linux','sf08-browser','jetbrains','vscode-package','nagi-package']:
         needs[job] = {'result':results.get(job,'success')}
     needs['rust-1-88'] = {'result':results.get('rust-1-88', results.get('linux','success'))}
+    needs['go-backend'] = {'result':results.get('go-backend', 'success' if full or package else 'skipped')}
     needs['linux-workspace'] = {'result':results.get('linux-workspace', results.get('linux','success'))}
     needs['nagi-regression'] = {'result':results.get('nagi-regression',
         'skipped' if results.get('nagi-package') == 'skipped' else 'success')}

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from native_artifacts import native_executable
@@ -21,6 +22,15 @@ CASES = [
     ("abc", 1, None, "Invalid:"),
     ("-1", 1, None, "amount must be non-negative"),
 ]
+
+
+def verify_result_try_tutorial(compiler: Path, docs_only: bool) -> None:
+    command = [sys.executable, str(ROOT / "scripts/verify_result_try_tutorial.py")]
+    if docs_only:
+        command.append("--docs-only")
+    else:
+        command.extend(["--compiler", str(compiler)])
+    subprocess.run(command, cwd=ROOT, check=True, timeout=1800)
 
 
 def main():
@@ -41,6 +51,7 @@ def main():
             raise AssertionError(f"Tutorial code differs from the runnable example: {doc}")
 
     if args.docs_only:
+        verify_result_try_tutorial(compiler, True)
         print("Onboarding: Japanese/English tutorial code matches the native-tested source")
         return
 
@@ -93,6 +104,7 @@ def main():
     report = {"docs_code": "Japanese/English match", "native_cases": rows}
     (output / "results.json").write_text(json.dumps(report, ensure_ascii=False, indent=2),
                                        encoding="utf-8")
+    verify_result_try_tutorial(compiler, False)
     print("Onboarding: bilingual code matches; High/saved Low check and build; 10 native cases passed")
 
 

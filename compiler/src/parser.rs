@@ -509,15 +509,9 @@ impl Parser {
             self.end_stmt()?;
             S::Return(e)
         } else if self.eat("if") {
-            let c = self.expr(0)?;
-            let y = self.block()?;
-            self.skip();
-            let n = if self.eat("else") {
-                self.block()?
-            } else {
-                vec![]
-            };
-            S::If(c, y, n)
+            self.if_branch()?
+        } else if self.elif_header() {
+            return Err(self.err("elifには同じ字下げの直前のifまたはelifが必要です"));
         } else if self.eat("while") {
             let c = self.expr(0)?;
             S::While(c, self.block()?)
@@ -682,6 +676,59 @@ impl Parser {
             flow: None,
             task: Default::default(),
         })
+    }
+    // All words remain identifiers in the lexer. Recognize only a High block
+    // header, preserving existing `elif(...)`, `elif = ...`, and `elif: T = ...`
+    // statements, including immediately after an if statement.
+    fn elif_header(&self) -> bool {
+        if !self.high || !matches!(&self.t().kind, K::Id(word) if word == "elif") {
+            return false;
+        }
+        let mut nesting = 0usize;
+        for pair in self.ts[self.pos + 1..].windows(2) {
+            match &pair[0].kind {
+                K::Sym(s) if s == "(" || s == "[" => nesting += 1,
+                K::Sym(s) if s == ")" || s == "]" => nesting = nesting.saturating_sub(1),
+                K::Sym(s) if s == ":" && nesting == 0 => {
+                    return matches!(pair[1].kind, K::Newline);
+                }
+                K::Sym(s) if s == ";" && nesting == 0 => return false,
+                K::Newline | K::Dedent | K::Eof => return false,
+                _ => {}
+            }
+        }
+        false
+    }
+    fn if_branch(&mut self) -> Result<S, String> {
+        let condition = self.expr(0)?;
+        let yes = self.block()?;
+        self.skip();
+        let no = if self.elif_header() {
+            let line = self.t().line;
+            self.pos += 1;
+            // Each elif becomes an if nested inside the previous else. Charge
+            // that synthetic nesting to the same budget as handwritten blocks.
+            self.depth += 1;
+            if self.depth > 64 {
+                return Err(self.err("ブロックの入れ子は64段までです"));
+            }
+            let kind = self.if_branch()?;
+            self.depth -= 1;
+            vec![Stmt {
+                kind,
+                line,
+                binding_span: None,
+                binding_type: None,
+                binding_borrowed: false,
+                flow: None,
+                task: Default::default(),
+            }]
+        } else if self.eat("else") {
+            self.block()?
+        } else {
+            vec![]
+        };
+        Ok(S::If(condition, yes, no))
     }
     fn pattern_binding(&mut self) -> Result<PatternBinding, String> {
         let start = self.pos;

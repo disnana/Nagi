@@ -16,6 +16,7 @@ import test_levels
 import test_publication_gate
 import test_publish_conditions
 import windows_contract_projection
+import go_backend_projection
 import parallel_cache_projection
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,7 +33,8 @@ class LinuxWorkspaceSourceTests(unittest.TestCase):
     def setUp(self):
         self.current_source = (ROOT / '.github/workflows/ci.yml').read_text()
         self.source = parallel_cache_projection.inverse_workflow(self.current_source)
-        self.linux_source = windows_contract_projection.inverse_workflow(self.source)
+        self.linux_source = windows_contract_projection.inverse_workflow(
+            go_backend_projection.inverse_workflow(self.source))
 
     def test_one_command_moves_and_all_original_linux_checks_are_restored(self):
         prove(self.source)
@@ -101,8 +103,12 @@ class LinuxWorkspaceSourceTests(unittest.TestCase):
         ):
             self.assertIn(old, shard.JOB)
             mutations.append(self.source.replace(shard.JOB, shard.JOB.replace(old, new, 1), 1))
-        for new in (windows_contract_projection.READY_NEW, windows_contract_projection.PUBLISH_NEW):
-            mutations.append(self.source.replace(new, new.replace(' linux-workspace,', '', 1), 1))
+        for marker in (
+            '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, jetbrains,',
+            '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, sf08-browser,',
+        ):
+            self.assertIn(marker, self.source)
+            mutations.append(self.source.replace(marker, marker.replace('linux-workspace, ', ''), 1))
         for index, changed in enumerate(mutations):
             with self.subTest(mutation=index), self.assertRaises((ValueError, AssertionError)):
                 prove(changed)
