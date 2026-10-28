@@ -6,7 +6,10 @@
 //! semantics.
 use crate::{
     ast::{Expr, Function, MatchPattern, NameResolution, Program, Stmt, Type, E, S},
-    checked::{CheckedProgram, EnumFacts, EnumVariantFact, ExpressionKey, OperationPlan},
+    checked::{
+        CheckedProgram, EnumFacts, EnumVariantFact, ExpressionKey, FinalCheckFacts,
+        FutureCapture, OperationPlan,
+    },
     project::BuildProfile,
     source::Sources,
 };
@@ -122,6 +125,25 @@ fn go_type(
     enums: &BTreeSet<String>,
     line: usize,
 ) -> Result<String, String> {
+    if ty.is_async_function() {
+        let (result, arguments) = ty
+            .1
+            .split_last()
+            .expect("async function type has a Future result");
+        let result = result
+            .1
+            .first()
+            .expect("async function result is a checked Future");
+        let arguments = arguments
+            .iter()
+            .map(|argument| go_type(argument, classes, enums, line))
+            .collect::<Result<Vec<_>, _>>()?
+            .join(", ");
+        return Ok(format!(
+            "func({arguments}) *nagiFuture[{}]",
+            go_type(result, classes, enums, line)?
+        ));
+    }
     let primitive = match ty.0.as_str() {
         "i8" => Some("int8"),
         "i16" => Some("int16"),
@@ -202,7 +224,12 @@ fn walk_expr_calls(expr: &Expr, calls: &mut Vec<String>) {
                 walk_expr_calls(value, calls);
             }
         }
-        E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null | E::Name(_) => {}
+        E::Name(name) => {
+            if expr.resolution == Some(NameResolution::Function) {
+                calls.push(name.clone());
+            }
+        }
+        E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null => {}
     }
 }
 
@@ -248,7 +275,10 @@ fn walk_statement_calls(statement: &Stmt, calls: &mut Vec<String>) {
     }
 }
 
-fn reachable(program: &Program) -> Result<Vec<(&Function, Vec<String>)>, String> {
+fn reachable<'a>(
+    program: &'a Program,
+    future_facts: &FinalCheckFacts,
+) -> Result<Vec<(&'a Function, Vec<String>)>, String> {
     let functions: BTreeMap<_, _> = program
         .functions
         .iter()
@@ -273,6 +303,19 @@ fn reachable(program: &Program) -> Result<Vec<(&Function, Vec<String>)>, String>
         for statement in &function.body {
             walk_statement_calls(statement, &mut calls);
         }
+        if let Some(captures) = future_facts.functions.get(&function.name) {
+            calls.extend(
+                captures
+                    .values()
+                    .filter(|capture| {
+                        matches!(
+                            capture.resolution,
+                            NameResolution::Function | NameResolution::Local
+                        ) && functions.contains_key(capture.callee.as_str())
+                    })
+                    .map(|capture| capture.callee.clone()),
+            );
+        }
         calls.sort();
         calls.dedup();
         for called in calls.into_iter().rev() {
@@ -290,6 +333,7 @@ struct Emitter<'a> {
     classes: BTreeSet<String>,
     enums: BTreeSet<String>,
     enum_facts: &'a EnumFacts,
+    future_facts: &'a FinalCheckFacts,
     reachable: Vec<(&'a Function, Vec<String>)>,
     operations: BTreeMap<String, BTreeMap<ExpressionKey, OperationPlan>>,
     current_function: Option<String>,
@@ -321,7 +365,8 @@ impl<'a> Emitter<'a> {
             .iter()
             .map(|enumeration| enumeration.name.clone())
             .collect();
-        let reachable = reachable(program)?;
+        let future_facts = checked.final_check_facts();
+        let reachable = reachable(program, future_facts)?;
         if program.functions.len() != checked.emission.functions.len() {
             return Err(
                 "internal compiler error: Go backend function plans do not match the checked program"
@@ -354,6 +399,7 @@ impl<'a> Emitter<'a> {
             classes,
             enums,
             enum_facts: &checked.enums,
+            future_facts,
             reachable,
             operations,
             current_function: None,
@@ -454,6 +500,27 @@ impl<'a> Emitter<'a> {
                     expression.line,
                     format!(
                         "internal compiler error: Go backend is missing the sealed operation plan for {function}"
+                    ),
+                )
+            })
+    }
+
+    fn future_capture(&self, expression: &Expr) -> Result<&FutureCapture, String> {
+        let function = self.current_function.as_ref().ok_or_else(|| {
+            error(
+                expression.line,
+                "internal compiler error: Go backend has no active function",
+            )
+        })?;
+        self.future_facts
+            .functions
+            .get(function)
+            .and_then(|captures| captures.get(&crate::ast::ExprUseId::of(expression)))
+            .ok_or_else(|| {
+                error(
+                    expression.line,
+                    format!(
+                        "internal compiler error: Go backend is missing sealed Future capture identity for {function}"
                     ),
                 )
             })
@@ -664,7 +731,11 @@ impl<'a> Emitter<'a> {
         match &expression.kind {
             E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null => Ok(()),
             E::Name(_) => match expression.resolution {
-                Some(NameResolution::Local | NameResolution::BorrowedLocal) => Ok(()),
+                Some(
+                    NameResolution::Local
+                    | NameResolution::BorrowedLocal
+                    | NameResolution::Function,
+                ) => Ok(()),
                 _ => Err(error(
                     expression.line,
                     "function/module values are not supported",
@@ -722,6 +793,24 @@ impl<'a> Emitter<'a> {
                 }
                 match expression.resolution {
                     Some(NameResolution::Function) => Ok(()),
+                    Some(NameResolution::Local) => {
+                        let capture = self.future_capture(expression)?;
+                        if capture.resolution != NameResolution::Local
+                            || !self
+                                .program
+                                .functions
+                                .iter()
+                                .any(|function| {
+                                    function.name == capture.callee && function.asynchronous
+                                })
+                        {
+                            return Err(error(
+                                expression.line,
+                                "internal compiler error: invalid sealed async callback identity",
+                            ));
+                        }
+                        Ok(())
+                    }
                     Some(NameResolution::Standard) => match self.operation_plan(expression)? {
                         OperationPlan::IdentityTransfer { argument }
                             if *argument == 0 && arguments.len() == 1 =>
@@ -854,7 +943,13 @@ impl<'a> Emitter<'a> {
                     go_type(item, &self.classes, &self.enums, expression.line)?
                 )
             }
-            E::Name(name) => ident(name),
+            E::Name(name) => {
+                if expression.resolution == Some(NameResolution::Function) {
+                    function_name(name)
+                } else {
+                    ident(name)
+                }
+            }
             E::Binary(left, operator, right) => {
                 let (left_before, left) = self.evaluated(left, ret)?;
                 before.extend(left_before);
@@ -1008,6 +1103,9 @@ impl<'a> Emitter<'a> {
                 match expression.resolution {
                     Some(NameResolution::Function) => {
                         format!("{}({})", function_name(name), values.join(", "))
+                    }
+                    Some(NameResolution::Local) => {
+                        format!("{}({})", ident(name), values.join(", "))
                     }
                     Some(NameResolution::Builtin) => match name.as_str() {
                         "print" => format!("nagiPrint({})", values[0]),

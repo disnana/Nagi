@@ -169,6 +169,37 @@ async def main() -> Result[unit, Error]:
     return await fail_work(capture(20))
 "#;
 
+const ASYNC_CALLBACK_PROGRAM: &str = r#"async def increment(value: i64) -> Result[i64, Error]:
+    print(value)
+    return ok(value + 1)
+
+async def ignored(value: i64) -> i64:
+    return value
+
+async def main() -> Result[unit, Error]:
+    callback = increment
+    callback = increment
+    unused_callback = ignored
+    answer = try await callback(41)
+    return ok(print(answer))
+"#;
+
+const ASYNC_CALLBACK_LOW: &str = r#"async fn increment(value: i64) -> Result[i64, Error] {
+    print(value);
+    return ok(value + 1);
+}
+async fn ignored(value: i64) -> i64 {
+    return value;
+}
+async fn main() -> Result[unit, Error] {
+    let callback = increment;
+    callback = increment;
+    let unused_callback = ignored;
+    let answer = try await callback(41);
+    return ok(print(answer));
+}
+"#;
+
 #[test]
 fn go_backend_runs_cold_user_async_from_high_saved_low_and_main() {
     let fixture = Fixture::new();
@@ -266,6 +297,74 @@ func TestPanickingFutureCannotBeRetried(t *testing.T) {
         String::from_utf8_lossy(&failure.stderr).contains("async failure sentinel"),
         "{}",
         String::from_utf8_lossy(&failure.stderr)
+    );
+}
+
+#[test]
+fn go_backend_uses_checked_identity_for_local_async_callbacks() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", ASYNC_CALLBACK_PROGRAM);
+    let high = fixture.go("run", "main.nagi", "out-high-callback");
+    assert!(
+        high.status.success(),
+        "{}",
+        String::from_utf8_lossy(&high.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&high.stdout), "41\n42\n");
+
+    let go = fs::read_to_string(fixture.0.join("out-high-callback/go/main.go")).unwrap();
+    assert!(go.contains("func(int64) *nagiFuture[nagiResult[int64, nagiError]]"));
+    assert!(go.contains("= nagiFn_"));
+
+    let generated =
+        fs::read_to_string(fixture.0.join("out-high-callback/generated.low")).unwrap();
+    fixture.write("saved.low", &generated);
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    let saved = fixture.go("run", "saved.low", "out-saved-callback");
+    assert!(
+        saved.status.success(),
+        "{}",
+        String::from_utf8_lossy(&saved.stderr)
+    );
+    assert_eq!(saved.stdout, high.stdout);
+
+    fixture.write("manual.low", ASYNC_CALLBACK_LOW);
+    let manual = fixture.go("run", "manual.low", "out-manual-callback");
+    assert!(
+        manual.status.success(),
+        "{}",
+        String::from_utf8_lossy(&manual.stderr)
+    );
+    assert_eq!(manual.stdout, high.stdout);
+
+    fixture.write(
+        "invalid.nagi",
+        "async def first() -> i64:\n    return 1\nasync def second() -> i64:\n    return 2\nasync def main():\n    callback = first\n    callback = second\n    print(await callback())\n",
+    );
+    let invalid = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&fixture.0)
+        .args([
+            "build",
+            "invalid.nagi",
+            "--no-project",
+            "--backend",
+            "go",
+            "--out",
+            "out-invalid-callback",
+        ])
+        .env("NAGI_GO", fixture.0.join("missing-go"))
+        .env_remove("NAGI_RUN_RETENTION")
+        .output()
+        .unwrap();
+    let diagnostic = String::from_utf8_lossy(&invalid.stderr);
+    assert!(!invalid.status.success());
+    assert!(
+        diagnostic.contains("別のasync関数を再代入できません"),
+        "{diagnostic}"
+    );
+    assert!(
+        !diagnostic.contains("Go toolchain was not found"),
+        "{diagnostic}"
     );
 }
 

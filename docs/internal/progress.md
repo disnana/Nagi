@@ -674,3 +674,15 @@ Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが�
 payloadなしenum段階のHEAD `f9fe618`を基点に、既存Rust専用corpus・bounded生成・batch・fuzz・shrinkerを維持したまま、少数の共通同期programをRust/Goで直接実行するtyped観測runnerを追加した。High、独立保存Low、手書きLowを区別し、成功時はraw stdout/stderrとstatusを期待値へ個別照合してからbackend間も比較する。境界外List indexはnative build成功後のnon-zero、事前marker一回、backend別primary panicを要求し、stack traceとbackend固有exit codeを同一化しない。
 
 共通checkerによるu64符号反転拒否、Rustでは動くview programのGo validation拒否、rustc/Go toolchain欠落をそれぞれfrontend／backend unsupported／infrastructureとして分けた。timeout、compile failure、同じ誤stdout、CRLF差、警告内のpanic文字列を成功やruntime faultへ流さない。期限切れ時はUnix process group／Windows process treeを終了し、Unixでは停止しない孫processの消滅を実行確認する。`nagic run`のCLI stderrは比較せず、成功generationの実行ファイルを直接観測する。専用Go integrationはLinux/macOS 25件、Windows 24件へ増える。全42 corpusのRust-Go同等性、async/view/HTTP/DB/actor対応、backend共通shrinkerは未実装のまま明示する。
+
+## 2026-10-27: Go backendのasync callback identity
+
+直接awaitの後続として、同じユーザー定義async関数をローカル変数へ保持し、そこから
+呼び出してawaitする最小経路を追加した。Go emitterは変数名や関数名の文字列から
+呼出先を推測せず、共有checkerが封印したFuture capture identityをreachabilityと
+validationに使用する。引数評価、cold開始、一回消費、Result/tryの契約は直接awaitと
+同じで、別のasync関数への再代入は既存checkerがGo toolchain起動前に拒否する。
+
+High、独立保存Low、手書きLowの実Go build/runと、同一callback再代入、異なるcallbackの
+negativeを1件へまとめる。必須件数はLinux/macOS 30、Windows 29。callbackを引数・戻り値・
+containerへ保存すること、view/borrow capture、owner cleanup、task/scope/spawnは未対応のまま。

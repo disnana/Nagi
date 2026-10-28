@@ -26,7 +26,7 @@ pub struct CheckedProgram {
     provenance: SourceProvenance,
     pub(crate) emission: EmissionPlan,
     pub(crate) enums: EnumFacts,
-    _final_check_facts: FinalCheckFacts,
+    final_check_facts: FinalCheckFacts,
 }
 impl CheckedProgram {
     pub fn program(&self) -> &Program {
@@ -42,6 +42,9 @@ impl CheckedProgram {
         self.enums
             .validate(&self.program)
             .map_err(|e| FinalizeError::defect(e).to_string())
+    }
+    pub(crate) fn final_check_facts(&self) -> &FinalCheckFacts {
+        &self.final_check_facts
     }
     pub(super) fn seal(
         program: Program,
@@ -65,7 +68,7 @@ impl CheckedProgram {
             provenance,
             emission,
             enums,
-            _final_check_facts: facts,
+            final_check_facts: facts,
         })
     }
 }
@@ -204,17 +207,17 @@ impl EnumFacts {
 
 // Private checker proof: no syntax field can assert safe task transfer.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct FinalCheckFacts {
+pub(crate) struct FinalCheckFacts {
     pub functions: BTreeMap<String, BTreeMap<ExprUseId, FutureCapture>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct FutureCapture {
+pub(crate) struct FutureCapture {
     pub callee: String,
     pub resolution: NameResolution,
     pub arguments: Vec<FutureArgument>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct FutureArgument {
+pub(crate) struct FutureArgument {
     pub index: usize,
     pub expression: ExprUseId,
     pub ty: Type,
