@@ -55,6 +55,14 @@ Linux実Goの追加実行検査3件（正常2件・index境界失敗1件）と�
 
 Linux x86_64、AMD EPYC 9V74割当5 CPU、Go 1.27.3、Rust 1.99.1、release buildした`nagic`で、Point・関数・Result/try・consoleの小規模appを測った。Goはclean 4.330秒、変更なし中央値0.180秒、関数本体変更0.186秒。Rust dev/full-runtime incrementalは45.283秒、0.570秒、0.638秒。機能・依存量が同等でないためbuild feedbackの観測に限り、native性能や本番優位性は主張しない。Windows/macOS、HTTP等、output lock競合、power-loss、同機能appのRSS/throughputは未検証。build receiptは監査用で完全なcache keyではなく、独自native cache再利用には使わない。詳細と受入条件は[最小backend記録](go-backend-0.3-minimum.md)を参照する。merge、version、tag、releaseは行っていない。
 
+2026-10-28追記: cold asyncとcallback identityに続き、Go backendのborrowをread-only
+`view[str]` inputへ限定して接続した。関数入力とlocal値だけをGo `string` valueへ落とし、
+return・field・aggregate・他viewは従来どおり拒否する。High、保存Low、手書きLow、nested await、
+temporary、local callback、import aliasを実Goで照合し、owner上書きと広いview型のnegativeを
+Go起動前に固定する。`FutureArgument.owners`をtransitive origin証明と扱わず、一般borrow、
+resource view、owner cleanupには中立planが残る。設計と境界は
+[string borrow記録](go-async-string-borrow.md)を参照する。merge、version、tag、releaseは行っていない。
+
 2026-10-27追記: 最小実装のDraft PR #178はHEAD `308edd5`で通常CI 21成功・想定skip 3、CodeQL 6成功を確認した。ただし通常Linux job内の14件だけで、Windows/macOSの実Go実行保証ではない。次の独立差分ではchange classifierへ`go_checks`を追加し、shared/compiler・未知path・package時はfail-closedでGoを選択する。Go 1.27.3と自動toolchain取得禁止を固定し、L2はLinux/Windows/macOS arm64、L3はmacOS Intelを含む4platformで実`go build/run` integrationを行う。実行件数・失敗・ignore・filterを別parserで厳密に検査し、選択jobの欠落/skipをReady/publication aggregateが拒否する。Rust runtimeのみ・editorのみ・通常Docsは対象外だが、未知/mixed変更は広い側へ倒す。ローカルではCI policy 223件、Linux実Go 14件、workflow投影roundtrip、fmtを確認。remote exact-head、Windows/macOS実行と独立最終監査はDraft PRのgateとして残す。
 
 ## 2026-10-23: 完成コードの末尾空行でeditor情報を失う不具合

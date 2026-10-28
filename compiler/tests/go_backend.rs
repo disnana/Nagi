@@ -200,6 +200,43 @@ async fn main() -> Result[unit, Error] {
 }
 "#;
 
+const ASYNC_BORROW_PROGRAM: &str = r#"async def add_one(value: i64) -> i64:
+    return value + 1
+
+async def read_after(part: view[str]) -> Result[i64, Error]:
+    marker = await add_one(0)
+    print(part)
+    return ok(len(part) + marker)
+
+async def main() -> Result[unit, Error]:
+    owner = "Nagi"
+    borrowed = view(owner)
+    borrowed = view(owner)
+    callback = read_after
+    first = try await callback(borrowed)
+    second = try await read_after(view("Hi"))
+    return ok(print(first + second))
+"#;
+
+const ASYNC_BORROW_LOW: &str = r#"async fn add_one(value: i64) -> i64 {
+    return value + 1;
+}
+async fn read_after(part: view[str]) -> Result[i64, Error] {
+    let marker: i64 = await add_one(0);
+    print(part);
+    return ok(len(part) + marker);
+}
+async fn main() -> Result[unit, Error] {
+    let owner: str = "Nagi";
+    let borrowed: view[str] = view(owner);
+    borrowed = view(owner);
+    let callback = read_after;
+    let first: i64 = try await callback(borrowed);
+    let second: i64 = try await read_after(view("Hi"));
+    return ok(print(first + second));
+}
+"#;
+
 #[test]
 fn go_backend_runs_cold_user_async_from_high_saved_low_and_main() {
     let fixture = Fixture::new();
@@ -395,6 +432,129 @@ fn go_backend_uses_checked_identity_for_local_async_callbacks() {
         String::from_utf8_lossy(&shadowed.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&shadowed.stdout), "1\n");
+}
+
+#[test]
+fn go_backend_keeps_read_only_string_borrows_in_cold_async_values() {
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", ASYNC_BORROW_PROGRAM);
+    let high = fixture.go("run", "main.nagi", "out-high-borrow");
+    assert!(
+        high.status.success(),
+        "{}",
+        String::from_utf8_lossy(&high.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&high.stdout), "Nagi\nHi\n8\n");
+
+    let go = fs::read_to_string(fixture.0.join("out-high-borrow/go/main.go")).unwrap();
+    assert!(go.contains("func(string) *nagiFuture["), "{go}");
+    assert!(
+        !go.contains("*string"),
+        "borrowed strings must use value headers"
+    );
+
+    let generated = fs::read_to_string(fixture.0.join("out-high-borrow/generated.low")).unwrap();
+    fixture.write("saved.low", &generated);
+    fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+    let saved = fixture.go("run", "saved.low", "out-saved-borrow");
+    assert!(
+        saved.status.success(),
+        "{}",
+        String::from_utf8_lossy(&saved.stderr)
+    );
+    assert_eq!(saved.stdout, high.stdout);
+
+    fixture.write("manual.low", ASYNC_BORROW_LOW);
+    let manual = fixture.go("run", "manual.low", "out-manual-borrow");
+    assert!(
+        manual.status.success(),
+        "{}",
+        String::from_utf8_lossy(&manual.stderr)
+    );
+    assert_eq!(manual.stdout, high.stdout);
+
+    fixture.write(
+        "borrowed-library.nagi",
+        "async def imported(part: view[str]) -> i64:\n    return len(part)\n",
+    );
+    fixture.write(
+        "imported.nagi",
+        "import \"borrowed-library.nagi\" as library\nasync def main():\n    owner = \"alias\"\n    callback = library.imported\n    print(await callback(view(owner)))\n",
+    );
+    let imported = fixture.go("run", "imported.nagi", "out-imported-borrow");
+    assert!(
+        imported.status.success(),
+        "{}",
+        String::from_utf8_lossy(&imported.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&imported.stdout), "5\n");
+}
+
+#[test]
+fn go_borrow_stage_rejects_wider_views_before_the_toolchain() {
+    for (name, source, line, message) in [
+        (
+            "bytes-callback",
+            "async def bad(part: view[bytes]) -> i64:\n    return len(part)\nasync def main():\n    callback = bad\n    print(0)\n",
+            4,
+            "type fn[view[bytes]",
+        ),
+        (
+            "view-return",
+            "def borrowed(part: view[str]) -> view[str]:\n    return part\ndef main():\n    owner = \"value\"\n    print(borrowed(view(owner)))\n",
+            1,
+            "type view[str] is not supported",
+        ),
+        (
+            "view-list",
+            "def main():\n    owner = \"value\"\n    borrowed = [view(owner)]\n    print(len(borrowed))\n",
+            3,
+            "type view[str] is not supported",
+        ),
+        (
+            "view-copy",
+            "def main():\n    owner = \"value\"\n    borrowed = view(owner)\n    copied = copy(borrowed)\n    print(copied)\n",
+            4,
+            "operation copy is not supported",
+        ),
+        (
+            "owner-overwrite",
+            "async def read(part: view[str]) -> i64:\n    return len(part)\nasync def main():\n    owner = \"before\"\n    borrowed = view(owner)\n    owner = \"after\"\n    print(await read(borrowed))\n",
+            6,
+            "viewまたはループから参照中の所有値は再代入できません",
+        ),
+    ] {
+        let fixture = Fixture::new();
+        let file = format!("{name}.nagi");
+        fixture.write(&file, source);
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .current_dir(&fixture.0)
+            .args([
+                "build",
+                &file,
+                "--no-project",
+                "--backend",
+                "go",
+                "--out",
+                "out",
+            ])
+            .env("NAGI_GO", fixture.0.join("missing-go"))
+            .env_remove("NAGI_RUN_RETENTION")
+            .output()
+            .unwrap();
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{name} unexpectedly succeeded");
+        assert!(diagnostic.contains(message), "{name}: {diagnostic}");
+        assert!(
+            diagnostic.contains(&format!("{file}:{line}")),
+            "{name}: {diagnostic}"
+        );
+        assert!(
+            !diagnostic.contains("Go toolchain was not found"),
+            "{name}: {diagnostic}"
+        );
+        assert!(!fixture.0.join("out/.nagi/apps").exists(), "{name}");
+    }
 }
 
 #[test]

@@ -94,7 +94,7 @@ generationには次を保存する。
 
 ## 実行検証
 
-専用integration testは実Go toolchainを使い、callback identity段階ではLinux/macOSで30件、WindowsでUnix symlink固有の1件を除く29件を検査する。
+専用integration testは実Go toolchainを使い、read-only string borrow段階ではLinux/macOSで32件、WindowsでUnix symlink固有の1件を除く31件を検査する。
 
 - Highと独立保存Lowが同じ出力になる
 - private std-only lifecycle kernelの13 native testを名前集合まで検査し、public std.actorのHigh/手書きLow事前拒否を維持する
@@ -145,7 +145,7 @@ std-only Go moduleでgeneration・one-for-one再起動・global予算・実join�
 native検査する。生成applicationへの組込みとpublic std.actor受理はまだ行わない。
 mailbox/READY/events/charge、cold async/borrow/callback/owner cleanupは後続gateである。
 private lifecycle段階の必須件数はLinux/macOS 27、Windows 26だった。後続のcold user
-async 2件とcallback identity 1件を含む現在の必須件数はLinux/macOS 30、Windows 29。
+async 2件、callback identity 1件、string borrow 2件を含む現在の必須件数はLinux/macOS 32、Windows 31。
 
 1. 3 OSで最小backendの実build/runとlast-good保護を必須CI化する。
 2. shared conformance oracleとbackend別driverを分離し、同じ対応Nagi programの結果・診断を比較する。

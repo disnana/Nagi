@@ -43,9 +43,11 @@ Go backendのpublic std.actor操作、async/await、view/shared、scope/taskは�
 Go toolchainを欠損させたHigh・手書きLowでもactor.default_optionsの未対応診断と元行を
 要求する。Rustで動いたtestやbenchmarkをGo保証へ転用しない。
 
-独立sliceはcold async（引数captureと本体開始を分離）、callback identity、borrow、
+独立sliceはcold async（引数captureと本体開始を分離）、callback identity、read-only
+`view[str]` input、一般borrow、
 owner cleanup、scope cancellationと実joinの順に封印factsへ接続する。cold asyncと
-ローカルasync callback identityは実装済みで、borrow以降は未対応である。operationは
+ローカルasync callback identity、read-only `view[str]` inputは実装済みで、一般borrow以降は
+未対応である。operationは
 canonical Operation IDを保持し、Rust pathや関数名文字列から再判定しない。
 これらのgate後にscalar限定のpublic actorを検討する。mailbox/Turn、READY/events、
 count/byte charge、reply期限、accepted-workの扱いは別sliceである。

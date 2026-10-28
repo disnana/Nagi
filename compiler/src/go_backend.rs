@@ -196,6 +196,45 @@ fn go_type(
     }
 }
 
+fn go_borrow_input_type(
+    ty: &Type,
+    classes: &BTreeSet<String>,
+    enums: &BTreeSet<String>,
+    line: usize,
+) -> Result<String, String> {
+    if ty == &Type::generic("view", vec![Type::named("str")]) {
+        return Ok("string".into());
+    }
+    go_type(ty, classes, enums, line)
+}
+
+fn go_local_type(
+    ty: &Type,
+    classes: &BTreeSet<String>,
+    enums: &BTreeSet<String>,
+    line: usize,
+) -> Result<String, String> {
+    if ty.is_async_function() {
+        let (result, arguments) =
+            ty.1.split_last()
+                .expect("async function type has a Future result");
+        let result = result
+            .1
+            .first()
+            .expect("async function result is a checked Future");
+        let arguments = arguments
+            .iter()
+            .map(|argument| go_borrow_input_type(argument, classes, enums, line))
+            .collect::<Result<Vec<_>, _>>()?
+            .join(", ");
+        return Ok(format!(
+            "func({arguments}) *nagiFuture[{}]",
+            go_type(result, classes, enums, line)?
+        ));
+    }
+    go_borrow_input_type(ty, classes, enums, line)
+}
+
 fn walk_expr_calls(expr: &Expr, calls: &mut Vec<String>) {
     match &expr.kind {
         E::Call(name, _, args) => {
@@ -460,7 +499,7 @@ impl<'a> Emitter<'a> {
                 ));
             }
             for (_, ty) in &function.params {
-                go_type(ty, &self.classes, &self.enums, function.line)?;
+                go_borrow_input_type(ty, &self.classes, &self.enums, function.line)?;
             }
             go_type(&function.ret, &self.classes, &self.enums, function.line)?;
             if function.name == "main"
@@ -726,7 +765,7 @@ impl<'a> Emitter<'a> {
                 format!("operation {name} is not supported by the initial Go backend"),
             ));
         }
-        go_type(ty, &self.classes, &self.enums, expression.line)?;
+        go_local_type(ty, &self.classes, &self.enums, expression.line)?;
         match &expression.kind {
             E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null => Ok(()),
             E::Name(_) => match expression.resolution {
@@ -837,6 +876,7 @@ impl<'a> Emitter<'a> {
                                 | "len"
                                 | "range"
                                 | "append"
+                                | "view"
                         ) =>
                     {
                         if matches!(name.as_str(), "print" | "write")
@@ -1112,6 +1152,7 @@ impl<'a> Emitter<'a> {
                         "i64" => format!("int64({})", values[0]),
                         "len" => format!("int64(len({}))", values[0]),
                         "range" => format!("nagiRange{{end: {}}}", values[0]),
+                        "view" => values[0].clone(),
                         "ok" => {
                             let ty = expression.ty.as_ref().expect("validated result");
                             format!(
@@ -1212,7 +1253,7 @@ impl<'a> Emitter<'a> {
     ) -> Result<(Vec<String>, String), String> {
         let (mut before, value) = self.expression(expression, ret)?;
         let name = self.temp("value");
-        let ty = go_type(
+        let ty = go_local_type(
             expression.ty.as_ref().expect("validated expression type"),
             &self.classes,
             &self.enums,
@@ -1250,7 +1291,7 @@ impl<'a> Emitter<'a> {
                     }
                     let name = ident(name);
                     if *declare {
-                        let ty = go_type(
+                        let ty = go_local_type(
                             annotation.as_ref().expect("checked declaration type"),
                             &self.classes,
                             &self.enums,
@@ -1472,7 +1513,7 @@ impl<'a> Emitter<'a> {
                     Ok(format!(
                         "{} {}",
                         ident(name),
-                        go_type(ty, &self.classes, &self.enums, function.line)?
+                        go_borrow_input_type(ty, &self.classes, &self.enums, function.line)?
                     ))
                 })
                 .collect::<Result<Vec<_>, String>>()?

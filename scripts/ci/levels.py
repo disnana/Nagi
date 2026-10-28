@@ -7,10 +7,10 @@ from pathlib import Path
 import changes
 
 PLATFORMS = [
-    dict(os='ubuntu-latest', platform='linux-x86_64', executable='nagic', rust_host='x86_64-unknown-linux-gnu', go_tests='30'),
-    dict(os='windows-latest', platform='windows-x86_64', executable='nagic.exe', rust_host='x86_64-pc-windows-msvc', go_tests='29'),
-    dict(os='macos-15', platform='macos-arm64', executable='nagic', rust_host='aarch64-apple-darwin', go_tests='30'),
-    dict(os='macos-15-intel', platform='macos-x86_64', executable='nagic', rust_host='x86_64-apple-darwin', go_tests='30'),
+    dict(os='ubuntu-latest', platform='linux-x86_64', executable='nagic', rust_host='x86_64-unknown-linux-gnu', go_tests='32'),
+    dict(os='windows-latest', platform='windows-x86_64', executable='nagic.exe', rust_host='x86_64-pc-windows-msvc', go_tests='31'),
+    dict(os='macos-15', platform='macos-arm64', executable='nagic', rust_host='aarch64-apple-darwin', go_tests='32'),
+    dict(os='macos-15-intel', platform='macos-x86_64', executable='nagic', rust_host='x86_64-apple-darwin', go_tests='32'),
 ]
 # Only these reviewed front-end paths can use L1 native coverage. Everything
 # else, including checker/emitter/lowering and all runtime ownership/task/
