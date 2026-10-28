@@ -39,7 +39,8 @@ publicへつなぐには、checked ownership factsに基づく決定的release�
 
 ## まだ受理しない範囲と依存順
 
-Go backendのpublic std.actor操作、async/await、view/shared、scope/taskは拒否を維持する。
+Go backendのpublic std.actor操作、async標準operation、一般borrow/shared、scope/taskは拒否を維持する。
+user async/awaitとread-only `view[str]` inputは後続の限定sliceで実装済みである。
 Go toolchainを欠損させたHigh・手書きLowでもactor.default_optionsの未対応診断と元行を
 要求する。Rustで動いたtestやbenchmarkをGo保証へ転用しない。
 

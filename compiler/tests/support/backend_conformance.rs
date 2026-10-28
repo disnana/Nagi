@@ -896,53 +896,6 @@ pub fn assert_case(
     Ok(observations)
 }
 
-pub fn assert_go_rejected(
-    name: &str,
-    high: &str,
-    handwritten_low: &str,
-    entry: EntryKind,
-    diagnostic: &str,
-    line: usize,
-) -> Result<(), String> {
-    let case = SharedCase {
-        name,
-        high,
-        handwritten_low,
-        expectation: Expectation::RunSuccess {
-            stdout: Vec::new(),
-            stderr: Vec::new(),
-        },
-    };
-    let fixture = Fixture::new(name).map_err(|error| error.to_string())?;
-    let high_path = fixture
-        .write("main.nagi", case.high)
-        .map_err(|error| error.to_string())?;
-    fixture
-        .write(
-            "saved.low",
-            saved_low(&high_path).map_err(|error| error.to_string())?,
-        )
-        .map_err(|error| error.to_string())?;
-    fixture
-        .write("handwritten.low", case.handwritten_low)
-        .map_err(|error| error.to_string())?;
-    let tools = Toolchains::current();
-    let rust = rust_observation(&fixture, entry, &tools).map_err(|error| error.to_string())?;
-    if rust.stage != Stage::Runtime || rust.status != Some(0) {
-        return Err(format!("Rust should run supported source: {rust:?}"));
-    }
-    let go = go_observation(&fixture, entry, &tools).map_err(|error| error.to_string())?;
-    let stderr = String::from_utf8_lossy(&go.stderr);
-    if go.stage != Stage::Compile
-        || go.status == Some(0)
-        || !stderr.contains(diagnostic)
-        || !stderr.contains(&format!("{}:{line}", source_name(entry)))
-    {
-        return Err(format!("Go rejection mismatch: {go:?}"));
-    }
-    Ok(())
-}
-
 pub fn assert_frontend_rejected(
     name: &str,
     high: &str,

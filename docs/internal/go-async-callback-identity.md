@@ -29,7 +29,7 @@ callback値はGoの`func(...)*nagiFuture[T]`へ落とす。callback作成でasyn
 ## 対象外
 
 - callbackを関数引数、戻り値、class field、List、Optionなどへ保存すること
-- `view` / borrowを含むcallback引数と、owner cleanup
+- read-only `view[str]`以外のborrowを含むcallback引数と、owner cleanup
 - 複数Futureの並行実行、取消、timeout、scope join
 - async標準operation、public actor、HTTP、DB、auth/session
 
@@ -41,6 +41,9 @@ GoのGCが値を保持することをNagiのborrow lifetimeやcleanup成功の�
 High、Highから保存したLow、独立した手書きLow、import aliasを実Go toolchainでbuild/runし、
 同じraw出力を要求する。同じcallbackの再代入と`Result` / `try await`を含める。異なるasync関数
 への再代入はGo toolchainを欠損させた状態でも元source位置のchecker診断となることを確認する。
+
+後続sliceではread-only `view[str]`入力を値として保持するlocal callbackを追加済みである。
+その他のborrowとowner cleanupは引き続き対象外である。
 
 この1件を加えた専用integrationの必須件数はLinux/macOS 30、Windows 29。Windowsだけ少ない
 1件は既存のUnix symlink保護ケースであり、callback検査のskipではない。

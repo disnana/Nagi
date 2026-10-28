@@ -492,40 +492,59 @@ fn go_backend_keeps_read_only_string_borrows_in_cold_async_values() {
 
 #[test]
 fn go_borrow_stage_rejects_wider_views_before_the_toolchain() {
-    for (name, source, line, message) in [
+    for (name, extension, source, line, message) in [
         (
             "bytes-callback",
+            "nagi",
             "async def bad(part: view[bytes]) -> i64:\n    return len(part)\nasync def main():\n    callback = bad\n    print(0)\n",
             1,
             "type view[bytes] is not supported",
         ),
         (
             "view-return",
+            "nagi",
             "def borrowed(part: view[str]) -> view[str]:\n    return part\ndef main():\n    owner = \"value\"\n    print(borrowed(view(owner)))\n",
             1,
             "type view[str] is not supported",
         ),
         (
             "view-list",
+            "nagi",
             "def main():\n    owner = \"value\"\n    borrowed = [view(owner)]\n    print(len(borrowed))\n",
             3,
             "type view[str] is not supported",
         ),
         (
             "view-copy",
+            "nagi",
             "def main():\n    owner = \"value\"\n    borrowed = view(owner)\n    copied = copy(borrowed)\n    print(copied)\n",
             4,
             "operation copy is not supported",
         ),
         (
             "owner-overwrite",
+            "nagi",
             "async def read(part: view[str]) -> i64:\n    return len(part)\nasync def main():\n    owner = \"before\"\n    borrowed = view(owner)\n    owner = \"after\"\n    print(await read(borrowed))\n",
             6,
             "viewまたはループから参照中の所有値は再代入できません",
         ),
+        (
+            "list-string-view-high",
+            "nagi",
+            "def main():\n    values = [\"a\", \"b\"]\n    borrowed = view(values)\n    print(len(borrowed))\n",
+            3,
+            "view of List[str] is not supported by the initial Go borrow stage",
+        ),
+        (
+            "list-string-view-low",
+            "low",
+            "fn main() -> unit {\n    let values: List[str] = [\"a\", \"b\"];\n    let borrowed: view[str] = view(values);\n    print(len(borrowed));\n}\n",
+            3,
+            "view of List[str] is not supported by the initial Go borrow stage",
+        ),
     ] {
         let fixture = Fixture::new();
-        let file = format!("{name}.nagi");
+        let file = format!("{name}.{extension}");
         fixture.write(&file, source);
         let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
             .current_dir(&fixture.0)
@@ -1660,7 +1679,7 @@ fn main() -> unit {
 }
 
 #[test]
-fn shared_oracle_rejects_wrong_results_and_keeps_unsupported_and_infra_distinct() {
+fn shared_oracle_rejects_wrong_results_and_keeps_infra_distinct() {
     use backend_conformance::{Backend, EntryKind, Expectation, FaultKind, SharedCase, Stage};
 
     let success = Expectation::RunSuccess {
@@ -1732,21 +1751,24 @@ def main():
     let low_view = r#"fn length(value: view[str]) -> i64 { return len(value); }
 fn main() -> unit { print(length(view("abc"))); }
 "#;
-    for (entry, line) in [
-        (EntryKind::High, 1),
-        (EntryKind::SavedLow, 3),
-        (EntryKind::HandwrittenLow, 1),
-    ] {
-        backend_conformance::assert_go_rejected(
-            "shared-view-unsupported",
-            high_view,
-            low_view,
-            entry,
-            "type view[str] is not supported by the initial Go backend",
-            line,
-        )
-        .unwrap_or_else(|error| panic!("{entry:?}: {error}"));
-    }
+    let read_only_string_view = SharedCase {
+        name: "shared-read-only-string-view",
+        high: high_view,
+        handwritten_low: low_view,
+        expectation: Expectation::RunSuccess {
+            stdout: b"3\n".to_vec(),
+            stderr: Vec::new(),
+        },
+    };
+    backend_conformance::assert_case(
+        &read_only_string_view,
+        &[
+            EntryKind::High,
+            EntryKind::SavedLow,
+            EntryKind::HandwrittenLow,
+        ],
+    )
+    .unwrap_or_else(|error| panic!("{error}"));
 
     let valid = SharedCase {
         name: "shared-missing-go",

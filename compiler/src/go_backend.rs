@@ -879,6 +879,24 @@ impl<'a> Emitter<'a> {
                                 | "view"
                         ) =>
                     {
+                        if name == "view" {
+                            let Some(argument_ty) =
+                                arguments.first().and_then(|argument| argument.ty.as_ref())
+                            else {
+                                return Err(error(
+                                    expression.line,
+                                    "internal compiler error: invalid checked view shape",
+                                ));
+                            };
+                            if argument_ty != &Type::named("str") {
+                                return Err(error(
+                                    expression.line,
+                                    format!(
+                                        "view of {argument_ty} is not supported by the initial Go borrow stage; only a read-only string borrowed from str is supported"
+                                    ),
+                                ));
+                            }
+                        }
                         if matches!(name.as_str(), "print" | "write")
                             && arguments
                                 .first()
