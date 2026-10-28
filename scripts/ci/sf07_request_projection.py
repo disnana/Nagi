@@ -83,8 +83,8 @@ def inverse_csrf(source):
 # U4/U5 made the producer, native driver and attached Request Context production.
 # Historical U1 inverses above intentionally remain frozen; current source is
 # instead bound to the independently reviewed public RC commit/tree below.
-PRODUCTION_COMMIT = '9863a3878755d77dd250a1773e569f0305db72c6'
-PRODUCTION_TREE = 'd9a0cc8af00495f1a24ff4951aee2f269f5fbbf8'
+PRODUCTION_COMMIT = '1004a908c4e9090b1ed764d2a51900a5bdb2d5bf'
+PRODUCTION_TREE = '9bbfe19664f715f2bead02e50e5e79f703afba07'
 PRODUCTION_SOURCES = {'http': {'path': 'runtime/src/http_server.rs',
           'blob': 'dd56e351196ded77e8e92ac8cede54236af29fe6',
           'sha256': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
@@ -94,9 +94,9 @@ PRODUCTION_SOURCES = {'http': {'path': 'runtime/src/http_server.rs',
              'sha256': '363cf9c8e60369ad0e9996b6323c7c4f9e2a47eddc7bb160e514c1522b58b3a4',
              'tokens': 'f215ac43d66d09aed10f8af5d52c0cedc07ce94b64a8c22432fdc7b584bce4b6'},
  'stage': {'path': 'runtime/src/http_server/browser_login_stage_tests.rs',
-           'blob': '6d57cdbf3cff4051b061c3f71bddb6827ad4e3a5',
-           'sha256': '220975a888800934f209be4ec4a96449e32f3cedef90119e517d6c01b2dcb3a3',
-           'tokens': 'a13eac9ab415613067261d9927594ce023d421bcd4518d6feb76f0819f6d8164'},
+           'blob': 'c06bc058e5b95851e079d4b24e31b1b9cae558d4',
+           'sha256': '6e31ac420dbcd06f63651b93c8a12f2acffff319f4c7c4c55f50181a5723d110',
+           'tokens': 'a0dc3d69b0b877aadbaf91a6d1d72389b886871362b450822352fdf6c58d7f2e'},
  'csrf': {'path': 'runtime/src/http_server/csrf_http.rs',
           'blob': '8b0728b8eb3aab578f8b27a7836cecc4c846ad1f',
           'sha256': '5f597750de0a5b07a29a1d05649e272bc11103b6e093711e0c5d00118d442943',

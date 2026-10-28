@@ -11,8 +11,9 @@ from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 
 ROOT = Path(__file__).resolve().parents[2]
-# Raw workflow from immutable base commit 0d1884c, before this one test addition.
-BEFORE_ELIF_WORKFLOW_SHA256 = "f688bcbd5c21bf37ca5ab80d9d0eb655c80f848b2ddcaa1564d3da2695da6418"
+# Reviewed inherited workflow after the response-budget source pins and before
+# the Go/High elif harness additions are projected away below.
+BEFORE_ELIF_WORKFLOW_SHA256 = "52df257f03e8da9ba84e737da298641e6fd8d110146dffbac3a1ea2f26926dd5"
 
 
 class HighElifProjectionTests(unittest.TestCase):
