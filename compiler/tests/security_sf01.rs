@@ -1,7 +1,11 @@
 use nagic::{check, emit, source};
 #[cfg(nagi_sf01_diagnostic)]
 use std::cell::Cell;
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 const SLOT_POLICY: u8 = 1;
 const SLOT_NATIVE_REPLACEMENT: u8 = 2;
@@ -253,9 +257,17 @@ struct Fixture(PathBuf, Observation);
 impl Fixture {
     fn new() -> Self {
         let base = std::env::temp_dir();
+        // Windows runners can reuse a process ID while a directory left by an
+        // interrupted earlier test command still exists.  Some ACL states are
+        // reported as AccessDenied rather than AlreadyExists, so include a
+        // per-fixture nonce instead of relying on PID + counter alone.
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
         let path = (0u64..)
             .find_map(|n| {
-                let p = base.join(format!("nagi-sf01-{}-{n}", std::process::id()));
+                let p = base.join(format!("nagi-sf01-{}-{nonce}-{n}", std::process::id()));
                 match fs::create_dir(&p) {
                     Ok(()) => Some(p),
                     Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => None,
