@@ -55,6 +55,19 @@ test('typing an elif local annotation preserves its nested indentation', () => {
   }
 });
 
+test('same-name elif statements never align as contextual branches', () => {
+  const prefix = 'if ready:\n    print(1)\n    ';
+  for (const statement of ['elif = 4; if True:', 'elif(2); if True:', 'elif : i64 = 2 # local:']) {
+    assert.equal(format(prefix + statement + '|', ':'), prefix + statement);
+  }
+});
+
+test('multiline elif headers align as one logical statement', () => {
+  const before = 'if a:\n    work()\n    elif (\n        b and c\n    ):';
+  const expected = 'if a:\n    work()\nelif (\n    b and c\n):';
+  assert.equal(format(before + '|', ':'), expected);
+});
+
 test('first and following cases align under their nearest match', () => {
   assert.equal(format('def main():\n    match result:\n        case Ok(value):|', ':'), 'def main():\n    match result:\n        case Ok(value):');
   assert.equal(format('def main():\n    match result:\n        case Ok(value):\n            print(value)\n            case Err(problem):|', ':'), 'def main():\n    match result:\n        case Ok(value):\n            print(value)\n        case Err(problem):');

@@ -18,8 +18,21 @@ function branchParent(blocks, kind, indent, size) {
 
 function branchKind(statement) {
   const kind = /^(else|elif|case)\b/.exec(statement)?.[1];
-  // A bare colon can still be the user's `elif: Type` local annotation.
-  return kind === 'elif' && !statement.slice(4, -1).trim() ? undefined : kind;
+  if (kind !== 'elif') return kind;
+  const condition = statement.slice(4, -1).trim();
+  if (!condition) return undefined; // `elif: Type` can be a local annotation.
+  let depth = 0;
+  for (let index = 0; index < condition.length; index++) {
+    const value = condition[index];
+    if (value === '(' || value === '[') depth++;
+    else if (value === ')' || value === ']') depth = Math.max(0, depth - 1);
+    else if (depth === 0 && (value === ';' || value === ':')) return undefined;
+    else if (depth === 0 && value === '='
+      && condition[index - 1] !== '=' && condition[index - 1] !== '!'
+      && condition[index - 1] !== '<' && condition[index - 1] !== '>'
+      && condition[index + 1] !== '=') return undefined;
+  }
+  return 'elif';
 }
 
 // Return edits to leading whitespace only. Strings and comments keep their text.

@@ -27,6 +27,20 @@ public class NagiTypedEditingTest extends BasePlatformTestCase {
         myFixture.type(':');
         myFixture.checkResult("if a:\n    work()\nelif b:\n    work()\nelse:<caret>");
     }
+    public void testMultilineElifHeaderAlignsAsOneStatement() {
+        myFixture.configureByText("multiline.nagi",
+                "if a:\n    work()\n    elif (\n        b and c\n    )<caret>");
+        myFixture.type(':');
+        myFixture.checkResult("if a:\n    work()\nelif (\n    b and c\n):<caret>");
+    }
+    public void testSameNameElifStatementsNeverAlignAsBranches() {
+        String prefix = "if ready:\n    print(1)\n    ";
+        for (String statement : new String[] {"elif = 4; if True", "elif(2); if True", "elif : i64 = 2 # local"}) {
+            myFixture.configureByText("identifier.nagi", prefix + statement + "<caret>");
+            myFixture.type(':');
+            myFixture.checkResult(prefix + statement + ":<caret>");
+        }
+    }
     public void testElseAlignsToNearestNestedIfAndOuterIfSurvivesInnerElse() {
         myFixture.configureByText("main.nagi", "def main():\n    if a:\n        if b:\n            print(1)\n        else:\n            print(2)\n            else<caret>");
         myFixture.type(':');

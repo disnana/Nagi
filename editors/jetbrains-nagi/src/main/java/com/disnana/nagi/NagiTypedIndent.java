@@ -184,15 +184,19 @@ final class NagiTypedIndent {
     private static Header header(List<Token> statement, String text) {
         if (statement.isEmpty()) return null;
         Token first = statement.get(0);
-        if (first.kind() != NagiTokenScanner.Kind.KEYWORD) return null;
+        String word = text.substring(first.start(), first.end());
+        // The line-bounded scanner cannot see the closing colon of a multiline
+        // contextual elif. The complete logical statement below still proves
+        // the header shape and the branch matcher proves its owning if.
+        if (first.kind() != NagiTokenScanner.Kind.KEYWORD
+                && !(word.equals("elif") && contextualElifHeader(statement, text))) return null;
         Token last = statement.get(statement.size() - 1);
         if (last.kind() != NagiTokenScanner.Kind.PUNCTUATION
                 || !text.substring(last.start(), last.end()).equals(":")) return null;
-        String word = text.substring(first.start(), first.end());
         return switch (word) {
             case "else" -> new Header(Branch.ELSE, null);
             // A bare `elif:` is also the start of an existing local annotation.
-            case "elif" -> statement.size() > 2 ? new Header(Branch.ELSE, "if") : null;
+            case "elif" -> contextualElifHeader(statement, text) ? new Header(Branch.ELSE, "if") : null;
             case "case" -> new Header(Branch.CASE, null);
             case "if", "match", "def", "class", "enum", "while", "for", "with", "scope", "try" ->
                     new Header(Branch.NONE, word);
@@ -201,6 +205,38 @@ final class NagiTypedIndent {
                     ? new Header(Branch.NONE, "async") : null;
             default -> null;
         };
+    }
+
+    private static boolean contextualElifHeader(List<Token> statement, String text) {
+        if (statement.size() <= 2) return false;
+        Token first = statement.get(0);
+        Token last = statement.get(statement.size() - 1);
+        int depth = 0;
+        boolean condition = false;
+        char quote = 0;
+        for (int index = first.end(); index < last.start(); index++) {
+            char value = text.charAt(index);
+            if (quote != 0) {
+                if (value == '\\' && index + 1 < last.start()) index++;
+                else if (value == quote) quote = 0;
+                condition = true;
+                continue;
+            }
+            if (value == '\'' || value == '"') { quote = value; condition = true; continue; }
+            if (value == '#') {
+                while (index + 1 < last.start() && text.charAt(index + 1) != '\n'
+                        && text.charAt(index + 1) != '\r') index++;
+                continue;
+            }
+            if (value == '(' || value == '[') { depth++; condition = true; continue; }
+            if (value == ')' || value == ']') { depth = Math.max(0, depth - 1); condition = true; continue; }
+            if (depth == 0 && (value == ';' || value == ':')) return false;
+            if (value == '=' && depth == 0
+                    && (index == first.end() || "=!<>".indexOf(text.charAt(index - 1)) < 0)
+                    && (index + 1 >= last.start() || text.charAt(index + 1) != '=')) return false;
+            if (!Character.isWhitespace(value)) condition = true;
+        }
+        return condition && depth == 0 && quote == 0;
     }
 
     private static Block branchParent(Deque<Block> blocks, Branch branch, int indent, int indentSize) {

@@ -148,11 +148,19 @@ public final class NagiTokenScanner {
                 condition = true;
                 continue;
             }
-            if (value == '#') return false;
+            if (value == '#') {
+                if (depth == 0) return false;
+                while (index + 1 < end && text.charAt(index + 1) != '\n'
+                        && text.charAt(index + 1) != '\r') index++;
+                continue;
+            }
             if (value == '\'' || value == '"') { quote = value; condition = true; continue; }
             if (value == '(' || value == '[') { depth++; condition = true; continue; }
             if (value == ')' || value == ']') { depth = Math.max(0, depth - 1); condition = true; continue; }
             if (value == ';' && depth == 0) return false;
+            if (value == '=' && depth == 0
+                    && (index == wordEnd || "=!<>".indexOf(text.charAt(index - 1)) < 0)
+                    && (index + 1 >= end || text.charAt(index + 1) != '=')) return false;
             if (value == ':' && depth == 0) {
                 if (!condition) return false;
                 for (int tail = index + 1; tail < end; tail++) {

@@ -40,6 +40,12 @@ public class NagiCoreTest {
                 .filter(token -> token.kind() != NagiTokenScanner.Kind.SPACE).findFirst().orElseThrow().kind());
         assertEquals(NagiTokenScanner.Kind.KEYWORD, tokens("    elif (\n        not ready\n    ):\n        print(1)", false).stream()
                 .filter(token -> token.kind() != NagiTokenScanner.Kind.SPACE).findFirst().orElseThrow().kind());
+        assertEquals(NagiTokenScanner.Kind.KEYWORD, tokens("    elif (\n        # reason\n        not ready\n    ):\n        print(1)", false).stream()
+                .filter(token -> token.kind() != NagiTokenScanner.Kind.SPACE).findFirst().orElseThrow().kind());
+        for (String compatible : List.of("elif = 4; if True:", "elif : i64 = 2 # local:")) {
+            assertEquals(compatible, NagiTokenScanner.Kind.IDENTIFIER, tokens(compatible, false).stream()
+                    .filter(token -> token.start() == compatible.indexOf("elif")).findFirst().orElseThrow().kind());
+        }
     }
     @Test public void builtinTypesAndTypeDeclarationsHaveThemeTypeKeysWithoutGuessingReferences() {
         for (boolean low : new boolean[] {false, true}) {
