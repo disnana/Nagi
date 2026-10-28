@@ -362,10 +362,15 @@ fn go_backend_uses_checked_identity_for_local_async_callbacks() {
         diagnostic.contains("別のasync関数を再代入できません"),
         "{diagnostic}"
     );
+    assert!(diagnostic.contains("invalid.nagi:7"), "{diagnostic}");
     assert!(
         !diagnostic.contains("Go toolchain was not found"),
         "{diagnostic}"
     );
+    assert!(!fixture
+        .0
+        .join("out-invalid-callback/.nagi/apps")
+        .exists());
 
     fixture.write(
         "library.nagi",
@@ -382,6 +387,18 @@ fn go_backend_uses_checked_identity_for_local_async_callbacks() {
         String::from_utf8_lossy(&imported.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&imported.stdout), "42\n");
+
+    fixture.write(
+        "shadowed.nagi",
+        "async def first() -> i64:\n    return 1\nasync def second() -> i64:\n    return 2\nasync def main():\n    second = first\n    print(await second())\n",
+    );
+    let shadowed = fixture.go("run", "shadowed.nagi", "out-shadowed-callback");
+    assert!(
+        shadowed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&shadowed.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&shadowed.stdout), "1\n");
 }
 
 #[test]
