@@ -1,0 +1,404 @@
+[
+  {
+    "cpu_affinity_count": 1,
+    "active_clients": 4,
+    "total_actors": 5,
+    "completed_successes_per_second": {
+      "median": 1459224.5243110454,
+      "min": 1130193.0392314869,
+      "max": 1608021.4542222423
+    },
+    "process_cpu_ns_per_success": {
+      "median": 670.46615,
+      "min": 592.22405,
+      "max": 717.27725
+    },
+    "elapsed_ns": {
+      "median": 13705910,
+      "min": 12437645,
+      "max": 17696092
+    },
+    "latency_p50_ns": {
+      "median": 3345,
+      "min": 3335,
+      "max": 3385
+    },
+    "latency_p95_ns": {
+      "median": 3956,
+      "min": 3906,
+      "max": 4026
+    },
+    "latency_p99_ns": {
+      "median": 8733,
+      "min": 6950,
+      "max": 13270
+    },
+    "healthy_completions_during_fault": {
+      "median": 16330,
+      "min": 13768,
+      "max": 16452
+    },
+    "fault_duration_ns": {
+      "median": 10516022,
+      "min": 10204292,
+      "max": 10745269
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 10766,
+      "min": 7161,
+      "max": 11818
+    },
+    "common_interval_jain_index": {
+      "median": 0.9999999899939974,
+      "min": 0.9999999899939974,
+      "max": 0.9999999899939974
+    },
+    "observed_peak_rss_bytes": {
+      "median": 8269824,
+      "min": 8265728,
+      "max": 8331264
+    },
+    "retained_rss_delta_bytes_after_release": {
+      "median": 2945024,
+      "min": 2945024,
+      "max": 2949120
+    },
+    "rss_at_ready_median": 1998848,
+    "rss_after_release_median": 4853760
+  },
+  {
+    "cpu_affinity_count": 1,
+    "active_clients": 16,
+    "total_actors": 17,
+    "completed_successes_per_second": {
+      "median": 1395042.4550654646,
+      "min": 1208795.9426885063,
+      "max": 1543492.4630973623
+    },
+    "process_cpu_ns_per_success": {
+      "median": 711.696975,
+      "min": 606.9436375,
+      "max": 800.1767125
+    },
+    "elapsed_ns": {
+      "median": 57345925,
+      "min": 51830509,
+      "max": 66181559
+    },
+    "latency_p50_ns": {
+      "median": 15474,
+      "min": 15443,
+      "max": 15573
+    },
+    "latency_p95_ns": {
+      "median": 19860,
+      "min": 19619,
+      "max": 20130
+    },
+    "latency_p99_ns": {
+      "median": 75784,
+      "min": 71618,
+      "max": 98809
+    },
+    "healthy_completions_during_fault": {
+      "median": 11682,
+      "min": 8632,
+      "max": 15464
+    },
+    "fault_duration_ns": {
+      "median": 10516953,
+      "min": 10381775,
+      "max": 10997775
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 124578,
+      "min": 81353,
+      "max": 184919
+    },
+    "common_interval_jain_index": {
+      "median": 0.9999999956217169,
+      "min": 0.9999999956217169,
+      "max": 0.9999999956217169
+    },
+    "observed_peak_rss_bytes": {
+      "median": 27119616,
+      "min": 27103232,
+      "max": 27185152
+    },
+    "retained_rss_delta_bytes_after_release": {
+      "median": 11145216,
+      "min": 11145216,
+      "max": 11145216
+    },
+    "rss_at_ready_median": 2039808,
+    "rss_after_release_median": 13049856
+  },
+  {
+    "cpu_affinity_count": 1,
+    "active_clients": 64,
+    "total_actors": 65,
+    "completed_successes_per_second": {
+      "median": 1567937.8196627104,
+      "min": 1250420.717726956,
+      "max": 1628897.6045543815
+    },
+    "process_cpu_ns_per_success": {
+      "median": 632.10824375,
+      "min": 603.711796875,
+      "max": 795.938621875
+    },
+    "elapsed_ns": {
+      "median": 204089726,
+      "min": 196451882,
+      "max": 255913866
+    },
+    "latency_p50_ns": {
+      "median": 65058,
+      "min": 61993,
+      "max": 65319
+    },
+    "latency_p95_ns": {
+      "median": 92460,
+      "min": 91188,
+      "max": 154062
+    },
+    "latency_p99_ns": {
+      "median": 184889,
+      "min": 177849,
+      "max": 383108
+    },
+    "healthy_completions_during_fault": {
+      "median": 14922,
+      "min": 14800,
+      "max": 16872
+    },
+    "fault_duration_ns": {
+      "median": 10883117,
+      "min": 10105523,
+      "max": 10991631
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 259132,
+      "min": 178750,
+      "max": 282487
+    },
+    "common_interval_jain_index": {
+      "median": 0.9999999987881083,
+      "min": 0.9999999987881083,
+      "max": 0.9999999987881083
+    },
+    "observed_peak_rss_bytes": {
+      "median": 102539264,
+      "min": 102539264,
+      "max": 102543360
+    },
+    "retained_rss_delta_bytes_after_release": {
+      "median": 65957888,
+      "min": 65953792,
+      "max": 65957888
+    },
+    "rss_at_ready_median": 2269184,
+    "rss_after_release_median": 67858432
+  },
+  {
+    "cpu_affinity_count": 2,
+    "active_clients": 4,
+    "total_actors": 5,
+    "completed_successes_per_second": {
+      "median": 1764544.4784315317,
+      "min": 1018480.6366970591,
+      "max": 1900679.607000279
+    },
+    "process_cpu_ns_per_success": {
+      "median": 898.77955,
+      "min": 813.0329,
+      "max": 1897.17185
+    },
+    "elapsed_ns": {
+      "median": 11334370,
+      "min": 10522552,
+      "max": 19637094
+    },
+    "latency_p50_ns": {
+      "median": 721,
+      "min": 701,
+      "max": 2073
+    },
+    "latency_p95_ns": {
+      "median": 3796,
+      "min": 3686,
+      "max": 10195
+    },
+    "latency_p99_ns": {
+      "median": 5218,
+      "min": 4267,
+      "max": 15023
+    },
+    "healthy_completions_during_fault": {
+      "median": 20000,
+      "min": 11073,
+      "max": 20000
+    },
+    "fault_duration_ns": {
+      "median": 10492968,
+      "min": 10422788,
+      "max": 11308541
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 5218,
+      "min": 4267,
+      "max": 15854
+    },
+    "common_interval_jain_index": {
+      "median": 0.8501363420827601,
+      "min": 0.7546961519486147,
+      "max": 0.9063997432255649
+    },
+    "observed_peak_rss_bytes": {
+      "median": 8351744,
+      "min": 8314880,
+      "max": 8409088
+    },
+    "retained_rss_delta_bytes_after_release": {
+      "median": 2977792,
+      "min": 2945024,
+      "max": 3055616
+    },
+    "rss_at_ready_median": 2052096,
+    "rss_after_release_median": 4898816
+  },
+  {
+    "cpu_affinity_count": 2,
+    "active_clients": 16,
+    "total_actors": 17,
+    "completed_successes_per_second": {
+      "median": 2161467.4548385693,
+      "min": 2135049.0587569503,
+      "max": 2284850.090128768
+    },
+    "process_cpu_ns_per_success": {
+      "median": 871.8433,
+      "min": 836.2982375,
+      "max": 903.7809
+    },
+    "elapsed_ns": {
+      "median": 37011892,
+      "min": 35013238,
+      "max": 37469865
+    },
+    "latency_p50_ns": {
+      "median": 4998,
+      "min": 2144,
+      "max": 5458
+    },
+    "latency_p95_ns": {
+      "median": 13841,
+      "min": 13460,
+      "max": 14982
+    },
+    "latency_p99_ns": {
+      "median": 44728,
+      "min": 31808,
+      "max": 63536
+    },
+    "healthy_completions_during_fault": {
+      "median": 19592,
+      "min": 17778,
+      "max": 20790
+    },
+    "fault_duration_ns": {
+      "median": 10361519,
+      "min": 10356742,
+      "max": 10820073
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 92470,
+      "min": 79059,
+      "max": 92640
+    },
+    "common_interval_jain_index": {
+      "median": 0.9893149220199017,
+      "min": 0.9382008655107743,
+      "max": 0.9946841986736641
+    },
+    "observed_peak_rss_bytes": {
+      "median": 27357184,
+      "min": 27316224,
+      "max": 27369472
+    },
+    "retained_rss_delta_bytes_after_release": {
+      "median": 10682368,
+      "min": 10473472,
+      "max": 10891264
+    },
+    "rss_at_ready_median": 2101248,
+    "rss_after_release_median": 12603392
+  },
+  {
+    "cpu_affinity_count": 2,
+    "active_clients": 64,
+    "total_actors": 65,
+    "completed_successes_per_second": {
+      "median": 2414784.7915495513,
+      "min": 2339470.163230974,
+      "max": 2479156.280519043
+    },
+    "process_cpu_ns_per_success": {
+      "median": 812.418571875,
+      "min": 805.495209375,
+      "max": 840.70348125
+    },
+    "elapsed_ns": {
+      "median": 132516985,
+      "min": 129076171,
+      "max": 136783108
+    },
+    "latency_p50_ns": {
+      "median": 12038,
+      "min": 2073,
+      "max": 17807
+    },
+    "latency_p95_ns": {
+      "median": 76576,
+      "min": 51167,
+      "max": 78549
+    },
+    "latency_p99_ns": {
+      "median": 97338,
+      "min": 94323,
+      "max": 137097
+    },
+    "healthy_completions_during_fault": {
+      "median": 26034,
+      "min": 22283,
+      "max": 26175
+    },
+    "fault_duration_ns": {
+      "median": 11131764,
+      "min": 11014747,
+      "max": 11193153
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 163146,
+      "min": 140102,
+      "max": 270188
+    },
+    "common_interval_jain_index": {
+      "median": 0.566278150294413,
+      "min": 0.11457585229898196,
+      "max": 0.6440349274267253
+    },
+    "observed_peak_rss_bytes": {
+      "median": 102821888,
+      "min": 102555648,
+      "max": 103272448
+    },
+    "retained_rss_delta_bytes_after_release": {
+      "median": 42377216,
+      "min": 37941248,
+      "max": 67473408
+    },
+    "rss_at_ready_median": 2301952,
+    "rss_after_release_median": 44363776
+  }
+]

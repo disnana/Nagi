@@ -24,7 +24,7 @@ import time
 
 MIN_FREE = 8 * 1024**3
 MAX_RSS = 512 * 1024**2
-MAX_LINE = 2 * 1024**2
+MAX_LINE = 32 * 1024**2
 WALL_SECONDS = 30
 CPU_SECONDS = 15
 
@@ -40,11 +40,11 @@ def percentile(samples: list[int], fraction: float) -> int | None:
     return sorted(samples)[max(0, math.ceil(len(samples) * fraction) - 1)] if samples else None
 
 
-def summarize_phase(value: dict, iterations: int, expect_fault: bool) -> dict:
+def summarize_phase(value: dict, iterations: int, expect_fault: bool, client_count: int = 2) -> dict:
     if value["elapsed_ns"] <= 0 or value["cpu_ns"] < 0:
         raise ValueError("invalid clocks")
     clients = value["clients"]
-    if len(clients) != 2 or any(len(c) != iterations for c in clients):
+    if len(clients) != client_count or any(len(c) != iterations for c in clients):
         raise ValueError("missing completed client records")
     for c in clients:
         for start, end, success in c:
@@ -52,7 +52,7 @@ def summarize_phase(value: dict, iterations: int, expect_fault: bool) -> dict:
                 raise ValueError("invalid call observation")
     successful = [[s for s in c if s[2]] for c in clients]
     successes = sum(map(len, successful))
-    failures = 2 * iterations - successes
+    failures = client_count * iterations - successes
     # Refusal, business Err, timeout and queue admission are not successes.
     latency = [end - start for c in successful for start, end, _ in c]
     overlap_start = max(c[0][0] for c in clients)
@@ -72,11 +72,11 @@ def summarize_phase(value: dict, iterations: int, expect_fault: bool) -> dict:
         "completed_successes_per_second": successes * 1e9 / value["elapsed_ns"],
         "process_cpu_ns_per_success": value["cpu_ns"] / successes if successes and value["cpu_ns"] > 0 else None,
         "cpu_clock_positive": value["cpu_ns"] > 0,
-        "latency_p50_ns": percentile(latency, .5), "latency_p99_ns": percentile(latency, .99),
+        "latency_p50_ns": percentile(latency, .5), "latency_p95_ns": percentile(latency, .95), "latency_p99_ns": percentile(latency, .99),
         "clients": [{"successes": len(c), "latency_p99_ns": percentile([b-a for a,b,_ in c], .99)} for c in successful],
         "common_active_interval_ns": [overlap_start, overlap_end],
         "common_interval_completions": overlap,
-        "common_interval_jain_index": sum(overlap)**2 / (2 * squares) if squares else None,
+        "common_interval_jain_index": sum(overlap)**2 / (client_count * squares) if squares else None,
         "fault_interval_ns": fault, "fault_duration_ns": duration,
         "healthy_completions_during_fault": len(during),
         "healthy_successes_per_second_during_fault": len(during)*1e9/duration if duration else None,
@@ -93,6 +93,17 @@ def process_snapshot(pid: int) -> dict:
             "os_threads": len(list((root/'task').iterdir()))}
 
 
+def sampled_rss(process) -> int | None:
+    try:
+        return process_snapshot(process.pid)['rss_bytes']
+    except PermissionError:
+        # /proc access can disappear after the final acknowledged checkpoint.
+        # Failure to observe a live child must still stop the measurement.
+        if process.poll() is None:
+            raise
+        return None
+
+
 def child_limits(cpus: list[int]) -> None:
     import resource  # Linux-only; analysis helpers remain importable on Windows.
     os.sched_setaffinity(0, cpus)
@@ -100,12 +111,16 @@ def child_limits(cpus: list[int]) -> None:
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
 
-def run_case(binary: Path, output: Path, actors: int, iterations: int, repeat: int, cpus: list[int]) -> dict:
+def run_case(binary: Path, output: Path, actors: int, iterations: int, repeat: int, cpus: list[int], active_clients: int | None = None) -> dict:
     capacity(output)
     label = f"cpus-{len(cpus)}-actors-{actors}-round-{repeat}"
     result = {"actors": actors, "round": repeat, "cpu_affinity": cpus, "runtime_threads": len(cpus), "iterations_per_client": iterations,
               "status": "failed", "checkpoints": [], "phases": []}
     env = dict(os.environ, NAGI_THREADS=str(len(cpus)), NAGI_PROBE_ACTORS=str(actors), NAGI_PROBE_ITERATIONS=str(iterations))
+    if active_clients is not None:
+        env["NAGI_PROBE_CLIENTS"] = str(active_clients)
+        result["active_clients"] = active_clients
+    expected_phases = 1 if active_clients is not None else 3
     started = time.monotonic()
     process = None
     with (output/f'{label}.stderr').open('wb') as stderr, gzip.open(output/f'{label}.jsonl.gz', 'wt', encoding='utf-8') as raw:
@@ -123,9 +138,9 @@ def run_case(binary: Path, output: Path, actors: int, iterations: int, repeat: i
                     raise RuntimeError('wall guard')
                 capacity(output)
                 try:
-                    rss = process_snapshot(process.pid)['rss_bytes']
-                    peak = max(peak, rss)
-                    if rss > MAX_RSS:
+                    rss = sampled_rss(process)
+                    peak = max(peak, rss or 0)
+                    if rss is not None and rss > MAX_RSS:
                         raise RuntimeError('RSS guard')
                 except (FileNotFoundError, ProcessLookupError, KeyError):
                     pass  # Process exit is checked below, never counted as success.
@@ -152,15 +167,22 @@ def run_case(binary: Path, output: Path, actors: int, iterations: int, repeat: i
                             process.stdin.flush()
                         else:
                             phase = len(result['phases'])
-                            if value['phase'] != phase or phase > 2:
+                            if value['phase'] != phase or phase >= expected_phases:
                                 raise ValueError('phase order')
-                            summary = summarize_phase(value, iterations, phase == 1 and actors >= 3)
+                            summary = summarize_phase(value, iterations, active_clients is not None or (phase == 1 and actors >= 3), active_clients if active_clients is not None else 2)
+                            if active_clients is not None:
+                                if value.get('recovery') != [1, 1, 2, 0]:
+                                    raise ValueError('missing/invalid public failure and recovery evidence')
+                                summary['public_failure_count'] = 1
+                                summary['public_restart_count'] = 1
+                                summary['recovered_generation'] = 2
+                                summary['recovered_state'] = 0
                             result['phases'].append(summary)
                             if summary['failures']:
                                 raise RuntimeError('benchmark call did not complete successfully')
             selector.close()
             code = process.wait(timeout=max(.1, WALL_SECONDS-(time.monotonic()-started)))
-            if code or buffer or len(result['checkpoints']) != 4 or len(result['phases']) != 3:
+            if code or buffer or len(result['checkpoints']) != 4 or len(result['phases']) != expected_phases:
                 raise RuntimeError(f'incomplete native run, exit={code}')
             before, idle, stopped, released = result['checkpoints']
             result['idle_rss_delta_bytes'] = idle['rss_bytes'] - before['rss_bytes']

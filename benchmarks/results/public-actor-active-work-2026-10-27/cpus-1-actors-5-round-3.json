@@ -1,0 +1,110 @@
+{
+  "actors": 5,
+  "round": 3,
+  "cpu_affinity": [
+    0
+  ],
+  "runtime_threads": 1,
+  "iterations_per_client": 5000,
+  "status": "passed",
+  "checkpoints": [
+    {
+      "rss_bytes": 1904640,
+      "high_water_rss_bytes": 1904640,
+      "fd_count": 9,
+      "os_threads": 2,
+      "checkpoint": 0,
+      "alive_tasks": 0
+    },
+    {
+      "rss_bytes": 1998848,
+      "high_water_rss_bytes": 1998848,
+      "fd_count": 9,
+      "os_threads": 2,
+      "checkpoint": 1,
+      "alive_tasks": 7
+    },
+    {
+      "rss_bytes": 4853760,
+      "high_water_rss_bytes": 8232960,
+      "fd_count": 9,
+      "os_threads": 2,
+      "checkpoint": 2,
+      "alive_tasks": 1
+    },
+    {
+      "rss_bytes": 4853760,
+      "high_water_rss_bytes": 8232960,
+      "fd_count": 9,
+      "os_threads": 2,
+      "checkpoint": 3,
+      "alive_tasks": 0
+    }
+  ],
+  "phases": [
+    {
+      "phase": 0,
+      "successes": 20000,
+      "failures": 0,
+      "elapsed_ns": 17696092,
+      "process_cpu_ns": 14345545,
+      "completed_successes_per_second": 1130193.0392314869,
+      "process_cpu_ns_per_success": 717.27725,
+      "cpu_clock_positive": true,
+      "latency_p50_ns": 3335,
+      "latency_p95_ns": 3956,
+      "latency_p99_ns": 8733,
+      "clients": [
+        {
+          "successes": 5000,
+          "latency_p99_ns": 8523
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 9534
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 8953
+        },
+        {
+          "successes": 5000,
+          "latency_p99_ns": 8232
+        }
+      ],
+      "common_active_interval_ns": [
+        15293,
+        17679296
+      ],
+      "common_interval_completions": [
+        4999,
+        4998,
+        4998,
+        4999
+      ],
+      "common_interval_jain_index": 0.9999999899939974,
+      "fault_interval_ns": [
+        40,
+        10516062
+      ],
+      "fault_duration_ns": 10516022,
+      "healthy_completions_during_fault": 13768,
+      "healthy_successes_per_second_during_fault": 1309240.3192005495,
+      "healthy_latency_p99_ns_during_fault": 10766,
+      "public_failure_count": 1,
+      "public_restart_count": 1,
+      "recovered_generation": 2,
+      "recovered_state": 0
+    }
+  ],
+  "active_clients": 4,
+  "idle_rss_delta_bytes": 94208,
+  "idle_rss_delta_bytes_per_actor": 18841.6,
+  "retained_rss_delta_bytes_after_release": 2949120,
+  "released_fd_delta": 0,
+  "released_task_delta": 0,
+  "sampled_peak_rss_bytes": 8269824,
+  "observed_peak_rss_bytes": 8269824,
+  "exit_code": 0,
+  "process_wall_seconds": 0.1737923049950041
+}
