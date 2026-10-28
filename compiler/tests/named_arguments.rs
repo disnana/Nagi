@@ -196,6 +196,16 @@ fn imported_and_async_functions_share_named_call_normalization() {
 }
 
 #[test]
+fn source_parameter_names_survive_module_binding_renames() {
+    let program = checked(
+        "def echo(main: i64) -> i64:\n    return main\ndef main():\n    print(echo(main=42))\n",
+    );
+    let low = emit::low(&program);
+    assert!(low.contains("(42)"), "{low}");
+    assert!(!low.contains("main = 42"), "{low}");
+}
+
+#[test]
 fn named_calls_keep_type_errors_and_explain_explicit_type_arguments() {
     let error = diagnostic(
         "def add(left: i64, right: i64) -> i64:\n    return left + right\ndef main():\n    print(add(left=\"wrong\", right=2))\n",

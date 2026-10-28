@@ -2111,6 +2111,7 @@ mod metadata_tests {
             functions: vec![Function {
                 name: "main".into(),
                 params: vec![],
+                source_parameter_names: vec![],
                 parameter_spans: vec![],
                 ret: Type::named("unit"),
                 asynchronous: false,

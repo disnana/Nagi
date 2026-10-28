@@ -458,9 +458,11 @@ impl Parser {
                 } else {
                     self.block()?
                 };
+                let source_parameter_names = params.iter().map(|(name, _)| name.clone()).collect();
                 p.functions.push(Function {
                     name,
                     params,
+                    source_parameter_names,
                     parameter_spans,
                     ret,
                     asynchronous,

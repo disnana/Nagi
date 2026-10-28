@@ -916,7 +916,7 @@ fn named_user_calls_share_checked_positional_lowering_with_the_go_backend() {
     let fixture = Fixture::new();
     fixture.write(
         "main.nagi",
-        "def add(left: i64, right: i64) -> i64:\n    return left + right\ndef main():\n    print(add(left=20, right=22))\n",
+        "def add(main: i64, right: i64) -> i64:\n    return main + right\ndef main():\n    print(add(main=20, right=22))\n",
     );
     let output = fixture.go("run", "main.nagi", "out");
     assert!(

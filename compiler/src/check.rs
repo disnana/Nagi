@@ -4320,11 +4320,13 @@ impl Checker {
             }
             return Err(error(e.line, "この値は呼び出せる関数ではありません"));
         } else if let Some(function) = self.functions.get(name) {
-            function
-                .params
-                .iter()
-                .map(|(name, _)| name.clone())
-                .collect::<Vec<_>>()
+            if function.source_parameter_names.len() != function.params.len() {
+                return Err(error(
+                    e.line,
+                    format!("internal compiler error: {name} の引数名情報が一致しません"),
+                ));
+            }
+            function.source_parameter_names.clone()
         } else if self.registered.contains(name) {
             if let Some(operation) = crate::stdlib::operation(name) {
                 let info = crate::stdlib::operation_info(operation);
