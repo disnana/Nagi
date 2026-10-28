@@ -189,19 +189,15 @@ Go backendが動く前にGoの数値やRust比倍率を記載しない。最初�
 - Docs/example: code blockが指すtargetの実check/build/run。target不明、routing file、selector/gate/workflow、dependency/lock変更: 広い両backend coverageへfail-safe。
 - formal release: 両backendの実装済みsupport matrixに対する4 OS L3。未対応targetを成功に見せるskipは禁止する。
 
-`gate.py`はGo jobのexpected result、実行case数、target/toolchain receiptを検証する。必要jobのmissing/skipped/0 casesは失敗する。cache keyはbackend、compiler commit、toolchain、OS/arch、profile、features、dependency lock/sum、runtime hashを含む。外部PRのcacheはwrite不可または信頼境界を分け、artifactへsecret/private module credentialを入れない。
+現在の`gate.py`はselectorが要求したGo jobのsuccessを検証し、missing/skippedを失敗にする。実行case数とsummaryの整合性は`assert_go_backend_summary.py`が検証し、0 casesを失敗にする。target/toolchain receiptをaggregate gateで照合する仕組みは未実装であり、formal release coverageを広げる前に追加する。cache keyはbackend、compiler commit、toolchain、OS/arch、profile、features、dependency lock/sum、runtime hashを含む。外部PRのcacheはwrite不可または信頼境界を分け、artifactへsecret/private module credentialを入れない。
 
 現在の`ci.yml`はpushでmain/tagを対象とし、任意の0.3.0開発branch pushを自動検査しない。初期sliceは必ずPRと`workflow_dispatch`で検証する。長期`0.3` branchを採用する場合だけ、権限を広げず明示branch triggerとrequired aggregate checkを追加する。CI時間短縮はrouting unit testsとshadow計測でmissがないことを確認した後に有効化する。
 
 ## Result / tryの入門改善
 
-Go backendとは独立して、初心者向けに日英`Result`/`try`教材を追加する。
+0.2.2では初心者向けの日英`Result`/`try`教材を公開済みである。`test-nagi-code/result-try-tutorial`で、`parse_i64`を使う完全実行例、手動`match`、`try`による成功値の取り出しとErrの早期return、Python例との違いを説明している。
 
-1. `parse_i64`を手動`match`でOk/Err伝播する完全実行例。
-2. 同じ処理を`try`へ置き換え、成功値を取り出し、Err時は現在の関数から同じerror型を早期returnすることを行ごとに示す。
-3. `Result[Result[T,E1],E2]`、`await`との順序、error型不一致、HTTP responseへの変換を別節にする。
-4. negative例は「例外を握り潰す」「panicへ変える」「自動rollbackする」という誤解を診断と実行結果で否定する。
-5. 公開版で実行できるRust例を先に提供し、Go backend対応後は同じsourceの両backend実行を追加する。未公開Goコマンドを公開版手順に混ぜない。
+Go backendでこの教材を実行できるとはまだ扱わない。残る作業は、`Result[Result[T,E1],E2]`、`await`との順序、error型不一致、HTTP responseへの変換を実装済みsupport matrixに合わせて追加し、Go対応後に同じsourceの両backend実行を検証することである。未公開Goコマンドを公開版手順に混ぜず、「例外を握り潰す」「panicへ変える」「自動rollbackする」という誤解を否定するnegative例も、実際の診断と実行結果を伴う場合だけ掲載する。
 
 ## 0.2.2との分離と次の判断
 
