@@ -2,7 +2,7 @@
 
 [Agent entry point](README.md) · [High reference](language.md)
 
-This guide describes application integration supported by the published Nagi compiler 0.2.1. Confirm the installed compiler with `nagic --version`; editor extension versions are separate.
+This guide describes application integration supported by the published Nagi compiler 0.2.2. Confirm the installed compiler with `nagic --version`; editor extension versions are separate.
 
 Keep typed business decisions, records, and validation in Nagi. Let a Rust adapter own a crate's transport, resource management, and Rust-specific types. The independent crate can retain its API; only the adapter needs generated Nagi names.
 

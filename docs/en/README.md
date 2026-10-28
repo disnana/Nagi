@@ -2,15 +2,15 @@
 
 Follow [installation](getting-started.md) with [your first CLI app](first-app.md). Use the [language feature index](#language-feature-index) for a path through the language, or open the [syntax reference](syntax.md) and [built-in functions](builtins.md) for lookup.
 
-These Docs target Nagi 0.2.1, [released on 2026-10-23](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.1). Editor extensions have separate versions; see the [editor guide](editor.md). The official site is normally built from main and may include later changes. See the [Changelog](../../CHANGELOG.md) and [0.2.0 migration guide](migration-0.2.0.md).
+The published compiler baseline for these Docs is Nagi 0.2.2, [released on 2026-10-27](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.2). Editor extensions have separate versions; see the [editor guide](editor.md). The official site is normally built from main and may include unreleased changes. The [Changelog](../../CHANGELOG.md) separates released entries from `Unreleased`; see the [0.2.0 migration guide](migration-0.2.0.md) for compatibility details.
 
 See [About Nagi](introduction.md) for its purpose and current scope. The references below describe implemented APIs and their limits. Unimplemented proposals are kept in [design](library-design.md) and the [roadmap](roadmap.md).
 
 ## Find it quickly
 
-[What you can build](use-cases.md) · [End-to-end task API](task-api-tutorial.md) · [Concrete FastAPI/Quart comparison](task-api-comparison.md) · [Development and debugging](developer-workflow.md) · [Strengths and comparisons](comparison.md) · [Agent docs and skill](../../ai/README.md)
+[What you can build](use-cases.md) · [End-to-end task API](task-api-tutorial.md) · [Concrete FastAPI/Quart comparison](task-api-comparison.md) · [Development and debugging](developer-workflow.md) · [Strengths and comparisons](comparison.md) · [Changelog](../../CHANGELOG.md) · [Agent docs and skill](../../ai/README.md)
 
-The quick reference routes everyday commands, symptoms, and API questions to the relevant guide. Version 0.2.2 improvements are still in development.
+The quick reference routes everyday commands, symptoms, and API questions to the relevant guide. The Changelog separates features released through 0.2.2 from `Unreleased`. The planned 0.3.0 Go target is under implementation and does not imply that Go HTTP or Actor support is available.
 
 ## First steps
 
@@ -91,6 +91,6 @@ Follow the [first contribution walkthrough](contributing.md) to locate a source 
 
 `std.actor` is a standard library available from Nagi 0.1.8. The [sample](../../test-nagi-code/library-examples/supervised-service/README.en.md) covers registration, calls, and shutdown. The older actor/Supervisor built-ins and [queues](queue.md) remain test APIs. For performance, read the [measurement methods](performance.md), [results](measurements.md), and [HTTP load tests](http-capacity.md).
 
-These pages cover Nagi 0.2.1 and the current source. See the [change log](../../CHANGELOG.md) for changes by version. Unsupported features are listed on each page.
+These pages use Nagi 0.2.2 as the published baseline and may also describe current source when explicitly marked. See the [change log](../../CHANGELOG.md) for released and unreleased changes. Unsupported features are listed on each page.
 
 - [Authentication/authorization](security.md) and [0.2.0 migration](migration-0.2.0.md)

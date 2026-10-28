@@ -1,18 +1,18 @@
 # NagiアプリのGitHub Actions
 
-プロジェクトCI generatorを使い、アプリのworkflowを作成できます。Python 3.10以上が必要です。公開済み0.2.1には`tools/generate_project_ci.py`を同梱しています。0.2.1の配布物またはこのソースcheckoutを使ってください。公開0.2.0には同梱されていません。`nagi.toml`があるアプリのルートで実行します。
+プロジェクトCI generatorを使い、アプリのworkflowを作成できます。Python 3.10以上が必要です。公開済み0.2.2には`tools/generate_project_ci.py`を同梱しています。0.2.2の配布物またはこのソースcheckoutを使ってください。公開0.2.0には同梱されていません。`nagi.toml`があるアプリのルートで実行します。
 
 ```bash
-# 0.2.1配布物を展開したdirectoryを指定
+# 0.2.2配布物を展開したdirectoryを指定
 python /path/to/nagi/tools/generate_project_ci.py \
-  --nagi-version 0.2.1 --output .github/workflows/nagi.yml
+  --nagi-version 0.2.2 --output .github/workflows/nagi.yml
 ```
 
 ソースcheckoutを使う場合:
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --nagi-version 0.2.1 --output .github/workflows/nagi.yml
+  --nagi-version 0.2.2 --output .github/workflows/nagi.yml
 ```
 
 generatorはPython標準ライブラリだけを使います。指定先へworkflowを書き込み、既存fileは上書きせず、必要な親directoryを作成します。既存fileを置き換えるときだけ`--force`を指定してください。保存前に内容を確認する場合は、標準出力へ表示できます。
@@ -21,21 +21,21 @@ generatorはPython標準ライブラリだけを使います。指定先へworkf
 python /path/to/Nagi/scripts/generate_project_ci.py
 ```
 
-このソースcheckoutのgeneratorはNagi `0.2.1`を既定値にします。公開済み0.2.1配布物に同梱されたgeneratorの既定値は`0.2.0`なので、上の例ではどちらも`--nagi-version 0.2.1`を明示しています。native buildにはstable Rustを使います。生成時に設定を変更できます。
+現在のgeneratorはNagi `0.2.1`を既定値にするため、上の例では公開済みの現行版`0.2.2`を明示しています。generatorの既定値を、利用するNagiのversionだと決めつけないでください。native buildにはstable Rustを使います。生成時に設定を変更できます。
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --nagi-version 0.2.1 --toolchain stable \
+  --nagi-version 0.2.2 --toolchain stable \
   --output .github/workflows/nagi.yml
 ```
 
 Nagiのversionは完全な`X.Y.Z`形式で指定します。buildは既定でrelease profileを使います。`--os-matrix`を付けるとUbuntu・macOS・Windowsでbuildします。省略時はUbuntuだけです。
 
-このソースcheckoutのgeneratorでは、開発用CI向けに`--build-profile dev`を選べます。これは次版generatorの機能で、公開済み0.2.1配布物の`tools/generate_project_ci.py`にはありません。生成先のNagi CLIは公開0.2.1以上が必要です。
+公開済み0.2.2のgeneratorでは、開発用CI向けに`--build-profile dev`を選べます。生成先のNagi CLIは公開0.2.1以上が必要です。
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --nagi-version 0.2.1 --build-profile dev --os-matrix \
+  --nagi-version 0.2.2 --build-profile dev --os-matrix \
   --output .github/workflows/nagi.yml
 ```
 

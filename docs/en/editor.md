@@ -2,7 +2,7 @@
 
 [Contents](README.md) · [Setup](getting-started.md) · [Extension installation and settings](vscode-extension.md)
 
-**Current published versions (2026-10-25):** Nagi 0.2.1 was [released on October 23](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.1), and JetBrains plugin 0.1.6 is [published on GitHub Releases](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6). Check [GitHub Releases](https://github.com/disnana/Nagi/releases) or the Marketplace for available versions and compatible IDEs. The [root README](../../README.en.md) describes the published compiler scope; the [Docs index](README.md) identifies 0.2.2 development changes. The 0.1.2 and 0.1.3 details below are version-specific history, not a current inventory of downloadable ZIPs. Check each release before choosing an asset.
+**Current published versions (2026-10-28):** Nagi 0.2.2 was [released on October 27](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.2), and JetBrains plugin 0.1.6 is [published on GitHub Releases](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6). VS Code and JetBrains extensions are versioned separately from the compiler. Check [GitHub Releases](https://github.com/disnana/Nagi/releases) or the Marketplace for available versions and compatible IDEs. The 0.1.2 and 0.1.3 details below are version-specific history, not a current inventory of downloadable ZIPs.
 
 ## JetBrains 0.1.2 and 0.1.3 version history
 
@@ -18,7 +18,7 @@ Plugin 0.1.3 generation retention uses compiler 0.2.0 and applies only to IDE-ma
 
 ## Neighbor-file import assistance (Nagi 0.2.1, JetBrains 0.1.6)
 
-Compiler support for importing neighboring files by name is included in Nagi 0.2.1 and reflected in the [published JetBrains plugin 0.1.6 release](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6). It is not included in Nagi 0.2.0 or plugin 0.1.3 and earlier. Check the [Docs index](README.md) separately for Nagi 0.2.2 development changes. This guide does not claim manual GUI or IME acceptance.
+Compiler support for importing neighboring files by name is included in Nagi 0.2.1 and later and reflected in the [published JetBrains plugin 0.1.6 release](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6). It is not included in Nagi 0.2.0 or plugin 0.1.3 and earlier. This guide does not claim manual GUI or IME acceptance.
 
 Save `models.nagi` in the same folder: High completion after `import mo` offers `models`, and `from models import ` offers that file's own definitions. Low searches neighboring `.low` files. Standard-module candidates come from the compiler registry. Selecting a function in a `from` import inserts no call parentheses. Navigation on an import source, selected definition, or alias requires an exact original location from the compiler. See [syntax and a runnable example](modules-and-rust.md#import-a-neighboring-file-by-name).
 

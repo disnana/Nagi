@@ -1,8 +1,8 @@
-# runtime依存の選択（0.2.2開発版）
+# runtime依存の選択（0.2.2）
 
 [English](en/runtime-profiles.md)
 
-この機能は**未リリースの0.2.2向け開発ソース**が対象です。公開済み0.2.1にはありません。`nagic build --help`に`--runtime-profile full|auto`があることを確認してください。プラグインの版とは別です。
+この機能は公開済みNagi 0.2.2で利用できます。0.2.1以前にはありません。`nagic build --help`に`--runtime-profile full|auto`があることを確認してください。プラグインの版とは別です。
 
 最初の小さなプログラムでも通信・暗号ライブラリをビルドする負担を減らすため、依存runtimeの選択を明示的に試せます。
 

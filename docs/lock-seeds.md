@@ -1,8 +1,8 @@
-# 初回の依存lockを選ぶ（0.2.2開発版）
+# 初回の依存lockを選ぶ（0.2.2）
 
 [English](en/lock-seeds.md)
 
-未リリースの0.2.2向け開発機能です。公開済み0.2.1にはありません。既定は従来どおりCargoによる依存解決です。対応する配布物には、配布runtimeと照合した初期lockを`runtime-seed/`に同梱します。
+公開済みNagi 0.2.2の明示opt-in機能です。0.2.1以前にはありません。既定は従来どおりCargoによる依存解決です。対応する配布物には、配布runtimeと照合した初期lockを`runtime-seed/`に同梱します。
 
 ```sh
 nagic build --project my-app --seed-lock --build-stats

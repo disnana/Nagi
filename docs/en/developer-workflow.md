@@ -1,6 +1,6 @@
 # Development and debugging quick reference
 
-Start here for the Nagi 0.2.1 edit, check, run, and release loop. New users can follow [installation](getting-started.md); teams evaluating adoption can read [strengths and language comparisons](comparison.md).
+Start here for the Nagi 0.2.2 edit, check, run, and release loop. New users can follow [installation](getting-started.md); teams evaluating adoption can read [strengths and language comparisons](comparison.md).
 
 ## Three everyday commands
 
@@ -60,4 +60,4 @@ The stderr `nagi-build-stats` record reports pre-Cargo time, Cargo time, and Fre
 
 ## Before releasing
 
-Run complete `check`, a release build, and application-specific positive/negative tests. Nagi 0.2.1 has no generic `nagic test` command. Add the application's existing harness to CI, testing real HTTP requests or persisted database results where appropriate. Verify installed-version support using the [changelog](../../CHANGELOG.md) and [published releases](https://github.com/disnana/Nagi/releases). Version 0.2.2 is in development.
+Run complete `check`, a release build, and application-specific positive/negative tests. Nagi 0.2.2 has no generic `nagic test` command. Add the application's existing harness to CI, testing real HTTP requests or persisted database results where appropriate. Verify installed-version support using the [changelog](../../CHANGELOG.md) and [published releases](https://github.com/disnana/Nagi/releases). Do not treat `Unreleased` entries or the planned Go target as published features.

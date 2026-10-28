@@ -11,13 +11,13 @@
 | `print(value)` | 数値・bool・str・view[str]・UUID | `unit` | 1つの数値・bool・文字列などを改行付きで表示。classや配列をそのまま表示するAPIはない |
 | `write(value)` | printと同じ | `unit` | 改行なしで表示。引数はprintと同じ |
 | `read_line()` | なし | `Result[str, Error]` | `text = try read_line()`。コンソールの同期入力 |
-| `read_line(prompt)` | str・view[str] | `Result[str, Error]` | 開発版で追加。文字列を改行なしで表示してから同期入力 |
+| `read_line(prompt)` | str・view[str] | `Result[str, Error]` | 0.2.2で追加。文字列を改行なしで表示してから同期入力 |
 | `env("NAME", "default")` | str、str | `str` | 環境変数が取得できなければ既定値 |
 | `assert_true(condition)` | bool | `unit` | 条件はbool。Falseならpanic |
 
 `read_line`は出力を画面へ反映してから1行読みます。末尾の改行を除き、ほかの空白は残します。入力が終わると空文字列を返します。入力中は処理が止まるため、コンソールアプリで使います。
 
-開発版では `name = try read_line("名前: ")` と書けます。promptは読み取り用の借用で、呼び出し後も使えます。出力→flush→入力の順に実行し、出力・flush・入力のI/O失敗は `Result` の `Error` として返します。`try` または `match` で処理してください。引数なしの呼び出しは従来どおり使えます。公開済み0.2.1では `write("名前: ")` の後に `try read_line()` を使ってください。[完全な例](../examples/tutorial/prompt-input.nagi)は開発版向けです。
+公開済み0.2.2では `name = try read_line("名前: ")` と書けます。promptは読み取り用の借用で、呼び出し後も使えます。出力→flush→入力の順に実行し、出力・flush・入力のI/O失敗は `Result` の `Error` として返します。`try` または `match` で処理してください。引数なしの呼び出しは従来どおり使えます。[完全な例](../examples/tutorial/prompt-input.nagi)も0.2.2で動きます。0.2.1では `write("名前: ")` の後に `try read_line()` を使ってください。
 
 `env`の第2引数は、環境変数を取得できなかったときだけ評価します。値が存在すれば、既定値を作る関数も呼びません。既定値の式で`try`や`await`を使う場合の生成修正はNagi 0.1.11への導入対象です。公開配布での利用可否は[GitHub Releases](https://github.com/disnana/Nagi/releases)で確認してください。
 

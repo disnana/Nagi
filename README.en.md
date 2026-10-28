@@ -1,4 +1,4 @@
-# Nagi 0.2.1 — a backend language in development
+# Nagi 0.2.2 — a backend language in development
 
 [日本語](README.md)
 
@@ -39,9 +39,9 @@ nagic --version
 nagic --help
 ```
 
-The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) is available from the Marketplace or [GitHub Releases](https://github.com/disnana/Nagi/releases). [Nagi](editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm is available from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) or [GitHub Releases](https://github.com/disnana/Nagi/releases). For Marketplace installs, check the listing's Versions view for available versions and compatible IDE builds. The published GitHub 0.1.2 release includes one common `nagi-jetbrains-0.1.2.zip` and its `.sha256` for both IDEs. The minimum IDE builds for that ZIP are IDEA 2025.1.1 build 251.25410.109 and PyCharm 2025.1.1 build 251.25410.122. Marketplace installs directly to the compatible IDE; Release ZIPs are installed manually. Compiler-backed completion, diagnostics, and navigation in plugin 0.1.3 require published compiler 0.2.0 or later. Check GitHub Releases for available plugin ZIPs. See the [editor guide](docs/en/editor.md).
+The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang) is available from the Marketplace or [GitHub Releases](https://github.com/disnana/Nagi/releases). [Nagi](editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm is available from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) or the [JetBrains 0.1.6 release](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6). Check Marketplace Versions or the release notes for compatible IDE builds. The compiler and each extension are versioned separately; see the [editor guide](docs/en/editor.md) for completion, diagnostics, and navigation coverage.
 
-Nagi 0.2.1 was [released on 2026-10-23](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.1). Use `nagic run --project . --profile dev` during development. Find task-specific information in the [development quick reference](docs/en/developer-workflow.md) and [language comparisons](docs/en/comparison.md). The install scripts select the latest public release. The HTTP and SQLite examples below require 0.2.0; published 0.1.11 does not include these APIs. Check the installed compiler with `nagic --version` and read the [0.2.0 migration guide](docs/en/migration-0.2.0.md) before upgrading.
+Nagi 0.2.2 was [released on 2026-10-27](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.2). Use `nagic run --project . --profile dev` during development. Find task-specific information in the [development quick reference](docs/en/developer-workflow.md), [capability overview](docs/en/use-cases.md), and [changelog](CHANGELOG.md). The install scripts select the latest public release. The HTTP and SQLite examples below require 0.2.0; published 0.1.11 does not include these APIs. Check the installed compiler with `nagic --version` and read the [0.2.0 migration guide](docs/en/migration-0.2.0.md) before upgrading.
 
 ### Uninstall
 
@@ -118,7 +118,7 @@ Applications normally use indentation-based High (`.nagi`). Low (`.low`) uses br
 
 Development will prioritize High and Rust integration while preserving Low compatibility. See [High and Low](docs/en/low-language.md) and [Rust integration](docs/en/modules-and-rust.md).
 
-## Current scope (0.2.1)
+## Current published scope (0.2.2)
 
 | Available in this source | Main limits |
 |---|---|

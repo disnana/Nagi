@@ -1,6 +1,6 @@
 ---
 name: nagi-development
-description: Create, change, debug, and verify Nagi applications with the published 0.2.1 compiler. Use for .nagi or .low source, nagi.toml projects, High/Low diagnostics, Rust adapters, HTTP, JSON, SQLite, actors, async work, or generated-code failures. Do not use for changes to the Nagi compiler or editor implementation; follow the repository's contributor instructions for those.
+description: Create, change, debug, and verify Nagi applications with the published 0.2.2 compiler. Use for .nagi or .low source, nagi.toml projects, High/Low diagnostics, Rust adapters, HTTP, JSON, SQLite, actors, async work, or generated-code failures. Do not use for changes to the Nagi compiler or editor implementation; follow the repository's contributor instructions for those.
 ---
 
 # Nagi application development
@@ -12,7 +12,7 @@ If the skill was copied without the repository, use the public [agent guide](htt
 ## Establish the version, project, and contract
 
 1. Read the user's goal, repository guidance, nearest `nagi.toml`, entry source, and relevant imports. Preserve existing project structure and dependency constraints.
-2. Run `nagic --version` and `nagic --help`. These guides target published Nagi compiler 0.2.1. Editor extensions have separate versions and binaries. Confirm the installed compiler before using a feature; do not assume unreleased repository changes or a plugin version are published. Check `cargo --version` when preparing for or diagnosing a native build, not for Nagi source checking.
+2. Run `nagic --version` and `nagic --help`. These guides target published Nagi compiler 0.2.2. Editor extensions have separate versions and binaries. Confirm the installed compiler before using a feature; do not assume `Unreleased` repository changes, the planned Go target, or a plugin version are published. Check `cargo --version` when preparing for or diagnosing a native build, not for Nagi source checking.
 3. Choose a nearby working example and read its source/configuration, or consult the relevant reference and compiler tests before using an unfamiliar API. Roadmap and design pages describe proposals, not shipped APIs.
 4. Keep compiler implementation work out of this application workflow. For changes to Nagi itself, use the repository's `AGENTS.md`.
 
@@ -37,7 +37,7 @@ nagic run --project . --profile dev
 
 An explicit source file does not automatically load nearby project configuration. Use `nagic check main.nagi --project .` when invoking a file. `check` validates Nagi source and writes generated Low; it does not invoke Cargo or validate Rust adapter bodies. `run` performs native generation/build and executes the program in one command. Keep source checking, native build, and runtime outcomes distinct in diagnosis and final reporting.
 
-The default profile is `release`; use `run --profile dev` for the edit/run loop. For a release build or pre-release validation, run `nagic build --project . --profile release` only when needed. Avoid running both `build` and `run` by default because `run` builds again. Published 0.2.1 supports `--profile dev|release` and `--build-stats` on `build` and `run`. `--incremental` and `--incremental=units` require `build`/`run --profile dev`; these options are opt-in. Check `nagic --help` if using another installed version. `nagic build --locked` is unsupported; after generation, use the generated Cargo manifest when a locked Cargo build is needed:
+The default profile is `release`; use `run --profile dev` for the edit/run loop. For a release build or pre-release validation, run `nagic build --project . --profile release` only when needed. Avoid running both `build` and `run` by default because `run` builds again. Published 0.2.2 supports `--profile dev|release` and `--build-stats` on `build` and `run`. `--incremental` and `--incremental=units` require `build`/`run --profile dev`; these options are opt-in. Check `nagic --help` if using another installed version. `nagic build --locked` is unsupported; after generation, use the generated Cargo manifest when a locked Cargo build is needed:
 
 ```sh
 cargo build --release --locked --manifest-path build/main/Cargo.toml

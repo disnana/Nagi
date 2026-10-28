@@ -1,6 +1,6 @@
 # Debug a Nagi application
 
-Use this guide when a Nagi application fails to parse, check, build, run, or receive editor assistance. It targets published compiler 0.2.1. Start by recording `nagic --version`, the command that failed, its exit status, and the first useful diagnostic. Editor extensions have separate versions and may launch a different compiler binary. Check their configured path and version independently. Do not infer that an unreleased compiler or plugin change is available from the repository source alone.
+Use this guide when a Nagi application fails to parse, check, build, run, or receive editor assistance. It targets published compiler 0.2.2. Start by recording `nagic --version`, the command that failed, its exit status, and the first useful diagnostic. Editor extensions have separate versions and may launch a different compiler binary. Check their configured path and version independently. Do not infer that an `Unreleased` compiler or plugin change is available from the repository source alone.
 
 ## Find the failing stage
 

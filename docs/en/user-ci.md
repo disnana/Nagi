@@ -1,22 +1,22 @@
 # GitHub Actions for a Nagi application
 
 Use the project CI generator to create an application workflow. Python 3.10 or
-later is required. Published 0.2.1 distributions include
+later is required. Published 0.2.2 distributions include
 `tools/generate_project_ci.py`; released 0.2.0 does not include this tool.
-Use a 0.2.1 archive or this source checkout. Run it from the
+Use a 0.2.2 archive or this source checkout. Run it from the
 application repository root, where `nagi.toml` is located:
 
 ```bash
-# Point to the extracted 0.2.1 distribution
+# Point to the extracted 0.2.2 distribution
 python /path/to/nagi/tools/generate_project_ci.py \
-  --nagi-version 0.2.1 --output .github/workflows/nagi.yml
+  --nagi-version 0.2.2 --output .github/workflows/nagi.yml
 ```
 
 With a source checkout:
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --nagi-version 0.2.1 --output .github/workflows/nagi.yml
+  --nagi-version 0.2.2 --output .github/workflows/nagi.yml
 ```
 
 The generator uses only Python's standard library. It writes the workflow at
@@ -28,14 +28,14 @@ The default output can also be reviewed before saving:
 python /path/to/Nagi/scripts/generate_project_ci.py
 ```
 
-The generator in this source checkout defaults to Nagi `0.2.1`. The generator
-bundled in published 0.2.1 archives still defaults to `0.2.0`, so the examples
-explicitly pin `--nagi-version 0.2.1` for both. Native builds use stable Rust.
+The current generator defaults to Nagi `0.2.1`, so the examples explicitly pin
+the current published version, `--nagi-version 0.2.2`. Do not assume the
+generator default selects the Nagi version you intend to use. Native builds use stable Rust.
 Change these settings when generating the file:
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --nagi-version 0.2.1 --toolchain stable \
+  --nagi-version 0.2.2 --toolchain stable \
   --output .github/workflows/nagi.yml
 ```
 
@@ -43,15 +43,13 @@ The version must be a complete `X.Y.Z` release version. Builds use the release
 profile by default. Use `--os-matrix` to build on Ubuntu,
 macOS, and Windows; without it, the workflow builds on Ubuntu only.
 
-The generator in this source checkout accepts `--build-profile dev` for
-development CI. This is a next-version generator feature; the
-`tools/generate_project_ci.py` bundled in published 0.2.1 archives does not
-accept it. The generated workflow requires a released Nagi CLI version of
+The generator published with 0.2.2 accepts `--build-profile dev` for
+development CI. The generated workflow requires a released Nagi CLI version of
 0.2.1 or later:
 
 ```bash
 python /path/to/Nagi/scripts/generate_project_ci.py \
-  --nagi-version 0.2.1 --build-profile dev --os-matrix \
+  --nagi-version 0.2.2 --build-profile dev --os-matrix \
   --output .github/workflows/nagi.yml
 ```
 
