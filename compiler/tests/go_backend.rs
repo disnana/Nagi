@@ -912,6 +912,26 @@ fn imported_functions_share_frontend_resolution_with_the_go_backend() {
 }
 
 #[test]
+fn named_user_calls_share_checked_positional_lowering_with_the_go_backend() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "main.nagi",
+        "def add(main: i64, right: i64) -> i64:\n    return main + right\ndef main():\n    print(add(main=20, right=22))\n",
+    );
+    let output = fixture.go("run", "main.nagi", "out");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "42\n");
+
+    let generated = fs::read_to_string(fixture.0.join("out/generated.low")).unwrap();
+    assert!(generated.contains("(20, 22));"), "{generated}");
+    assert!(!generated.contains("left = 20"), "{generated}");
+}
+
+#[test]
 fn exhaustive_matches_and_float_console_contract_compile_and_run() {
     let fixture = Fixture::new();
     fixture.write(

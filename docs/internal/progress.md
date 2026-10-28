@@ -8,6 +8,14 @@
 
 修正後3試行は各通常300/300、過負荷200×705・429×29,295・500/503/transport失敗0、別route全200、有限時間内のroute回復、回復後FD10–11。低速接続100本中全件EOF、許可authorityへ送った途中body25件は408、同時の通常15件は全200、close/RST後FD10。Python測定基盤43件、runtime869件成功/1計測専用ignored、全workspace `cargo test --locked`、runtime all-target Clippyとfmtが成功した。短時間RSSだけでmemory leak不在とは断定せず、過去のBrowserLogin 504根因も解決扱いにしない。独立最終再監査はP0/P1/P2なし。最新HEAD CIはPR gateとして残す。
 
+## 2026-10-27: 宣言順の名前付き関数引数（独立開発・未リリース）
+
+初期base `origin/main` `0d1884c`、branch `feat/named-call-args-20261027`。従来の`f(a, b)`を維持したまま、通常関数・組み込み・登録済み標準APIを`f(first=a, second=b)`の全名前付き形式でも呼べるようにした。parserが既存class/enum構築と同じ一時形を保持し、checkerが対象名を解決してから既存の位置`E::Call`へ正規化する。backend固有ASTを増やさず、型・move・borrow・Policy・async captureとRust/Go loweringは既存経路を通る。
+
+初版は評価順を曖昧にしないため、位置引数との混在、名前の並べ替え、明示型引数との組合せ、引数名を型に持たない関数値を拒否する。全引数を宣言順に名前付きで書き、各式をソース順に一度だけ評価する。重複・未知・不足・順序違いを個別診断し、class/enum payloadの既存の順不同named fieldは変更しない。公開0.2.2で動くと約束するREADME・既存examplesは位置引数のまま維持し、未リリースsource checkout専用の`http.response_limits`完成例を別tutorialとして追加した。
+
+初期ローカルLinux検証では名前付き引数14件、builtin/標準API署名在庫2件、frontend contracts 23件、conformance 6件、codegen 16件、editor assistance 42件、all-target Clippy `-D warnings`、fmtが成功した。独立reviewで、同名global関数がlocal関数値/データを迂回するmodule解決、内部canonical名を診断へ出す経路、non-function localの誤誘導、公開例の先行更新を検出した。resolverでlocalを優先しつつ既存class/enum constructor優先規則を保持し、利用者向け固定診断と回帰へ修正した。修正後の独立再監査は重大・中程度の追加所見なし。公開済み0.2.2、High `elif`、統合済みGo backendを含むmainへ再統合した最終HEADで33件成功・4件想定skipのCIを通し、main `8ec67ef`へマージ済み。
+
 ## 2026-10-27: Highのelif構文（独立開発・未リリース）
 
 base `origin/main` `0d1884c`、独立worktree `Nagi-high-elif` / branch `feat/high-elif-20261027`。Highの`elif 条件:`だけを既存`S::If`のelse内ifへlowerし、Rust/Go別の実装やLow構文を増やしていない。lexerの全wordは元から`K::Id`で、同名の関数/引数/変数、if直後の`elif(...)`・`elif: i64 = ...`も既存の有効入力となるため、予約語化を避けた。ブロック見出しの末尾`:`だけを文脈認識し、同一行`else if`は引き続き拒否。合成ifの元行と既存64段nesting上限、move/return flow、保存Low経路を維持する。
