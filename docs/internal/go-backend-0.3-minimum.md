@@ -145,7 +145,8 @@ std-only Go moduleでgeneration・one-for-one再起動・global予算・実join�
 native検査する。生成applicationへの組込みとpublic std.actor受理はまだ行わない。
 mailbox/READY/events/charge、cold async/borrow/callback/owner cleanupは後続gateである。
 private lifecycle段階の必須件数はLinux/macOS 27、Windows 26だった。後続のcold user
-async 2件、callback identity 1件、string borrow 2件を含む現在の必須件数はLinux/macOS 32、Windows 31。
+async 2件、callback identity 1件、string borrow 2件に加え、共有checkerで正規化する名前付き
+関数呼出し1件を含む現在の必須件数はLinux/macOS 33、Windows 32。
 
 1. 3 OSで最小backendの実build/runとlast-good保護を必須CI化する。
 2. shared conformance oracleとbackend別driverを分離し、同じ対応Nagi programの結果・診断を比較する。

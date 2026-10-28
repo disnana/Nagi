@@ -2,8 +2,11 @@
 
 ## 未リリース / Unreleased
 
+- 関数・組み込み・標準APIの呼び出しで、全引数を`name=value`として宣言順に指定できるようにする。既存の位置引数とclass/enum構築を維持し、混在、重複、未知、不足、順序違いはbuild時に拒否する。checked frontendで既存の位置呼び出しへ正規化し、評価順・所有権検査・backend出力を変えない。
+- Allow function, builtin, and registered standard-API calls to name every argument in declaration order with `name=value`. Preserve positional calls and class/enum construction; reject mixed, duplicate, unknown, missing, and out-of-order arguments at build time. Normalize through the checked frontend so source-order evaluation, ownership checks, and backend lowering stay unchanged.
 - High構文にPythonと同じ`elif condition:`を追加し、既存の入れ子`else:` + `if`と同じ検査済み`if`へloweringします。Low構文と従来の`elif`識別子は維持し、VS Code / JetBrainsの補完・色・字下げも文脈に限定します。
 - Add contextual High `elif condition:` branches, lowered through the existing checked `if` representation. Preserve Low syntax and existing `elif` identifiers, with context-aware completion, coloring and indentation in both editor plugins.
+
 ## Nagi 0.2.2 — 2026-10-27
 
 - 0.2.1との互換性、既定のfull runtime・release build、完全なHigh/Low・型・所有権・Policy検査、Cargoのnative再判定、旧成功成果物の保護を維持しながら、小さな変更の開発待ち時間と初回依存解決の再現性を改善します。IDEプラグインは別の版・公開工程です。

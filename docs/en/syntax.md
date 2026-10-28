@@ -65,7 +65,9 @@ def show(value: i64):
     return
 ```
 
-Parameter types are required. An omitted return type means unit. Value-returning functions must return on every path. Calls use positional arguments, such as `add(1, 2)`. Default/variadic arguments and user-defined generics are unavailable.
+Parameter types are required. An omitted return type means unit. Value-returning functions must return on every path. **Unreleased source checkout:** Calls can use positional arguments such as `add(1, 2)`, or a compiler built from this source checkout can name every argument as in `add(left=1, right=2)`. Published 0.2.2 requires positional calls. Named arguments follow declaration order and cannot be mixed with positional arguments, so each expression is still evaluated exactly once in source order. Function-value types do not retain parameter names, so call function values positionally. Combining named arguments with explicit type arguments, default/variadic arguments, and user-defined generic functions is unavailable. Class and enum-payload construction retains its existing all-fields-named syntax and does not require field order.
+
+See the unreleased [named response-limits example](../../examples/tutorial/named-response-limits.nagi) for a twelve-argument HTTP budget whose names remain visible at the call site.
 
 ## Branches and loops
 
