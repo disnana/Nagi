@@ -99,9 +99,25 @@ fn named_include_text_resolves_before_checker_normalization() {
         .unwrap()
         .display()
         .to_string();
-    assert!(low.contains(&canonical), "{low}");
+    let mut saved = nagic::parser::parse(&low, false).unwrap();
+    check::check(&mut saved).unwrap();
+    let nagic::ast::S::Expr(printed) = &saved.functions[0].body[0].kind else {
+        panic!("{low}");
+    };
+    let nagic::ast::E::Call(_, _, arguments) = &printed.kind else {
+        panic!("{low}");
+    };
+    let nagic::ast::E::Call(name, _, arguments) = &arguments[0].kind else {
+        panic!("{low}");
+    };
+    assert_eq!(name, "include_text");
+    assert!(
+        matches!(&arguments[0].kind, nagic::ast::E::Str(path) if path == &canonical),
+        "{low}"
+    );
     assert!(!low.contains("include_text(\"asset.txt\")"), "{low}");
     f.run("named", &high.program, "embedded\n");
+    f.run("named_saved", &saved, "embedded\n");
 }
 
 #[test]
