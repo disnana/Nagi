@@ -1035,7 +1035,7 @@ pub fn deadline_reaps_descendant() -> Result<(), String> {
     let pid_path = fixture.0.join("child.pid");
     let pid_path = pid_path.display().to_string().replace('\'', "''");
     let parent = format!(
-        "$p=[System.Diagnostics.Process]::Start('powershell.exe','-NoProfile -Command \"Start-Sleep -Seconds 300\"'); [System.IO.File]::WriteAllText('{pid_path}',$p.Id.ToString()); [System.Environment]::Exit(0)"
+        "$p=[System.Diagnostics.Process]::Start('powershell.exe','-NoProfile -Command Start-Sleep -Seconds 300'); [System.IO.File]::WriteAllText('{pid_path}',$p.Id.ToString()); [System.Environment]::Exit(0)"
     );
     let mut command = Command::new("powershell.exe");
     command
