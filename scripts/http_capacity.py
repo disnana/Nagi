@@ -23,7 +23,7 @@ from native_artifacts import native_executable
 
 ROOT = Path(__file__).resolve().parents[1]
 URL = "http://127.0.0.1:8080"
-BUCKETS = "[0,1ms,2ms,4ms,8ms,16ms,32ms,64ms,128ms,256ms,512ms,1s,2s,5s,10s]"
+SERVER_RSS_CEILING_KIB = 2 * 1024 * 1024
 CASES = {
     "health": ("GET", "/health", None, [10000, 30000, 60000, 100000]),
     "json_4k": ("POST", "/echo", {"name": "x" * 4096, "age": 18}, [5000, 10000, 15000, 20000, 30000, 50000]),
@@ -62,16 +62,46 @@ def cgroup() -> dict:
     }
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect)
+
+
+def local_subprocess_environment(worker_count: int) -> dict[str, str]:
+    environment = dict(os.environ, GOMAXPROCS=str(worker_count))
+    for name in (
+        "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY",
+        "http_proxy", "https_proxy", "all_proxy",
+    ):
+        environment.pop(name, None)
+    environment["NO_PROXY"] = "*"
+    environment["no_proxy"] = "*"
+    return environment
+
+
 def request(method: str, path: str, body=None) -> tuple[int, bytes, float]:
     data = None if body is None else json.dumps(body, separators=(",", ":")).encode()
     req = urllib.request.Request(URL + path, data=data, method=method,
                                  headers={"Content-Type": "application/json"})
     start = time.monotonic()
-    with urllib.request.urlopen(req, timeout=5) as response:
+    with LOCAL_OPENER.open(req, timeout=5) as response:
         return response.status, response.read(), (time.monotonic() - start) * 1000
 
 
-def recovery(server: subprocess.Popen, seconds: int) -> list[dict]:
+def resource_abort_reason(server: dict, group: dict, memory_ceiling: int) -> str | None:
+    if server.get("exited"):
+        return "server exited"
+    if server.get("rss_kib", 0) > SERVER_RSS_CEILING_KIB:
+        return "server RSS exceeded 2 GiB"
+    if group["memory_current"] > memory_ceiling:
+        return "cgroup memory exceeded the configured ceiling"
+    return None
+
+
+def recovery(server: subprocess.Popen, seconds: int, memory_ceiling: int | None = None) -> list[dict]:
     rows = []
     start = time.monotonic()
     while time.monotonic() - start < seconds:
@@ -80,9 +110,16 @@ def recovery(server: subprocess.Popen, seconds: int) -> list[dict]:
             result = {"status": status, "body_ok": body == b"ok", "latency_ms": latency}
         except Exception as error:
             result = {"error": type(error).__name__ + ": " + str(error)}
-        rows.append({"elapsed_s": time.monotonic() - start, "server": proc(server.pid),
+        server_state = proc(server.pid)
+        group_state = cgroup() if memory_ceiling is not None else None
+        if group_state is not None:
+            reason = resource_abort_reason(server_state, group_state, memory_ceiling)
+            if reason is not None:
+                raise RuntimeError("Recovery aborted: " + reason)
+        rows.append({"elapsed_s": time.monotonic() - start, "server": server_state,
                      "tcp_states_local_port_8080": tcp_states(server.pid),
-                     "fd_types": fd_types(server.pid), **result})
+                     "fd_types": fd_types(server.pid),
+                     **({"cgroup": group_state} if group_state is not None else {}), **result})
         time.sleep(.5)
     return rows
 
@@ -131,6 +168,9 @@ def stop(process: subprocess.Popen) -> None:
 
 @contextmanager
 def server_for(args, folder: Path):
+    memory_ceiling = getattr(args, "memory_ceiling", None)
+    if memory_ceiling is not None and cgroup()["memory_current"] > memory_ceiling:
+        raise RuntimeError("cgroup memory is already above the configured ceiling")
     # Fail before launching a server if another application owns this port.
     with socket.socket() as probe:
         probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -143,6 +183,10 @@ def server_for(args, folder: Path):
             for _ in range(100):
                 if server.poll() is not None:
                     raise RuntimeError("Server exited: " + (folder / "server.log").read_text())
+                if memory_ceiling is not None:
+                    reason = resource_abort_reason(proc(server.pid), cgroup(), memory_ceiling)
+                    if reason is not None:
+                        raise RuntimeError("Server startup aborted: " + reason)
                 try:
                     assert request("GET", "/health")[:2] == (200, b"ok")
                     break
@@ -152,9 +196,17 @@ def server_for(args, folder: Path):
                 raise RuntimeError("Server did not become ready")
             # Keep the DB read workload fixed. Write workloads use a fresh DB.
             assert json.loads(request("POST", "/users", {"name": "alice", "age": 18})[1])["id"] == 1
+            if memory_ceiling is not None:
+                reason = resource_abort_reason(proc(server.pid), cgroup(), memory_ceiling)
+                if reason is not None:
+                    raise RuntimeError("Server preflight aborted: " + reason)
             assert json.loads(request("GET", "/users/1")[1]) == {"id": 1, "name": "alice", "age": 18}
             echo = {"name": "x" * 4096, "age": 18}
             assert json.loads(request("POST", "/echo", echo)[1]) == echo
+            if memory_ceiling is not None:
+                reason = resource_abort_reason(proc(server.pid), cgroup(), memory_ceiling)
+                if reason is not None:
+                    raise RuntimeError("Server preflight aborted: " + reason)
             yield server
         finally:
             stop(server)
@@ -175,18 +227,17 @@ def target(folder: Path, case: str) -> Path:
 def load(args, folder: Path, server: subprocess.Popen, case: str, rate: int, seconds: int,
          sample_seconds: float, report_seconds: int = 0) -> dict:
     folder.mkdir(parents=True, exist_ok=True)
+    starting_cgroup = cgroup()
+    if starting_cgroup["memory_current"] > args.memory_ceiling:
+        raise RuntimeError(
+            "cgroup memory is already above the configured ceiling: "
+            f"{starting_cgroup['memory_current']} > {args.memory_ceiling} bytes"
+        )
     report_file = folder / "reports.jsonl"
     prefix = ["taskset", "-c", args.client_cpus, str(args.vegeta)]
-    environment = dict(os.environ, GOMAXPROCS=str(len(args.client_cpus.split(","))))
-    attack_args = prefix + ["attack", "-targets=" + str(target(folder, case)),
-                           f"-rate={rate}/s", f"-duration={seconds}s", "-workers=32",
-                           f"-max-workers={args.max_workers}", "-max-body=0", "-timeout=5s",
-                           "-http2=false", "-keepalive=true", f"-max-connections={args.max_connections}",
-                           "-laddr=" + args.local_address]
-    report_args = prefix + ["report", "-type=json", "-buckets=" + BUCKETS,
-                           "-output=" + str(report_file)]
-    if report_seconds:
-        report_args += [f"-every={report_seconds}s"]
+    environment = local_subprocess_environment(len(args.client_cpus.split(",")))
+    attack_args = vegeta_attack_command(prefix, target(folder, case), rate, seconds, args)
+    report_args = vegeta_report_command(prefix, report_file, report_seconds)
     before = proc(server.pid)
     children_before = resource.getrusage(resource.RUSAGE_CHILDREN)
     start = time.monotonic()
@@ -208,11 +259,12 @@ def load(args, folder: Path, server: subprocess.Popen, case: str, rate: int, sec
                     samples.append(sample)
                     resources.write(json.dumps(sample) + "\n")
                     resources.flush()
-                    if (sample["server"].get("exited") or
-                            sample["server"].get("rss_kib", 0) > 2 * 1024 * 1024 or
-                            sample["cgroup"]["memory_current"] > args.memory_ceiling or
-                            elapsed > seconds + 30):
-                        aborted = "server exit, resource ceiling, or client time budget reached"
+                    aborted = resource_abort_reason(
+                        sample["server"], sample["cgroup"], args.memory_ceiling
+                    )
+                    if aborted is None and elapsed > seconds + 30:
+                        aborted = "client time budget was exceeded"
+                    if aborted is not None:
                         stop(attack)
                         break
                     minute = int(elapsed // 60)
@@ -224,6 +276,14 @@ def load(args, folder: Path, server: subprocess.Popen, case: str, rate: int, sec
                     time.sleep(sample_seconds)
             attack.wait(timeout=10)
             reporter.wait(timeout=15)
+            if aborted is not None:
+                save(folder / "abort.json", {
+                    "reason": aborted,
+                    "attack_exit": attack.returncode,
+                    "reporter_exit": reporter.returncode,
+                    "last_sample": samples[-1] if samples else None,
+                })
+                raise RuntimeError("Load aborted: " + aborted)
             if attack.returncode or reporter.returncode:
                 raise RuntimeError("Vegeta failed; see stderr files in " + str(folder))
         finally:
@@ -263,6 +323,30 @@ def load(args, folder: Path, server: subprocess.Popen, case: str, rate: int, sec
     }
     save(folder / "result.json", result)
     return result
+
+
+def vegeta_attack_command(prefix: list[str], target_file: Path, rate: int, seconds: int,
+                           args) -> list[str]:
+    return [
+        *prefix, "attack", "-targets=" + str(target_file), f"-rate={rate}/s",
+        f"-duration={seconds}s", "-workers=32", f"-max-workers={args.max_workers}",
+        "-max-body=0", "-timeout=5s", "-redirects=0", "-http2=false",
+        "-keepalive=true", f"-max-connections={args.max_connections}",
+        "-laddr=" + args.local_address,
+    ]
+
+
+def vegeta_report_command(prefix: list[str], output: Path, every_seconds: int = 0) -> list[str]:
+    """Build a Vegeta v12.13 JSON report command.
+
+    JSON reports already contain the latency percentiles consumed below.  The
+    `-buckets` flag belongs to older Vegeta report interfaces and is rejected
+    by the pinned v12.13.0 binary before it reads any attack results.
+    """
+    command = [*prefix, "report", "-type=json", "-output=" + str(output)]
+    if every_seconds:
+        command += [f"-every={every_seconds}s"]
+    return command
 
 
 def environment(args) -> dict:
@@ -347,7 +431,7 @@ def main() -> None:
                         load(args, folder / "warmup", server, case, min(rate, 1000), 2, .5)
                         row = load(args, folder, server, case, rate, args.duration, .5)
                         row["repeat"] = repeat
-                        row["recovery"] = recovery(server, 2)
+                        row["recovery"] = recovery(server, 2, args.memory_ceiling)
                     results.append(row)
                     save(args.out / "limits.json", results)
                     print(json.dumps({"phase": "limits", "case": case, "target_rps": rate,
@@ -362,7 +446,7 @@ def main() -> None:
         with server_for(args, folder) as server:
             load(args, folder / "warmup", server, "json_4k", 1000, 3, .5)
             row = load(args, folder, server, "json_4k", args.soak_rate, args.soak_seconds, 5, 60)
-            row["recovery"] = recovery(server, args.recovery_seconds)
+            row["recovery"] = recovery(server, args.recovery_seconds, args.memory_ceiling)
         save(args.out / "soak.json", row)
         print(json.dumps({"phase": "soak_complete", "requests": row["metrics"]["requests"],
                           "success": row["metrics"]["success"], "aborted": row["aborted"]}), flush=True)

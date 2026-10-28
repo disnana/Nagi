@@ -457,3 +457,14 @@ pub(crate) fn http_startup_test_pool(path: std::path::PathBuf) -> (Pool, HttpSta
         control,
     )
 }
+
+#[cfg(all(test, nagi_auth_stage_diag, nagi_browser_login_diag))]
+pub(crate) struct HttpHeldCheckout {
+    _held: adapter::HeldCheckout,
+}
+#[cfg(all(test, nagi_auth_stage_diag, nagi_browser_login_diag))]
+pub(crate) async fn hold_http_checkout_for_test(pool: &Pool) -> HttpHeldCheckout {
+    HttpHeldCheckout {
+        _held: pool.adapter.checkout_without_begin().await.unwrap(),
+    }
+}

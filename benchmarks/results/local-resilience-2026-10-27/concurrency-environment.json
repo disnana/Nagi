@@ -1,0 +1,27 @@
+{
+  "date_utc": "2026-10-27T03:05:35.841182Z",
+  "source_commit": "0d1884cb5a24235a440811a9f5d16be1bf5a664a",
+  "platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "cpu_model": "AMD EPYC 9V74 80-Core Processor",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "cpu_quota": "400000 100000",
+  "memory_limit": "17179869184",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "source_sha256": {
+    "runtime/examples/concurrency_bench.rs": "6d489d4aba2aef24f0a34a3ad80b8f174942336d85eefdcc89e53369c66292e6",
+    "runtime/src/concurrent.rs": "b17ac40d8e856e412c0544785cba053e195d943e3d60fa4f88f568506e86ceeb"
+  },
+  "command": "cargo run --locked --release -p nagi-runtime --example concurrency_bench",
+  "limitations": [
+    "single local process",
+    "Tokio runtime; not BEAM process isolation",
+    "intentional Rust panic only; no SIGSEGV, abort, OOM, process kill, or external load",
+    "RSS includes allocator retention and does not prove per-task memory release"
+  ]
+}

@@ -111,7 +111,7 @@ Nagi 0.1.10以降では、応答開始前のhandlerやmapperでunwindするpanic
 
 採用した消費順序は入口検査→route枠→認証・CSRF・body検査→認証済みsubject枠→handler／Session発行・更新です。routeの429が401／403より先になる場合があります。Errや取消で返金しません。正常preflightはroute tokenを消費しませんが、入口のcapacity・同時実行数・期限の保護は受けます。subject枠は認証済み主体を得られるprofileだけで使います。同一route・同一process内の制限で、別route・別process・複数台を通じた全体制限ではありません。
 
-token不足は429、table／quota容量不足やClosing／ClockFaultは503、内部故障やmapper自身の失敗は500です。既に成立した認証・期限等の拒否を上書きしません。独立した有限fallback枠まで不足した場合は接続を閉じます。
+token不足は429、table／quota容量不足やClosing／ClockFaultは503です。通常応答枠の容量不足でmapperも`Busy`になった場合は独立fallback枠から503を返し、それ以外の内部故障やmapper自身の失敗は詳細を伏せた500にします。既に成立した認証・期限等の拒否を上書きしません。独立した有限fallback枠まで不足した場合は接続を閉じます。
 
 算術的に受理できる設定でも、全processメモリや遅延SLAの保証ではありません。下記の小規模構成の実測と配備先の条件を踏まえて予算を選んでください。
 

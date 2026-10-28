@@ -28,6 +28,7 @@ Cache inspect roots must be absolute and at most 4096 encoded OS path bytes each
 Options:
   --project DIR|nagi.toml  Select a project
   --no-project            Disable project discovery
+  --backend rust|go       Select code generation backend (default: project, then rust)
   --native FILE.low       Add handwritten Low
   --rust FILE.rs          Add a Rust adapter
   --rust-dep NAME=VERSION  Add a Rust dependency
@@ -71,9 +72,13 @@ Cache inspection notes:
 struct Manifest {
     entry: String,
     #[serde(default)]
+    backend: Option<Backend>,
+    #[serde(default)]
     native: Vec<String>,
     #[serde(default)]
     rust: Rust,
+    #[serde(default)]
+    go: Go,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -82,6 +87,13 @@ struct Rust {
     file: Option<String>,
     #[serde(default)]
     dependencies: BTreeMap<String, RustDependency>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Go {
+    #[serde(default)]
+    files: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
@@ -139,6 +151,8 @@ pub struct Options {
     pub native: Vec<PathBuf>,
     pub rust_file: Option<PathBuf>,
     pub rust_dependencies: BTreeMap<String, RustDependency>,
+    pub backend: Backend,
+    pub go_files: Vec<PathBuf>,
     pub out: PathBuf,
     pub cost: bool,
     /// Include raw generated Rust details after a mapped Nagi diagnostic.
@@ -157,6 +171,22 @@ pub struct Options {
     /// Set only when a project is selected. Plain SOURCE commands keep their cwd.
     pub project_root: Option<PathBuf>,
     pub(crate) manifest_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Backend {
+    #[default]
+    Rust,
+    Go,
+}
+impl Backend {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Rust => "rust",
+            Self::Go => "go",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -334,7 +364,7 @@ pub fn resolve_map(args: &[String], cwd: &Path) -> Result<(Options, MapOptions),
                     return Err(format!("{option} may be specified only once"));
                 }
             }
-            "--project" | "--native" | "--rust" | "--rust-dep" => {
+            "--project" | "--native" | "--rust" | "--rust-dep" | "--backend" => {
                 // Keep values intact even when a path happens to match a map
                 // option or view name. resolve validates these shared options.
                 input.push(args[i].clone());
@@ -484,11 +514,12 @@ fn read_manifest(path: &Path) -> Result<Manifest, String> {
             .file
             .as_ref()
             .is_some_and(|s| s.trim().is_empty())
+        || config.go.files.iter().any(|s| s.trim().is_empty())
     {
         return Err(manifest_error(
             path,
             1,
-            "native / rust.fileには空でないパスを指定してください",
+            "native / rust.file / go.filesには空でないパスを指定してください",
         ));
     }
     validate_dependencies(&config.rust.dependencies).map_err(|e| manifest_error(path, 1, e))?;
@@ -513,6 +544,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut rust_diagnostics = false;
     let mut profile = None;
     let mut runtime_profile = None;
+    let mut backend = None;
     let mut seed_lock = false;
     let mut build_stats = false;
     let mut incremental = false;
@@ -526,13 +558,23 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         let option = &args[i];
         match option.as_str() {
             "--project" | "--native" | "--rust" | "--rust-dep" | "--out" | "--sql-schema"
-            | "--sql-dialect" | "--profile" | "--runtime-profile" => {
+            | "--sql-dialect" | "--profile" | "--runtime-profile" | "--backend" => {
                 i += 1;
                 let value = args
                     .get(i)
                     .filter(|v| !v.starts_with("--") && !v.is_empty())
                     .ok_or_else(|| format!("{option} requires a value"))?;
                 match option.as_str() {
+                    "--backend" => {
+                        let selected = match value.as_str() {
+                            "rust" => Backend::Rust,
+                            "go" => Backend::Go,
+                            _ => return Err("--backend requires rust or go".into()),
+                        };
+                        if backend.replace(selected).is_some() {
+                            return Err("--backend must be specified once".into());
+                        }
+                    }
                     "--runtime-profile" => {
                         let selected = match value.as_str() {
                             "full" => RuntimeProfile::Full,
@@ -666,9 +708,12 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let mut project_root = None;
     let mut manifest_path = None;
     let mut rust_dependencies = BTreeMap::new();
+    let mut go_files = Vec::new();
+    let mut configured_backend = None;
     if let Some(manifest) = manifest {
         let manifest = fs::canonicalize(&manifest).map_err(|e| manifest_error(&manifest, 1, e))?;
         let config = read_manifest(&manifest)?;
+        configured_backend = config.backend;
         manifest_path = Some(manifest.clone());
         let root = manifest.parent().unwrap().to_path_buf();
         if source.is_none() {
@@ -682,6 +727,7 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
             rust_file = config.rust.file.map(|p| root.join(p));
         }
         rust_dependencies = config.rust.dependencies;
+        go_files = config.go.files.into_iter().map(|p| root.join(p)).collect();
         project_root = Some(root);
     }
     rust_dependencies.extend(dependencies);
@@ -700,6 +746,30 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
     let source = source.ok_or(
         "SOURCEまたはnagi.tomlが必要です。nagic run --project DIRでプロジェクトを選べます",
     )?;
+    let backend = backend.or(configured_backend).unwrap_or_default();
+    if backend == Backend::Go {
+        if runtime_profile.is_some() {
+            return Err("--runtime-profile is supported only by the rust backend".into());
+        }
+        if seed_lock {
+            return Err("--seed-lock is supported only by the rust backend".into());
+        }
+        if incremental {
+            return Err("--incremental is supported only by the rust backend".into());
+        }
+        if rust_diagnostics {
+            return Err("--rust-diagnostics is supported only by the rust backend".into());
+        }
+    } else if !go_files.is_empty() {
+        return Err(format!(
+            "selected backend rust cannot use Go native assets: {}. Select --backend go or remove [go].files",
+            go_files
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
     let out = out.unwrap_or_else(|| {
         project_root
             .as_deref()
@@ -716,6 +786,8 @@ pub fn resolve(args: &[String], cwd: &Path) -> Result<Options, String> {
         native,
         rust_file,
         rust_dependencies,
+        backend,
+        go_files,
         out,
         cost,
         rust_diagnostics,

@@ -1662,7 +1662,8 @@ impl<'a> Resolver<'a> {
         };
         // Asset resolution runs before type checking. Preserve this known
         // value binding so a callback named include_text is not read as a file.
-        if matches!(&expr.kind, E::Call(name, _, _) if self.locals.contains_key(name)) {
+        if matches!(&expr.kind, E::Call(name, _, _) | E::Record(name, _) if self.locals.contains_key(name))
+        {
             expr.resolution = Some(NameResolution::Local);
         }
         if bare.is_some_and(|name| {
@@ -1759,7 +1760,21 @@ impl<'a> Resolver<'a> {
                 }
             }
             E::Record(name, fields) => {
-                if !self.resolve_variant_name(name, expr.line, expr.span, false)? {
+                // Named function calls temporarily share the record parser
+                // shape. Preserve the established class/enum constructor rule
+                // when such a definition exists, but never let a same-spelled
+                // global function bypass a local function value or local data.
+                let local = self.locals.contains_key(name);
+                let constructor = if local {
+                    self.target(name, expr.line)?
+                        .is_some_and(|target| matches!(target.kind, DefKind::Class | DefKind::Enum))
+                } else {
+                    false
+                };
+                if local && !constructor {
+                    self.resolve_name(name, expr.line, expr.span, None)?;
+                    expr.resolution = Some(NameResolution::Local);
+                } else if !self.resolve_variant_name(name, expr.line, expr.span, false)? {
                     self.resolve_name(name, expr.line, expr.span, Some(DefKind::Class))?;
                 }
                 for (_, field) in fields {
@@ -2096,6 +2111,7 @@ mod metadata_tests {
             functions: vec![Function {
                 name: "main".into(),
                 params: vec![],
+                source_parameter_names: vec![],
                 parameter_spans: vec![],
                 ret: Type::named("unit"),
                 asynchronous: false,

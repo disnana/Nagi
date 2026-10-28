@@ -341,7 +341,7 @@ def wiring_controls(root: Path, env: dict) -> bool:
     anchor = (b"observer.emit_private(crate::auth::session_deadline_observer::"
               b"PrivateTerminal::PreparationTimer);")
     # This frozen digest is generated from the immutable reviewed candidate.
-    expected_digest = "e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31"
+    expected_digest = "397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54"
     canonical = original.replace(b"\r\n", b"\n")
     if (b"\r" in canonical or hashlib.sha256(canonical).hexdigest() != expected_digest
             or original.count(anchor) != 1):

@@ -1,0 +1,40 @@
+# Browser Handlerの期限・native診断
+
+これは未確定のBrowserLogin 504を調べるための非公開診断であり、原因修正や実行速度改善ではない。元の`strict_json_valid`失敗はverifier/handler各1回、claim消費済み、Issue APIの成功戻り前、削除cookieあり・認証cookieなしだった。HandlerTimerとHandlerLateReadyの区別や、Issue内部のDB/native境界は記録されていなかった。後の成功や人工的CPU制限での成功は、原因解消の証拠ではない。
+
+## 対象と維持する契約
+
+既存の`nagi_auth_stage_diag`と`nagi_browser_login_diag`が両方有効なときだけ、Browser Handlerの実際のFutureをSession observerのtask-local scopeで観測する。観測範囲にClaimやverifierのDB処理は含めない。`guarded_terminal`は`None`のままで、Guardedを偽装しない。
+
+元のadmission時刻と、productionが既に選択したHandler期限を使う。lease、Claimの期限短縮、handler/security/body予算、TTL、SQL、並列度、取消・cookie deliveryは変更しない。stock buildとcfg単独では新しいscope・状態・出力を追加しない。取消は既に受理されたnative処理を巻き戻さないため、Issue APIが成功を返していないことを「DB未commit」と言い換えない。
+
+## requestの対応とsnapshot
+
+Browser phaseのrequest番号は既存の`Lease.id`であり、Session observerには別のrequest採番はない。新wrapperは実ownerのleaseを借用してその数値だけをcopyする。leaseの強参照や権限は保持しない。既存のchecked allocatorは番号をwrapさせず、使い切れば失敗する。
+
+実際のHandlerTimer/LateReady分岐で一度copyした記録から、次の2行を出力する。
+
+- `browser_handler_deadline_diag`: request、phase15、実terminal8/9、poll/DB境界、有限counter、残予算。
+- `browser_handler_native_call_diag`: 同じrequestとterminal、Browser専用origin4、既存のcoherent native-call witness。
+
+既存の`session_native_call_diag`とorigin0〜3の文法は変えない。新しい2行と既存Browser phase16の対応は、同じ失敗test・同じinvocation・明示request番号で検査する。隣接していること、同じnative generation、近い時刻だけで対応を推測しない。native witnessがunavailableならzero/UNSEENを維持し、header値から埋めない。Timerだけからstd時計の期限通過を推測しない。
+
+DB値は最後に観測した実境界であり、lock所有や待機原因の分類ではない。LogicalCheckoutはcapacity/startup/readyを含むため、それだけでcold workerとは断定できない。native-call witnessはCOMMITへの入口、実return、記録公開、checkout返却を区別する。取消後にnativeが進んでも、copy済みのterminal記録は更新しない。
+
+## 採集と機密出力
+
+外部Browser失敗のsanitizerは、sourceを固定した既知のFAILED stdout blockだけで新prefixを許す。request不一致・重複・欠落・順序不正・別test/suite・未知field・範囲外・成功blockやblock外の記録は拒否する。raw256KiB、output16KiB、marker16の上限は維持する。SQL、path、header/body、cookie/token、任意のerror/assert/panic値を公開しない。旧記録には空の新配列を追加せず、正当な新factがあるBrowser記録だけに閉じた追加情報を保存する。
+
+期待504で正常終了するnative controlsは、既存のboth-cfg `--lib --nocapture` broad採集で動く。broadはauth slot1/2と既知のtest coverageを検証し、新しい数値行を公開traceへコピーしない。これは外部Browserの失敗block限定parserとは別のmodeである。新controlsが成功blockに出たことを理由に、外部parserを緩めない。
+
+Rustの新controlsは、実emitがcopyした同じenvelopeをtest-onlyの単一Optionから検査する。終了後に再snapshotしてnative進行後の値を取り違えない。global sink、出力抑止、新しい収集frameworkは追加しない。
+
+## 回帰の構成
+
+元production pathでHTTP504とsecurity/cleanup条件が成立した後、Session scopeだけが無い`ScopeMissing`のREDをTimer/LateReadyの2件で先に確認した。新APIのコンパイルエラーはREDに含めない。
+
+Timer controlは既存worker2 gateと、test-onlyのheld checkoutを使う。Handler内で初めて実Issueをpollし、元1000msの範囲でgate到達を確認してから、同じ期限で504になることを検査する。LateReady controlはscope内の実Issue成功後に有限のnon-yielding Readyを元期限の後へ返し、認証cookieが配信されないことを検査する。期限前にworker gateを解放するpositive controlも含める。SQL setupを先に行うstage controlであり、外部socketの元失敗を再現したとは説明しない。
+
+追加のobserver controlsはrequest番号とGuarded scopeの分離、権限非保持、取消時の偽terminal禁止、native metadataの後続進行とimmutable terminal copyを検査する。旧native20とBrowser stage9の集合は維持し、旧17件のbroad必須集合に新しい5件を追加する。既存CI命令やprimary失敗の扱いは変更しない。
+
+最終受入には、cfg組合せのcompile、実socket Browserとnative/observer回帰、旧・新sanitizerのnegative、元sourceへ戻せるexact inverse、stock Clippy、最終sourceのworkspace tests、独立reviewが必要である。これらの成功は元CI失敗の根因を確定しない。

@@ -455,6 +455,9 @@ pub(crate) fn contains_task_binding(statements: &[Stmt]) -> bool {
 pub struct Function {
     pub name: String,
     pub params: Vec<(String, Type)>,
+    /// Source spelling for named calls. Module resolution may rename local
+    /// bindings to keep flattened symbols collision-free.
+    pub(crate) source_parameter_names: Vec<String>,
     pub parameter_spans: Vec<Span>,
     pub ret: Type,
     pub asynchronous: bool,

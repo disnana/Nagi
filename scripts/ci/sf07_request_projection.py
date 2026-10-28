@@ -83,31 +83,80 @@ def inverse_csrf(source):
 # U4/U5 made the producer, native driver and attached Request Context production.
 # Historical U1 inverses above intentionally remain frozen; current source is
 # instead bound to the independently reviewed public RC commit/tree below.
-PRODUCTION_COMMIT = '9dd70dc73b2722fb537edc34452916030670d027'
-PRODUCTION_TREE = '726d6c476d7e4a69c2a4ba8ab84dd922eac1d2dc'
+PRODUCTION_COMMIT = '1004a908c4e9090b1ed764d2a51900a5bdb2d5bf'
+PRODUCTION_TREE = '9bbfe19664f715f2bead02e50e5e79f703afba07'
 PRODUCTION_SOURCES = {'http': {'path': 'runtime/src/http_server.rs',
-          'blob': '581551f3f2544b4d59ed806af106996d5795ed54',
-          'sha256': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
-          'tokens': '4dea895e5e943d98cecd93c2f1e28b0c348c0b6581364ff6fa8c885cc5b7a12e'},
+          'blob': 'dd56e351196ded77e8e92ac8cede54236af29fe6',
+          'sha256': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
+          'tokens': '9c4f072d0674f252a364010d0299dc16c246e296560a16ed65c494c67921c10c'},
  'browser': {'path': 'runtime/src/http_server/browser_login.rs',
-             'blob': '41878db9c1e5cf78d4a8c682f7f7d53f8ddfe557',
-             'sha256': '17252effa839788999212f90b1418bdba27173ef3c230ee4223311ebd4ce64b6',
-             'tokens': '071429be0bc17b652cbff8589312ea8104f367e14ba390c3de0eec94f9a2bc01'},
+             'blob': '7d9f62bcd723d985a227e13b8ce4ec15a8bd3a3a',
+             'sha256': '363cf9c8e60369ad0e9996b6323c7c4f9e2a47eddc7bb160e514c1522b58b3a4',
+             'tokens': 'f215ac43d66d09aed10f8af5d52c0cedc07ce94b64a8c22432fdc7b584bce4b6'},
  'stage': {'path': 'runtime/src/http_server/browser_login_stage_tests.rs',
-           'blob': '6d57cdbf3cff4051b061c3f71bddb6827ad4e3a5',
-           'sha256': '220975a888800934f209be4ec4a96449e32f3cedef90119e517d6c01b2dcb3a3',
-           'tokens': 'a13eac9ab415613067261d9927594ce023d421bcd4518d6feb76f0819f6d8164'},
+           'blob': 'c06bc058e5b95851e079d4b24e31b1b9cae558d4',
+           'sha256': '6e31ac420dbcd06f63651b93c8a12f2acffff319f4c7c4c55f50181a5723d110',
+           'tokens': 'a0dc3d69b0b877aadbaf91a6d1d72389b886871362b450822352fdf6c58d7f2e'},
  'csrf': {'path': 'runtime/src/http_server/csrf_http.rs',
-          'blob': '93095cab1709b4753237c0e8a8705f6bfa1a64a8',
-          'sha256': '4e97c5c0268ad6caa49df5a4d5e2cb6e9b4e7cdc5c74e7d900b0439b1ff0a6e1',
-          'tokens': 'aa7607f96728acb1a74c964a441c97799d68409027e999c09c596838ce45d533'},
+          'blob': '8b0728b8eb3aab578f8b27a7836cecc4c846ad1f',
+          'sha256': '5f597750de0a5b07a29a1d05649e272bc11103b6e093711e0c5d00118d442943',
+          'tokens': '3ff87ae24cdc8244a912d6105d11c04ea29ff0e4af98e3543256f57f4f248a1f'},
  'public': {'path': 'runtime/tests/browser_login_public_api.rs',
             'blob': 'aeafab34a1842038538b71bf15b1989eaac268bd',
             'sha256': '4999e44ad29bf7777a9f92d349eee025c9d3c1112162b7cc7d0524c74e745050',
             'tokens': 'fe23e1f3098b190113722979aed4fbaffeb10153f0869ba083dabf3674ac8156'}}
 
 
+BROWSER_HANDLER_ADDITIONS = (
+    ("        .catch_unwind();\n", '''        #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+        let handler_observer = crate::auth::session_deadline_observer::BrowserHandlerObserver::new(
+            &owner.lease_owner().lease,
+            admitted,
+            until,
+        );
+        #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+        let future = handler_observer.scope(future);
+''', "        match tokio::time::timeout_at(\n"),
+    ("                diag::exit(Exit::HandlerLateReady);\n", '''                #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+                handler_observer
+                    .emit(crate::auth::session_deadline_observer::BrowserTerminal::LateReady);
+''', "                terminal(Status::GATEWAY_TIMEOUT, pool, owner)\n"),
+    ("                diag::exit(Exit::HandlerTimer);\n", '''                #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+                handler_observer
+                    .emit(crate::auth::session_deadline_observer::BrowserTerminal::Timer);
+''', "                terminal(Status::GATEWAY_TIMEOUT, pool, owner)\n"),
+    ("mod stage_tests;\n", '''
+#[cfg(all(test, nagi_auth_stage_diag, nagi_browser_login_diag))]
+#[path = "browser_handler_diagnostic_tests.rs"]
+mod handler_diagnostic_tests;
+''', ""),
+)
+BROWSER_HANDLER_COVERAGE = '''    "http_server::browser_login::handler_diagnostic_tests::original_handler_timer_preserves_pending_issue_witness",
+    "http_server::browser_login::handler_diagnostic_tests::original_handler_late_ready_preserves_committed_issue_witness",
+    "http_server::browser_login::handler_diagnostic_tests::released_native_startup_preserves_success_without_terminal_record",
+    "auth::session_deadline_observer::tests::browser_request_key_and_guarded_scope_remain_independent",
+    "auth::session_deadline_observer::tests::browser_terminal_copy_survives_later_native_metadata_and_cancellation",
+'''
+
+
+def inverse_browser_handler_coverage(source):
+    before = '    "http_server::tests::security_tests::late_verifier_failure_uses_the_exhausted_security_budget",\n'
+    if source.count(BROWSER_HANDLER_COVERAGE) != 1 or source.count(before + BROWSER_HANDLER_COVERAGE + ')\n') != 1:
+        raise ValueError('Browser Handler coverage addition mismatch')
+    return source.replace(BROWSER_HANDLER_COVERAGE, '', 1)
+
+
+def inverse_browser_handler(source):
+    for before, added, after in BROWSER_HANDLER_ADDITIONS:
+        if source.count(added) != 1 or source.count(before + added + after) != 1:
+            raise ValueError('Browser Handler observer placement mismatch')
+        source = source.replace(added, '', 1)
+    return source
+
+
 def approved_production(name, source):
+    if name == 'browser':
+        source = inverse_browser_handler(source)
     expected = PRODUCTION_SOURCES.get(name)
     if expected is None or hashlib.sha256(source.encode()).hexdigest() != expected['sha256']:
         raise ValueError('approved U4 production source identity mismatch')
@@ -120,7 +169,7 @@ def approved_production(name, source):
 BASE_TOKENS = {'http': '8efe1130c731238099553c0e9fc58a19ff103fc57278c55c7ec8839de26d1f3e', 'browser': '2b61c339bfeecc0519ccf72517cc64346f40b6c51d2bab946004f2f6f2a71dab', 'stage': '8b5e8f0c3ab595d8fa6b93d2c4c400ef670f64933c576db994315c620bdcced4', 'csrf': '21ae359e321f254d831f0c29b43392f2b8490e8c14ccddaef733f58c8b7b95d3'}
 HTTP_BEFORE = 'e6969a04326ed5fc4b3795f64a2909ffb5bbfae16f679589b93a819922084485'
 HISTORICAL_HTTP_AFTER = '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6'
-HTTP_AFTER = 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31'
+HTTP_AFTER = '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54'
 TESTS_BEFORE = '8752ae42a02af282b9a5d79f11e6e1bc1c95642fb1c1b4f4a23da34012130173'
 HISTORICAL_TESTS_AFTER = '640f64c8c44fb085d04c445c14cbd7c4c46ce07ab7353351a195260a2740c64f'
 TESTS_AFTER = '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8'
@@ -428,6 +477,15 @@ def inverse_workflow(source):
     if "\n  ci-plan:\n" in source:
         source = _LEVELS.inverse_workflow(source)
     source = _B1.inverse_failure_diagnostic(source)
+    # The guarded Busy regression is the fifteenth case in the exact SF03
+    # deadline inventory.  Restore the inherited fourteen-case workflow only
+    # after validating both original acceptance sites; missing, duplicated, or
+    # independently edited counts remain visible to the frozen history proof.
+    deadline_current = '"sf03-b1-csrf-deadline.log":15'
+    deadline_inherited = '"sf03-b1-csrf-deadline.log":14'
+    if source.count(deadline_current) != 2 or source.count(deadline_inherited) != 0:
+        raise ValueError('guarded Busy deadline inventory mismatch')
+    source = source.replace(deadline_current, deadline_inherited)
     source = _PARALLEL.inverse_workflow(source)
     source = _inverse_source_guard_dedup_base(source)
     for added, inherited, label in (

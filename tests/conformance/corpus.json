@@ -77,7 +77,7 @@
     "high": true,
     "expected": "reject:high-parse",
     "oracle": "",
-    "diagnostic": "classの型引数は未対応です",
+    "diagnostic": "名前付きフィールドまたは名前付き引数を使う呼出しに明示型引数は指定できません",
     "line": 4
   },
   {
@@ -86,7 +86,7 @@
     "high": false,
     "expected": "reject:low-parse",
     "oracle": "",
-    "diagnostic": "classの型引数は未対応です",
+    "diagnostic": "名前付きフィールドまたは名前付き引数を使う呼出しに明示型引数は指定できません",
     "line": 2
   },
   {

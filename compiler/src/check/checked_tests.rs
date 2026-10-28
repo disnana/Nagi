@@ -469,6 +469,347 @@ fn final_future_capture_facts_reject_identity_argument_owner_and_span_tampering(
     }
 }
 
+fn user_capture(argument: &FutureArgument) -> &UserAsyncArgumentFacts {
+    let ArgumentCaptureFacts::UserAsync(facts) = &argument.capture else {
+        panic!("expected user async argument facts")
+    };
+    facts
+}
+
+fn local_binding(program: &Program, function: &str, name: &str) -> BindingId {
+    let function = program
+        .functions
+        .iter()
+        .find(|f| f.name == function)
+        .unwrap();
+    function
+        .body
+        .iter()
+        .find_map(|statement| match &statement.kind {
+            S::Assign { name: local, .. } if local == name => Some(BindingId {
+                line: statement.line,
+                token: statement.binding_span.unwrap().start,
+            }),
+            _ => None,
+        })
+        .unwrap()
+}
+
+fn parameter_binding(program: &Program, function: &str, index: usize) -> BindingId {
+    let function = program
+        .functions
+        .iter()
+        .find(|f| f.name == function)
+        .unwrap();
+    BindingId {
+        line: function.line,
+        token: function.parameter_spans[index].start,
+    }
+}
+
+fn capture_entries(source: &str, manual: &str, mut verify: impl FnMut(&CheckedProgram)) {
+    let high = checked_high(source);
+    verify(&high);
+    let low = crate::emit::low(high.program());
+    // Facts are reconstructed, not transported in Low text. Its expression
+    // and binding identities belong to this independent parse.
+    for text in [&low, manual] {
+        let checked = crate::check::finalize(
+            crate::parser::parse(text, false).unwrap(),
+            Program::default(),
+            SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        verify(&checked);
+        crate::emit::rust(&checked).unwrap();
+    }
+}
+
+#[test]
+fn user_async_capture_snapshots_direct_callback_alias_field_parameter_and_transfer() {
+    let high = "class Pair:\n    text: str\nasync def read(part: view[str]) -> i64:\n    return len(part)\nasync def value(number: i64, text: str):\n    print(number)\nasync def work(part: view[str]):\n    owner = \"owner\"\n    alias = view(owner)\n    callback = read\n    print(await read(alias))\n    print(await callback(alias))\n    pair = Pair(text=\"field\")\n    print(await read(view(pair.text)))\n    print(await read(part))\n    print(await read(view(\"temporary\")))\n    await value(42, \"owned\")\n";
+    let manual = "record Pair { text: str; }\nasync fn read(part: view[str]) -> i64 { return len(part); }\nasync fn value(number: i64, text: str) -> unit { print(number); }\nasync fn work(part: view[str]) -> unit {\nlet owner: str = \"owner\";\nlet alias: view[str] = view(owner);\nlet callback: fn[view[str], Future[i64]] = read;\nprint(await read(alias));\nprint(await callback(alias));\nlet pair: Pair = Pair(text=\"field\");\nprint(await read(view(pair.text)));\nprint(await read(part));\nprint(await read(view(\"temporary\")));\nawait value(42, \"owned\");\n}";
+    capture_entries(high, manual, |checked| {
+        let program = checked.program();
+        let captures = &checked.final_check_facts().functions["work"];
+        assert_eq!(captures.len(), 6);
+        let entries: Vec<_> = captures.iter().collect();
+        let owner = local_binding(program, "work", "owner");
+        let alias = local_binding(program, "work", "alias");
+        for (index, resolution) in [NameResolution::Function, NameResolution::Local]
+            .into_iter()
+            .enumerate()
+        {
+            let (call, capture) = entries[index];
+            assert_eq!(capture.callee, "read");
+            assert_eq!(capture.resolution, resolution);
+            let argument = &capture.arguments[0];
+            let facts = user_capture(argument);
+            assert_eq!(
+                facts.slot,
+                ArgumentCaptureSlot {
+                    call: *call,
+                    argument: 0
+                }
+            );
+            assert_eq!(facts.transfer, ExprUseMode::Copy);
+            assert!(!facts.views_absent);
+            assert_eq!(facts.release, ArgumentRelease::Deferred);
+            assert_eq!(facts.depths.len(), 1);
+            assert_eq!(
+                facts.depths[0].origins,
+                vec![FlowOrigin {
+                    binding: owner,
+                    fields: vec![],
+                    owner_loan: true,
+                    static_origin: false,
+                }]
+            );
+            assert!(!facts.depths[0].borrows_temporary);
+            assert_eq!(argument.owners.len(), 1);
+            assert_eq!(argument.owners[0].1, alias);
+        }
+        let field = &user_capture(&entries[2].1.arguments[0]).depths[0];
+        assert_eq!(
+            field.origins,
+            vec![FlowOrigin {
+                binding: local_binding(program, "work", "pair"),
+                fields: vec!["text".into()],
+                owner_loan: true,
+                static_origin: false,
+            }]
+        );
+        let parameter = &user_capture(&entries[3].1.arguments[0]).depths[0];
+        assert_eq!(
+            parameter.origins,
+            vec![FlowOrigin {
+                binding: parameter_binding(program, "work", 0),
+                fields: vec![],
+                owner_loan: false,
+                static_origin: false,
+            }]
+        );
+        let temporary = user_capture(&entries[4].1.arguments[0]);
+        assert!(temporary.depths[0].origins.is_empty());
+        assert!(temporary.depths[0].borrows_temporary);
+        assert!(!temporary.views_absent);
+        assert_eq!(temporary.release, ArgumentRelease::Deferred);
+        let copy = user_capture(&entries[5].1.arguments[0]);
+        assert_eq!(copy.transfer, ExprUseMode::Copy);
+        assert!(copy.depths.is_empty());
+        assert!(copy.views_absent);
+        assert_eq!(copy.release, ArgumentRelease::NotRequired);
+        let moved = user_capture(&entries[5].1.arguments[1]);
+        assert_eq!(moved.transfer, ExprUseMode::Move);
+        assert!(moved.depths.is_empty());
+        assert!(moved.views_absent);
+        assert_eq!(moved.release, ArgumentRelease::Deferred);
+    });
+}
+
+#[test]
+fn user_async_capture_depths_preserve_container_loans_separately_from_contents() {
+    let high = "async def read(parts: view[view[view[str]]]) -> i64:\n    return len(parts)\nasync def work():\n    owner = \"owner\"\n    parts = [view(owner)]\n    rows = [view(parts)]\n    print(await read(view(rows)))\n";
+    let manual = "async fn read(parts: view[view[view[str]]]) -> i64 { return len(parts); }\nasync fn work() -> unit {\nlet owner: str = \"owner\";\nlet parts: List[view[str]] = [view(owner)];\nlet rows: List[view[view[str]]] = [view(parts)];\nprint(await read(view(rows)));\n}";
+    capture_entries(high, manual, |checked| {
+        let captures = &checked.final_check_facts().functions["work"];
+        let facts = user_capture(&captures.values().next().unwrap().arguments[0]);
+        assert_eq!(facts.depths.len(), 3);
+        let owner = local_binding(checked.program(), "work", "owner");
+        let parts = local_binding(checked.program(), "work", "parts");
+        let rows = local_binding(checked.program(), "work", "rows");
+        for (depth, expected) in [vec![owner, parts, rows], vec![owner, parts], vec![owner]]
+            .into_iter()
+            .enumerate()
+        {
+            assert_eq!(
+                facts.depths[depth]
+                    .origins
+                    .iter()
+                    .map(|origin| origin.binding)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            assert!(!facts.depths[depth].borrows_temporary);
+        }
+        assert_eq!(facts.release, ArgumentRelease::Deferred);
+    });
+    let checked = checked_high(&format!("{high}async def main():\n    await work()\n"));
+    let error =
+        crate::go_backend::source(&checked, &[], crate::project::BuildProfile::Dev).unwrap_err();
+    assert!(error.starts_with("line 1: Go backend:"), "{error}");
+    assert!(
+        error.contains("type view[view[view[str]]] is not supported"),
+        "{error}"
+    );
+}
+
+#[test]
+fn user_async_capture_earlier_argument_does_not_observe_later_content_mutation() {
+    let high = "async def read(part: view[str], ignored: unit) -> i64:\n    return len(part)\nasync def work(first: view[str], second: view[str]):\n    parts = [first]\n    print(await read(parts[0], append(parts, second)))\n";
+    let manual = "async fn read(part: view[str], ignored: unit) -> i64 { return len(part); }\nasync fn work(first: view[str], second: view[str]) -> unit {\nlet parts: List[view[str]] = [first];\nprint(await read(parts[0], append(parts, second)));\n}";
+    capture_entries(high, manual, |checked| {
+        let capture = checked.final_check_facts().functions["work"]
+            .values()
+            .next()
+            .unwrap();
+        let before = user_capture(&capture.arguments[0]);
+        assert_eq!(
+            before.depths[0]
+                .origins
+                .iter()
+                .map(|origin| origin.binding)
+                .collect::<Vec<_>>(),
+            vec![parameter_binding(checked.program(), "work", 0)]
+        );
+        assert_eq!(
+            user_capture(&capture.arguments[1]).release,
+            ArgumentRelease::NotRequired
+        );
+    });
+}
+
+#[test]
+fn user_async_capture_rechecks_replace_facts_with_final_loop_pass() {
+    let source = "async def read(part: view[str]) -> i64:\n    return len(part)\nasync def work(first: view[str], second: view[str], count: i64):\n    selected = first\n    for index in range(count):\n        print(await read(selected))\n        selected = second\n";
+    let manual = "async fn read(part: view[str]) -> i64 { return len(part); }\nasync fn work(first: view[str], second: view[str], count: i64) -> unit {\nlet selected: view[str] = first;\nfor index in range(count) { print(await read(selected)); selected = second; }\n}";
+    capture_entries(source, manual, |checked| {
+        let mut program = checked.program().clone();
+        let first = super::super::check_mode(&mut program, false).unwrap();
+        let second = super::super::check_mode(&mut program, false).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(&first, checked.final_check_facts());
+        assert_eq!(first.functions["work"].len(), 1);
+        let capture = first.functions["work"].values().next().unwrap();
+        let origins = &user_capture(&capture.arguments[0]).depths[0].origins;
+        assert_eq!(
+            origins
+                .iter()
+                .map(|origin| origin.binding)
+                .collect::<Vec<_>>(),
+            vec![
+                parameter_binding(&program, "work", 0),
+                parameter_binding(&program, "work", 1)
+            ]
+        );
+    });
+}
+
+#[test]
+fn user_async_capture_proven_absence_still_defers_view_containing_release() {
+    let high = "async def read(parts: List[view[str]], optional: Option[view[str]]):\n    print(len(parts))\nasync def work():\n    await read([], None)\n";
+    let manual = "async fn read(parts: List[view[str]], optional: Option[view[str]]) -> unit { print(len(parts)); }\nasync fn work() -> unit { await read([], None); }";
+    capture_entries(high, manual, |checked| {
+        let capture = checked.final_check_facts().functions["work"]
+            .values()
+            .next()
+            .unwrap();
+        for argument in &capture.arguments {
+            let facts = user_capture(argument);
+            assert!(facts.views_absent);
+            assert_eq!(facts.release, ArgumentRelease::Deferred);
+            assert!(!facts.depths.is_empty());
+            assert!(facts
+                .depths
+                .iter()
+                .all(|depth| depth.origins.is_empty() && !depth.borrows_temporary));
+        }
+        assert_eq!(
+            user_capture(&capture.arguments[0]).transfer,
+            ExprUseMode::Move
+        );
+        assert_eq!(
+            user_capture(&capture.arguments[1]).transfer,
+            ExprUseMode::Copy
+        );
+    });
+}
+
+#[test]
+fn user_async_capture_preserves_explicit_static_origin_and_standard_is_unplanned() {
+    let files = Files::new();
+    let path = files.write("main.nagi", "import std.http.server as http\nimport std.actor as actor\nasync def read(part: view[str]) -> i64:\n    return len(part)\nasync def main():\n    print(await read(http.Status.OK.phrase))\n    await sleep(0)\n    await actor.yield_now()\n");
+    let loaded = crate::source::load(&path, true).unwrap();
+    let provenance = loaded.provenance();
+    let checked = crate::check::finalize(loaded.program, Program::default(), provenance).unwrap();
+    let captures = checked
+        .final_check_facts()
+        .functions
+        .values()
+        .find(|captures| !captures.is_empty())
+        .unwrap();
+    assert_eq!(captures.len(), 3);
+    let entries: Vec<_> = captures.values().collect();
+    let facts = user_capture(&entries[0].arguments[0]);
+    assert_eq!(
+        facts.depths[0].origins,
+        vec![FlowOrigin {
+            binding: BindingId { line: 0, token: 0 },
+            fields: vec![],
+            owner_loan: false,
+            static_origin: true,
+        }]
+    );
+    assert!(!facts.depths[0].borrows_temporary);
+    assert!(!facts.views_absent);
+    assert_eq!(facts.release, ArgumentRelease::Deferred);
+    assert_eq!(entries[1].resolution, NameResolution::Builtin);
+    assert_eq!(
+        entries[1].arguments[0].capture,
+        ArgumentCaptureFacts::UnplannedStandard
+    );
+    assert_eq!(entries[2].resolution, NameResolution::Standard);
+    assert!(entries[2].arguments.is_empty());
+}
+
+#[test]
+fn user_async_capture_seal_rejects_each_new_fact_mutation() {
+    let mut program = crate::parser::parse("async def read(part: view[str]) -> i64:\n    return len(part)\nasync def work(part: view[str]) -> i64:\n    return await read(part)\n", true).unwrap();
+    let original = super::super::check_mode(&mut program, false).unwrap();
+    for mutation in 0..13 {
+        let mut facts = original.clone();
+        let argument = &mut facts
+            .functions
+            .get_mut("work")
+            .unwrap()
+            .values_mut()
+            .next()
+            .unwrap()
+            .arguments[0];
+        let ArgumentCaptureFacts::UserAsync(capture) = &mut argument.capture else {
+            panic!()
+        };
+        match mutation {
+            0 => capture.slot.call.start += 1,
+            1 => capture.slot.argument += 1,
+            2 => capture.transfer = ExprUseMode::Move,
+            3 => capture.depths[0].origins[0].binding.token += 1,
+            4 => capture.depths[0].origins[0].fields.push("wrong".into()),
+            5 => capture.depths[0].origins[0].owner_loan = true,
+            6 => capture.depths[0].origins[0].static_origin = true,
+            7 => capture.depths[0].borrows_temporary = true,
+            8 => capture.depths.push(capture.depths[0].clone()),
+            9 => capture.views_absent = true,
+            10 => capture.release = ArgumentRelease::NotRequired,
+            11 => capture.transfer = ExprUseMode::Borrow,
+            12 => argument.capture = ArgumentCaptureFacts::UnplannedStandard,
+            _ => unreachable!(),
+        }
+        let error = CheckedProgram::seal(
+            program.clone(),
+            SourceProvenance::user_low_unmapped(),
+            facts,
+        )
+        .err()
+        .unwrap();
+        assert_eq!(error.kind(), FailureKind::CompilerDefect);
+        assert!(
+            error.to_string().contains("Future capture facts"),
+            "{error}"
+        );
+    }
+}
+
 #[test]
 fn sqlite_literal_plan_rejects_missing_index_and_payload_tampering() {
     let fixture = Files::new();
@@ -477,6 +818,18 @@ fn sqlite_literal_plan_rejects_missing_index_and_payload_tampering() {
     let loaded = crate::source::load(&path, true).unwrap();
     let provenance = loaded.provenance();
     let checked = crate::check::finalize(loaded.program, Program::default(), provenance).unwrap();
+    let standard_arguments: Vec<_> = checked
+        .final_check_facts()
+        .functions
+        .values()
+        .flat_map(|captures| captures.values())
+        .filter(|capture| capture.resolution == NameResolution::Standard)
+        .flat_map(|capture| &capture.arguments)
+        .collect();
+    assert_eq!(standard_arguments.len(), 3);
+    assert!(standard_arguments
+        .iter()
+        .all(|argument| { argument.capture == ArgumentCaptureFacts::UnplannedStandard }));
     for mutation in 0..3 {
         let mut emission = EmissionPlan::build(checked.program(), checked.provenance()).unwrap();
         let sql = emission
