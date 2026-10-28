@@ -428,6 +428,15 @@ def inverse_workflow(source):
     if "\n  ci-plan:\n" in source:
         source = _LEVELS.inverse_workflow(source)
     source = _B1.inverse_failure_diagnostic(source)
+    # The guarded Busy regression is the fifteenth case in the exact SF03
+    # deadline inventory.  Restore the inherited fourteen-case workflow only
+    # after validating both original acceptance sites; missing, duplicated, or
+    # independently edited counts remain visible to the frozen history proof.
+    deadline_current = '"sf03-b1-csrf-deadline.log":15'
+    deadline_inherited = '"sf03-b1-csrf-deadline.log":14'
+    if source.count(deadline_current) != 2 or source.count(deadline_inherited) != 0:
+        raise ValueError('guarded Busy deadline inventory mismatch')
+    source = source.replace(deadline_current, deadline_inherited)
     source = _PARALLEL.inverse_workflow(source)
     source = _inverse_source_guard_dedup_base(source)
     for added, inherited, label in (

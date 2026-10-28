@@ -29,6 +29,7 @@ EXPECTED_NATIVE_REQUIRED = frozenset((
     "http_server::csrf_http::deadline_tests::body_selection_tests::exact_tie_and_one_nanosecond_neighbors_are_strict",
     "http_server::csrf_http::deadline_tests::body_selection_tests::unrepresentable_body_deadline_remains_rejected",
     "http_server::csrf_http::deadline_tests::pool_readiness_tests::cold_worker2_startup_spends_original_guarded_http_budget",
+    "http_server::csrf_http::deadline_tests::pool_readiness_tests::guarded_busy_mapper_returns_503_retires_owner_and_recovers_capacity",
     "http_server::csrf_http::deadline_tests::pool_readiness_tests::ready_worker2_setup_preserves_same_guarded_http_budget",
 ))
 
@@ -46,8 +47,8 @@ class MutationEvidenceTests(unittest.TestCase):
         self.addCleanup(kill.stop)
 
     def stock(self):
-        return ("running 14 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(EXPECTED_NATIVE_REQUIRED))
-                + "test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
+        return ("running 15 tests\n" + "".join("test " + name + " ... ok\n" for name in sorted(EXPECTED_NATIVE_REQUIRED))
+                + "test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 500 filtered out; finished in 1.00s\n")
 
     def auth_stock(self, required=None):
         required = guard.AUTH_REQUIRED if required is None else required
@@ -77,7 +78,7 @@ class MutationEvidenceTests(unittest.TestCase):
                          re.findall(r"#\[(?:tokio::)?test\]\s*(?:async )?fn ([a-z0-9_]+)", text))
         self.assertEqual(names, EXPECTED_NATIVE_REQUIRED)
         self.assertEqual(names, guard.REQUIRED)
-        self.assertEqual(len(names), 14)
+        self.assertEqual(len(names), 15)
 
     def test_auth_csrf_source_inventory_is_exact(self):
         source = ROOT / "runtime/src/auth/csrf/tests.rs"
@@ -150,7 +151,7 @@ class MutationEvidenceTests(unittest.TestCase):
         for raw, code in ((self.stock().replace(row, ""), 0), (self.stock() + row, 0),
                           (self.stock().replace(row, row.replace("... ok", "... ignored")), 0),
                           (self.stock().replace(row, row.replace(guard.BASE, "other::")), 0),
-                          (self.stock().replace("14 passed", "0 passed"), 0), (self.stock(), 101)):
+                          (self.stock().replace("15 passed", "0 passed"), 0), (self.stock(), 101)):
             with self.subTest(code=code):
                 self.assertFalse(guard.inventory(raw, code, guard.REQUIRED))
 

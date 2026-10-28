@@ -15,7 +15,7 @@ from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 ROOT = Path(__file__).resolve().parents[2]
 # Frozen pre-policy projection with the reviewed 9863a387 HTTP source identity.
-PRE_POLICY_WORKFLOW_SHA256 = '0a0bfbbd4fa46ee3ef302c7f17a34b619e42de1748ef20231c6e4192f88b5cc4'
+PRE_POLICY_WORKFLOW_SHA256 = 'e365fafd91d9b2ef5761cec1105bac59103d5e32ff878ef338781bd7034dafe3'
 
 
 def job(source, name):

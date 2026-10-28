@@ -24,7 +24,7 @@ import high_elif_projection
 ROOT = Path(__file__).resolve().parents[2]
 # Frozen Linux-only projection with the reviewed 9863a387 HTTP source identity;
 # Windows relocation must restore this workflow exactly.
-LINUX_WORKFLOW_SHA256 = '2e5f26def5402fb752b48670621d3ed49fe1916f634693b9435c6ce2374d260f'
+LINUX_WORKFLOW_SHA256 = '7d9a8da028fe100d34d2287f85812f24740ff719c2da6f8d8b3f88b3ca8bf1a1'
 COMMON = (
     'Check bounded SF01 diagnostic observer',
     'Check SF01 High, saved Low, handwritten Low and native policy contracts',

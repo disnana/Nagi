@@ -717,7 +717,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":14, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":15, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -779,7 +779,7 @@ jobs:
           # Unsupported resource fields remain explicitly unavailable.
           PYB1RESOURCE
           set +e
-          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests::pool_readiness_tests:: -- --show-output 2>&1 | python -c 'import sys
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib worker2_ -- --show-output 2>&1 | python -c 'import sys
           remaining=256*1024+1
           while True:
            chunk=sys.stdin.buffer.read(8192)
@@ -2059,7 +2059,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":14, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":15, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -2121,7 +2121,7 @@ jobs:
           # Unsupported resource fields remain explicitly unavailable.
           PYB1RESOURCE
           set +e
-          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests::pool_readiness_tests:: -- --show-output 2>&1 | python -c 'import sys
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib worker2_ -- --show-output 2>&1 | python -c 'import sys
           remaining=256*1024+1
           while True:
            chunk=sys.stdin.buffer.read(8192)

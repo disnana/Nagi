@@ -602,13 +602,17 @@ class BackportSourceTests(unittest.TestCase):
             'echo "RUNNER_TEMP must be an existing directory on Windows"', 1)
         moved_within_step = workflow.replace(
             first_anchor, run_open + f'          {first_command}\n' + _WINDOWS_TEMP_GUARD, 1)
-        wrong_count_site = workflow.replace(_CSRF_DEADLINE_CURRENT,
-                                             '"sf03-b1-csrf-deadline.log":13', 1)
-        missing_count_site = workflow.replace(_CSRF_DEADLINE_CURRENT,
+        # The raw workflow carries #183's fifteenth deadline case.  The shared
+        # projection validates and restores that addition before this helper
+        # handles its inherited fourteen-to-twelve residual.
+        raw_deadline_count = '"sf03-b1-csrf-deadline.log":15'
+        wrong_count_site = workflow.replace(raw_deadline_count,
+                                             '"sf03-b1-csrf-deadline.log":14', 1)
+        missing_count_site = workflow.replace(raw_deadline_count,
                                               _CSRF_DEADLINE_HISTORICAL, 1)
         duplicate_count_site = workflow.replace(
             '"sf04-html-core.log": 20,',
-            '"sf04-html-core.log": 20, "sf03-b1-csrf-deadline.log":14', 1)
+            '"sf04-html-core.log": 20, "sf03-b1-csrf-deadline.log":15', 1)
         for label, mutant in (
             ('missing guard', missing),
             ('duplicated guard', duplicated),
