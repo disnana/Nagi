@@ -18,7 +18,7 @@ class CoverageTests(unittest.TestCase):
         record, status = guard.coverage(self.raw(), 0)
         self.assertEqual(status, 0)
         self.assertEqual(record["status"], "passed")
-        self.assertEqual(record["required_count"], 17)
+        self.assertEqual(record["required_count"], 18)
 
     def test_missing_or_ignored_stage_fails(self):
         original = ("test " + guard.REQUIRED[0] + " ... ok\n").encode()

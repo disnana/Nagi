@@ -36,6 +36,7 @@ CASES = (
 ))
 POOL_READINESS_CASES = (
     "cold_worker2_startup_spends_original_guarded_http_budget",
+    "guarded_busy_mapper_returns_503_retires_owner_and_recovers_capacity",
     "ready_worker2_setup_preserves_same_guarded_http_budget",
 )
 REQUIRED = (frozenset(BASE + name for name in CASES)

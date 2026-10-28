@@ -14,7 +14,8 @@ import high_elif_projection
 from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
 ROOT = Path(__file__).resolve().parents[2]
-PRE_POLICY_WORKFLOW_SHA256 = '11aff8b893594832c7b6b6e4697ed6badbb5c5952dd268c2433db09b900e7d09'
+# Frozen pre-policy projection with the reviewed 9863a387 HTTP source identity.
+PRE_POLICY_WORKFLOW_SHA256 = 'e365fafd91d9b2ef5761cec1105bac59103d5e32ff878ef338781bd7034dafe3'
 
 
 def job(source, name):

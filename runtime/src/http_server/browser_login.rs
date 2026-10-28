@@ -382,8 +382,7 @@ where
             }
             Ok(Ok(PreparedCompletion::Terminal(response))) => finish(response, pool, owner),
             Ok(Ok(PreparedCompletion::MapperFailure(error))) => {
-                drop(error);
-                terminal(Status::INTERNAL_SERVER_ERROR, pool, owner)
+                terminal(mapper_failure_status(&error), pool, owner)
             }
             Ok(Err(_)) => terminal(Status::INTERNAL_SERVER_ERROR, pool, owner),
             Err(_) => {

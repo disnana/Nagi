@@ -225,6 +225,12 @@ class RequestSourceTests(unittest.TestCase):
     def test_u2_workflow_inverse_is_exact_and_keeps_unrelated_changes_visible(self):
         workflow = read('.github/workflows/ci.yml')
         self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(), BASE_WORKFLOW_SHA)
+        deadline = '"sf03-b1-csrf-deadline.log":15'
+        self.assertEqual(workflow.count(deadline), 2)
+        for replacement in ('', deadline + deadline, '"sf03-b1-csrf-deadline.log":14',
+                            '"sf03-b1-csrf-deadline.log":16'):
+            with self.subTest(deadline_replacement=replacement), self.assertRaises(ValueError):
+                projection.inverse_workflow(workflow.replace(deadline, replacement, 1))
         for line in projection.U2_NATIVE_LINES:
             for changed in (workflow.replace(line, '', 1), workflow.replace(line, line + line, 1)):
                 with self.assertRaises(ValueError):

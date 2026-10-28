@@ -2,6 +2,8 @@
 
 ## 未リリース / Unreleased
 
+- HTTP応答容量不足が既定error mapperでも容量不足になった場合、内部障害500へ変換せず、独立fallback枠から503を返します。他のmapper失敗の非公開500、既存認証・期限・応答上限を維持します。有限loopback過負荷、低速接続、異常切断、回復、actor/Supervisor補助検証の再現可能な証拠を追加します。
+- Preserve typed HTTP load shedding when both a handler response and its error mapper exhaust the ordinary response pool: return a bounded fallback 503 while keeping other mapper failures as opaque 500 responses. Add finite loopback-only overload, slow-connection, disconnect, recovery and actor/supervision evidence without claiming Internet DDoS or BEAM equivalence.
 - 関数・組み込み・標準APIの呼び出しで、全引数を`name=value`として宣言順に指定できるようにする。既存の位置引数とclass/enum構築を維持し、混在、重複、未知、不足、順序違いはbuild時に拒否する。checked frontendで既存の位置呼び出しへ正規化し、評価順・所有権検査・backend出力を変えない。
 - Allow function, builtin, and registered standard-API calls to name every argument in declaration order with `name=value`. Preserve positional calls and class/enum construction; reject mixed, duplicate, unknown, missing, and out-of-order arguments at build time. Normalize through the checked frontend so source-order evaluation, ownership checks, and backend lowering stay unchanged.
 - High構文にPythonと同じ`elif condition:`を追加し、既存の入れ子`else:` + `if`と同じ検査済み`if`へloweringします。Low構文と従来の`elif`識別子は維持し、VS Code / JetBrainsの補完・色・字下げも文脈に限定します。

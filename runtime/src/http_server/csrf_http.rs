@@ -598,8 +598,7 @@ pub(super) async fn dispatch_guarded_inner<S: Send + Sync + 'static>(
         }
         Ok(Ok(PreparedCompletion::Terminal(response))) => response,
         Ok(Ok(PreparedCompletion::MapperFailure(error))) => {
-            drop(error);
-            return terminal(&owner, Status::INTERNAL_SERVER_ERROR, head, true);
+            return terminal(&owner, mapper_failure_status(&error), head, true);
         }
         Ok(Err(_)) => return terminal(&owner, Status::INTERNAL_SERVER_ERROR, head, true),
         Err(_) => {
