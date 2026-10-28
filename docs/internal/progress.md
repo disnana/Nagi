@@ -1,5 +1,9 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-28: Go backendの統合候補と段階計画
+
+[0.3.0段階計画](go-backend-0.3-plan.md)を、0.2.2公開後の実装状況へ更新した。単一のRust製`nagic`、共有High/Low・checker、Rust既定、CLI > project > Rustのbackend選択、target別native資産とfail-closed診断を維持する。最小Go backend、3 OS必須gate、List/Range、明示move、payloadなしenum、共有conformance、private lifecycle、cold user async、callback identity、限定`view[str]`とsealed capture factsは統合候補まで進んだ。HTTP/DB/auth/actor/task/scope、一般borrowと実release planは未対応であり、main反映・本番対応・性能優位とは扱わない。細分化した段階はcommitとtest単位で保持し、review/mergeは統合branchの最終HEADで行う。
+
 ## 2026-10-27: Go user async / awaitのcold最小段階
 
 #188のprivate lifecycle kernel上で、共有checkerが受理したユーザー定義async関数と
