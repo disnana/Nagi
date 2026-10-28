@@ -7,10 +7,10 @@ from pathlib import Path
 import changes
 
 PLATFORMS = [
-    dict(os='ubuntu-latest', platform='linux-x86_64', executable='nagic', rust_host='x86_64-unknown-linux-gnu'),
-    dict(os='windows-latest', platform='windows-x86_64', executable='nagic.exe', rust_host='x86_64-pc-windows-msvc'),
-    dict(os='macos-15', platform='macos-arm64', executable='nagic', rust_host='aarch64-apple-darwin'),
-    dict(os='macos-15-intel', platform='macos-x86_64', executable='nagic', rust_host='x86_64-apple-darwin'),
+    dict(os='ubuntu-latest', platform='linux-x86_64', executable='nagic', rust_host='x86_64-unknown-linux-gnu', go_tests='32'),
+    dict(os='windows-latest', platform='windows-x86_64', executable='nagic.exe', rust_host='x86_64-pc-windows-msvc', go_tests='31'),
+    dict(os='macos-15', platform='macos-arm64', executable='nagic', rust_host='aarch64-apple-darwin', go_tests='32'),
+    dict(os='macos-15-intel', platform='macos-x86_64', executable='nagic', rust_host='x86_64-apple-darwin', go_tests='32'),
 ]
 # Only these reviewed front-end paths can use L1 native coverage. Everything
 # else, including checker/emitter/lowering and all runtime ownership/task/
@@ -26,15 +26,17 @@ def boolean(value):
     return value == 'true'
 
 
-def expected(level, full, package):
+def expected(level, full, package, go):
     if level not in ('1', '2', '3'):
         raise ValueError('invalid CI level')
     full_selected = boolean(full)
     package_selected = boolean(package)
+    go_selected = boolean(go)
     nagi = full_selected or package_selected
     comprehensive = level != '1' and nagi
     return dict(level=level, critical_checks=str(level == '1' and full_selected).lower(),
                 comprehensive_checks=str(comprehensive).lower(), package_checks=str(comprehensive).lower(),
+                go_checks=str(go_selected or package_selected).lower(),
                 matrix=json.dumps({'include': PLATFORMS if level == '3' else PLATFORMS[:3]}, separators=(',', ':')))
 
 
@@ -47,8 +49,9 @@ def ordinary(path):
     return path in ROUTINE_RUST
 
 
-def select(event, paths, full, release, requested='default'):
+def select(event, paths, full, go, release, requested='default'):
     boolean(full)
+    boolean(go)
     for component in ('nagi', 'vscode', 'jetbrains'):
         boolean(release.get('package_' + component))
         boolean(release.get('release_' + component))
@@ -61,7 +64,7 @@ def select(event, paths, full, release, requested='default'):
         level = '1'
     else:
         level = '2'  # missing range, unknown/control-plane/dependency path, main, schedule, unfamiliar event
-    return expected(level, full, release['package_nagi'])
+    return expected(level, full, release['package_nagi'], go)
 
 
 def complete_paths(base, head):
@@ -88,11 +91,12 @@ def validation_errors(needs):
         failures.append('ci-plan: ' + str(job.get('result', 'missing')))
     selected = job.get('outputs', {})
     full = needs.get('changes', {}).get('outputs', {}).get('full_checks')
+    go = needs.get('changes', {}).get('outputs', {}).get('go_checks')
     release = needs.get('release-plan', {}).get('outputs', {})
     try:
         for component in ('nagi', 'vscode', 'jetbrains'):
             boolean(release.get('release_' + component))
-        wanted = expected(selected.get('level'), full, release.get('package_nagi'))
+        wanted = expected(selected.get('level'), full, release.get('package_nagi'), go)
         if any(boolean(release['release_' + name]) for name in ('nagi', 'vscode', 'jetbrains')) and wanted['level'] != '3':
             raise ValueError('formal release requires level 3')
         for key, value in wanted.items():
@@ -106,7 +110,8 @@ def validation_errors(needs):
 def main():
     release = json.loads(os.environ['CI_RELEASE_PLAN'])
     result = select(os.environ['CI_EVENT'], complete_paths(os.environ.get('CI_BASE', ''), os.environ['CI_HEAD']),
-                    os.environ['CI_FULL'], release, os.environ.get('CI_REQUESTED', 'default'))
+                    os.environ['CI_FULL'], os.environ['CI_GO'], release,
+                    os.environ.get('CI_REQUESTED', 'default'))
     with Path(os.environ['GITHUB_OUTPUT']).open('a', encoding='utf-8') as output:
         for key, value in result.items():
             output.write(f'{key}={value}\n')

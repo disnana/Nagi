@@ -18,6 +18,7 @@ EDITS = [(None, "  workflow_dispatch:\n    inputs:\n      level:\n        descri
 
 def inverse_workflow(source):
     source = _sibling('high_elif_projection').inverse_workflow(source)
+    source = _sibling('go_backend_projection').inverse_workflow(source)
     source = _sibling('browser_failure_projection').inverse_workflow(source)
     source = _sibling('sf06_failure_projection').inverse_workflow(source)
     source = _sibling('parallel_cache_projection').inverse_workflow(source)

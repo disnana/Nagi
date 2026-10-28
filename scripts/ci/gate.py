@@ -26,6 +26,14 @@ def errors(needs: dict) -> list[str]:
             actual = needs.get(job, {}).get("result", "missing")
             if actual != expected:
                 failures.append(f"{job}: {actual}, expected {expected}")
+    go = selection.get("go_checks")
+    if go not in ("true", "false"):
+        failures.append("go-backend: missing or invalid check plan")
+    else:
+        expected = "success" if go == "true" else "skipped"
+        actual = needs.get("go-backend", {}).get("result", "missing")
+        if actual != expected:
+            failures.append(f"go-backend: {actual}, expected {expected}")
     jetbrains = needs.get("changes", {}).get("outputs", {}).get("jetbrains_checks")
     if jetbrains not in ("true", "false"):
         failures.append("jetbrains: missing or invalid check plan")

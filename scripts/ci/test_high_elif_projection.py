@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 
 import high_elif_projection as projection
+import go_backend_projection
 import levels_projection
 import sf07_request_projection as history
 from sf07_projection_contract import BASE_WORKFLOW_SHA256
@@ -20,7 +21,8 @@ class HighElifProjectionTests(unittest.TestCase):
 
     def test_exact_command_inverse_retains_raw_and_frozen_history(self):
         restored = projection.inverse_workflow(self.source)
-        self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(), BEFORE_ELIF_WORKFLOW_SHA256)
+        inherited = go_backend_projection.inverse_workflow(restored)
+        self.assertEqual(hashlib.sha256(inherited.encode()).hexdigest(), BEFORE_ELIF_WORKFLOW_SHA256)
         self.assertEqual(restored.count(projection.ORIGINAL_STEP), 1)
         self.assertNotIn("--test high_elif", restored)
         self.assertEqual(restored.replace(projection.ORIGINAL_STEP, projection.ADDED_STEP, 1), self.source)
@@ -64,7 +66,8 @@ class HighElifProjectionTests(unittest.TestCase):
         mutant = self.source.replace(before, after, 1)
         restored = projection.inverse_workflow(mutant)
         self.assertIn(after, restored)
-        self.assertNotEqual(hashlib.sha256(restored.encode()).hexdigest(), BEFORE_ELIF_WORKFLOW_SHA256)
+        inherited = go_backend_projection.inverse_workflow(restored)
+        self.assertNotEqual(hashlib.sha256(inherited.encode()).hexdigest(), BEFORE_ELIF_WORKFLOW_SHA256)
         try:
             inherited = history.inverse_workflow(mutant)
         except ValueError:

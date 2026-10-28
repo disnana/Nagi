@@ -17,7 +17,8 @@
 1. [準備と最初の実行](getting-started.md)でcompilerを用意し、Hello Worldを動かす。
 2. [コードを書きながら学ぶ](language-guide.md)で値・関数・配列・borrow・Resultを試す。
 3. [最初の小さなCLIアプリ](first-app.md)で、入力・型付きの失敗・境界値の手動確認を一続きで行う。
-4. [タスク管理APIの通し教材](task-api-tutorial.md)でHTTP、JSON、SQLite、テスト、release buildを一続きで試す。
+4. [Resultとtryの小さな入門](../test-nagi-code/result-try-tutorial/README.md)でResultの伝播とmatchによる回復を確認する。
+5. [タスク管理APIの通し教材](task-api-tutorial.md)でHTTP、JSON、SQLite、テスト、release buildを一続きで試す。
 
 [VS Codeの使い方](editor.md)と[JetBrains版の導入・Release ZIPの選び方](../editors/jetbrains-nagi/README.md)も確認できます。
 
