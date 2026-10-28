@@ -157,7 +157,7 @@
     "runtime/src/sqlite/session.rs": 1148,
     "runtime/src/sqlite/session_native_finish_tests.rs": 307,
     "runtime/src/sqlite/tests.rs": 686,
-    "runtime/src/task.rs": 1367,
+    "runtime/src/task.rs": 1370,
     "runtime/tests/http_client_operation_public_api.rs": 198
   },
   "schema": 1,
