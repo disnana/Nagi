@@ -8,7 +8,7 @@
 
 ## 今すぐ探す
 
-[開発・デバッグの早見表](developer-workflow.md) · [特徴と他言語との比較](comparison.md) · [devビルド](development-builds.md) · [アプリCI](user-ci.md) · [AI向けDocs・Skill](../ai/README.md)
+[何を作れるか](use-cases.md) · [タスク管理APIの通し教材](task-api-tutorial.md) · [FastAPI・Quartとの具体比較](task-api-comparison.md) · [開発・デバッグの早見表](developer-workflow.md) · [特徴と他言語との比較](comparison.md) · [AI向けDocs・Skill](../ai/README.md)
 
 日々のコマンド、症状別の修正先、APIの入口を早見表にまとめています。0.2.2の改善は開発中として区別します。
 
@@ -17,7 +17,8 @@
 1. [準備と最初の実行](getting-started.md)でcompilerを用意し、Hello Worldを動かす。
 2. [コードを書きながら学ぶ](language-guide.md)で値・関数・配列・borrow・Resultを試す。
 3. [最初の小さなCLIアプリ](first-app.md)で、入力・型付きの失敗・境界値の手動確認を一続きで行う。
-4. [HTTP](http.md)でAPIを作り、[SQLite](database.md)でデータを保存する。
+4. [Resultとtryの小さな入門](../test-nagi-code/result-try-tutorial/README.md)でResultの伝播とmatchによる回復を確認する。
+5. [タスク管理APIの通し教材](task-api-tutorial.md)でHTTP、JSON、SQLite、テスト、release buildを一続きで試す。
 
 [VS Codeの使い方](editor.md)と[JetBrains版の導入・Release ZIPの選び方](../editors/jetbrains-nagi/README.md)も確認できます。
 
@@ -29,7 +30,7 @@
 |---|---|---|---|
 | 値、型注釈、代入・再代入 | [入門 #1：値と型](language-guide.md#1-値と型)で数値を更新し`11`を表示 | 型は最初の値から決まり、別の型へは再代入できない | [型](types.md)、[値と変数](syntax.md#値と変数) |
 | 関数、引数、return、関数値 | [入門 #2：関数を定義する](language-guide.md#2-関数を定義する)で`42`を返す | 引数と戻り値の型を書き、実行文は`main`から呼ぶ | [関数構文](syntax.md#関数とreturn)、[関数型](types.md#関数を値として渡す) |
-| if、match、for、while、演算子 | [入門 #3：配列・class・分岐・繰り返し](language-guide.md#3-配列class分岐繰り返し)で`OK`と反復結果を表示 | bool以外を条件にできない。`break`、`continue`、`elif`は未対応 | [分岐・loop・演算子](syntax.md#分岐とループ)、[match](error-handling.md#成功と失敗を分ける) |
+| if、match、for、while、演算子 | [入門 #3：配列・class・分岐・繰り返し](language-guide.md#3-配列class分岐繰り返し)で`OK`と反復結果を表示 | 条件はbool。`elif`は開発版Highで追加（未リリース）。`break`、`continue`は未対応 | [分岐・loop・演算子](syntax.md#分岐とループ)、[match](error-handling.md#成功と失敗を分ける) |
 | List、class、field、enum | [入門 #3：配列・class・分岐・繰り返し](language-guide.md#3-配列class分岐繰り返し)と[class例](classes.md)で合計・field値を表示 | Listは要素型を揃える。classは名前付きfieldで作り、method・継承・field再代入は未対応 | [型とenum](types.md#enumで種類を分ける)、[class](classes.md) |
 | nullable `T?` / `Option[T]` | [値がない場合の例](error-handling.md#値がない場合を扱う)で`Some`と`None`を処理 | 両方を`match`する。`unwrap`や`if value is not None`の型絞り込みはない | [型](types.md)、[match構文](syntax.md#resultasyncscope) |
 | `Result[T, E]`、`try`、`match`、独自Error | [最初のCLI](first-app.md)で入力失敗を伝え、[入門 #5：失敗をResultで返す](language-guide.md#5-失敗する処理はresultで返す)で回復例を読む | `try`はErrを呼出元へ返す。局所回復には`match`でOk/Err両方を書く | [失敗の種類と例](error-handling.md)、[組み込み関数](builtins.md#変換成功失敗) |
@@ -61,6 +62,8 @@
 | やりたいこと | ページ |
 |---|---|
 | DBなしのHTTP、ヘッダー、応答status | [HTTP](http.md)、[APIリファレンス](http-server.md) |
+| JSON APIを作りSQLiteへ保存する | [タスク管理APIの通し教材](task-api-tutorial.md) |
+| Nagi・FastAPI・Quartで同じAPIを比べる | [具体的な比較](task-api-comparison.md) |
 | JSONを読み書きする | [JSON](json.md) |
 | 旧SQLite APIとSQLの事前検査 | [SQLite](database.md)、[SQLの事前検査](sql-check.md) |
 | 型付きparameters・Pool・transactionを使う | [SQLite PoolとTransaction](sqlite-pool.md) |

@@ -722,7 +722,8 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             match n.as_str() {
                 "print" => format!("println!(\"{{}}\", {})", string_or_value(&a[0], types)),
                 "write" => format!("print!(\"{{}}\", {})", string_or_value(&a[0], types)),
-                "read_line" => "::nagi_runtime::read_line()".into(),
+                "read_line" if a.is_empty() => "::nagi_runtime::read_line()".into(),
+                "read_line" => format!("::nagi_runtime::read_line_prompt({})", string_arg(&a[0], types)),
                 "include_text" => format!("include_str!({}).to_owned()", string_arg(&a[0], types)),
                 "assert_true" => format!("assert!({})", args[0]),
                 "view" => {
@@ -1887,6 +1888,8 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     #[cfg(nagi_editor_stage_diag)]
     crate::editor_stage_diag::mark(1);
     let project_manifest = options.manifest_path;
+    let backend = options.backend;
+    let go_files = options.go_files;
     let profile = options.profile;
     let runtime_profile = options.runtime_profile;
     let mut build_stats = options.build_stats.then(crate::build_analysis::Stats::new);
@@ -2016,7 +2019,8 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     p.functions = resolution.functions[..nf].to_vec();
     // Resolve once before any projection so known runtime sources receive the
     // same pre-lock and post-lock alias protection as explicit source inputs.
-    let runtime_root = if matches!(cmd, "build" | "run") {
+    let runtime_root = if backend == crate::project::Backend::Rust && matches!(cmd, "build" | "run")
+    {
         Some(crate::installation::root()?)
     } else {
         None
@@ -2025,7 +2029,6 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let mut inputs: Vec<_> = sources
         .files()
         .map(|(path, _, _)| path.to_path_buf())
-        .chain(rust_file.iter().cloned())
         .chain(project_manifest.iter().cloned())
         .chain(sql_schema.iter().cloned())
         .chain(
@@ -2040,20 +2043,26 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         )
         .chain(crate::output::assets(&resolution))
         .chain(crate::output::assets(&all))
-        // These explicit roots are known; discovering arbitrary Rust/include or
-        // Cargo build-script inputs remains Cargo's responsibility.
-        .chain(rust_deps.values().filter_map(|dependency| {
-            if let crate::project::RustDependency::Detailed(table) = dependency {
-                table
-                    .path
-                    .as_ref()
-                    .map(|root| root.join("Cargo.toml"))
-                    .filter(|manifest| manifest.is_file())
-            } else {
-                None
-            }
-        }))
         .collect();
+    match backend {
+        crate::project::Backend::Rust => {
+            inputs.extend(rust_file.iter().cloned());
+            // These explicit roots are known; discovering arbitrary Rust/include or
+            // Cargo build-script inputs remains Cargo's responsibility.
+            inputs.extend(rust_deps.values().filter_map(|dependency| {
+                if let crate::project::RustDependency::Detailed(table) = dependency {
+                    table
+                        .path
+                        .as_ref()
+                        .map(|root| root.join("Cargo.toml"))
+                        .filter(|manifest| manifest.is_file())
+                } else {
+                    None
+                }
+            }));
+        }
+        crate::project::Backend::Go => inputs.extend(go_files.iter().cloned()),
+    }
     inputs.sort();
     inputs.dedup();
     let mut outputs = Vec::new();
@@ -2065,15 +2074,27 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
             outputs.push(out.join("cost-report.json"));
         }
         if matches!(cmd, "build" | "run") {
-            outputs.extend([
-                out.join("src/main.rs"),
-                out.join("Cargo.toml"),
-                out.join("Cargo.lock"),
-            ]);
+            match backend {
+                crate::project::Backend::Rust => outputs.extend([
+                    out.join("src/main.rs"),
+                    out.join("Cargo.toml"),
+                    out.join("Cargo.lock"),
+                ]),
+                crate::project::Backend::Go => {
+                    outputs.extend([out.join("go/main.go"), out.join("go/go.mod")])
+                }
+            }
         }
         if !outputs.is_empty() {
             if let Ok(directory) = fs::canonicalize(&out) {
-                outputs.push(crate::generation::latest_path(&path, &directory)?);
+                outputs.push(match backend {
+                    crate::project::Backend::Rust => {
+                        crate::generation::latest_path(&path, &directory)?
+                    }
+                    crate::project::Backend::Go => {
+                        crate::go_backend::latest_path(&path, &directory)?
+                    }
+                });
             }
         }
         crate::output::protect(&outputs, &inputs, "Generated")?;
@@ -2084,7 +2105,14 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         } else {
             let lock = crate::generation::OutputLock::acquire(&out)?;
             if !outputs.is_empty() {
-                let latest = crate::generation::latest_path(&path, &lock.directory)?;
+                let latest = match backend {
+                    crate::project::Backend::Rust => {
+                        crate::generation::latest_path(&path, &lock.directory)?
+                    }
+                    crate::project::Backend::Go => {
+                        crate::go_backend::latest_path(&path, &lock.directory)?
+                    }
+                };
                 if !outputs.contains(&latest) {
                     outputs.push(latest);
                 }
@@ -2140,6 +2168,21 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     let checked = crate::check::finalize(p, all, sources.provenance())
         .map_err(|e| partial_projection(crate::diagnostics::finalize_message(&e, &sources)))?;
     let p = checked.program();
+    if backend == crate::project::Backend::Go {
+        crate::go_backend::source(&checked, &go_files, profile)
+            .map_err(|error| partial_projection(sources.diagnostic(&error)))?;
+        if rust_file.is_some() || !rust_deps.is_empty() {
+            let mut assets = Vec::new();
+            if let Some(path) = &rust_file {
+                assets.push(path.display().to_string());
+            }
+            assets.extend(rust_deps.keys().map(|name| format!("dependency {name}")));
+            return Err(partial_projection(format!(
+                "selected backend go cannot use Rust native assets: {}. Select --backend rust or remove the Rust assets",
+                assets.join(", ")
+            )));
+        }
+    }
     if let Some(schema) = sql_schema {
         crate::sql_check::check(p, &sources, &schema).map_err(partial_projection)?;
     }
@@ -2231,6 +2274,70 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
     }
     let temporary_run = cmd == "run"
         && std::env::var_os("NAGI_RUN_RETENTION").is_some_and(|value| value == "latest");
+    if backend == crate::project::Backend::Go {
+        if temporary_run {
+            return Err(
+                "managed temporary runs are not supported by the initial Go backend".into(),
+            );
+        }
+        let generated_directory = &output_lock
+            .as_ref()
+            .expect("Go build owns output lock")
+            .directory;
+        let canonical_source = fs::canonicalize(&path).map_err(|error| error.to_string())?;
+        let low_snapshot = low_snapshot
+            .as_deref()
+            .or_else(|| {
+                sources
+                    .files()
+                    .find(|(file, _, _)| *file == canonical_source)
+                    .map(|(_, text, _)| text)
+            })
+            .ok_or("Cannot find read source for Go generation snapshot")?;
+        let result = crate::go_backend::build(
+            &checked,
+            &path,
+            generated_directory,
+            &sources,
+            low_snapshot,
+            &inputs,
+            &go_files,
+            profile,
+        )
+        .map_err(partial_projection)?;
+        let binary = result.binary;
+        drop(output_lock);
+        if build_stats.is_some() {
+            eprintln!(
+                "nagi-build-stats: {}",
+                serde_json::json!({
+                    "schema_version":1,
+                    "backend":"go",
+                    "profile":profile.as_str(),
+                    "checks":"full",
+                    "go_ms":result.go_ms,
+                    "publish_ms":result.publish_ms,
+                    "total_ms":started.elapsed().as_secs_f64() * 1000.0,
+                    "toolchain":result.toolchain,
+                    "receipt":binary.parent().unwrap().join("build-receipt.json").to_string_lossy(),
+                })
+            );
+        }
+        eprintln!("native: {}", binary.display());
+        if cmd == "run" {
+            let mut process = Command::new(&binary);
+            if let Some(root) = options.project_root {
+                process.current_dir(root);
+            }
+            let status = process
+                .status()
+                .map_err(|error| format!("Cannot run Go backend executable: {error}"))?;
+            if !status.success() {
+                return Err(format!("program exited: {status}"));
+            }
+        }
+        return Ok(());
+    }
     let binary = (|| -> Result<PathBuf, String> {
     let root = runtime_root.as_ref().expect("build/run resolved runtime before projection");
     fs::create_dir_all(out.join("src")).map_err(|e| e.to_string())?;

@@ -10,7 +10,7 @@ The name comes from the Japanese word *nagi* (凪), meaning calm seas: the surfa
 
 ## Learn the language
 
-Start with [setup](docs/en/getting-started.md), the [language guide](docs/en/language-guide.md), [your first CLI app](docs/en/first-app.md), and then [HTTP](docs/en/http.md). Use the [language feature index](docs/en/README.md#language-feature-index) and [reference index](docs/en/README.md) to look up features and APIs, or read the [sample projects](docs/en/library-examples.md).
+Start with [setup](docs/en/getting-started.md), the [language guide](docs/en/language-guide.md), and [your first CLI app](docs/en/first-app.md). To start from something you want to build, use the [use-case guide](docs/en/use-cases.md) and [end-to-end task API tutorial](docs/en/task-api-tutorial.md). Use the [language feature index](docs/en/README.md#language-feature-index) and [reference index](docs/en/README.md) to look up features and APIs, or read the [sample projects](docs/en/library-examples.md).
 
 The [official website](https://nagi.disnana.com/en/) includes the introduction and English Docs. See [purpose and current scope](docs/en/introduction.md), [design decisions and rationale](DESIGN.en.md), and the [development priorities](docs/en/roadmap.md).
 

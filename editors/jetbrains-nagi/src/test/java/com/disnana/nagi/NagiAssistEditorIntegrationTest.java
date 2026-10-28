@@ -90,6 +90,87 @@ public class NagiAssistEditorIntegrationTest extends BasePlatformTestCase {
                 info.getDescription() != null && info.getDescription().contains(diagnostic.message())));
     }
 
+    public void testAllIntrinsicCandidatesReachTheRegisteredHighLowLookup() throws Exception {
+        String[] expected = ("print write read_line include_text view copy share clone_shared len range sleep "
+                + "json_decode json_encode ok some error not_found internal_error fail error_kind error_message "
+                + "assert_true parse_i64 parse_f64 make_ints actor_demo actor_pair_demo queue_demo task_demo cpu_sum "
+                + "i64 i32 uuid_parse uuid_format append env slice bench_i64 bench_f64 bench_scalar clock_ns size_of supervisor_demo").split(" ");
+        for (boolean low : new boolean[] { false, true }) {
+            String text = low ? "fn inspect() {\n    \n}\n" : "def inspect():\n    \n";
+            open(low ? "catalog.low" : "catalog.nagi", text);
+            var file = myFixture.getFile();
+            var editor = myFixture.getEditor();
+            editor.getCaretModel().moveToOffset(text.indexOf("    ") + 4);
+            var service = getProject().getService(NagiAssistService.class);
+            service.requestCompletion(file, editor);
+            waitFor(() -> service.fresh(file, editor) != null);
+            var variants = myFixture.completeBasic();
+            assertNotNull(variants);
+            for (String name : expected) {
+                var item = java.util.Arrays.stream(variants).filter(candidate -> candidate.getLookupString().equals(name))
+                        .findFirst().orElse(null);
+                assertNotNull((low ? "Low " : "High ") + name, item);
+                var presentation = new com.intellij.codeInsight.lookup.LookupElementPresentation();
+                item.renderElement(presentation);
+                assertNotNull(name, presentation.getTypeText());
+                assertTrue(name, presentation.getTypeText().contains("->"));
+            }
+            for (String name : new String[] { "html", "serve", "db_open", "db_query" }) {
+                assertFalse(name, java.util.Arrays.stream(variants).anyMatch(item -> item.getLookupString().equals(name)));
+            }
+            if (myFixture.getLookup() != null) myFixture.getLookup().hideLookup(true);
+        }
+    }
+
+    public void testReadLineCompletionUsesCompilerSignatureAndExistingCallInsertionInHighAndLow() throws Exception {
+        var smartKeys = com.intellij.codeInsight.CodeInsightSettings.getInstance();
+        boolean previous = smartKeys.AUTOINSERT_PAIR_BRACKET;
+        try {
+            smartKeys.AUTOINSERT_PAIR_BRACKET = true;
+            for (boolean low : new boolean[] { false, true }) {
+                String text = low
+                        ? "fn inspect() -> Result[str, Error] { let text = try read_li; return ok(text); }\n"
+                        : "def inspect() -> Result[str, Error]:\n    text = try read_li\n    return ok(text)\n";
+                open(low ? "input.low" : "input.nagi", text);
+                var file = myFixture.getFile();
+                var editor = myFixture.getEditor();
+                editor.getCaretModel().moveToOffset(text.indexOf("read_li") + "read_li".length());
+                var service = getProject().getService(NagiAssistService.class);
+                service.requestCompletion(file, editor);
+                waitFor(() -> service.fresh(file, editor) != null);
+                var variants = myFixture.completeBasic();
+                assertNotNull(variants);
+                var candidate = java.util.Arrays.stream(variants)
+                        .filter(item -> item.getLookupString().equals("read_line")).findFirst().orElse(null);
+                assertNotNull(candidate);
+                var presentation = new com.intellij.codeInsight.lookup.LookupElementPresentation();
+                candidate.renderElement(presentation);
+                assertEquals("read_line() -> Result[str, Error]; read_line(prompt: str | view[str]) -> Result[str, Error]", presentation.getTypeText());
+                assertNotNull(myFixture.getLookup());
+                myFixture.getLookup().setCurrentItem(candidate);
+                myFixture.finishLookup('(');
+                assertEquals(text.replace("read_li", "read_line()"), editor.getDocument().getText());
+
+                PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+                service.requestBaseline(file, editor);
+                waitFor(() -> service.fresh(file, editor) != null);
+                assertTrue(service.fresh(file).response().frontendAccepted());
+                int start = editor.getDocument().getText().indexOf("read_line()");
+                com.intellij.openapi.command.WriteCommandAction.runWriteCommandAction(getProject(),
+                        () -> editor.getDocument().insertString(start + "read_line(".length(), "\"名前: \""));
+                PsiDocumentManager.getInstance(getProject()).commitAllDocuments();
+                service.requestBaseline(file, editor);
+                waitFor(() -> service.fresh(file, editor) != null);
+                assertTrue(service.fresh(file).response().frontendAccepted());
+                var callee = file.findElementAt(file.getText().indexOf("read_line"));
+                // Intrinsic signatures are completion metadata. The protocol
+                // supplies no definition target for parameter info or docs.
+                assertNull(service.functionDefinition(file, callee));
+                assertNull(new NagiDocumentationProvider().generateDoc(callee, callee));
+            }
+        } finally { smartKeys.AUTOINSERT_PAIR_BRACKET = previous; }
+    }
+
     /** Run against both the matching compiler and published 0.2.1 (NAGI_TEST_COMPILER). */
     public void testPointFactsReturnAfterMalformedTypingAtTheFinalUnindentedBlankLine() throws Exception {
         open("point.nagi", "def main():\n    print(1)\n");

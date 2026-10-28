@@ -19,6 +19,7 @@ REQUIRED = (
     "http_server::browser_login::stage_tests::consumed_prepare_non_yielding_200_late_ready_returns_504",
     "http_server::browser_login::stage_tests::committed_issue_live_200_delivers_auth_cookie_once",
     "http_server::browser_login::stage_tests::committed_issue_handler_err_1000_returns_500_without_cookie",
+    "http_server::browser_login::stage_tests::committed_issue_busy_mapper_returns_503_and_deletes_consumed_cookie",
     "http_server::browser_login::stage_tests::committed_issue_handler_panic_1000_returns_500_without_cookie",
     "http_server::browser_login::stage_tests::committed_issue_handler_pending_200_returns_504_and_drops_once",
     "auth::session::http_bridge::delivery_tests::real_commit_survives_dropped_intent_mapper_and_panic_without_cookie",

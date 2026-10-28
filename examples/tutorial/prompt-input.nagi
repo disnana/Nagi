@@ -1,0 +1,5 @@
+# 開発版向け。公開済み0.2.1は write("名前: ") と read_line() を使う。
+def main() -> Result[unit, Error]:
+    name = try read_line("名前: ")
+    print("こんにちは")
+    return ok(print(name))

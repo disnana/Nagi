@@ -15,9 +15,11 @@ SPEC.loader.exec_module(guard)
 
 class CoverageTests(unittest.TestCase):
     def test_original_seventeen_stages_remain_exact_and_new_controls_are_additive(self):
-        self.assertEqual(hashlib.sha256('\n'.join(guard.REQUIRED[:17]).encode()).hexdigest(),
+        original = tuple(name for name in guard.REQUIRED if name !=
+                         "http_server::browser_login::stage_tests::committed_issue_busy_mapper_returns_503_and_deletes_consumed_cookie")
+        self.assertEqual(hashlib.sha256('\n'.join(original[:17]).encode()).hexdigest(),
                          'a4e5689b1e96e1c0712819c5b05c21c2d104085b05f22b6eb8c87b2aadf82e89')
-        self.assertEqual(len(guard.REQUIRED), 22)
+        self.assertEqual(len(guard.REQUIRED), 23)
     def test_successful_expected_504_controls_use_broad_mode_without_publishing_raw(self):
         from test_session_deadline_diagnostic import BrowserHandlerDiagnosticTests as fixture
         path = SOURCE.with_name('auth_stage_diagnostic.py')
@@ -50,7 +52,7 @@ class CoverageTests(unittest.TestCase):
         record, status = guard.coverage(self.raw(), 0)
         self.assertEqual(status, 0)
         self.assertEqual(record["status"], "passed")
-        self.assertEqual(record["required_count"], 22)
+        self.assertEqual(record["required_count"], 23)
 
     def test_missing_or_ignored_stage_fails(self):
         original = ("test " + guard.REQUIRED[0] + " ... ok\n").encode()

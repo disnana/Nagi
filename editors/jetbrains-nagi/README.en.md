@@ -6,6 +6,10 @@ Nagi support for IntelliJ IDEA and PyCharm. Version 0.1.6 is published on [GitHu
 
 The plugin version is managed in `build.gradle.kts`. The published 0.1.2 release includes a common ZIP for both IDEs; check Releases for newer available assets. For Marketplace installs, check the existing listing's Versions view for available versions and compatible IDE builds. Install it directly from [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi) in a compatible IDE, or download one common ZIP for both IDEs from [GitHub Releases](https://github.com/disnana/Nagi/releases).
 
+## In development: keyword and type assistance
+
+Keyword lookup, including `try`, and builtin type hints in annotations work without the compiler. Class and enum declaration names receive type coloring while editing. The expanded builtin function catalog requires the matching development compiler. These additions are not part of published 0.1.6.
+
 ## 0.1.6 editing changes
 
 The custom gesture that reduces indentation on consecutive Enter presses has been removed. Repeated Enter keeps the current blank-line indentation. Manual Backspace and Shift+Tab, ordinary block indentation and delimiter continuation remain available. This change is not in the published 0.1.5 ZIP.
@@ -98,6 +102,8 @@ The `jetbrains-v0.1.1` release contains `nagi-jetbrains-IC-0.1.1.zip` for IDEA a
 To install a GitHub Release ZIP, select it in **Settings → Plugins → ⚙ → Install Plugin from Disk**, then restart the IDE. A PR build is available as the `release-jetbrains` artifact only after all IDEA/PyCharm stable/EAP checks pass in **Actions → Nagi checks**. For a local build, use the ZIP in `build/distributions/`.
 
 Set the compiler executable in **Settings → Languages & Frameworks → Nagi**. An empty value uses `nagic` from `PATH`. Relative paths resolve from the IDE project root.
+
+The next plugin version under development can color matching `()` and `[]` pairs (`{}` in Low too) by nesting depth when **Color matching brackets by nesting depth** is enabled on the same page. This feature is not included in the published 0.1.6 release and is disabled by default. Customize all six depth colors under **Settings → Editor → Color Scheme → Nagi**. Brackets in strings or comments and unmatched brackets keep their normal syntax color.
 
 Open a Nagi file and choose **Nagi: Check** or **Nagi: Run** in its context menu or the Tools menu. These actions save open files before execution. The compiler does not run in untrusted projects.
 

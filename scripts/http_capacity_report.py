@@ -21,7 +21,8 @@ def metrics(value: dict) -> dict:
     requests = value["requests"]
     assert requests > 0, "Empty load result"
     assert sum(value["status_codes"].values()) == requests, "Status counts do not match requests"
-    assert sum(value["buckets"].values()) == requests, "Histogram does not match requests"
+    if "buckets" in value:
+        assert sum(value["buckets"].values()) == requests, "Histogram does not match requests"
     successes = value["status_codes"].get("200", 0)
     return {"requests": requests, "non_200_or_transport_errors": requests - successes,
             "dispatched_rps": value["rate"], "successful_rps": value["throughput"],
@@ -32,8 +33,16 @@ def metrics(value: dict) -> dict:
 
 
 def windows(reports: list[dict]) -> list[dict]:
-    """Difference cumulative reports; latency estimates are histogram bounds."""
+    """Difference cumulative counts, retaining histogram bounds when present.
+
+    Vegeta v12.13 JSON reports no longer include the optional histogram map.
+    New captures therefore expose the cumulative p99 as a diagnostic field,
+    without presenting it as the interval p99 derived from old histograms.
+    """
     result = []
+    histogram_reports = ["buckets" in report for report in reports]
+    assert all(histogram_reports) or not any(histogram_reports), "Mixed histogram report formats"
+    has_histograms = all(histogram_reports)
     previous_counts = {}
     previous_requests = previous_successes = 0
     start = previous_end = datetime.fromisoformat(reports[0]["earliest"])
@@ -42,26 +51,31 @@ def windows(reports: list[dict]) -> list[dict]:
         end = datetime.fromisoformat(report["end"])
         count = report["requests"] - previous_requests
         successes = report["status_codes"].get("200", 0) - previous_successes
-        histogram = {int(key): value - previous_counts.get(key, 0)
-                     for key, value in report["buckets"].items()}
-        assert count >= 0 and all(value >= 0 for value in histogram.values()), "Non-cumulative report"
-        assert sum(histogram.values()) == count and 0 <= successes <= count
+        histogram = ({int(key): value - previous_counts.get(key, 0)
+                      for key, value in report["buckets"].items()} if has_histograms else None)
+        assert count >= 0 and (histogram is None or all(value >= 0 for value in histogram.values())), "Non-cumulative report"
+        assert (histogram is None or sum(histogram.values()) == count) and 0 <= successes <= count
         elapsed = (end - previous_end).total_seconds()
         if count:
             assert elapsed > 0
-            edges = sorted(histogram)
-            total = 0
             bound = None
-            for index, lower in enumerate(edges):
-                total += histogram[lower]
-                if total >= math.ceil(count * .99):
-                    bound = edges[index + 1] / 1e6 if index + 1 < len(edges) else None
-                    break
+            if histogram is not None:
+                edges = sorted(histogram)
+                total = 0
+                for index, lower in enumerate(edges):
+                    total += histogram[lower]
+                    if total >= math.ceil(count * .99):
+                        bound = edges[index + 1] / 1e6 if index + 1 < len(edges) else None
+                        break
             result.append({"end_s": (end - start).total_seconds(), "seconds": elapsed,
                            "requests": count, "non_200_or_transport_errors": count - successes,
-                           "successful_rps": successes / elapsed, "p99_bucket_upper_ms": bound})
+                           "successful_rps": successes / elapsed,
+                           "p99_bucket_upper_ms": bound,
+                           "p99_cumulative_ms": (None if histogram is not None else
+                                                  report["latencies"]["99th"] / 1e6)})
         previous_end, previous_requests = end, report["requests"]
-        previous_successes, previous_counts = report["status_codes"].get("200", 0), report["buckets"]
+        previous_successes = report["status_codes"].get("200", 0)
+        previous_counts = report.get("buckets", {})
     return result
 
 

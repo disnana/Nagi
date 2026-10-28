@@ -6,6 +6,10 @@ IntelliJ IDEA・PyCharm向けのNagiプラグインです。0.1.6は[GitHub Rele
 
 プラグインの版は`build.gradle.kts`で管理します。公開済み0.1.2には両IDE共通ZIPがあり、新しい利用可能な成果物はReleasesで確認してください。Marketplaceから入れる場合は既存ページのVersionsで利用可能な版とIDE対応を確認してください。[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)から対応IDEへ直接インストールするか、[GitHub Releases](https://github.com/disnana/Nagi/releases)から両IDE共通のZIPを取得できます。
 
+## 開発中：キーワード・型の編集補助
+
+`try`などのキーワードと型注釈位置の組み込み型名を、コンパイラが使えない場合も候補に出します。class／enum宣言名は入力中から型の色を使います。組み込み関数の候補拡充には、この変更に対応した開発版コンパイラが必要です。公開済み0.1.6の追加機能としては扱わないでください。
+
 ## 0.1.6の編集動作
 
 連続Enterで空行の字下げを自動で1段戻す独自動作を撤去しました。Enterを繰り返しても現在の字下げを維持します。手動のBackspace・Shift+Tabと、通常のブロック・括弧内の字下げ補助は引き続き使えます。この変更は公開済み0.1.5には含まれません。
@@ -98,6 +102,8 @@ compiler 0.1.12の一時候補は中止され、公開artifactはありません
 GitHub ReleasesのZIPを使う場合は、IDEの **Settings → Plugins → ⚙ → Install Plugin from Disk** で選び、IDEを再起動します。PRの動作確認用ZIPは、IDEA/PyCharmのstable/EAP検証がすべて成功した **Actions → Nagi checks** の`release-jetbrains` artifactから取得できます。自己ビルドした場合は`build/distributions/`にあるZIPを使います。
 
 **Settings → Languages & Frameworks → Nagi** でコンパイラのパスを設定できます。空欄なら`PATH`の`nagic`を使います。相対パスはIDEプロジェクトのルートから解決します。
+
+開発中の次版では、同じ画面の **Color matching brackets by nesting depth** を有効にすると、対応する`()`・`[]`（Lowでは`{}`も）を入れ子の深さごとに色分けできます。この機能は公開版0.1.6には未収録で、既定は無効です。6段階の色は **Settings → Editor → Color Scheme → Nagi** でthemeに合わせて変更できます。文字列・コメント内と対応しない括弧は通常のsyntax色を維持します。
 
 Nagiファイルを開き、右クリックまたはToolsメニューから **Nagi: Check** / **Nagi: Run** を選びます。実行前に開いているファイルを保存します。信頼していないプロジェクトではコンパイラを起動しません。
 

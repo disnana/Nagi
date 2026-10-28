@@ -35,7 +35,6 @@ const builtinRows = [
   ['env', 'name: str, fallback: str', 'str', '環境変数がなければ既定値を返します。'],
   ['assert_true', 'condition: bool', 'unit', 'Falseならpanicします。'],
   ['range', 'end: i64', 'Range', 'forで0から終端未満まで走査します。'],
-  ['html', 'text: str', 'Html', '所有文字列をHTML応答にします。'],
   ['include_text', 'path: str', 'str', '文字列リテラルの相対パスをコンパイル時に埋め込みます。'],
   ['read_line', '', 'Result[str, Error]', 'コンソールから同期的に1行読みます。'],
   ['sleep', 'milliseconds: i64', 'unit', 'ミリ秒単位で待ちます。', true],
@@ -75,10 +74,17 @@ const builtins = builtinRows.map(([name, args, result, description, asynchronous
   parameters: builtinParameters(args),
   return_type: result, asynchronous, description, builtin: true,
 }));
-const types = ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'str', 'bytes', 'unit', 'Error', 'Html', 'UUID', 'timestamp', 'List', 'Result', 'view', 'shared', 'Option', 'fn'];
+const readLine = builtins.find(item => item.name === 'read_line');
+readLine.overloads = [
+  { signature: 'def read_line() -> Result[str, Error]', parameters: [] },
+  { signature: 'def read_line(prompt: str | view[str]) -> Result[str, Error]', parameters: [{ name: 'prompt', type: 'str | view[str]' }] },
+];
+readLine.signature = readLine.overloads.map(item => item.signature).join('; ');
+readLine.description = '同期入力。引数がある場合はその文字列を改行なしで表示し、flushしてから1行読みます。I/O失敗はResultで返します。';
+const types = ['i8', 'i16', 'i32', 'i64', 'u8', 'u16', 'u32', 'u64', 'f32', 'f64', 'bool', 'str', 'bytes', 'unit', 'Error', 'UUID', 'timestamp', 'List', 'Result', 'view', 'shared', 'Option', 'Map', 'fn'];
 const typeInsertions = {
   List: 'List[${1:T}]', Result: 'Result[${1:T}, ${2:Error}]', view: 'view[${1:str}]', shared: 'shared[${1:T}]',
-  Option: 'Option[${1:T}]', fn: 'fn[${1:i64}, ${2:i64}]',
+  Map: 'Map[${1:K}, ${2:V}]', Option: 'Option[${1:T}]', fn: 'fn[${1:i64}, ${2:i64}]',
 };
 const matchPatterns = [
   { name: 'Ok', kind: 'pattern', signature: 'case Ok(value)', parameters: [{ name: 'value', type: 'T' }],
@@ -439,7 +445,7 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
     return bindings.has(item.name) ? { ...item, nameOnly: true } : item;
   });
   if (local && !values.some(item => item.name === local.name)) values.unshift(localItem(local));
-  return [...values, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
+  return [...values, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class', 'elif']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
 }
 
 function insertion(item, following) {
@@ -485,7 +491,7 @@ function callContext(text, offset) {
         const start = prefix.length - match[1].length;
         const parts = match[1].split(/\s*\.\s*/);
         return { name: parts.at(-1), qualifier: parts.length > 1 ? parts.slice(0, -1).join('.') : undefined,
-          argument, start: start + match[1].length - parts.at(-1).length };
+          argument, argumentsStart: i + 1, start: start + match[1].length - parts.at(-1).length };
       }
     } else if (c === ']') brackets++;
     else if (c === '[') brackets--;
@@ -520,7 +526,9 @@ function signatureAt(index, text, offset, source = {}) {
   if (!item || !['function', 'class', 'enum_member'].includes(item.kind) ||
       item.kind === 'enum_member' && !item.parameters?.length ||
       shadowedAt(index, text, { ...call, end: call.start + call.name.length }, source, item)) return undefined;
-  return { item: call.qualifier ? { ...item, callName: `${call.qualifier}.${call.name}` } : item, argument: call.argument };
+  const activeSignature = item.overloads?.length && text.slice(call.argumentsStart, offset).trim()
+    ? Math.max(0, item.overloads.findIndex(overload => overload.parameters.length > call.argument)) : 0;
+  return { item: call.qualifier ? { ...item, callName: `${call.qualifier}.${call.name}` } : item, argument: call.argument, activeSignature };
 }
 
 module.exports = { context, wordAt, declarations, hoverAt, completionCandidates, insertion, activeCall, signatureAt, memberContext };

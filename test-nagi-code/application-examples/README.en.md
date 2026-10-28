@@ -16,7 +16,7 @@
 
 To start with handwritten Low, use the [order quote CLI](../low-examples/order-quote/README.en.md). It combines Low-to-Low imports, typed JSON, input validation and integer price calculations.
 
-The byte inspector requires Nagi 0.1.10 or later; the Axum quote API is verified with 0.1.10. The authentication example uses this branch's standard HTTP request-bound auth API. Other existing examples also run on Nagi 0.1.9. Check the official release record before relying on the new API in a published compiler. Download or clone the repository, then run each folder with its `nagi.toml` from the repository root. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
+Use published Nagi 0.2.1 to try the complete collection. The device settings and authentication examples require the Query/Pool/Tx or request-bound authentication APIs from 0.2.0. The byte inspector requires 0.1.10 or later; the Axum quote API is verified with 0.1.10, and the quote API and supervised worker with 0.1.9. This page does not make a blanket promise that the remaining current examples work with an older compiler. Download or clone the repository, then run each folder with its `nagi.toml` from the repository root. See [setup](../../docs/en/getting-started.md) for Rust/Cargo and your OS's build tools.
 
 ```sh
 nagic run --project test-nagi-code/application-examples/stock-report

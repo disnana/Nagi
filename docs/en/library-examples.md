@@ -38,7 +38,7 @@ Selecting just a source file skips its neighboring `nagi.toml`. Use `--project` 
 
 | Project | Contents |
 | --- | --- |
-| [Task management](web-demo.md) | Browser UI, JSON API, and SQLite persistence |
+| [Task management JSON API](../../test-nagi-code/web-demo/README.en.md) | JSON CRUD, validation, and SQLite persistence; no browser UI or authentication |
 | [Result API](result-api.md) | Invalid input, missing data, DB failures, and recovery |
 | [Inventory](../../test-nagi-code/README.md#在庫管理api) | Typed JSON input, CRUD, and aggregation |
 | [Stock JSON report](../../test-nagi-code/application-examples/stock-report/README.en.md) | Read typed JSON from stdin and validate it with custom errors |

@@ -81,6 +81,38 @@ fn names(v: &serde_json::Value) -> Vec<&str> {
 }
 
 #[test]
+fn elif_conditions_and_bodies_keep_compiler_completion_metadata_and_module_origins() {
+    let f = Fixture::new();
+    let text = "def inspect(value: i64):\n    if value == 0:\n        print(0)\n    elif value > 0:\n        print(value)\n    else:\n        print(-1)\n";
+    f.write("main.nagi", text);
+    for needle in ["elif value", "print(value"] {
+        let v = f.analyze(text, needle);
+        let item = v["completion"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["name"] == "value")
+            .unwrap_or_else(|| panic!("{v}"));
+        assert_eq!(item["type"], "i64");
+        assert_eq!(item["target"]["line"], 1);
+    }
+    f.write(
+        "main.nagi",
+        "import \"branch.nagi\"\ndef main():\n    print(0)\n",
+    );
+    f.write(
+        "branch.nagi",
+        "def inspect():\n    if True:\n        print(0)\n    elif missing:\n        print(1)\n",
+    );
+    let v = f.request(serde_json::json!({"files":[]}));
+    assert!(v["diagnostics"][0]["file"]
+        .as_str()
+        .unwrap()
+        .ends_with("branch.nagi"));
+    assert_eq!(v["diagnostics"][0]["line"], 4);
+}
+
+#[test]
 fn import_queries_reject_parenthesis_and_bracket_continuations() {
     let f = Fixture::new();
     f.write("main.nagi", "");
@@ -939,6 +971,238 @@ fn compiler_offers_print_for_intrinsic_name_prefixes_across_source_forms() {
     assert_ne!(saved_low, saved, "{saved}");
     let v = call_name_response(&f, entry, &saved_low, "pr");
     assert_print_candidate(&v);
+}
+
+#[test]
+fn all_supported_intrinsics_are_completion_candidates_in_high_and_low() {
+    let f = Fixture::new();
+    // Independent supported-language inventory, including diagnostic/benchmark intrinsics.
+    let expected = [
+        "print",
+        "write",
+        "read_line",
+        "include_text",
+        "view",
+        "copy",
+        "share",
+        "clone_shared",
+        "len",
+        "range",
+        "sleep",
+        "json_decode",
+        "json_encode",
+        "ok",
+        "some",
+        "error",
+        "not_found",
+        "internal_error",
+        "fail",
+        "error_kind",
+        "error_message",
+        "assert_true",
+        "parse_i64",
+        "parse_f64",
+        "make_ints",
+        "actor_demo",
+        "actor_pair_demo",
+        "queue_demo",
+        "task_demo",
+        "cpu_sum",
+        "i64",
+        "i32",
+        "uuid_parse",
+        "uuid_format",
+        "append",
+        "env",
+        "slice",
+        "bench_i64",
+        "bench_f64",
+        "bench_scalar",
+        "clock_ns",
+        "size_of",
+        "supervisor_demo",
+    ];
+    for (entry, text) in [
+        ("main.nagi", "def inspect():\n    candidate\n"),
+        ("manual.low", "fn inspect() { candidate; }\n"),
+    ] {
+        f.write(entry, text);
+        let v = call_name_response(&f, entry, text, "candidate");
+        let actual = v["completion"]["items"].as_array().unwrap();
+        for name in expected {
+            let candidates = actual
+                .iter()
+                .filter(|item| item["name"] == name)
+                .collect::<Vec<_>>();
+            assert_eq!(candidates.len(), 1, "{entry} {name}: {v}");
+            assert_eq!(candidates[0]["kind"], "function");
+            assert_eq!(candidates[0]["access"], "read");
+            assert!(
+                candidates[0]["signature"].as_str().unwrap().contains("->"),
+                "{name}"
+            );
+            assert!(candidates[0].get("target").is_none(), "{name}");
+        }
+        for retired in [
+            "html",
+            "serve",
+            "db_open",
+            "db_exec",
+            "db_all",
+            "db_query",
+            "db_insert",
+            "db_update",
+            "db_write",
+        ] {
+            assert!(!names(&v).contains(&retired), "{entry} {retired}: {v}");
+        }
+    }
+    // Every intrinsic passes through the same scope/taint gates, including
+    // moved locals, imports and namespace/member contexts tested below.
+    for name in expected {
+        let text = format!("def inspect():\n    {name} = 1\n    candidate\n");
+        let v = call_name_response(&f, "main.nagi", &text, "candidate");
+        assert!(
+            !v["completion"]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["name"] == name && item["kind"] == "function"),
+            "{name}: {v}"
+        );
+    }
+}
+
+#[test]
+fn compiler_offers_both_read_line_call_forms_with_explicit_result_signature() {
+    let f = Fixture::new();
+    for (entry, text, needle) in [
+        ("main.nagi", "def inspect():\n    read_li\n", "read_li"),
+        (
+            "main.nagi",
+            "def inspect() -> Result[str, Error]:\n    text = try read_li\n    return ok(text)\n",
+            "read_li",
+        ),
+        ("manual.low", "fn inspect() { read_li; }\n", "read_li"),
+    ] {
+        f.write(entry, text);
+        let v = call_name_response(&f, entry, text, needle);
+        assert_eq!(v["semantic_status"], "editor-partial", "{v}");
+        let candidates = v["completion"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|item| item["name"] == "read_line")
+            .collect::<Vec<_>>();
+        assert_eq!(candidates.len(), 1, "{v}");
+        assert_eq!(candidates[0]["kind"], "function");
+        assert_eq!(
+            candidates[0]["signature"],
+            "read_line() -> Result[str, Error]; read_line(prompt: str | view[str]) -> Result[str, Error]"
+        );
+        assert_eq!(candidates[0]["access"], "read");
+        assert!(candidates[0].get("target").is_none(), "{v}");
+        assert!(!v["symbols"]["definitions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|definition| definition["name"] == "read_line"));
+    }
+}
+
+#[test]
+fn read_line_completion_respects_local_global_and_import_shadowing() {
+    let f = Fixture::new();
+    f.write("main.nagi", "");
+    f.write("helper.nagi", "def replacement() -> i64:\n    return 1\n");
+    for (text, kind) in [
+        ("def inspect():\n    read_line = 1\n    read_li\n", "local"),
+        (
+            "def read_line() -> i64:\n    return 1\ndef inspect():\n    read_li\n",
+            "function",
+        ),
+        (
+            "class read_line:\n    value: i64\ndef inspect():\n    read_li\n",
+            "class",
+        ),
+        (
+            "enum read_line:\n    Empty\ndef inspect():\n    read_li\n",
+            "enum",
+        ),
+        (
+            "from \"helper.nagi\" import replacement as read_line\ndef inspect():\n    read_li\n",
+            "function",
+        ),
+        (
+            "from std.result import map_error as read_line\ndef inspect():\n    read_li\n",
+            "function",
+        ),
+        (
+            "import \"helper.nagi\" as read_line\ndef inspect():\n    read_li\n",
+            "module",
+        ),
+    ] {
+        let v = call_name_response(&f, "main.nagi", text, "read_li");
+        let candidates = v["completion"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|item| item["name"] == "read_line")
+            .collect::<Vec<_>>();
+        assert_eq!(candidates.len(), 1, "{text}: {v}");
+        assert_eq!(candidates[0]["kind"], kind, "{text}: {v}");
+        assert!(candidates[0]["target"].is_object(), "{text}: {v}");
+        assert_ne!(
+            candidates[0]["signature"], "read_line() -> Result[str, Error]",
+            "{text}: {v}"
+        );
+    }
+}
+
+#[test]
+fn read_line_intrinsic_does_not_leak_into_members_imports_or_tainted_contexts() {
+    let f = Fixture::new();
+    f.write("main.nagi", "");
+    f.write("helper.nagi", "def replacement() -> i64:\n    return 1\n");
+    for text in [
+        "class User:\n    name: str\ndef inspect(user: User):\n    user.read_li\n",
+        "import \"helper.nagi\" as helper\ndef inspect():\n    helper.read_li\n",
+        "from \"helper.nagi\" import read_li",
+        "def inspect():\n    unknown_call()\n    read_li\n",
+        "from std.ownership import move\ndef inspect():\n    read_line = \"owned\"\n    saved = move(read_line)\n    read_li\n",
+        "def inspect():\n    read_line(\n",
+    ] {
+        let needle = if text.ends_with("(\n") { "read_line(" } else { "read_li" };
+        let v = call_name_response(&f, "main.nagi", text, needle);
+        assert!(!names(&v).contains(&"read_line"), "{text}: {v}");
+    }
+}
+
+#[test]
+fn read_line_preserves_zero_arguments_and_requires_explicit_result_handling() {
+    let f = Fixture::new();
+    for (entry, accepted, discarded, prompt, implicit) in [
+        ("main.nagi",
+         "def inspect() -> Result[str, Error]:\n    text = try read_line()\n    return ok(text)\n",
+         "def inspect():\n    read_line()\n",
+         "def inspect() -> Result[str, Error]:\n    return read_line(\"prompt\", \"extra\")\n",
+         "def inspect() -> str:\n    return read_line()\n"),
+        ("manual.low",
+         "fn inspect() -> Result[str, Error] { let text = try read_line(); return ok(text); }\n",
+         "fn inspect() { read_line(); }\n",
+         "fn inspect() -> Result[str, Error] { return read_line(\"prompt\", \"extra\"); }\n",
+         "fn inspect() -> str { return read_line(); }\n"),
+    ] {
+        f.write(entry, accepted);
+        let v = f.request_entry(entry, serde_json::json!({"files":[{"file":entry,"text":accepted}]}));
+        assert_eq!(v["frontend_accepted"], true, "{entry}: {v}");
+        for (text, diagnostic) in [(discarded, "Resultを無視できません"), (prompt, "引数"), (implicit, "型が一致しません")] {
+            let v = f.request_entry(entry, serde_json::json!({"files":[{"file":entry,"text":text}]}));
+            assert_eq!(v["frontend_checked"], true, "{entry}: {v}");
+            assert_eq!(v["frontend_accepted"], false, "{entry}: {v}");
+            assert!(v["diagnostics"][0]["message"].as_str().unwrap().contains(diagnostic), "{text}: {v}");
+        }
+    }
 }
 
 #[test]

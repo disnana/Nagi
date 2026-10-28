@@ -5,13 +5,13 @@
     <description><![CDATA[
         <p>Nagi language support for IntelliJ IDEA and PyCharm.</p>
         <p>Provides High (.nagi) and Low (.low) syntax highlighting, code folding, indentation and paired-input support, compiler-backed completion and current-snapshot diagnostics, exact-source definition navigation, semantic coloring, parameter information, and standard Nagi Run/Stop controls.</p>
-        <p>Install the Nagi compiler separately; it is not bundled. Nagi 0.2.0 supports the assistance protocol used by this plugin. Published nagic 0.1.11 supports ordinary Check/Run but not semantic assistance. Syntax highlighting and top-level def/fn keyword lookup do not require the compiler.</p>
+        <p>Install the Nagi compiler separately; it is not bundled. Nagi 0.2.0 supports the assistance protocol used by this plugin. Published nagic 0.1.11 supports ordinary Check/Run but not semantic assistance. Syntax highlighting, keyword lookup, and builtin type spelling hints do not require the compiler.</p>
         <p>Semantic assistance is partial editor analysis, not a full build check. Diagnostics show the first compiler error returned, and navigation requires an exact source target. Nagi: Check and Nagi: Run use the current file or the nearest project containing nagi.toml. Commands and analysis processes require a trusted project. Run/Check save open files before starting.</p>
         <p>Download the compiler and available plugin releases from <a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>. Plugin availability in the existing JetBrains Marketplace listing is shown under Versions; Marketplace submission and approval are separate from GitHub publication.</p>
         <h3>日本語</h3>
         <p>IntelliJ IDEA・PyCharm向けのNagi言語サポートです。</p>
         <p>High（.nagi）・Low（.low）のシンタックスハイライト、折りたたみ、インデントとペア入力、コンパイラによる補完と現在のsnapshotに基づく診断、正確なsource位置への定義移動、semantic色分け、引数情報、IDE標準のRun/Stopを提供します。</p>
-        <p>コンパイラは別途インストールしてください。プラグインには同梱しません。Nagi 0.2.0はこのプラグインのassist protocolに対応しています。公開済みnagic 0.1.11は通常のCheck/Runに対応しますが、semantic assistanceには対応していません。シンタックスハイライトと最上位のdef・fn字句候補にコンパイラは不要です。</p>
+        <p>コンパイラは別途インストールしてください。プラグインには同梱しません。Nagi 0.2.0はこのプラグインのassist protocolに対応しています。公開済みnagic 0.1.11は通常のCheck/Runに対応しますが、semantic assistanceには対応していません。シンタックスハイライト、キーワード補完と組み込み型名の字句候補にコンパイラは不要です。</p>
         <p>semantic assistanceは部分解析で、完全なbuild検査ではありません。診断はコンパイラが最初に返すエラーに限られ、定義移動には正確なsource位置が必要です。Nagi: Check / Nagi: Runは現在のファイルか最寄りのnagi.tomlを含むプロジェクトを使います。コマンドと解析プロセスの起動には信頼されたプロジェクトが必要で、Run/Checkは起動前に開いているファイルを保存します。</p>
         <p>コンパイラと配布済みプラグインは<a href="https://github.com/disnana/Nagi/releases">GitHub Releases</a>から入手できます。既存JetBrains Marketplaceページでの配布状況はVersionsで確認してください。Marketplaceへの提出・承認はGitHub公開と別です。</p>
     ]]></description>
@@ -28,6 +28,9 @@
         <lang.parserDefinition language="NagiLow" implementationClass="com.disnana.nagi.NagiParserDefinition$Low"/>
         <lang.syntaxHighlighterFactory language="Nagi" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$Factory"/>
         <lang.syntaxHighlighterFactory language="NagiLow" implementationClass="com.disnana.nagi.NagiSyntaxHighlighter$LowFactory"/>
+        <colorSettingsPage implementation="com.disnana.nagi.NagiColorSettingsPage"/>
+        <annotator language="Nagi" implementationClass="com.disnana.nagi.NagiBracketDepthAnnotator"/>
+        <annotator language="NagiLow" implementationClass="com.disnana.nagi.NagiBracketDepthAnnotator"/>
         <projectService serviceImplementation="com.disnana.nagi.NagiAssistService"/>
         <notificationGroup id="Nagi compiler assistance" displayType="BALLOON" isLogByDefault="true"/>
         <completion.contributor language="Nagi" implementationClass="com.disnana.nagi.NagiAssistCompletionContributor"/>

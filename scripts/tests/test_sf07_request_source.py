@@ -32,7 +32,7 @@ class RequestSourceTests(unittest.TestCase):
         source = read('runtime/src/http_server/browser_login.rs')
         restored = projection.inverse_browser_handler(source)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
-                         '17252effa839788999212f90b1418bdba27173ef3c230ee4223311ebd4ce64b6')
+                         '363cf9c8e60369ad0e9996b6323c7c4f9e2a47eddc7bb160e514c1522b58b3a4')
         for before, added, after in projection.BROWSER_HANDLER_ADDITIONS:
             for changed in (source.replace(added, '', 1), source.replace(added, added * 2, 1),
                             source.replace(added, added.replace('nagi_browser_login_diag', 'test'), 1),
@@ -56,7 +56,7 @@ class RequestSourceTests(unittest.TestCase):
         coverage = read('scripts/ci/browser_login_stage_coverage.py')
         restored_coverage = projection.inverse_browser_handler_coverage(coverage)
         self.assertEqual(hashlib.sha256(restored_coverage.encode()).hexdigest(),
-                         '19ef03623734ac9bbb505b02cab555fa8fd96a09fbc23dcda6f06f691b6ac33a')
+                         '5ada31eed9ecdc841dd06bbcd8ce056a30c75916c8a7c596fab1c03428af5502')
         addition = projection.BROWSER_HANDLER_COVERAGE
         for changed in (coverage.replace(addition, '', 1), coverage.replace(addition, addition * 2, 1),
                         coverage.replace(addition, addition.replace('original_handler_timer_', 'foreign_timer_'), 1)):
@@ -260,6 +260,12 @@ class RequestSourceTests(unittest.TestCase):
     def test_u2_workflow_inverse_is_exact_and_keeps_unrelated_changes_visible(self):
         workflow = read('.github/workflows/ci.yml')
         self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(), BASE_WORKFLOW_SHA)
+        deadline = '"sf03-b1-csrf-deadline.log":15'
+        self.assertEqual(workflow.count(deadline), 2)
+        for replacement in ('', deadline + deadline, '"sf03-b1-csrf-deadline.log":14',
+                            '"sf03-b1-csrf-deadline.log":16'):
+            with self.subTest(deadline_replacement=replacement), self.assertRaises(ValueError):
+                projection.inverse_workflow(workflow.replace(deadline, replacement, 1))
         for line in projection.U2_NATIVE_LINES:
             for changed in (workflow.replace(line, '', 1), workflow.replace(line, line + line, 1)):
                 with self.assertRaises(ValueError):

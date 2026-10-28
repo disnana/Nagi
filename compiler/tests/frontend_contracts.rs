@@ -376,16 +376,16 @@ fn record_constructors_reject_type_arguments_in_high_low_and_symbols() {
                     "record Point {{ x: i64; }}\nfn main() {{ let point = Point[{ty}](x=7); }}\n"
                 )
             };
-            assert!(parser::parse(&source, high)
-                .unwrap_err()
-                .contains("classの型引数は未対応です"));
+            assert!(parser::parse(&source, high).unwrap_err().contains(
+                "名前付きフィールドまたは名前付き引数を使う呼出しに明示型引数は指定できません"
+            ));
             f.write(name, &source);
             for command in ["check", "lower", "symbols"] {
                 let output = f.run(command, name);
                 assert!(!output.status.success(), "{command} {name} accepted {ty}");
-                assert!(
-                    String::from_utf8_lossy(&output.stderr).contains("classの型引数は未対応です")
-                );
+                assert!(String::from_utf8_lossy(&output.stderr).contains(
+                    "名前付きフィールドまたは名前付き引数を使う呼出しに明示型引数は指定できません"
+                ));
             }
         }
     }

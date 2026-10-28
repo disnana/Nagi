@@ -13,7 +13,12 @@ cargo build --release --locked -p nagic
 .\target\release\nagic.exe run --project test-nagi-code/web-demo
 ```
 
-The default URL is [http://127.0.0.1:8091](http://127.0.0.1:8091). Set `NAGI_PORT` to change the port and `NAGI_DB` to change the database path. Running as a project uses `test-nagi-code/web-demo/nagi-tasks.sqlite` by default and reuses saved data after restart. Set `NAGI_DB` to an absolute path to use an existing database.
+The default URL is [http://127.0.0.1:8091](http://127.0.0.1:8091). Set `NAGI_PORT` to change the port and `NAGI_DB` to change the database path. When changing the port, also set the accepted Host as `NAGI_HTTP_AUTHORITY=127.0.0.1:port`. Running as a project uses `test-nagi-code/web-demo/nagi-tasks.sqlite` by default and reuses saved data after restart. Set `NAGI_DB` to an absolute path to use an existing database.
+
+```sh
+NAGI_PORT=18091 NAGI_HTTP_AUTHORITY=127.0.0.1:18091 NAGI_DB=/tmp/nagi-tasks.sqlite \
+  nagic run --project test-nagi-code/web-demo --profile dev
+```
 
 `GET /` returns a plain-text note about the JSON API. The former raw-HTML UI is not served through standard HTTP routes. `index.html` remains an unconnected former UI reference. Nagi 0.2.0 provides a typed HTML subset, but this sample has not migrated its browser UI. The sample does not label HTML markup as plain text, and its API remains JSON.
 

@@ -5,6 +5,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import javax.swing.JComponent;
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
@@ -14,10 +15,12 @@ import javax.swing.SpinnerNumberModel;
 public final class NagiConfigurable implements Configurable {
     private JTextField compilerPath;
     private JSpinner timeout;
+    private JCheckBox bracketDepthColors;
     @Override public String getDisplayName() { return "Nagi"; }
     @Override public JComponent createComponent() {
         compilerPath = new JTextField(35);
         timeout = new JSpinner(new SpinnerNumberModel(30, 1, 300, 1));
+        bracketDepthColors = new JCheckBox("Color matching brackets by nesting depth");
         var panel = new JPanel(new GridBagLayout());
         var constraints = new GridBagConstraints();
         constraints.anchor = GridBagConstraints.NORTHWEST;
@@ -32,6 +35,8 @@ public final class NagiConfigurable implements Configurable {
         panel.add(new JLabel("Check timeout (seconds):"), constraints);
         constraints.gridx = 1;
         panel.add(timeout, constraints);
+        constraints.gridx = 0; constraints.gridy++; constraints.gridwidth = 2;
+        panel.add(bracketDepthColors, constraints);
         constraints.gridy++; constraints.weighty = 1;
         panel.add(new JLabel("Check and Run save open files. Editor assistance reads current buffers and never saves them."), constraints);
         reset();
@@ -39,15 +44,19 @@ public final class NagiConfigurable implements Configurable {
     }
     @Override public boolean isModified() {
         var settings = NagiSettings.getInstance().getState();
-        return !compilerPath.getText().equals(settings.compilerPath) || ((Number)timeout.getValue()).intValue() != settings.checkTimeoutSeconds;
+        return !compilerPath.getText().equals(settings.compilerPath)
+                || ((Number)timeout.getValue()).intValue() != settings.checkTimeoutSeconds
+                || bracketDepthColors.isSelected() != settings.bracketDepthColors;
     }
     @Override public void apply() {
-        NagiSettings.update(compilerPath.getText(), ((Number)timeout.getValue()).intValue());
+        NagiSettings.update(compilerPath.getText(), ((Number)timeout.getValue()).intValue(),
+                bracketDepthColors.isSelected());
     }
     @Override public void reset() {
         var values = NagiSettings.getInstance().getState();
         compilerPath.setText(values.compilerPath);
         timeout.setValue(values.checkTimeoutSeconds);
+        bracketDepthColors.setSelected(values.bracketDepthColors);
     }
-    @Override public void disposeUIResources() { compilerPath = null; timeout = null; }
+    @Override public void disposeUIResources() { compilerPath = null; timeout = null; bracketDepthColors = null; }
 }
