@@ -223,6 +223,44 @@ pub(crate) struct FutureArgument {
     pub ty: Type,
     pub passing: crate::stdlib::Passing,
     pub owners: Vec<(ExprUseId, BindingId)>,
+    pub capture: ArgumentCaptureFacts,
+}
+
+/// Target-neutral argument facts, sealed but not yet a runtime release plan.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ArgumentCaptureFacts {
+    UserAsync(UserAsyncArgumentFacts),
+    /// Registered standard operations and legacy builtin Future calls retain
+    /// their existing capture behavior without a user argument plan.
+    UnplannedStandard,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct UserAsyncArgumentFacts {
+    pub slot: ArgumentCaptureSlot,
+    /// User calls transfer arguments by value: only Copy or Move is possible.
+    pub transfer: ExprUseMode,
+    /// Index is the content depth, including depth zero. Empty origins do not
+    /// prove static storage, absence of borrowing, or a release schedule.
+    pub depths: Vec<OriginDepthFacts>,
+    pub views_absent: bool,
+    pub release: ArgumentRelease,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ArgumentCaptureSlot {
+    pub call: ExprUseId,
+    pub argument: usize,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct OriginDepthFacts {
+    pub origins: Vec<FlowOrigin>,
+    pub borrows_temporary: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ArgumentRelease {
+    /// A Copy argument whose type contains no views needs no owner release.
+    NotRequired,
+    /// Release has not been planned; no backend may infer cleanup from this.
+    Deferred,
 }
 
 #[cfg(test)]

@@ -694,3 +694,30 @@ validationに使用する。引数評価、cold開始、一回消費、Result/tr
 High、独立保存Low、手書きLowの実Go build/runと、同一callback再代入、異なるcallbackの
 negativeを1件へまとめる。必須件数はLinux/macOS 30、Windows 29。callbackを引数・戻り値・
 containerへ保存すること、view/borrow capture、owner cleanup、task/scope/spawnは未対応のまま。
+
+## 2026-10-28: user async引数のtarget-neutral capture facts
+
+#195の確定commit `7d1f1a9fd37c977e9a216785b05e274d0158bf78`を基点に、各user async引数へ
+call/argument slot、Copy/Move、content depth別のtransitiveな`FlowOrigin`とtemporary marker、
+views absence、未計画のrelease状態を封印した。各引数のexpr/demand/consume/hold成功直後に
+call-localでsnapshotし、全引数成功後だけ公開する。後の引数のcontainer mutationを先のsnapshotへ
+逆流させず、loopと再checkでは最終passのfactsで置換する。標準asyncとlegacy builtin Futureは
+`UnplannedStandard`とし、既存Passing・capture検査を維持する。
+
+新factsはbackendが生成・releaseへ使用しない。`NotRequired`はviewを含まないCopy型だけ、
+他は`Deferred`であり、empty originや`views_absent`からcleanupを推定しない。
+checker受理・診断・Low serialization・Rust/Go出力・runtime・allocation・Drop/close/cancel順序、
+一般borrow対応とowner lifetimeは変更しない。temporary owner identity、実release schedule、
+match/loopのrelease anchorは未計画のまま。[範囲と保証](go-async-string-borrow.md)。
+
+Linuxでfmt/check、`cargo clippy --locked -p nagic --all-targets -- -D warnings`、sealed unit 26件
+（新7件、slot/transfer/origin/temp/depth/absence/release等の改竄13経路を含む）、conformance 6件、
+Go integration 32件、ownership_calls 9件、async_value_types 6件、view_origins 10件、codegen 17件を
+成功確認した。新factsはdirect/local callback、aliasとowner、field/static/parameter、nested viewの
+depth 0/1/2、後引数のappend、最終loop pass、空view containerでもDeferredをHigh・保存Low・
+手書きLowで検査する。static/標準metadataは実file resolverを通し、nested viewはGo生成前の
+unsupported診断を維持した。追加native Rust回帰はHigh・保存Low・手書きLowそれぞれで
+mutation/nested view/callback/loopを実build/runする。Go 32件は#195の既存raw出力・negativeも維持する。
+
+共有cacheを使い、最終確認時の空きは約15.3 GiB。全workspace suite、独立最終audit、exact-headの
+Windows/macOS/CIは別gateとして残す。merge・push・PR作成・release・publishは行わない。

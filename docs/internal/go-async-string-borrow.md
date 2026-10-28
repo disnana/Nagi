@@ -24,11 +24,20 @@ local alias、同一identityのlocal async callbackへ接続する。Rust backen
 外へ運ぶfunction signatureは未対応とする。対応しない型をGo `string`やsliceへ暗黙変換せず、
 Go toolchain起動前の元source位置付き診断にする。
 
-`FinalCheckFacts::FutureArgument.owners`は構文上の名前useとBindingIdであり、transitiveな
-borrow origin証明ではない。alias先owner、field path、static origin、temporary loan、
-content depthを表さない。immutable string入力はoriginから生成動作を決める必要がないため
-既存factsで実装できるが、mutable sequence、resource view、owner retirement、決定的cleanupへ
-広げる前にtarget-neutralなorigin/storage/release planを封印する必要がある。
+`FinalCheckFacts::FutureArgument.owners`は構文上の名前useとBindingIdのまま維持する。
+0.3.0の後続facts段階では、ユーザーasync呼出しの各引数にtarget-neutralな
+`UserAsyncArgumentFacts`を追加する。引数のexpr/demand/consume/hold成功直後、次の引数を
+検査する前に、call/argument slot、Copy/Move、depthごとのtransitiveな`FlowOrigin`と
+temporary borrow marker、`views_absent`を記録し、呼出し全体の成功後だけ公開する。
+後の引数のmutationは先のsnapshotへ逆流させず、loop/recheckでは最終passで置換する。
+sealはcheckerの再構築結果との完全一致を要求し、Lowへfactsをserializeしない。
+
+これは生成動作へまだ接続しないfactsである。`release = NotRequired`はviewを含まない
+Copy型だけとし、それ以外は`Deferred`を保持する。originが空でもstatic、借用なし、
+release可能とは推定しない。標準asyncとlegacy builtin Futureは`UnplannedStandard`のまま
+であり、Passingと既存検査を維持する。temporary owner identity、storage/releaseの実行位置、
+match/loopのcleanup anchorは計画していない。mutable sequence、resource view、owner retirement、
+決定的cleanupをGoへ追加する前に別の設計・検証が必要である。
 
 Go GCによるphysical memory回収時刻やRustと同じretentionを保証しない。Futureが消費時に
 body closureを解放する既存契約は維持するが、これを一般owner cleanupの実装証拠にしない。
