@@ -113,3 +113,38 @@ for (const button of document.querySelectorAll('[data-copy]')) {
     }
   });
 }
+
+const changelogFilter = document.querySelector('[data-changelog-filter]');
+if (changelogFilter) {
+  const entries = [...document.querySelectorAll('.changelog-index .docs-main > ul > li')];
+  const groups = [...document.querySelectorAll('.changelog-index .docs-main > h2')];
+  const outlineItems = [...document.querySelectorAll('.changelog-index .outline a')];
+  const status = document.querySelector('[data-changelog-status]');
+  const updateChangelog = () => {
+    const query = changelogFilter.value.trim().toLocaleLowerCase(document.documentElement.lang);
+    let shown = 0;
+    for (const entry of entries) {
+      const visible = !query || entry.textContent.toLocaleLowerCase(document.documentElement.lang).includes(query);
+      entry.hidden = !visible;
+      if (visible) shown += 1;
+    }
+    for (const heading of groups) {
+      const list = heading.nextElementSibling;
+      heading.hidden = Boolean(list && ![...list.children].some(item => !item.hidden));
+      if (list) list.hidden = heading.hidden;
+      for (const link of outlineItems) {
+        let target = '';
+        try { target = decodeURIComponent(link.hash.slice(1)); } catch { target = link.hash.slice(1); }
+        if (target === heading.id) link.closest('li').hidden = heading.hidden;
+      }
+    }
+    if (status) {
+      status.textContent = english
+        ? `${shown} of ${entries.length} versions shown.`
+        : `${entries.length}件中${shown}件のバージョンを表示しています。`;
+    }
+  };
+  changelogFilter.addEventListener('input', updateChangelog);
+  window.addEventListener('pageshow', updateChangelog);
+  updateChangelog();
+}

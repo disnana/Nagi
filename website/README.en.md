@@ -50,6 +50,7 @@ You can serve the contents of `build/website/` elsewhere. It includes `.nojekyll
 | Home code example | `website/examples/double.nagi`; run it and confirm the output |
 | Docs body | Japanese: `docs/*.md` and sample READMEs; English: `docs/en/*.md` |
 | Docs groups and page list | `GROUPS`, `ENGLISH_GROUPS`, and `EXTRA` in `website/build.py` |
+| Changelog | The root `CHANGELOG.md` is canonical; the build generates a small index and per-version detail pages without copying the body |
 | Typography, spacing, colors, responsive layout | `website/assets/site.css` |
 | Shared navigation and metadata | `website/templates/page.html` |
 
@@ -68,4 +69,4 @@ Pages CI pins source links to the build commit with `--ref "$GITHUB_SHA"`; manua
 - Distinguish a published feature from a repository change or a design proposal. Link performance statements to their conditions and results.
 - For procedures, give the prerequisites, commands, and expected results in that order. Keep the home page brief; explain types, resource lifetimes, and detailed behavior in the relevant Docs.
 
-The site build verifies generated HTML and local links. It does not establish that feature descriptions are correct or code samples run; check those against the implementation, tests, and execution results as well.
+The site build verifies generated HTML and local links. It does not establish that feature descriptions are correct or code samples run; check those against the implementation, tests, and execution results as well. For changes, also exercise a narrow viewport, keyboard navigation, light/dark themes, code overflow, and copy feedback in an isolated real browser.

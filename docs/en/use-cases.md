@@ -28,6 +28,114 @@ Run it as a native program with `nagic run hello.nagi --profile dev`. The [Resul
 | Rust crate adapters | Explicit boundaries to Axum and existing crates | Released | Rust assets are not a Go target input | [Axum quote API](../../test-nagi-code/application-examples/axum-service/README.en.md) | [Rust integration](modules-and-rust.md) |
 | Dev builds, incremental mode, runtime/lock selection | Select edit-loop cost and dependency resolution explicitly | Released (runtime/seed are opt-in) | Unpublished | [Development builds](development-builds.md) | [Runtime selection](runtime-profiles.md), [lock seed](lock-seeds.md) |
 
+## Choose by code and observed output
+
+These excerpts come from complete samples checked with Nagi 0.2.2. Use the button at the top right of each code block to copy it. Each link provides the complete source and execution conditions. The examples are not yet available on the Go target.
+
+### HTTP, JSON, and SQLite
+
+The [complete task API](../../test-nagi-code/web-demo/tasks.nagi) decodes JSON into a type, validates it, and then writes to SQLite.
+
+The following block is a handler excerpt. Run it as the linked project, which supplies `State`, `SaveTask`, and the storage functions; it is not a standalone file.
+
+```nagi
+async def create_task(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    input = try json_decode[SaveTask](request.body)
+    try validate_task(view(input.title))
+    done: i32 = 0
+    if input.done:
+        done = 1
+    task = try await storage_create_task(view(state.db), input.title, done)
+    return http.json[Task](http.response_context(view(request)), http.Status.OK, task)
+```
+
+Start the server from the repository root and run the real HTTP checks in another terminal.
+
+```sh
+nagic run --project test-nagi-code/web-demo --profile dev
+python test-nagi-code/web-demo/smoke_api.py --base-url http://127.0.0.1:8091
+```
+
+The expected final line is `PASS: 21 HTTP checks`. This sample does not include authentication or a browser UI.
+
+### Async, scopes, and Task results
+
+The [complete Task result sample](../../test-nagi-code/library-examples/task-results/main.nagi) moves a handle, awaits it once, and distinguishes Task failure from the inner business `Result`.
+
+The following block is an excerpt from the scope. Run it as the linked project, which supplies the imports and `answer` function; it is not a standalone file.
+
+```nagi
+async with scope:
+    original = spawn answer()
+    transferred = move(original)
+    received = await transferred
+    match received:
+        case Ok(value):
+            print(value)
+        case Err(failure):
+            print(message(failure))
+```
+
+```sh
+nagic run --project test-nagi-code/library-examples/task-results
+```
+
+It prints `42`, `business sentinel`, `sibling finished`, `after scope`, and `task-results: OK`. The order of the two concurrent messages is not fixed.
+
+### Actors and Supervisors
+
+The [complete Supervisor sample](../../test-nagi-code/library-examples/supervised-service/main.nagi) registers an Actor with explicit state creation and message handling functions.
+
+The following block is the registration excerpt. Run it as the linked project, which supplies the types, factory, and handler; it is not a standalone file.
+
+```nagi
+group = actor.supervisor[Context](Context(initial=0), actor.default_options())
+counter = try actor.register[CounterState, Message, i64, CounterError](
+    view(group), "counter", create_counter, update_counter, actor.default_actor_options()
+)
+```
+
+```sh
+nagic run --project test-nagi-code/library-examples/supervised-service
+curl http://127.0.0.1:8090/counter
+curl -H 'Content-Type: application/json' -d '5' http://127.0.0.1:8090/counter
+```
+
+Start the server with the first command and run `curl` in another terminal. The first response is `0`; the response after adding is `5`. The sample uses Tokio tasks in one process and does not promise BEAM process isolation.
+
+### Rust crate adapter
+
+The [local Rust library sample](../../test-nagi-code/rust-library/library-pricing.nagi) declares the typed boundary with `extern def` and keeps the implementation in `native.rs`.
+
+The following block is a shortened explanatory excerpt. Run it as the linked project, which supplies `Quote`, the remaining assertions, and `native.rs`; it is not a standalone file.
+
+```nagi
+@rust("native::quote")
+extern def quote(product: view[str], unit_price_cents: i64, quantity: i64) -> Result[Quote, Error]
+
+def main() -> Result[unit, Error]:
+    product = "Workshop notebook"
+    order = try quote(view(product), 250, 12)
+    return ok(print(order.total_cents))
+```
+
+```sh
+nagic check --project test-nagi-code/rust-library
+nagic run --project test-nagi-code/rust-library
+```
+
+The complete sample prints total `2700` and `Local Rust library verified.`. `check` does not execute the Rust implementation, so the adapter needs `run` for final verification.
+
+### Development and release builds
+
+```sh
+nagic check examples/tutorial/prompt-input.nagi --no-project
+nagic run examples/tutorial/prompt-input.nagi --no-project --profile dev
+nagic build examples/tutorial/prompt-input.nagi --no-project --profile release
+```
+
+`check` avoids Rust compilation, `dev` is for the edit loop, and `release` is for distribution. Every profile keeps Nagi type, ownership, and Policy checks.
+
 ## Use cases available now
 
 | What you want to build | Start here | What it demonstrates |

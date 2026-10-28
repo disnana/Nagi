@@ -4,6 +4,24 @@
 
 ここにある関数はimportなしで使えます。表の`T`は、数値などの対応する型に読み替えてください。利用者が型引数を持つ関数を定義する機能は未対応です。
 
+最初に、入力の変換・借用・長さ・出力を1つの実行可能な例で確認できます。
+
+```nagi
+def main() -> Result[unit, Error]:
+    text = "42"
+    number = try parse_i64(view(text))
+    print(number)
+    print(len(text))
+    return ok(assert_true(number == 42))
+```
+
+```sh
+nagic check builtins.nagi
+nagic run builtins.nagi --profile dev
+```
+
+順に`42`と、UTF-8のbyte数`2`を表示します。`check`はRustをcompileせず、`run`はネイティブ実行ファイルを作ります。この例は公開Nagi 0.2.2でcheck済みです。
+
 ## 出力、入力、環境
 
 | 呼び出し | 引数の型（順番どおり） | 戻り値 | 使い方・注意 |

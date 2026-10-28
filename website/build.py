@@ -25,6 +25,113 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_REPOSITORY = "https://github.com/disnana/Nagi"
 
 
+def changelog_sections(text: str) -> list[tuple[str, str, str]]:
+    """Split the canonical changelog without duplicating release content."""
+    matches = list(re.finditer(r"(?m)^## ([^\n]+)\n", text))
+    sections = []
+    used_slugs = set()
+    for index, match in enumerate(matches):
+        title = match.group(1).strip()
+        body_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        body = text[match.end():body_end].strip()
+        if title.lower().endswith("unreleased") or title.startswith("未リリース"):
+            slug = "unreleased"
+        else:
+            route_title = re.sub(r"\s+[—–-]\s+\d{4}-\d{2}-\d{2}$", "", title)
+            slug = re.sub(r"[^a-z0-9]+", "-", route_title.lower().replace("vs code", "vscode")).strip("-")
+        if not slug or slug in used_slugs:
+            raise ValueError(f"Duplicate or empty changelog route for: {title}")
+        used_slugs.add(slug)
+        sections.append((title, slug, body))
+    if not sections:
+        raise ValueError("CHANGELOG.md must contain at least one ## release section")
+    return sections
+
+
+def changelog_summary(body: str, locale: str, limit: int = 180) -> str:
+    for line in body.splitlines():
+        value = line.strip()
+        if not value.startswith("- "):
+            continue
+        value = value[2:]
+        value = re.sub(r"\[([^]]+)]\([^)]+\)", r"\1", value)
+        value = re.sub(r"[`*_]", "", value)
+        value = re.sub(r"\s+", " ", value).strip()
+        if len(value) > limit:
+            value = value[:limit].rstrip() + "…"
+        return value
+    return (
+        "Details, compatibility notes, and limits for this version."
+        if locale == "en" else
+        "この版の詳細、互換性、制約を確認できます。"
+    )
+
+
+def changelog_index(sections: list[tuple[str, str, str]], locale: str) -> tuple[str, dict[str, str]]:
+    title = "Changelog" if locale == "en" else "変更履歴"
+    intro = (
+        "Choose a version for its complete notes. This index stays small; each detail page is generated from the canonical `CHANGELOG.md`."
+        if locale == "en" else
+        "版を選ぶと完全な変更内容を読めます。この一覧は軽量に保ち、各詳細ページは正本の`CHANGELOG.md`から生成します。"
+    )
+    group_labels = {
+        "unreleased": "In development" if locale == "en" else "開発中",
+        "nagi": "Nagi compiler and runtime" if locale == "en" else "Nagiコンパイラ・ランタイム",
+        "jetbrains": "JetBrains plugin" if locale == "en" else "JetBrainsプラグイン",
+        "vscode": "VS Code extension" if locale == "en" else "VS Code拡張",
+        "combined": "Combined releases" if locale == "en" else "同時リリース",
+    }
+    grouped: dict[str, list[tuple[str, str, str]]] = {key: [] for key in group_labels}
+    routes = {}
+    for title_text, slug, body in sections:
+        lowered = title_text.lower()
+        if slug == "unreleased":
+            group = "unreleased"
+        elif "/" in title_text:
+            group = "combined"
+        elif lowered.startswith("nagi "):
+            group = "nagi"
+        elif lowered.startswith("jetbrains "):
+            group = "jetbrains"
+        elif lowered.startswith("vs code "):
+            group = "vscode"
+        else:
+            group = "combined"
+        grouped[group].append((title_text, slug, body))
+        routes[f"changelog/{slug}/"] = f"docs/changelog/{slug}/"
+    routes["changelog/"] = "docs/changelog/"
+    lines = [f"# {title}", "", intro]
+    for group, entries in grouped.items():
+        if not entries:
+            continue
+        lines.extend(["", f"## {group_labels[group]}", ""])
+        for title_text, slug, body in entries:
+            lines.append(f"- [{title_text}](changelog/{slug}/) — {changelog_summary(body, locale)}")
+    return "\n".join(lines) + "\n", routes
+
+
+def changelog_detail(
+    sections: list[tuple[str, str, str]], index: int, locale: str
+) -> str:
+    title, _, body = sections[index]
+    body = re.sub(
+        r"(?m)^(#{3,6})(?= )",
+        lambda match: "#" * (len(match.group(1)) - 1),
+        body,
+    )
+    all_label = "All versions" if locale == "en" else "全バージョン"
+    newer_label = "Newer" if locale == "en" else "新しい版"
+    older_label = "Older" if locale == "en" else "古い版"
+    links = [f"[{all_label}](changelog/)"]
+    if index > 0:
+        newer_title, newer_slug, _ = sections[index - 1]
+        links.insert(0, f"[← {newer_label}: {newer_title}](changelog/{newer_slug}/)")
+    if index + 1 < len(sections):
+        older_title, older_slug, _ = sections[index + 1]
+        links.append(f"[{older_label}: {older_title} →](changelog/{older_slug}/)")
+    return f"# {title}\n\n" + " · ".join(links) + f"\n\n{body}\n\n" + " · ".join(links) + "\n"
+
+
 def custom_domain(repository: str) -> str | None:
     # A fork must not inherit the upstream domain from its copy of CNAME.
     if repository.rstrip("/").lower() != DEFAULT_REPOSITORY.lower():
@@ -304,13 +411,20 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
         topic_pages = {slug for entries in NAV_TOPICS.values() for slug in entries}
 
         def link(slug, label):
-            active = ' aria-current="page"' if current == f"docs/{slug}/" else ""
+            selected = current == f"docs/{slug}/" or (
+                slug == "changelog" and current.startswith("docs/changelog/")
+            )
+            active = ' aria-current="page"' if selected else ""
             return f'<li><a href="{language_base}docs/{slug}/"{active}>{label}</a></li>'
 
         for index, (title, entries) in enumerate(ENGLISH_GROUPS if locale == "en" else GROUPS):
             links = []
             page_labels = dict(entries)
-            current_group = any(current == f"docs/{slug}/" for slug, _ in entries)
+            current_group = any(
+                current == f"docs/{slug}/" or
+                (slug == "changelog" and current.startswith("docs/changelog/"))
+                for slug, _ in entries
+            )
             for slug, label in entries:
                 if slug in NAV_TOPICS:
                     pages = NAV_TOPICS[slug]
@@ -325,11 +439,12 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
             sections.append(f'<details class="docs-nav-group" data-nav-group="{entries[0][0]}"{opened}><summary>{title}</summary><ul>{"".join(links)}</ul></details>')
         return f'<nav class="docs-nav" aria-label="{LABELS[locale]["docs_contents"]}">' + "".join(sections) + "</nav>"
 
-    def document(source, route, locale):
+    def document(source, route, locale, content=None, virtual_routes=None):
         if not source.is_file():
             raise ValueError(f"Missing Docs source: {source.relative_to(ROOT)}")
         md = MarkdownIt("commonmark", {"html": False}).enable("table").enable("strikethrough")
         labels = LABELS[locale]
+        language_base = base + ("en/" if locale == "en" else "")
         md.renderer.rules["fence"] = lambda tokens, index, options, env: code_block(tokens[index].content, tokens[index].info.split()[0] if tokens[index].info else "text", locale)
         md.renderer.rules["table_open"] = lambda *args: f'<div class="table-scroll" tabindex="0" role="region" aria-label="{labels["table_aria"]}"><table>\n'
         md.renderer.rules["table_close"] = lambda *args: '</table></div>\n'
@@ -352,6 +467,12 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
             href = token.attrGet("href") or ""
             parsed = urlsplit(href)
             if parsed.path and not parsed.scheme and not parsed.netloc:
+                if virtual_routes and parsed.path in virtual_routes:
+                    url = language_base + virtual_routes[parsed.path]
+                    if parsed.fragment:
+                        url += "#" + parsed.fragment
+                    token.attrSet("href", url)
+                    return md.renderer.renderToken(tokens, index, options, env)
                 target = (source.parent / unquote(parsed.path)).resolve()
                 if not target.is_relative_to(ROOT) or not target.exists():
                     raise ValueError(f"Invalid source link in {source.relative_to(ROOT)}: {href}")
@@ -384,7 +505,7 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
             return render_image(tokens, index, options, env)
 
         md.renderer.rules["image"] = image
-        tokens = md.parse(source.read_text(encoding="utf-8"))
+        tokens = md.parse(source.read_text(encoding="utf-8") if content is None else content)
         headings = []
         titles = []
         slugs = Counter()
@@ -413,13 +534,54 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
         sidebar = navigation(route, locale)
         relative = quote(source.relative_to(ROOT).as_posix())
         meta = f'<div class="doc-meta"><span>{labels["docs_version"]}</span><a href="{repo}/blob/{quote(ref, safe="")}/{relative}">{labels["source_label"]}</a></div>'
+        if route == "docs/changelog/":
+            filter_label = "Filter versions" if locale == "en" else "バージョンを絞り込む"
+            filter_placeholder = "Nagi, JetBrains, VS Code..." if locale == "en" else "Nagi、JetBrains、VS Code…"
+            filter_status = "All versions are shown." if locale == "en" else "全バージョンを表示しています。"
+            filter_control = (
+                f'<div class="changelog-filter" role="search"><label for="changelog-filter-{locale}">{filter_label}</label>'
+                f'<input id="changelog-filter-{locale}" type="search" data-changelog-filter '
+                f'placeholder="{filter_placeholder}" autocomplete="off">'
+                f'<p data-changelog-status role="status" aria-live="polite">{filter_status}</p></div>'
+            )
+            for title_text, slug, _ in sections:
+                link = f'<a href="{language_base}docs/changelog/{slug}/">'
+                anchored = f'<a id="{html.escape(slugify(title_text), quote=True)}" href="{language_base}docs/changelog/{slug}/">'
+                if link not in body:
+                    raise ValueError(f"Missing changelog index link for: {title_text}")
+                body = body.replace(link, anchored, 1)
+            first_group = re.search(r'<h2\b', body)
+            if not first_group:
+                raise ValueError("Changelog index must contain at least one version group")
+            body = body[:first_group.start()] + filter_control + body[first_group.start():]
+        body_class = "docs-page"
+        if route == "docs/changelog/":
+            body_class += " changelog-index"
+        elif route.startswith("docs/changelog/"):
+            body_class += " changelog-detail"
         layout = f'<div class="docs-shell"><div class="docs-layout">{sidebar}<div class="docs-content"><details class="mobile-doc-nav"><summary>{labels["docs_contents"]}</summary>{sidebar}</details><main id="main" class="docs-main">{body}{meta}</main></div><nav class="outline" aria-label="{labels["page_contents"]}"><p>{labels["on_page"]}</p><ul>{outline}</ul></nav></div></div>'
         description = f"Nagi development documentation: {titles[0]}." if locale == "en" else f"開発中のNagiの日本語ドキュメント。{titles[0]}について説明します。"
-        page(route, f"{titles[0]} | Nagi Docs", description, layout, locale, "docs-page")
+        page(route, f"{titles[0]} | Nagi Docs", description, layout, locale, body_class)
 
+    changelog_source = ROOT / "CHANGELOG.md"
+    sections = changelog_sections(changelog_source.read_text(encoding="utf-8"))
+    changelog_routes = [f"docs/changelog/{slug}/" for _, slug, _ in sections]
     for locale, sources in (("ja", SOURCES), ("en", ENGLISH_SOURCES)):
         for source, route in sources.items():
-            document(source, route, locale)
+            if source == changelog_source:
+                index_content, virtual_routes = changelog_index(sections, locale)
+                document(source, route, locale, index_content, virtual_routes)
+                for index, (_, slug, _) in enumerate(sections):
+                    detail_route = f"docs/changelog/{slug}/"
+                    document(
+                        source,
+                        detail_route,
+                        locale,
+                        changelog_detail(sections, index, locale),
+                        virtual_routes,
+                    )
+            else:
+                document(source, route, locale)
 
     example = (HERE / "examples/double.nagi").read_text(encoding="utf-8")
     for locale in ("ja", "en"):
@@ -436,7 +598,11 @@ def build(output: Path, base: str, origin: str, repo: str, ref: str) -> None:
         contents_label = "Go to the Docs contents" if english else "Docsの目次へ"
         page("404.html", f"{missing_title} | Nagi", missing_title, f'<main id="main" class="landing section"><h1>{missing_title}</h1><p>{missing_body}</p><p><a href="{language_base}docs/">{contents_label}</a></p></main>', locale)
     (output / ".nojekyll").touch()
-    locations = [origin + base + prefix + route for prefix in ("", "en/") for route in ["", *SOURCES.values()]]
+    locations = [
+        origin + base + prefix + route
+        for prefix in ("", "en/")
+        for route in ["", *SOURCES.values(), *changelog_routes]
+    ]
     sitemap = '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + "".join(f"<url><loc>{escape(url)}</loc></url>" for url in locations) + "</urlset>"
     (output / "sitemap.xml").write_text(sitemap, encoding="utf-8")
     discovery_files(output, base, origin, repo, ref)
