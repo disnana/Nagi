@@ -11,7 +11,7 @@ test('High grammar colors only contextual elif headers and preserves elif identi
   const expression = new RegExp(rule.match);
   for (const header of ['elif ready:', '    elif ready: # branch', 'elif check(value):']) assert.ok(expression.test(header), header);
   for (const identifier of ['elif', 'elif(2)', 'elif = 2', 'elif: i64 = 2', 'elif = 4; if True:',
-    'elif = 2 # note:', 'elif : i64 = 2 # local:', 'def elif(value: i64):', 'object.elif']) {
+    'elif = 2 # note:', 'elif : i64 = 2 # local:', 'elif  :', 'def elif(value: i64):', 'object.elif']) {
     assert.ok(!expression.test(identifier), identifier);
   }
 });
