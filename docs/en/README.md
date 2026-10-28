@@ -17,7 +17,8 @@ The quick reference routes everyday commands, symptoms, and API questions to the
 1. [Setup and first run](getting-started.md): install the compiler and run Hello World.
 2. [Learn by writing code](language-guide.md): try values, functions, lists, borrowing, and Results.
 3. [Your first small CLI app](first-app.md): connect input, typed failures, and a manual boundary check.
-4. [End-to-end task API](task-api-tutorial.md): connect HTTP, JSON, SQLite, tests, and a release build.
+4. [Short Result and try tutorial](../../test-nagi-code/result-try-tutorial/README.en.md): follow Result propagation and recovery with match.
+5. [End-to-end task API](task-api-tutorial.md): connect HTTP, JSON, SQLite, tests, and a release build.
 
 See the [VS Code guide](editor.md) for editor support. See [JetBrains installation and Release ZIP selection](../../editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm.
 

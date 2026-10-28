@@ -72,6 +72,15 @@ impl Fixture {
         std::fs::remove_dir_all(self.dir).unwrap();
     }
 }
+async fn bootstrap_case(case: &str, pool: &prelogin::Pool, owner: &prelogin::HttpOwner) {
+    let started = Instant::now();
+    if let Err(error) = pool.bootstrap_http(owner, None).await {
+        panic!(
+            "prelogin bootstrap case={case} elapsed_ms={} error={error:?}",
+            started.elapsed().as_millis()
+        );
+    }
+}
 struct Server {
     address: std::net::SocketAddr,
     stop: Option<tokio::sync::oneshot::Sender<()>>,
@@ -269,6 +278,7 @@ async fn origin_credential_and_body_rejections_never_issue_state() {
 }
 #[tokio::test]
 async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
+    const NORMAL_TTL_MS: i64 = 10_000;
     let response_request = response_public::tests::request_fixture(64);
     let response_context = response_context(&response_request);
     let f = Fixture::new(1000).await;
@@ -276,7 +286,7 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
     );
     let weak = first.downgrade();
-    f.pool.bootstrap_http(&first, None).await.unwrap();
+    bootstrap_case("expired_wire", &f.pool, &first).await;
     let seal = first.seal().unwrap();
     tokio::time::sleep(Duration::from_millis(1000)).await;
     let denied = finalize_prelogin(
@@ -297,15 +307,17 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     drop(first);
     assert!(!weak.has_live_owner());
     assert!(f.count().await == 1);
-    // Fresh normal lifetime for one-use/foreign/replacement paths.
+    // The expired-wire case above and the controlled maintenance-wait tests
+    // own expiry behavior. Keep these structural cases within the separate
+    // finite request lease instead of making scheduler load a 1s TTL oracle.
     prelogin::close_native(&f.pool, 2000).await.unwrap();
     sqlite::close(&f.auth, 2000).await.unwrap();
     std::fs::remove_dir_all(&f.dir).unwrap();
-    let f = Fixture::new(1000).await;
+    let f = Fixture::new(NORMAL_TTL_MS).await;
     let owner = prelogin::HttpOwner::new(
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
     );
-    f.pool.bootstrap_http(&owner, None).await.unwrap();
+    bootstrap_case("foreign_owner", &f.pool, &owner).await;
     let seal = owner.seal().unwrap();
     let foreign = prelogin::HttpOwner::new(
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
@@ -326,7 +338,7 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     let owner = prelogin::HttpOwner::new(
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
     );
-    f.pool.bootstrap_http(&owner, None).await.unwrap();
+    bootstrap_case("replacement", &f.pool, &owner).await;
     let seal = owner.seal().unwrap();
     let denied = finalize_prelogin(
         response_context,
@@ -341,11 +353,11 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
     f.stop().await;
     // Destructive success and impossible cache/304 replacements are separate
     // terminal cases; bounded new fixtures preserve the two-live-row budget.
-    let f = Fixture::new(1000).await;
+    let f = Fixture::new(NORMAL_TTL_MS).await;
     let owner = prelogin::HttpOwner::new(
         LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
     );
-    f.pool.bootstrap_http(&owner, None).await.unwrap();
+    bootstrap_case("destructive_success", &f.pool, &owner).await;
     let seal = owner.seal().unwrap();
     let accepted = finalize_prelogin(
         response_context,
@@ -368,11 +380,11 @@ async fn wire_take_refuses_expired_foreign_reused_and_replacement_seals() {
             conflicting_cache_for_test(empty(response_context, Status::OK).unwrap()),
         ),
     ] {
-        let f = Fixture::new(1000).await;
+        let f = Fixture::new(NORMAL_TTL_MS).await;
         let owner = prelogin::HttpOwner::new(
             LeaseOwner::new(Instant::now() + Duration::from_secs(10)).unwrap(),
         );
-        f.pool.bootstrap_http(&owner, None).await.unwrap();
+        bootstrap_case(case, &f.pool, &owner).await;
         let seal = owner.seal().unwrap();
         let denied = finalize_prelogin(
             response_context,
