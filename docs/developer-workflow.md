@@ -1,6 +1,6 @@
 # 開発・デバッグの早見表
 
-Nagi 0.2.1で「書く → 検査 → 実行 → 配布」を進める入口です。初めてなら[インストール](getting-started.md)、採用を検討するなら[特徴と他言語との比較](comparison.md)へ。
+Nagi 0.2.2で「書く → 検査 → 実行 → 配布」を進める入口です。初めてなら[インストール](getting-started.md)、採用を検討するなら[特徴と他言語との比較](comparison.md)へ。
 
 ## 普段はこの3つ
 
@@ -60,4 +60,4 @@ nagic run --project . --profile dev --build-stats
 
 ## リリース前
 
-完全な`check`、releaseビルド、アプリ固有の正常系・異常系テストを実施します。Nagi 0.2.1に汎用の`nagic test`コマンドはありません。既存のテストharnessをCIへ組み込み、HTTPなら実リクエスト、DBなら保存結果まで確認します。インストール済み版と機能の対応は[変更履歴](../CHANGELOG.md)と[公開Release](https://github.com/disnana/Nagi/releases)で確認できます。0.2.2は開発中です。
+完全な`check`、releaseビルド、アプリ固有の正常系・異常系テストを実施します。Nagi 0.2.2に汎用の`nagic test`コマンドはありません。既存のテストharnessをCIへ組み込み、HTTPなら実リクエスト、DBなら保存結果まで確認します。インストール済み版と機能の対応は[変更履歴](../CHANGELOG.md)と[公開Release](https://github.com/disnana/Nagi/releases)で確認できます。`Unreleased`や計画中のGo targetを公開機能として扱わないでください。

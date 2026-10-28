@@ -1,6 +1,6 @@
 # Nagi guidance for coding agents
 
-Use this directory for agents building or debugging Nagi applications. The guides target the published Nagi compiler **0.2.1**. Check `nagic --version` for the compiler actually in use; editor extensions have independent versions and release schedules. Repository development may contain unreleased work. Do not describe 0.2.2 or an editor plugin release as published unless its release record confirms it.
+Use this directory for agents building or debugging Nagi applications. The guides target the published Nagi compiler **0.2.2**. Check `nagic --version` for the compiler actually in use; editor extensions have independent versions and release schedules. Repository development may contain unreleased work. Do not describe `Unreleased`, the planned 0.3.0 Go target, or an editor plugin change as published unless its release record confirms it.
 
 For work on the compiler, runtime, editor implementation, or this repository, follow the root [AGENTS.md](../AGENTS.md). These application guides do not set compiler contracts or contributor workflow.
 
@@ -38,9 +38,9 @@ nagic run --project . --profile dev
 
 `check` checks Nagi syntax, declared types, ownership, and borrowing, and writes generated Low. `run` then builds and executes the program in one command. A successful `check` does not establish that native generation, Rust/Cargo build, publication of the executable, or runtime behavior succeeds. Report the failing stage from its actual diagnostic.
 
-The default native profile is `release`; use `--profile dev` for the normal edit/run loop. For an explicit release build or pre-release validation, run `nagic build --project . --profile release` when needed; do not also run `nagic run` unless you need a separate execution, since `run` builds again. The published 0.2.1 CLI accepts `--profile dev|release` and `--build-stats` on `build` and `run`; `--incremental` or `--incremental=units` requires `build`/`run --profile dev` and is opt-in. See the [development build guide](../docs/en/development-builds.md) for limits.
+The default native profile is `release`; use `--profile dev` for the normal edit/run loop. For an explicit release build or pre-release validation, run `nagic build --project . --profile release` when needed; do not also run `nagic run` unless you need a separate execution, since `run` builds again. The published 0.2.2 CLI accepts `--profile dev|release` and `--build-stats` on `build` and `run`; `--incremental` or `--incremental=units` requires `build`/`run --profile dev` and is opt-in. See the [development build guide](../docs/en/development-builds.md) for limits.
 
-Unreleased 0.2.2 development sources also provide [opt-in runtime selection](../docs/en/runtime-profiles.md). Check `nagic build --help` before using `--runtime-profile auto`; do not pass it to published 0.2.1 or enable it automatically. Read the selected profile and fallback reason in build stats, keep full checks, and do not generalize Hello/Point measurements to HTTP/database apps.
+Published 0.2.2 also provides [opt-in runtime selection](../docs/en/runtime-profiles.md). Check `nagic build --help` before using `--runtime-profile auto`; do not pass it to 0.2.1 or earlier or enable it automatically. Read the selected profile and fallback reason in build stats, keep full checks, and do not generalize Hello/Point measurements to HTTP/database apps.
 
 ## Tested starting points
 

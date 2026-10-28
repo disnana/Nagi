@@ -53,7 +53,7 @@ def site_defaults(repository: str) -> tuple[str, str]:
 
 
 GROUPS = [
-    ("目的から探す", [("use-cases", "何を作れるか"), ("task-api-tutorial", "タスク管理APIを作る"), ("task-api-comparison", "FastAPI・Quartとの比較"), ("developer-workflow", "開発・デバッグの早見表"), ("comparison", "特徴と他言語との比較"), ("development-builds", "開発ビルドと差分"), ("runtime-profiles", "runtime選択（開発中）"), ("lock-seeds", "初回lock（開発中）"), ("user-ci", "アプリのCI")]),
+    ("目的から探す", [("use-cases", "何を作れるか"), ("task-api-tutorial", "タスク管理APIを作る"), ("task-api-comparison", "FastAPI・Quartとの比較"), ("developer-workflow", "開発・デバッグの早見表"), ("comparison", "特徴と他言語との比較"), ("changelog", "変更履歴"), ("development-builds", "開発ビルドと差分"), ("runtime-profiles", "runtime選択"), ("lock-seeds", "初回lock"), ("user-ci", "アプリのCI")]),
     ("入門", [("getting-started", "準備と最初の実行"), ("language-guide", "コードを書きながら学ぶ"), ("first-app", "最初のCLIアプリ"), ("editor", "エディターの操作例")]),
     ("言語リファレンス", [("syntax", "文法の早見表"), ("builtins", "組み込み関数"), ("types", "型と推論"), ("classes", "class"), ("ownership", "所有権"), ("view-and-zero-copy", "viewとコピー"), ("error-handling", "エラー処理")]),
     ("アプリを作る", [("http", "使い方"), ("http-server", "APIリファレンス"), ("http-stdlib-performance", "性能測定"), ("security", "認証・認可"), ("migration-0.2.0", "0.2.0移行"), ("http-legacy", "旧APIの移行"), ("json", "JSON"), ("database", "SQLite"), ("sqlite-pool", "SQLite PoolとTransaction"), ("sql-check", "SQLの事前検査"), ("modules-and-rust", "importとRust連携"), ("libraries", "自作ライブラリとRustの資産"), ("projects", "プロジェクト設定"), ("async", "asyncとscope"), ("task-handles", "Task結果handle"), ("concurrency", "並行処理"), ("actor", "actorの書き方"), ("supervisor", "再起動と停止"), ("actor-reference", "APIリファレンス"), ("actor-performance", "性能測定")]),
@@ -62,6 +62,7 @@ GROUPS = [
 ]
 SOURCES = {ROOT / "docs/README.md": "docs/"}
 EXTRA = {
+    "changelog": ROOT / "CHANGELOG.md",
     "web-demo": ROOT / "test-nagi-code/web-demo/README.md",
     "result-api": ROOT / "test-nagi-code/result-api/README.md",
     "measurements": ROOT / "PERFORMANCE.md",
@@ -72,7 +73,7 @@ for _, entries in GROUPS:
         SOURCES[EXTRA.get(slug, ROOT / f"docs/{slug}.md")] = f"docs/{slug}/"
 
 ENGLISH_GROUPS = [
-    ("Find by task", [("use-cases", "What you can build"), ("task-api-tutorial", "Build a task API"), ("task-api-comparison", "FastAPI and Quart comparison"), ("developer-workflow", "Development and debugging"), ("comparison", "Strengths and comparisons"), ("development-builds", "Development builds"), ("runtime-profiles", "Runtime profiles (development)"), ("lock-seeds", "Initial lock (development)"), ("user-ci", "Application CI")]),
+    ("Find by task", [("use-cases", "What you can build"), ("task-api-tutorial", "Build a task API"), ("task-api-comparison", "FastAPI and Quart comparison"), ("developer-workflow", "Development and debugging"), ("comparison", "Strengths and comparisons"), ("changelog", "Changelog"), ("development-builds", "Development builds"), ("runtime-profiles", "Runtime profiles"), ("lock-seeds", "Initial lock"), ("user-ci", "Application CI")]),
     ("First steps", [("getting-started", "Setup and first run"), ("language-guide", "Learn by writing code"), ("first-app", "First CLI app"), ("editor", "Editor walkthrough")]),
     ("Language reference", [("syntax", "Syntax reference"), ("builtins", "Built-in functions"), ("types", "Types and inference"), ("classes", "Classes"), ("ownership", "Ownership"), ("view-and-zero-copy", "Views and copying"), ("error-handling", "Error handling")]),
     ("Build an application", [("http", "Guide"), ("http-server", "API reference"), ("http-stdlib-performance", "Measurements"), ("security", "Authentication"), ("migration-0.2.0", "0.2.0 migration"), ("http-legacy", "Retired API migration"), ("json", "JSON"), ("database", "SQLite"), ("sqlite-pool", "SQLite Pools and Transactions"), ("sql-check", "SQL checks"), ("modules-and-rust", "Imports and Rust"), ("libraries", "Libraries and Rust assets"), ("projects", "Project configuration"), ("async", "Async and scopes"), ("task-handles", "Task result handles"), ("concurrency", "Concurrency"), ("actor", "Writing actors"), ("supervisor", "Restart and shutdown"), ("actor-reference", "API reference"), ("actor-performance", "Measurements")]),
@@ -80,9 +81,10 @@ ENGLISH_GROUPS = [
     ("Design and development", [("library-design", "Library design proposal"), ("introduction", "About Nagi"), ("low-language", "High and Low"), ("memory-model", "Memory handling"), ("compiler-internals", "Compiler internals"), ("code-map", "Code maps"), ("contributing", "Contributing to Nagi"), ("queue", "Queue experiments"), ("ffi", "Language interfaces"), ("performance", "Reading benchmarks"), ("measurements", "Measurements"), ("http-capacity", "HTTP load tests"), ("roadmap", "Roadmap"), ("vscode-extension", "VS Code extension settings")]),
 ]
 ENGLISH_SOURCES = {ROOT / "docs/en/README.md": "docs/"}
+ENGLISH_EXTRA = {"changelog": ROOT / "CHANGELOG.md"}
 for _, entries in ENGLISH_GROUPS:
     for slug, _ in entries:
-        ENGLISH_SOURCES[ROOT / f"docs/en/{slug}.md"] = f"docs/{slug}/"
+        ENGLISH_SOURCES[ENGLISH_EXTRA.get(slug, ROOT / f"docs/en/{slug}.md")] = f"docs/{slug}/"
 if set(SOURCES.values()) != set(ENGLISH_SOURCES.values()):
     raise ValueError("Japanese and English Docs must contain the same pages")
 
@@ -97,18 +99,18 @@ NAV_TOPIC_LABELS = {
 
 LABELS = {
     "ja": dict(skip_label="本文へ移動", home_label="Nagi ホーム", menu_label="サイトのメニュー",
-               start_label="はじめる", status_label="Nagi 0.2.1 · 0.2.2開発中", footer_label="フッター",
+               start_label="はじめる", status_label="Nagi 0.2.2 公開中", footer_label="フッター",
                other_language="en", other_label="English", switch_label="Read this page in English",
                docs_contents="Docsの目次", page_contents="このページの目次", on_page="このページ",
-               source_label="このページのソース", docs_version="Nagi 0.2.1 · Docs",
+               source_label="このページのソース", docs_version="Nagi 0.2.2 · Docs",
                copy_label="コピー", copy_aria="このコードをコピー", code_aria="コード",
                table_aria="表（横にスクロールできます）", theme_label="外観",
                theme_system="システム", theme_light="ライト", theme_dark="ダーク"),
     "en": dict(skip_label="Skip to content", home_label="Nagi home", menu_label="Site navigation",
-               start_label="Get started", status_label="Nagi 0.2.1 · 0.2.2 in development", footer_label="Footer",
+               start_label="Get started", status_label="Nagi 0.2.2 available", footer_label="Footer",
                other_language="ja", other_label="日本語", switch_label="このページを日本語で読む",
                docs_contents="Docs contents", page_contents="On this page", on_page="On this page",
-               source_label="Page source", docs_version="Nagi 0.2.1 · Docs",
+               source_label="Page source", docs_version="Nagi 0.2.2 · Docs",
                copy_label="Copy", copy_aria="Copy this code", code_aria="Code",
                table_aria="Table (scroll horizontally)", theme_label="Appearance",
                theme_system="System", theme_light="Light", theme_dark="Dark"),
@@ -134,7 +136,7 @@ class NagiLexer(RegexLexer):
         (r"\b(async|await|try|return|if|else|while|for|in|match|case|let|import|from|as|scope|with|spawn|extern)\b", Keyword),
         (r"\b(True|False|true|false|None|null)\b", Keyword.Constant),
         (r"\b(i\d+|u\d+|f\d+|bool|str|bytes|unit|List|Result|Error|Db|Html|view|shared)\b", Keyword.Type),
-        (r"\b(print|len|range|ok|error|some|copy|parse_i64)\b", Name.Builtin),
+        (r"\b(print|write|read_line|len|range|ok|error|some|copy|parse_i64)\b", Name.Builtin),
         (r"\b\d+(?:\.\d+)?\b", Number), (r"@[A-Za-z_]\w*", Name.Decorator),
         (r"[+*/=<>!%-]+", Operator), (r"[():,;\[\]{}.]", Punctuation),
         (r"[A-Za-z_]\w*", Name), (r".", Text),
@@ -218,7 +220,8 @@ def discovery_files(output: Path, base: str, origin: str, repo: str, ref: str) -
         "> A backend language with Python-style syntax, explicit types and ownership, "
         "and native executables compiled through Rust/Cargo.",
         "",
-        "Published compiler baseline: 0.2.1. Version 0.2.2 is in development. "
+        "Published compiler baseline: 0.2.2. Unreleased changes and the planned "
+        "0.3.0 Go target are not shipped APIs. "
         "Editor plugins have independent versions. The site follows repository source; "
         "roadmap proposals are not shipped APIs.",
         "",

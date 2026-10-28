@@ -1,8 +1,8 @@
-# Runtime dependency selection (0.2.2 development)
+# Runtime dependency selection (0.2.2)
 
 [日本語](../runtime-profiles.md)
 
-This feature targets **unreleased development sources for 0.2.2**. Published 0.2.1 does not support it. Check that `nagic build --help` lists `--runtime-profile full|auto`. Compiler and editor plugin versions are independent.
+This feature is available in published Nagi 0.2.2. Version 0.2.1 and earlier do not support it. Check that `nagic build --help` lists `--runtime-profile full|auto`. Compiler and editor plugin versions are independent.
 
 Opt in to dependency selection to reduce the communication and cryptography dependencies compiled for a small first program:
 

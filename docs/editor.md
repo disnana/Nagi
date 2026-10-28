@@ -2,7 +2,7 @@
 
 [目次](README.md) · [準備と最初の実行](getting-started.md) · [拡張のインストールと設定](../editors/vscode-nagi/README.md)
 
-**現在の公開版（2026-10-25）:** Nagi 0.2.1は[10月23日に公開](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.1)、JetBrains plugin 0.1.6は[GitHub Releasesで公開](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6)済みです。導入可能な版とIDE対応は[GitHub Releases](https://github.com/disnana/Nagi/releases)またはMarketplaceで確認してください。[README](../README.md)に公開版の範囲を、[Docs目次](README.md)に0.2.2開発中の差分を掲載しています。下の0.1.2・0.1.3の記述は当時の版別記録で、現在の配布ZIP一覧ではありません。新しい配布物を選ぶ根拠にせず、個別releaseの情報を確認してください。
+**現在の公開版（2026-10-28）:** Nagi 0.2.2は[10月27日に公開](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.2)、JetBrains plugin 0.1.6は[GitHub Releasesで公開](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6)済みです。VS Code・JetBrains拡張はcompilerとは別に版管理します。導入可能な版とIDE対応は[GitHub Releases](https://github.com/disnana/Nagi/releases)またはMarketplaceで確認してください。下の0.1.2・0.1.3の記述は当時の版別記録で、現在の配布ZIP一覧ではありません。
 
 ## JetBrains 0.1.2・0.1.3の版別記録
 
@@ -18,7 +18,7 @@ plugin 0.1.3の世代保持はcompiler 0.2.0を使い、IDE管理のRunだけに
 
 ## 隣接ファイルのimport支援（Nagi 0.2.1・JetBrains 0.1.6）
 
-隣接ファイルを名前でimportするcompiler側の支援はNagi 0.2.1に含まれ、JetBrains plugin 0.1.6の[公開release](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6)にも反映されています。Nagi 0.2.0／plugin 0.1.3以前には含まれません。Nagi 0.2.2の開発差分は[Docs目次](README.md)で別に確認してください。この案内は手動GUIやIMEの受入を示すものではありません。
+隣接ファイルを名前でimportするcompiler側の支援はNagi 0.2.1以降に含まれ、JetBrains plugin 0.1.6の[公開release](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6)にも反映されています。Nagi 0.2.0／plugin 0.1.3以前には含まれません。この案内は手動GUIやIMEの受入を示すものではありません。
 
 同じフォルダーに`models.nagi`を保存すると、Highの`import mo`で`models`、`from models import `でそのファイル自身の定義を候補にします。Lowでは隣の`.low`が対象です。標準moduleの候補もcompilerの登録情報から取得します。`from`で関数を選んでも呼び出し括弧は付けません。import先・選んだ定義・別名の定義移動は、compilerが元ファイルの正確な位置を返せる場合に利用できます。[構文と実行例](modules-and-rust.md#隣のファイルを名前でimportする)を参照してください。
 

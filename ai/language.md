@@ -2,7 +2,7 @@
 
 [Agent entry point](README.md) · [Rust adapters](rust-interop.md)
 
-This guide describes the published Nagi compiler 0.2.1. Version mentions below identify when a rule or API was introduced; they are historical introduction versions, not the current guide baseline. Confirm the installed compiler with `nagic --version` before relying on a published feature.
+This guide describes the published Nagi compiler 0.2.2. Version mentions below identify when a rule or API was introduced; they are historical introduction versions, not the current guide baseline. Confirm the installed compiler with `nagic --version` before relying on a published feature.
 
 Use `.nagi` for application code and four spaces for blocks. Top level contains imports, classes, enums, functions, and extern declarations. Executable statements belong inside functions; `main` is the entry point. Annotate function parameters and value-returning functions. An omitted return annotation means `unit`. Classes are typed records constructed with every field named, rather than objects with methods.
 

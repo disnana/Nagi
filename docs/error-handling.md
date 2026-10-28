@@ -223,6 +223,6 @@ scopeは本体終了後に子taskの結果を確認し、その際にpanicを検
 
 診断はファイル名、行、該当ソース、理由を表示します。ビルド時も、元の位置を特定できるエラーはNagi・Lowの文や定義の行と関連noteを表示します。生成Rustの詳細は`build/run --rust-diagnostics`で確認できます。Rustの修正候補はRust向けです。手書きRustや位置を特定できない診断は省略せず、Rust側の表示を使います。厳密な列位置や全Rust診断の対応は未実装です。VS Codeの定義ジャンプは元ソースの列位置も扱います。
 
-0.2.1向け開発版の呼び出し診断では、通常の関数、ローカルの関数値、async関数、組み込み関数の位置引数の数が違うと、呼び出し先の名前と期待数・実際の数を表示します。たとえば`print()`は`print は1引数です（期待: 1個、実際: 0個）`となり、`print("Hello, Nagi!")`のように値を1個渡すと解消します。組み込み関数の型引数の個数の不一致も、名前と両方の数を表示します。[呼び出し診断のテスト](../compiler/tests/support/call_diagnostics.rs)でHigh・Low両方を確認しています。
+Nagi 0.2.1以降の呼び出し診断では、通常の関数、ローカルの関数値、async関数、組み込み関数の位置引数の数が違うと、呼び出し先の名前と期待数・実際の数を表示します。たとえば`print()`は`print は1引数です（期待: 1個、実際: 0個）`となり、`print("Hello, Nagi!")`のように値を1個渡すと解消します。組み込み関数の型引数の個数の不一致も、名前と両方の数を表示します。[呼び出し診断のテスト](../compiler/tests/support/call_diagnostics.rs)でHigh・Low両方を確認しています。
 
 実装とテストは[Resultの型検査・match](../compiler/tests/result_match.rs)、[独自エラー型](../compiler/tests/typed_errors.rs)、[map_error](../compiler/tests/result_stdlib.rs)、[整数のゼロ除算チェック](../compiler/tests/integer_zero_division.rs)、[scope](../runtime/src/concurrent.rs)、[actor](../runtime/src/actor/tests.rs)を参照してください。

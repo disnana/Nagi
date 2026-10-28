@@ -14,7 +14,7 @@ nagic build --project my-app --profile release --build-stats
 
 `dev` selects Cargo's development profile; `release` retains the existing optimized profile. Development compilation avoids optimization work and reuses development runtime dependencies. Ordinary integer arithmetic overflow normally panics in dev and wraps in release, as the existing language contract specifies. Cargo profile overrides and environment settings still apply. Measure production performance and distribute applications using release.
 
-Development sources for 0.2.2 add [opt-in runtime selection](runtime-profiles.md) for supported small programs. Published 0.2.1 does not support it. Full runtime dependencies remain the default, with complete checking preserved.
+Published 0.2.2 provides [opt-in runtime selection](runtime-profiles.md) for supported small programs. Version 0.2.1 and earlier do not support it. Full runtime dependencies remain the default, with complete checking preserved.
 
 ## Reusing the generated body
 

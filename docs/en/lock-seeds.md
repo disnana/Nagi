@@ -1,8 +1,8 @@
-# Selecting the initial dependency lock (0.2.2 development)
+# Selecting the initial dependency lock (0.2.2)
 
 [日本語](../lock-seeds.md)
 
-This is an unreleased development feature for 0.2.2; published 0.2.1 does not support it. The default remains ordinary Cargo dependency resolution. Supporting distributions include an initial lock, checked against their runtime, under `runtime-seed/`.
+This explicit opt-in feature is available in published Nagi 0.2.2; version 0.2.1 and earlier do not support it. The default remains ordinary Cargo dependency resolution. Supporting distributions include an initial lock, checked against their runtime, under `runtime-seed/`.
 
 ```sh
 nagic build --project my-app --seed-lock --build-stats

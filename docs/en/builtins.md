@@ -11,13 +11,13 @@ These functions need no imports. `T` stands for a supported type. User-defined g
 | `print(value)` | Numbers, bool, str, view[str], UUID | `unit` | Prints one number, bool, string, or similar value with a newline; no direct class/list printing API |
 | `write(value)` | Same as print | `unit` | Prints without a newline; accepts the same inputs as print |
 | `read_line()` | None | `Result[str, Error]` | `text = try read_line()`; synchronous console input |
-| `read_line(prompt)` | str or view[str] | `Result[str, Error]` | Added in the development version; prints the prompt without a newline before reading |
+| `read_line(prompt)` | str or view[str] | `Result[str, Error]` | Added in 0.2.2; prints the prompt without a newline before reading |
 | `env("NAME", "default")` | str, str | `str` | Returns the default when the environment variable is unavailable |
 | `assert_true(condition)` | bool | `unit` | Requires bool; panics on False |
 
 `read_line` displays pending output, then reads a line and removes its trailing newline. It retains other whitespace and returns an empty string at the end of input. It blocks while waiting for input, so use it in console applications.
 
-In the development version, use `name = try read_line("Name: ")`. The prompt is borrowed for reading and remains usable after the call. The operation writes the prompt, flushes output, then reads input. Write, flush, and read failures return an `Error` through `Result`; handle it with `try` or `match`. Existing calls without arguments keep their behavior. On released 0.2.1, use `write("Name: ")` followed by `try read_line()`. The [complete example](../../examples/tutorial/prompt-input.nagi) requires the development version.
+Published 0.2.2 supports `name = try read_line("Name: ")`. The prompt is borrowed for reading and remains usable after the call. The operation writes the prompt, flushes output, then reads input. Write, flush, and read failures return an `Error` through `Result`; handle it with `try` or `match`. Existing calls without arguments keep their behavior. The [complete example](../../examples/tutorial/prompt-input.nagi) runs on 0.2.2. On 0.2.1, use `write("Name: ")` followed by `try read_line()`.
 
 `env` evaluates its second argument only when the variable is unavailable. When a value exists, a function constructing the default is not called. The generation fix for defaults containing `try` or `await` targets Nagi 0.1.11; check [GitHub Releases](https://github.com/disnana/Nagi/releases) to confirm published availability.
 
