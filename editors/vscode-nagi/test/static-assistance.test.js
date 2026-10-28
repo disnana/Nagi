@@ -2,14 +2,26 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const f = require('../src/features');
+const highGrammar = require('../syntaxes/nagi.tmLanguage.json');
 const index = { definitions: [] };
+
+test('High grammar colors only contextual elif headers and preserves elif identifiers', () => {
+  const rule = highGrammar.patterns.find(pattern => pattern.captures?.['2']?.name === 'keyword.control.nagi');
+  assert.ok(rule);
+  const expression = new RegExp(rule.match);
+  for (const header of ['elif ready:', '    elif ready: # branch', 'elif check(value):']) assert.ok(expression.test(header), header);
+  for (const identifier of ['elif', 'elif(2)', 'elif = 2', 'elif: i64 = 2', 'elif = 4; if True:',
+    'elif = 2 # note:', 'elif : i64 = 2 # local:', 'elif  :', 'def elif(value: i64):', 'object.elif']) {
+    assert.ok(!expression.test(identifier), identifier);
+  }
+});
 
 test('keyword completion covers existing syntax in High and Low without leaking into types or members', () => {
   const shared = ['enum', 'scope', 'spawn', 'import', 'extern', 'in', 'with', 'and', 'or', 'not', 'True', 'False', 'None', 'true', 'false', 'null'];
   for (const low of [false, true]) {
     const names = f.completionCandidates(undefined, 'sco', 3, low).filter(x => x.kind === 'keyword').map(x => x.name);
-    for (const name of [...shared, ...(low ? ['fn', 'record', 'let'] : ['def', 'class'])]) assert.ok(names.includes(name), name);
-    for (const name of ['elif', 'break', 'continue', 'pass', ...(low ? ['def', 'class'] : ['fn', 'record'])]) assert.ok(!names.includes(name), name);
+    for (const name of [...shared, ...(low ? ['fn', 'record', 'let'] : ['def', 'class', 'elif'])]) assert.ok(names.includes(name), name);
+    for (const name of ['break', 'continue', 'pass', ...(low ? ['def', 'class', 'elif'] : ['fn', 'record'])]) assert.ok(!names.includes(name), name);
   }
   for (const text of ['value: sco', 'value.sco', '# sco', '"sco']) {
     assert.ok(!f.completionCandidates(undefined, text, text.length).some(x => x.kind === 'keyword'), text);

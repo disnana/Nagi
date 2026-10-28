@@ -1,7 +1,7 @@
 'use strict';
 const { context } = require('./features');
 
-const header = /^(?:(?:async\s+)?def\b|class\b|enum\b|if\b|else\b|while\b|for\b|match\b|case\b|scope\b|async\s+with\b)[\s\S]*:\s*$/;
+const header = /^(?:(?:async\s+)?def\b|class\b|enum\b|if\b|elif\b|else\b|while\b|for\b|match\b|case\b|scope\b|async\s+with\b)[\s\S]*:\s*$/;
 const pairs = { ')': '(', ']': '[', '}': '{' };
 
 function width(space, size) {
@@ -11,9 +11,28 @@ function width(space, size) {
 }
 
 function branchParent(blocks, kind, indent, size) {
-  const target = kind === 'else' ? 'if' : 'match';
+  const target = kind === 'else' || kind === 'elif' ? 'if' : 'match';
   const extra = kind === 'case' ? size : 0;
   return [...blocks].reverse().find(block => block.kind === target && block.indent + extra <= indent);
+}
+
+function branchKind(statement) {
+  const kind = /^(else|elif|case)\b/.exec(statement)?.[1];
+  if (kind !== 'elif') return kind;
+  const condition = statement.slice(4, -1).trim();
+  if (!condition) return undefined; // `elif: Type` can be a local annotation.
+  let depth = 0;
+  for (let index = 0; index < condition.length; index++) {
+    const value = condition[index];
+    if (value === '(' || value === '[') depth++;
+    else if (value === ')' || value === ']') depth = Math.max(0, depth - 1);
+    else if (depth === 0 && (value === ';' || value === ':')) return undefined;
+    else if (depth === 0 && value === '='
+      && condition[index - 1] !== '=' && condition[index - 1] !== '!'
+      && condition[index - 1] !== '<' && condition[index - 1] !== '>'
+      && condition[index + 1] !== '=') return undefined;
+  }
+  return 'elif';
 }
 
 // Return edits to leading whitespace only. Strings and comments keep their text.
@@ -44,14 +63,15 @@ function edits(text, line, character, trigger, options, language = 'nagi') {
     lastIndent = statementIndent;
     lastHeader = language === 'nagi' && !brackets.length && header.test(statement.trim());
     headerIndent = undefined;
-    const branch = lastHeader && /^(else|case)\b/.exec(statement.trim())?.[1];
+    const branch = lastHeader && branchKind(statement.trim());
+    if (lastHeader && /^elif\b/.test(statement.trim()) && !branch) lastHeader = false;
     if (branch) {
       const parent = branchParent(blocks, branch, statementIndent, size);
       if (parent) headerIndent = parent.indent + (branch === 'case' ? size : 0);
     }
     if (!brackets.length && language === 'nagi') {
       while (blocks.length && blocks.at(-1).indent >= statementIndent) blocks.pop();
-      if (lastHeader) blocks.push({ kind: statement.trim().split(/\s/)[0], indent: statementIndent });
+      if (lastHeader) blocks.push({ kind: branch === 'elif' ? 'if' : statement.trim().split(/\s/)[0], indent: statementIndent });
     }
   }
   const result = [];
@@ -76,7 +96,7 @@ function edits(text, line, character, trigger, options, language = 'nagi') {
       else if (pairs[c] && remaining.at(-1)?.kind === pairs[c]) remaining.pop();
     }
     if (remaining.length) return [];
-    const kind = /^(else|case)\b/.exec(brackets.length ? statement + current : current)?.[1];
+    const kind = branchKind(brackets.length ? statement + current : current);
     const start = brackets.length ? statementStart : line;
     const indent = width(lines[start].match(/^[ \t]*/)[0], size);
     const parent = kind && branchParent(blocks, kind, indent, size);

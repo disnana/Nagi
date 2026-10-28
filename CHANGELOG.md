@@ -2,6 +2,8 @@
 
 ## 未リリース / Unreleased
 
+- High構文にPythonと同じ`elif condition:`を追加し、既存の入れ子`else:` + `if`と同じ検査済み`if`へloweringします。Low構文と従来の`elif`識別子は維持し、VS Code / JetBrainsの補完・色・字下げも文脈に限定します。
+- Add contextual High `elif condition:` branches, lowered through the existing checked `if` representation. Preserve Low syntax and existing `elif` identifiers, with context-aware completion, coloring and indentation in both editor plugins.
 ## Nagi 0.2.2 — 2026-10-27
 
 - 0.2.1との互換性、既定のfull runtime・release build、完全なHigh/Low・型・所有権・Policy検査、Cargoのnative再判定、旧成功成果物の保護を維持しながら、小さな変更の開発待ち時間と初回依存解決の再現性を改善します。IDEプラグインは別の版・公開工程です。

@@ -68,6 +68,8 @@ NAGI_FUZZ_MUTATIONS=10000 NAGI_FUZZ_CASES=128 NAGI_FUZZ_SEED=305419896 cargo run
 
 seedを保存し、失敗したcase indexを含む件数以上で同じcommandを再実行する。`NAGI_FAILURE_DIR` をCI artifact uploadの対象directoryに指定する（未指定ならOS tempの `nagi-conformance-failures`）。PRとscheduleは同じrunnerとoracleを使い、case数とseedだけを変える。
 
+開発中のHigh `elif`（未リリース）は`compiler/tests/high_elif.rs`で既存ifへのlowering、識別子互換、条件/字下げの拒否、元行、return/move flow、High/独立保存LowのRust nativeを検査する。`editor_assistance.rs`は条件/本文の型・定義位置metadataとimport元の診断を担当し、初心者完成例もnative oracleに含める。
+
 ## Oracleと段階境界
 
 Cargoログの成功件数は、上位の各test binary・doctestの最終summaryから集計する。`graph_render`は同じtest binaryを子processで再実行しており、そのsummaryも親stdoutに出る。全summaryの単純合計は重複計上になる。実行した子processの観測と、独立したtest数を分け、出力のinterleaveを失敗や新しいtestの証拠としない。
@@ -98,7 +100,7 @@ PRとpushでは既存`Nagi checks`の変更検出を使う。compiler/runtime/te
 
 ## Cargo / HTTP / SQLとの接続
 
-`tests/conformance/harnesses.json` に実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で17harnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成と成功build世代は実Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
+`tests/conformance/harnesses.json` に実test名とcommandを登録する。`verify_compiler_contracts.py` は登録先source/testが存在することを検査し、`--run-linked` で登録済みharnessを順番に実行する。HTTP panicは実request、500/sanitized body、HEAD body、server継続性まで検査する既存runtime harnessが責任を持つ。SQL missing-columnは実SQLite schemaのopt-in checkとHigh/保存Lowのquery行を既存SQL harnessで検査する。HTTP生成と成功build世代は実Cargo build/実行harnessへ接続する。conformance corpusへの文字列記録だけではこれらの性質を保証しない。
 
 Phase 3では、登録資源の独立inventory、用途別capability、4例のLow/Rust全文goldenも接続した。固定logical ModuleIdのgoldenはresolver・生成の決定性を検査し、実fileのsource mapは既存統合testへ任せる。HTTPの追加native例は借用JSONとnamed mapperの登録構築を実行するもので、mapper本体を呼んだ証拠とはしない。4 OSの明示Cargo一覧にはinventoryと既存shared-field native回帰を追加し、既存HTTP/Actor/auth/copy検査も維持する。
 

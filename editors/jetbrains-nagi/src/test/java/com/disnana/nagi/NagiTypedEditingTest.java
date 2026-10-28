@@ -9,6 +9,38 @@ import java.util.function.Consumer;
 
 /** Actual typed editor input exercises the plugin registration and document edits. */
 public class NagiTypedEditingTest extends BasePlatformTestCase {
+    public void testBareElifAnnotationKeepsItsNestedIndentation() {
+        String prefix = "def main():\n    if ready:\n        print(1)\n        ";
+        for (String name : new String[] {"elif", "elif "}) {
+            myFixture.configureByText("annotation.nagi", prefix + name + "<caret>");
+            myFixture.type(':');
+            myFixture.checkResult(prefix + name + ":<caret>");
+            myFixture.type(" i64 = 2");
+            myFixture.checkResult(prefix + name + ": i64 = 2<caret>");
+        }
+    }
+    public void testElifChainAndFinalElseAlignToTheSameIf() {
+        myFixture.configureByText("chain.nagi", "if a:\n    work()\nelif b:\n    work()\n    elif c<caret>");
+        myFixture.type(':');
+        myFixture.checkResult("if a:\n    work()\nelif b:\n    work()\nelif c:<caret>");
+        myFixture.configureByText("final.nagi", "if a:\n    work()\nelif b:\n    work()\n    else<caret>");
+        myFixture.type(':');
+        myFixture.checkResult("if a:\n    work()\nelif b:\n    work()\nelse:<caret>");
+    }
+    public void testMultilineElifHeaderAlignsAsOneStatement() {
+        myFixture.configureByText("multiline.nagi",
+                "if a:\n    work()\n    elif (\n        b and c\n    )<caret>");
+        myFixture.type(':');
+        myFixture.checkResult("if a:\n    work()\nelif (\n    b and c\n):<caret>");
+    }
+    public void testSameNameElifStatementsNeverAlignAsBranches() {
+        String prefix = "if ready:\n    print(1)\n    ";
+        for (String statement : new String[] {"elif = 4; if True", "elif(2); if True", "elif : i64 = 2 # local"}) {
+            myFixture.configureByText("identifier.nagi", prefix + statement + "<caret>");
+            myFixture.type(':');
+            myFixture.checkResult(prefix + statement + ":<caret>");
+        }
+    }
     public void testElseAlignsToNearestNestedIfAndOuterIfSurvivesInnerElse() {
         myFixture.configureByText("main.nagi", "def main():\n    if a:\n        if b:\n            print(1)\n        else:\n            print(2)\n            else<caret>");
         myFixture.type(':');
