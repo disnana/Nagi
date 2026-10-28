@@ -16,6 +16,7 @@ import test_publication_gate
 import test_publish_conditions
 import windows_contract_projection as shard
 import parallel_cache_projection
+import go_backend_projection
 import sf06_failure_projection
 import browser_failure_projection
 
@@ -74,8 +75,9 @@ def effective_inventory(source, platform):
 
 
 def prove(source):
+    without_go = go_backend_projection.inverse_workflow(source)
     restored = sf06_failure_projection.inverse_workflow(shard.inverse_workflow(
-        browser_failure_projection.inverse_workflow(source)))
+        browser_failure_projection.inverse_workflow(without_go)))
     if hashlib.sha256(restored.encode()).hexdigest() != LINUX_WORKFLOW_SHA256:
         raise AssertionError('Linux-only workflow identity changed')
     current = parallel_cache_projection.apply_workflow(source)
@@ -181,8 +183,12 @@ class WindowsContractSourceTests(unittest.TestCase):
                               self.source.replace(guarded, '', 1),
                               self.source.replace(guarded, guarded * 2, 1),
                               self.source.replace(guarded, guarded.replace("!= 'Windows'", "== 'Windows'"), 1)))
-        for new, old in ((shard.READY_NEW, shard.READY_OLD), (shard.PUBLISH_NEW, shard.PUBLISH_OLD)):
-            mutations.append(self.source.replace(new, old, 1))
+        for marker in (
+            '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, jetbrains,',
+            '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, sf08-browser,',
+        ):
+            self.assertIn(marker, self.source)
+            mutations.append(self.source.replace(marker, marker.replace('linux-workspace, ', ''), 1))
         for index, changed in enumerate(mutations):
             self.assertNotEqual(changed, self.source, index)
             with self.subTest(mutation=index), self.assertRaises((ValueError, AssertionError)):

@@ -4086,6 +4086,83 @@ impl Checker {
         self.merge_moves(skipped);
         Ok(ty)
     }
+    fn future_argument_owners(&self, arg: &Expr) -> Result<Vec<(ExprUseId, BindingId)>, String> {
+        let mut owners = Vec::new();
+        checked::visit_expression(arg, &mut |operand| {
+            if let E::Name(name) = &operand.kind {
+                if let Some(var) = self.vars.get(name) {
+                    owners.push((ExprUseId::of(operand), var.binding));
+                }
+            }
+            Ok(())
+        })?;
+        Ok(owners)
+    }
+    fn user_async_argument(
+        &self,
+        call: ExprUseId,
+        index: usize,
+        arg: &Expr,
+        ty: Type,
+    ) -> Result<checked::FutureArgument, String> {
+        let transfer = if self.copy_type(&ty) {
+            ExprUseMode::Copy
+        } else {
+            ExprUseMode::Move
+        };
+        let depths = if ty.contains_view() {
+            (0..=Self::content_depth(&ty))
+                .map(|depth| {
+                    let mut origins: Vec<_> = self
+                        .origin_at(arg, depth)
+                        .into_iter()
+                        .map(|origin| FlowOrigin {
+                            binding: origin.binding,
+                            fields: origin.fields,
+                            owner_loan: origin.owner_loan,
+                            static_origin: origin.static_origin,
+                        })
+                        .collect();
+                    origins.sort_by(|a, b| {
+                        (a.binding, &a.fields, a.owner_loan, a.static_origin).cmp(&(
+                            b.binding,
+                            &b.fields,
+                            b.owner_loan,
+                            b.static_origin,
+                        ))
+                    });
+                    checked::OriginDepthFacts {
+                        origins,
+                        borrows_temporary: Self::borrows_temporary_at(arg, depth),
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let release = if transfer == ExprUseMode::Copy && !ty.contains_view() {
+            checked::ArgumentRelease::NotRequired
+        } else {
+            checked::ArgumentRelease::Deferred
+        };
+        Ok(checked::FutureArgument {
+            index,
+            expression: ExprUseId::of(arg),
+            ty,
+            passing: crate::stdlib::Passing::Move,
+            owners: self.future_argument_owners(arg)?,
+            capture: checked::ArgumentCaptureFacts::UserAsync(checked::UserAsyncArgumentFacts {
+                slot: checked::ArgumentCaptureSlot {
+                    call,
+                    argument: index,
+                },
+                transfer,
+                depths,
+                views_absent: self.views_absent(arg),
+                release,
+            }),
+        })
+    }
     fn expr_mode(
         &mut self,
         e: &mut Expr,
@@ -4103,36 +4180,19 @@ impl Checker {
         if retains_values {
             self.expression_loans.pop();
         }
-        if checked.as_ref().is_ok_and(Type::is_future) {
+        if checked.as_ref().is_ok_and(Type::is_future)
+            && matches!(
+                e.resolution,
+                Some(NameResolution::Standard | NameResolution::Builtin)
+            )
+        {
             if let E::Call(name, _, args) = &e.kind {
-                let callee = if e.resolution == Some(NameResolution::Local) {
-                    self.vars
-                        .get(name)
-                        .and_then(|v| v.async_function.clone())
-                        .ok_or_else(|| {
-                            error(
-                                e.line,
-                                "internal compiler error: missing async callee identity",
-                            )
-                        })?
-                } else {
-                    name.clone()
-                };
                 let passing = (e.resolution == Some(NameResolution::Standard))
                     .then(|| crate::stdlib::operation(name))
                     .flatten()
                     .map(|op| crate::stdlib::operation_info(op).parameters);
                 let mut arguments = Vec::new();
                 for (index, arg) in args.iter().enumerate() {
-                    let mut owners = Vec::new();
-                    checked::visit_expression(arg, &mut |operand| {
-                        if let E::Name(name) = &operand.kind {
-                            if let Some(var) = self.vars.get(name) {
-                                owners.push((ExprUseId::of(operand), var.binding));
-                            }
-                        }
-                        Ok(())
-                    })?;
                     arguments.push(checked::FutureArgument {
                         index,
                         expression: ExprUseId::of(arg),
@@ -4141,13 +4201,14 @@ impl Checker {
                             .and_then(|p| p.get(index))
                             .copied()
                             .unwrap_or(crate::stdlib::Passing::Move),
-                        owners,
+                        owners: self.future_argument_owners(arg)?,
+                        capture: checked::ArgumentCaptureFacts::UnplannedStandard,
                     });
                 }
                 self.future_captures.insert(
                     ExprUseId::of(e),
                     checked::FutureCapture {
-                        callee,
+                        callee: name.clone(),
                         resolution: e.resolution.ok_or("missing Future callee resolution")?,
                         arguments,
                     },
@@ -4165,6 +4226,7 @@ impl Checker {
         self.editor_capture(e);
         let line = e.line;
         let expression = ExprUseId::of(e);
+        let mut future_capture = None;
         if e.resolution == Some(NameResolution::Module) {
             let alias = match &e.kind {
                 E::Name(name) | E::Call(name, _, _) | E::Record(name, _) => name.as_str(),
@@ -4691,7 +4753,8 @@ impl Checker {
                             ),
                         ));
                     }
-                    for (arg, t) in args.iter_mut().zip(&signature) {
+                    let mut arguments = Vec::new();
+                    for (index, (arg, t)) in args.iter_mut().zip(&signature).enumerate() {
                         let got = self.expr(arg, Some(t))?;
                         if self.contains_task(&got) {
                             return Err(error(arg.line, "Taskを関数または別taskへ渡せません"));
@@ -4699,6 +4762,32 @@ impl Checker {
                         self.demand(&got, t, line)?;
                         self.consume(arg)?;
                         self.hold_value(arg, false);
+                        if ret.is_future() {
+                            // Snapshot before the next argument can mutate a
+                            // container's transitive origins. Rechecks replace
+                            // the complete call facts with the final pass.
+                            arguments.push(self.user_async_argument(expression, index, arg, got)?);
+                        }
+                    }
+                    if ret.is_future() {
+                        let callee = if e.resolution == Some(NameResolution::Local) {
+                            self.vars
+                                .get(n)
+                                .and_then(|v| v.async_function.clone())
+                                .ok_or_else(|| {
+                                    error(
+                                        line,
+                                        "internal compiler error: missing async callee identity",
+                                    )
+                                })?
+                        } else {
+                            n.clone()
+                        };
+                        future_capture = Some(checked::FutureCapture {
+                            callee,
+                            resolution: e.resolution.ok_or("missing Future callee resolution")?,
+                            arguments,
+                        });
                     }
                     ret
                 } else {
@@ -4711,6 +4800,9 @@ impl Checker {
         e.ty = Some(t.clone());
         if matches!(e.kind, E::Name(..)) {
             self.record_view_use(e, ExprUseMode::Borrow);
+        }
+        if let Some(capture) = future_capture {
+            self.future_captures.insert(expression, capture);
         }
         Ok(t)
     }
@@ -5474,6 +5566,47 @@ def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
         .unwrap()
         .to_string()
         .contains("internal owning-view lowering"));
+    }
+
+    #[test]
+    fn sealed_enum_constructor_and_match_identities_are_revalidated() {
+        let source = "enum State:\n    Ready\n    Busy\ndef select(value: State) -> i64:\n    match value:\n        case State.Ready:\n            return 1\n        case State.Busy:\n            return 2\ndef main():\n    print(select(State.Ready))\n";
+        let mut program = resolved_high(source);
+        check(&mut program).unwrap();
+        let main = root_function(&program, "main").name.clone();
+        let select = root_function(&program, "select").name.clone();
+        let mut checked = checked::CheckedProgram::seal_rechecked(
+            program,
+            crate::source::SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        checked.validate_for_emission().unwrap();
+
+        let constructor = checked.enums.functions[&main].constructors.clone();
+        checked
+            .enums
+            .functions
+            .get_mut(&main)
+            .unwrap()
+            .constructors
+            .clear();
+        assert!(checked
+            .validate_for_emission()
+            .unwrap_err()
+            .contains("checked enum facts"));
+        checked.enums.functions.get_mut(&main).unwrap().constructors = constructor;
+
+        checked
+            .enums
+            .functions
+            .get_mut(&select)
+            .unwrap()
+            .matches
+            .clear();
+        assert!(checked
+            .validate_for_emission()
+            .unwrap_err()
+            .contains("checked enum facts"));
     }
 
     #[test]

@@ -75,13 +75,31 @@ def requires_jetbrains(path: str) -> bool:
     )
 
 
+def requires_go(path: str) -> bool:
+    """Run the experimental Go backend contract for shared/compiler changes.
+
+    Rust runtime crates and editor-only presentation do not affect the Go
+    lowering. Unknown build, dependency, workflow, and source paths stay
+    fail-closed so a new shared input cannot silently avoid cross-target checks.
+    """
+    if not valid_path(path):
+        return True
+    if is_jetbrains_path(path) or path.startswith("editors/vscode-nagi/"):
+        return False
+    if is_docs_path(path):
+        return path == "docs/internal/go-backend-0.3-minimum.md"
+    if path.startswith(("runtime/", "runtime-core/", "website/")):
+        return False
+    return True
+
+
 def git(*args: str) -> bytes:
     return subprocess.check_output(["git", *args], cwd=ROOT, stderr=subprocess.PIPE)
 
 
 def classify(event: str, base: str, head: str) -> dict[str, str]:
     result = {
-        "full_checks": "true", "jetbrains_checks": "true",
+        "full_checks": "true", "jetbrains_checks": "true", "go_checks": "true",
         "reason": "No complete Docs/plugin-only comparison.",
     }
     if event not in ("push", "pull_request"):
@@ -106,6 +124,7 @@ def classify(event: str, base: str, head: str) -> dict[str, str]:
     if any(not valid_path(path) for path in paths):
         return result
     result["jetbrains_checks"] = str(any(requires_jetbrains(path) for path in paths)).lower()
+    result["go_checks"] = str(any(requires_go(path) for path in paths)).lower()
     if all(is_docs_path(path) or is_jetbrains_path(path) for path in paths):
         result["full_checks"] = "false"
         result["reason"] = (
@@ -129,6 +148,7 @@ def main() -> None:
     with args.output.open("a", encoding="utf-8") as output:
         output.write(f"full_checks={result['full_checks']}\n")
         output.write(f"jetbrains_checks={result['jetbrains_checks']}\n")
+        output.write(f"go_checks={result['go_checks']}\n")
     print(json.dumps(result, indent=2))
 
 

@@ -14,6 +14,7 @@ pub mod emit;
 mod function_units;
 mod generated_body;
 mod generation;
+mod go_backend;
 pub mod graph;
 mod installation;
 pub mod lexer;
