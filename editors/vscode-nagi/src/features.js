@@ -3,6 +3,10 @@ const keywords = ['enum', 'return', 'if', 'else', 'while', 'for', 'match', 'case
 const path = require('node:path');
 const { normalizeFile, fileKey } = require('./compiler');
 const pathKeys = Symbol('pathKeys');
+// Editor-only call probes stop rather than guessing from a truncated context.
+const MAX_CALL_SCAN = 16384;
+const MAX_CALL_DEPTH = 128;
+const MAX_CALLEE_SCAN = 1024;
 
 // A request may see several spellings of the same file. Keep identities only
 // for this request so a changed symlink is resolved again on the next one.
@@ -431,6 +435,8 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
     const userTypeNames = new Set(userTypes.map(item => item.name));
     return [...userTypes.map(item => ({ ...item, typeOnly: true })), ...types.filter(name => !userTypeNames.has(name)).map(name => ({ name, kind: 'type', signature: name }))];
   }
+  const namedFields = namedFieldCandidates(index, text, offset, source, state.masked, word);
+  if (namedFields) return namedFields;
   const local = localAt(index, text, word, source);
   const resolved = resolvedDeclaration(index, text, word, source);
   const bindings = lexicalBindings(state.masked, false);
@@ -445,10 +451,11 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
     return bindings.has(item.name) ? { ...item, nameOnly: true } : item;
   });
   if (local && !values.some(item => item.name === local.name)) values.unshift(localItem(local));
-  return [...values, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
+  return [...values, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class', 'elif']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
 }
 
 function insertion(item, following) {
+  if (item.namedField) return item.existingEquals || /^\s*=(?!=)/.test(following) ? item.name : `${item.name}=\$\{1:${item.name}\}`;
   if (item.importOnly || item.nameOnly) return item.name;
   if (item.kind === 'resource') {
     const parameters = item.typeParameters || [];
@@ -469,37 +476,89 @@ function insertion(item, following) {
   return `${item.name}${generic}(${args.map((arg, i) => `${item.kind === 'class' ? arg.name + '=' : ''}\$\{${i + 1 + types.length}:${arg.name}\}`).join(', ')})`;
 }
 
-function callContext(text, offset) {
-  const state = context(text, offset);
+function callContext(text, offset, state = context(text, offset)) {
   // Signature help can stay visible inside a string argument.
   if (state.inComment) return undefined;
-  const code = state.masked.slice(0, offset);
-  let parens = 0, brackets = 0, braces = 0, argument = 0;
-  for (let i = code.length - 1; i >= 0; i--) {
+  const code = state.masked;
+  const end = Math.min(offset, code.length);
+  const scanStart = Math.max(0, end - MAX_CALL_SCAN);
+  let parens = 0, brackets = 0, braces = 0, argument = 0, argumentStart, openings = 0;
+  for (let i = end - 1; i >= scanStart; i--) {
     const c = code[i];
     if (c === ')') parens++;
     else if (c === '(') {
       if (parens) { parens--; continue; }
-      let prefix = code.slice(0, i).trimEnd();
+      if (++openings > MAX_CALL_DEPTH) return undefined;
+      const prefixStart = Math.max(0, i - MAX_CALLEE_SCAN);
+      let prefix = code.slice(prefixStart, i).trimEnd();
       if (prefix.endsWith(']')) {
         let depth = 1, j = prefix.length - 2;
-        for (; j >= 0 && depth; j--) { if (prefix[j] === ']') depth++; else if (prefix[j] === '[') depth--; }
+        for (; j >= 0 && depth; j--) {
+          if (prefix[j] === ']') depth++; else if (prefix[j] === '[') depth--;
+          if (depth > MAX_CALL_DEPTH) return undefined;
+        }
+        if (depth) return undefined;
         prefix = prefix.slice(0, j + 1).trimEnd();
       }
       const match = prefix.match(/\b([A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*)$/);
       if (match && !/\.\s*$/.test(prefix.slice(0, match.index))) {
-        const start = prefix.length - match[1].length;
+        if (prefixStart && !prefix.slice(0, match.index).trim()) return undefined;
+        const start = prefixStart + prefix.length - match[1].length;
         const parts = match[1].split(/\s*\.\s*/);
+        const activeStart = argumentStart ?? i + 1;
+        const argumentName = /^\s*([A-Za-z_]\w*)\s*=(?!=)/.exec(state.masked.slice(activeStart))?.[1];
         return { name: parts.at(-1), qualifier: parts.length > 1 ? parts.slice(0, -1).join('.') : undefined,
-          argument, argumentsStart: i + 1, start: start + match[1].length - parts.at(-1).length };
+          argument, argumentName, argumentStart: activeStart, argumentsStart: i + 1,
+          calleeStart: start, start: start + match[1].length - parts.at(-1).length };
       }
     } else if (c === ']') brackets++;
     else if (c === '[') brackets--;
     else if (c === '}') braces++;
     else if (c === '{') braces--;
-    else if (c === ',' && !parens && !brackets && !braces) argument++;
+    else if (c === ',' && !parens && !brackets && !braces) { argumentStart ??= i + 1; argument++; }
+    if (Math.abs(parens) + Math.abs(brackets) + Math.abs(braces) > MAX_CALL_DEPTH) return undefined;
   }
   return undefined;
+}
+
+// Class construction has always used named fields. This only edits declaration
+// labels; it does not infer a value type or opt functions into named arguments.
+function namedFieldCandidates(index, text, offset, source, code, word) {
+  const call = callContext(text, offset, { masked: code, inComment: false });
+  if (!call) return undefined;
+  if (/\b(?:case|def|fn|class|record|enum)\s*$/.test(code.slice(0, call.calleeStart))) return undefined;
+  const item = callDeclaration(index, text, call, source);
+  if (item?.kind !== 'class') return undefined;
+  if (source.saved && (call.qualifier || /\bimport\b/.test(code))) return undefined;
+  if (lexicalBindings(code, false).has(call.name) && (source.saved ||
+      !resolvedDeclaration(index, text, { name: call.name, start: call.start, end: call.start + call.name.length }, source))) return undefined;
+  const ranges = [];
+  const stack = [];
+  let start = call.argumentsStart;
+  for (let i = start; i <= code.length; i++) {
+    if (i - call.argumentsStart >= MAX_CALL_SCAN) return undefined;
+    const c = code[i];
+    if (i === code.length || c === ')' && !stack.length) { ranges.push([start, i]); break; }
+    if ('([{'.includes(c)) {
+      if (stack.length >= MAX_CALL_DEPTH) return undefined;
+      stack.push(c);
+    }
+    else if (')]}'.includes(c)) {
+      if (stack.pop() !== { ')': '(', ']': '[', '}': '{' }[c]) return undefined;
+    } else if (c === ',' && !stack.length) { ranges.push([start, i]); start = i + 1; }
+  }
+  const active = ranges.find(([start, end]) => start <= offset && offset <= end);
+  if (!active || word.start < active[0] || code.slice(active[0], word.start).trim()) return undefined;
+  const tail = code.slice(word.end, active[1]).trimStart();
+  if (tail && !/^=(?!=)/.test(tail)) return undefined;
+  const supplied = new Set(ranges.filter(range => range !== active).map(([start, end]) =>
+    /^\s*([A-Za-z_]\w*)\s*=(?!=)/.exec(code.slice(start, end))?.[1]));
+  return (item.fields || []).filter(field => typeof field.name === 'string' &&
+    typeof field.type === 'string' && !supplied.has(field.name)).map(field => ({
+      name: field.name, kind: 'field', type: field.type, signature: `${field.name}: ${field.type}`, namedField: true,
+      existingEquals: tail.startsWith('='),
+      description: `${call.qualifier ? call.qualifier + '.' : ''}${call.name}の名前付きフィールド`,
+    }));
 }
 
 function activeCall(text, offset, qualified = false) {
@@ -516,6 +575,18 @@ function signatureAt(index, text, offset, source = {}) {
     const item = matchPatterns.find(item => item.name === call.name && item.parameters.length);
     if (item) return { item, argument: call.argument };
   }
+  const item = callDeclaration(index, text, call, source);
+  if (!item) return undefined;
+  const activeSignature = item.overloads?.length && text.slice(call.argumentsStart, offset).trim()
+    ? Math.max(0, item.overloads.findIndex(overload => overload.parameters.length > call.argument)) : 0;
+  const argument = item.kind === 'class' && call.argumentName
+    ? (item.fields || []).findIndex(field => field.name === call.argumentName) : call.argument;
+  if (argument < 0) return undefined;
+  return { item: call.qualifier ? { ...item, callName: `${call.qualifier}.${call.name}` } : item, argument, activeSignature };
+}
+
+function callDeclaration(index, text, call, source) {
+  if (localAt(index, text, { ...call, end: call.start + call.name.length }, source)) return undefined;
   let item;
   if (call.qualifier) {
     const member = memberContext(text, call.start);
@@ -526,9 +597,7 @@ function signatureAt(index, text, offset, source = {}) {
   if (!item || !['function', 'class', 'enum_member'].includes(item.kind) ||
       item.kind === 'enum_member' && !item.parameters?.length ||
       shadowedAt(index, text, { ...call, end: call.start + call.name.length }, source, item)) return undefined;
-  const activeSignature = item.overloads?.length && text.slice(call.argumentsStart, offset).trim()
-    ? Math.max(0, item.overloads.findIndex(overload => overload.parameters.length > call.argument)) : 0;
-  return { item: call.qualifier ? { ...item, callName: `${call.qualifier}.${call.name}` } : item, argument: call.argument, activeSignature };
+  return item;
 }
 
 module.exports = { context, wordAt, declarations, hoverAt, completionCandidates, insertion, activeCall, signatureAt, memberContext };

@@ -1,0 +1,456 @@
+{
+  "normal": {
+    "case": "health",
+    "target_rps": 100,
+    "duration_s": 3,
+    "wall_seconds": 3.011575762007851,
+    "client_max_workers": 512,
+    "aborted": null,
+    "client_max_connections": 256,
+    "client_local_address": "127.0.20.1",
+    "rate_attainment": 1.0031950478183354,
+    "scheduled_requests_estimate": 300,
+    "unsent_vs_schedule_estimate": 0,
+    "metrics": {
+      "latencies": {
+        "total": 90488945,
+        "mean": 301629,
+        "50th": 262556,
+        "90th": 399323,
+        "95th": 491498,
+        "99th": 975812,
+        "max": 2266384,
+        "min": 167343
+      },
+      "bytes_in": {
+        "total": 0,
+        "mean": 0
+      },
+      "bytes_out": {
+        "total": 0,
+        "mean": 0
+      },
+      "earliest": "2026-10-27T03:42:45.576346984Z",
+      "latest": "2026-10-27T03:42:48.566792368Z",
+      "end": "2026-10-27T03:42:48.567106958Z",
+      "duration": 2990445384,
+      "wait": 314590,
+      "requests": 300,
+      "rate": 100.31950478183353,
+      "throughput": 100.30895244286829,
+      "success": 1,
+      "status_codes": {
+        "200": 300
+      },
+      "errors": []
+    },
+    "server_before": {
+      "pid": 791122,
+      "cpu_ticks": 0,
+      "rss_kib": 4976,
+      "hwm_kib": 4976,
+      "fds": 11,
+      "threads": 4
+    },
+    "server_after": {
+      "pid": 791122,
+      "cpu_ticks": 3,
+      "rss_kib": 4976,
+      "hwm_kib": 4976,
+      "fds": 10,
+      "threads": 4
+    },
+    "server_cpu_seconds": 0.03,
+    "server_cpu_percent_of_one_core": 0.9961562441317653,
+    "server_peak_rss_kib": 4976,
+    "server_peak_fds": 11,
+    "client_cpu_seconds_total": 0.171904,
+    "client_cpu_seconds": {
+      "attack": 0.1,
+      "reporter": 0.04
+    },
+    "commands": {
+      "attack": [
+        "taskset",
+        "-c",
+        "2,3",
+        "/workspace/.toolchains/vegeta-12.13.0/vegeta",
+        "attack",
+        "-targets=/workspace/Nagi-local-resilience/build/local-resilience/http-resilience-run14/normal/target.txt",
+        "-rate=100/s",
+        "-duration=3s",
+        "-workers=32",
+        "-max-workers=512",
+        "-max-body=0",
+        "-timeout=5s",
+        "-redirects=0",
+        "-http2=false",
+        "-keepalive=true",
+        "-max-connections=256",
+        "-laddr=127.0.20.1"
+      ],
+      "report": [
+        "taskset",
+        "-c",
+        "2,3",
+        "/workspace/.toolchains/vegeta-12.13.0/vegeta",
+        "report",
+        "-type=json",
+        "-output=/workspace/Nagi-local-resilience/build/local-resilience/http-resilience-run14/normal/reports.jsonl"
+      ]
+    }
+  },
+  "overload": {
+    "case": "health",
+    "target_rps": 10000,
+    "duration_s": 3,
+    "wall_seconds": 3.0171198299940443,
+    "client_max_workers": 512,
+    "aborted": null,
+    "client_max_connections": 256,
+    "client_local_address": "127.0.20.2",
+    "rate_attainment": 0.9999793160944993,
+    "scheduled_requests_estimate": 30000,
+    "unsent_vs_schedule_estimate": 0,
+    "metrics": {
+      "latencies": {
+        "total": 350509793586,
+        "mean": 11683659,
+        "50th": 3882981,
+        "90th": 36059163,
+        "95th": 42579875,
+        "99th": 58042498,
+        "max": 100012408,
+        "min": 37577
+      },
+      "bytes_in": {
+        "total": 0,
+        "mean": 0
+      },
+      "bytes_out": {
+        "total": 0,
+        "mean": 0
+      },
+      "earliest": "2026-10-27T03:42:48.57969812Z",
+      "latest": "2026-10-27T03:42:51.579760173Z",
+      "end": "2026-10-27T03:42:51.580308953Z",
+      "duration": 3000062053,
+      "wait": 548780,
+      "requests": 30000,
+      "rate": 9999.793160944993,
+      "throughput": 234.95216115551494,
+      "success": 0.0235,
+      "status_codes": {
+        "200": 705,
+        "429": 29295
+      },
+      "errors": [
+        "429 Too Many Requests"
+      ]
+    },
+    "server_before": {
+      "pid": 791122,
+      "cpu_ticks": 3,
+      "rss_kib": 4976,
+      "hwm_kib": 4976,
+      "fds": 10,
+      "threads": 4
+    },
+    "server_after": {
+      "pid": 791122,
+      "cpu_ticks": 135,
+      "rss_kib": 9732,
+      "hwm_kib": 10892,
+      "fds": 10,
+      "threads": 4
+    },
+    "server_cpu_seconds": 1.32,
+    "server_cpu_percent_of_one_core": 43.75033390710921,
+    "server_peak_rss_kib": 10828,
+    "server_peak_fds": 156,
+    "client_cpu_seconds_total": 4.961959,
+    "client_cpu_seconds": {
+      "attack": 4.15,
+      "reporter": 0.35
+    },
+    "commands": {
+      "attack": [
+        "taskset",
+        "-c",
+        "2,3",
+        "/workspace/.toolchains/vegeta-12.13.0/vegeta",
+        "attack",
+        "-targets=/workspace/Nagi-local-resilience/build/local-resilience/http-resilience-run14/overload/target.txt",
+        "-rate=10000/s",
+        "-duration=3s",
+        "-workers=32",
+        "-max-workers=512",
+        "-max-body=0",
+        "-timeout=5s",
+        "-redirects=0",
+        "-http2=false",
+        "-keepalive=true",
+        "-max-connections=256",
+        "-laddr=127.0.20.2"
+      ],
+      "report": [
+        "taskset",
+        "-c",
+        "2,3",
+        "/workspace/.toolchains/vegeta-12.13.0/vegeta",
+        "report",
+        "-type=json",
+        "-output=/workspace/Nagi-local-resilience/build/local-resilience/http-resilience-run14/overload/reports.jsonl"
+      ]
+    }
+  },
+  "independent_route": {
+    "requests": 30,
+    "statuses": {
+      "200": 30
+    },
+    "latency_ms": {
+      "median": 0.9834609954850748,
+      "p95": 2.4207679962273687,
+      "p99": 2.5049449905054644,
+      "max": 3.496974997688085
+    },
+    "samples": [
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.7925679965410382
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.7722370064584538
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.9683529933681712
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.7912159926490858
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 2.5049449905054644
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.4576730027329177
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.5312330031301826
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 3.496974997688085
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.2561580078909174
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.3371800014283508
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.8239349990617484
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.8395689947064966
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.3885679945815355
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 2.4207679962273687
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.4836319896858186
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.9648480045143515
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.3993850006954744
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.9589890105416998
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.1189399956492707
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.549941003555432
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.5121850010473281
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.3695990055566654
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.7517860067309812
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.8355020108865574
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.9985689976019785
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.7965240074554458
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.3381219905568287
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.5347780097508803
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 1.7504760035080835
+      },
+      {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.6110940012149513
+      }
+    ]
+  },
+  "route_recovery": [
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 0.8504849974997342
+    },
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 0.8085820009000599
+    },
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 2.62414499593433
+    },
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 1.0451389971422032
+    },
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 0.7869789988035336
+    },
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 0.7303629972739145
+    },
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 0.8303039940074086
+    },
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 0.702522011124529
+    },
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 0.7197880040621385
+    },
+    {
+      "status": 429,
+      "body_sha256": "2c419cbe186f76906c931f16f5880b3e2933e9c1e09fb93b61571662b510e365",
+      "latency_ms": 0.7746100018266588
+    },
+    {
+      "status": 200,
+      "body_sha256": "2689367b205c16ce32ed4200942b8b8b1e262dfc70d9bc9fbc77c49699a4f1df",
+      "latency_ms": 0.716662994818762
+    }
+  ],
+  "after_overload": {
+    "server": {
+      "pid": 791122,
+      "cpu_ticks": 135,
+      "rss_kib": 9732,
+      "hwm_kib": 10892,
+      "fds": 11,
+      "threads": 4
+    },
+    "tcp_states": {
+      "LISTEN": 1,
+      "TIME_WAIT": 13942
+    },
+    "cgroup": {
+      "memory_current": 4880867328,
+      "cpu_stat": {
+        "usage_usec": 38054519110,
+        "user_usec": 34544977176,
+        "system_usec": 3509541934,
+        "nice_usec": 0,
+        "nr_periods": 327564,
+        "nr_throttled": 24936,
+        "throttled_usec": 1173366306,
+        "nr_bursts": 0,
+        "burst_usec": 0
+      }
+    }
+  }
+}

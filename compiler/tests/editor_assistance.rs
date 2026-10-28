@@ -81,6 +81,38 @@ fn names(v: &serde_json::Value) -> Vec<&str> {
 }
 
 #[test]
+fn elif_conditions_and_bodies_keep_compiler_completion_metadata_and_module_origins() {
+    let f = Fixture::new();
+    let text = "def inspect(value: i64):\n    if value == 0:\n        print(0)\n    elif value > 0:\n        print(value)\n    else:\n        print(-1)\n";
+    f.write("main.nagi", text);
+    for needle in ["elif value", "print(value"] {
+        let v = f.analyze(text, needle);
+        let item = v["completion"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["name"] == "value")
+            .unwrap_or_else(|| panic!("{v}"));
+        assert_eq!(item["type"], "i64");
+        assert_eq!(item["target"]["line"], 1);
+    }
+    f.write(
+        "main.nagi",
+        "import \"branch.nagi\"\ndef main():\n    print(0)\n",
+    );
+    f.write(
+        "branch.nagi",
+        "def inspect():\n    if True:\n        print(0)\n    elif missing:\n        print(1)\n",
+    );
+    let v = f.request(serde_json::json!({"files":[]}));
+    assert!(v["diagnostics"][0]["file"]
+        .as_str()
+        .unwrap()
+        .ends_with("branch.nagi"));
+    assert_eq!(v["diagnostics"][0]["line"], 4);
+}
+
+#[test]
 fn import_queries_reject_parenthesis_and_bracket_continuations() {
     let f = Fixture::new();
     f.write("main.nagi", "");

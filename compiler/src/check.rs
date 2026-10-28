@@ -184,6 +184,81 @@ fn editor_builtin_candidates() -> impl Iterator<Item = EditorBuiltinCandidate> {
     .into_iter()
     .map(|(name, signature)| EditorBuiltinCandidate { name, signature })
 }
+
+// Extract source-level parameter names from the same signatures exposed to
+// editors. Bracket depth keeps generic/function types from splitting at their
+// internal commas. A builtin such as read_line may publish more than one call
+// form; `arity` selects the form that is actually being checked.
+fn signature_parameter_names(signature: &str, arity: usize) -> Option<Vec<String>> {
+    signature.split(';').find_map(|form| {
+        let open = form.find('(')?;
+        let close = form.rfind(") ->")?;
+        let text = &form[open + 1..close];
+        let mut parts = vec![];
+        let mut depth = 0usize;
+        let mut start = 0usize;
+        for (index, ch) in text.char_indices() {
+            match ch {
+                '[' => depth += 1,
+                ']' => depth = depth.saturating_sub(1),
+                ',' if depth == 0 => {
+                    parts.push(text[start..index].trim());
+                    start = index + 1;
+                }
+                _ => {}
+            }
+        }
+        if !text.trim().is_empty() {
+            parts.push(text[start..].trim());
+        }
+        (parts.len() == arity).then(|| {
+            parts
+                .into_iter()
+                .map(|part| {
+                    part.split_once(':')
+                        .map_or(part, |(name, _)| name)
+                        .trim()
+                        .to_owned()
+                })
+                .collect()
+        })
+    })
+}
+
+#[cfg(test)]
+mod named_argument_signature_tests {
+    use super::*;
+
+    #[test]
+    fn every_builtin_completion_signature_exposes_its_checked_argument_names() {
+        for candidate in editor_builtin_candidates() {
+            let arity = if candidate.name == "read_line" {
+                1
+            } else {
+                builtin_arity(candidate.name).expect("candidate is a checked builtin")
+            };
+            let names = signature_parameter_names(&candidate.signature, arity)
+                .unwrap_or_else(|| panic!("missing argument names for {}", candidate.name));
+            assert_eq!(names.len(), arity, "{}", candidate.name);
+            assert!(
+                names.iter().all(|name| !name.is_empty()),
+                "{}",
+                candidate.name
+            );
+        }
+    }
+
+    #[test]
+    fn every_standard_operation_signature_exposes_its_checked_argument_names() {
+        for &operation in crate::stdlib::OPERATIONS {
+            let info = crate::stdlib::operation_info(operation);
+            let names = signature_parameter_names(info.signature, info.arity)
+                .unwrap_or_else(|| panic!("missing argument names for {}", info.name));
+            assert_eq!(names.len(), info.arity, "{}", info.name);
+            assert!(names.iter().all(|name| !name.is_empty()), "{}", info.name);
+        }
+    }
+}
 fn result(t: Type) -> Type {
     Type::generic("Result", vec![t, Type::named("Error")])
 }
@@ -4086,12 +4161,90 @@ impl Checker {
         self.merge_moves(skipped);
         Ok(ty)
     }
+    fn future_argument_owners(&self, arg: &Expr) -> Result<Vec<(ExprUseId, BindingId)>, String> {
+        let mut owners = Vec::new();
+        checked::visit_expression(arg, &mut |operand| {
+            if let E::Name(name) = &operand.kind {
+                if let Some(var) = self.vars.get(name) {
+                    owners.push((ExprUseId::of(operand), var.binding));
+                }
+            }
+            Ok(())
+        })?;
+        Ok(owners)
+    }
+    fn user_async_argument(
+        &self,
+        call: ExprUseId,
+        index: usize,
+        arg: &Expr,
+        ty: Type,
+    ) -> Result<checked::FutureArgument, String> {
+        let transfer = if self.copy_type(&ty) {
+            ExprUseMode::Copy
+        } else {
+            ExprUseMode::Move
+        };
+        let depths = if ty.contains_view() {
+            (0..=Self::content_depth(&ty))
+                .map(|depth| {
+                    let mut origins: Vec<_> = self
+                        .origin_at(arg, depth)
+                        .into_iter()
+                        .map(|origin| FlowOrigin {
+                            binding: origin.binding,
+                            fields: origin.fields,
+                            owner_loan: origin.owner_loan,
+                            static_origin: origin.static_origin,
+                        })
+                        .collect();
+                    origins.sort_by(|a, b| {
+                        (a.binding, &a.fields, a.owner_loan, a.static_origin).cmp(&(
+                            b.binding,
+                            &b.fields,
+                            b.owner_loan,
+                            b.static_origin,
+                        ))
+                    });
+                    checked::OriginDepthFacts {
+                        origins,
+                        borrows_temporary: Self::borrows_temporary_at(arg, depth),
+                    }
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let release = if transfer == ExprUseMode::Copy && !ty.contains_view() {
+            checked::ArgumentRelease::NotRequired
+        } else {
+            checked::ArgumentRelease::Deferred
+        };
+        Ok(checked::FutureArgument {
+            index,
+            expression: ExprUseId::of(arg),
+            ty,
+            passing: crate::stdlib::Passing::Move,
+            owners: self.future_argument_owners(arg)?,
+            capture: checked::ArgumentCaptureFacts::UserAsync(checked::UserAsyncArgumentFacts {
+                slot: checked::ArgumentCaptureSlot {
+                    call,
+                    argument: index,
+                },
+                transfer,
+                depths,
+                views_absent: self.views_absent(arg),
+                release,
+            }),
+        })
+    }
     fn expr_mode(
         &mut self,
         e: &mut Expr,
         expected: Option<&Type>,
         projection: bool,
     ) -> Result<Type, String> {
+        self.normalize_named_call(e)?;
         let retains_values = matches!(
             e.kind,
             E::Call(_, _, _) | E::List(_) | E::Binary(_, _, _) | E::Index(_, _)
@@ -4103,36 +4256,19 @@ impl Checker {
         if retains_values {
             self.expression_loans.pop();
         }
-        if checked.as_ref().is_ok_and(Type::is_future) {
+        if checked.as_ref().is_ok_and(Type::is_future)
+            && matches!(
+                e.resolution,
+                Some(NameResolution::Standard | NameResolution::Builtin)
+            )
+        {
             if let E::Call(name, _, args) = &e.kind {
-                let callee = if e.resolution == Some(NameResolution::Local) {
-                    self.vars
-                        .get(name)
-                        .and_then(|v| v.async_function.clone())
-                        .ok_or_else(|| {
-                            error(
-                                e.line,
-                                "internal compiler error: missing async callee identity",
-                            )
-                        })?
-                } else {
-                    name.clone()
-                };
                 let passing = (e.resolution == Some(NameResolution::Standard))
                     .then(|| crate::stdlib::operation(name))
                     .flatten()
                     .map(|op| crate::stdlib::operation_info(op).parameters);
                 let mut arguments = Vec::new();
                 for (index, arg) in args.iter().enumerate() {
-                    let mut owners = Vec::new();
-                    checked::visit_expression(arg, &mut |operand| {
-                        if let E::Name(name) = &operand.kind {
-                            if let Some(var) = self.vars.get(name) {
-                                owners.push((ExprUseId::of(operand), var.binding));
-                            }
-                        }
-                        Ok(())
-                    })?;
                     arguments.push(checked::FutureArgument {
                         index,
                         expression: ExprUseId::of(arg),
@@ -4141,13 +4277,14 @@ impl Checker {
                             .and_then(|p| p.get(index))
                             .copied()
                             .unwrap_or(crate::stdlib::Passing::Move),
-                        owners,
+                        owners: self.future_argument_owners(arg)?,
+                        capture: checked::ArgumentCaptureFacts::UnplannedStandard,
                     });
                 }
                 self.future_captures.insert(
                     ExprUseId::of(e),
                     checked::FutureCapture {
-                        callee,
+                        callee: name.clone(),
                         resolution: e.resolution.ok_or("missing Future callee resolution")?,
                         arguments,
                     },
@@ -4155,6 +4292,124 @@ impl Checker {
             }
         }
         checked
+    }
+
+    // The parser intentionally keeps `name = value` calls in the existing
+    // record shape until names are resolved. Class and enum construction keep
+    // their established unordered field semantics. Function calls are lowered
+    // to the existing positional AST before ownership checking and backend
+    // lowering, so every backend observes the same checked argument order.
+    //
+    // Named function arguments currently use an all-named, declaration-order
+    // form. This preserves left-to-right evaluation exactly without adding
+    // backend-specific temporary lowering. Positional calls remain unchanged.
+    fn normalize_named_call(&mut self, e: &mut Expr) -> Result<(), String> {
+        let E::Record(name, fields) = &e.kind else {
+            return Ok(());
+        };
+        if self.classes.contains_key(name) || self.enum_variant(name, e.line)?.is_some() {
+            return Ok(());
+        }
+
+        let expected = if let Some(variable) = self.vars.get(name) {
+            if variable.ty.0 == "fn" {
+                return Err(error(
+                    e.line,
+                    "関数値の引数名は型に含まれません。位置引数を使用してください",
+                ));
+            }
+            return Err(error(e.line, "この値は呼び出せる関数ではありません"));
+        } else if let Some(function) = self.functions.get(name) {
+            if function.source_parameter_names.len() != function.params.len() {
+                return Err(error(
+                    e.line,
+                    format!("internal compiler error: {name} の引数名情報が一致しません"),
+                ));
+            }
+            function.source_parameter_names.clone()
+        } else if self.registered.contains(name) {
+            if let Some(operation) = crate::stdlib::operation(name) {
+                let info = crate::stdlib::operation_info(operation);
+                signature_parameter_names(info.signature, info.arity).ok_or_else(|| {
+                    error(
+                        e.line,
+                        format!("internal compiler error: {name} の引数名を解決できません"),
+                    )
+                })?
+            } else {
+                return Ok(());
+            }
+        } else if let Some(arity) = builtin_arity(name) {
+            let arity = if name == "read_line" { 1 } else { arity };
+            let signature = editor_builtin_candidates()
+                .find(|candidate| candidate.name == name)
+                .map(|candidate| candidate.signature)
+                .ok_or_else(|| {
+                    error(
+                        e.line,
+                        format!("internal compiler error: {name} の引数情報がありません"),
+                    )
+                })?;
+            signature_parameter_names(&signature, arity).ok_or_else(|| {
+                error(
+                    e.line,
+                    format!("internal compiler error: {name} の引数名を解決できません"),
+                )
+            })?
+        } else {
+            return Ok(());
+        };
+
+        let mut seen = HashSet::new();
+        for (name, _) in fields {
+            if !seen.insert(name.as_str()) {
+                return Err(error(
+                    e.line,
+                    format!("名前付き引数 {name} が重複しています"),
+                ));
+            }
+            if !expected.iter().any(|expected| expected == name) {
+                return Err(error(
+                    e.line,
+                    format!(
+                        "不明な名前付き引数 {name} です（使用可能: {}）",
+                        expected.join(", ")
+                    ),
+                ));
+            }
+        }
+        if fields.len() != expected.len() {
+            let missing = expected
+                .iter()
+                .filter(|name| !seen.contains(name.as_str()))
+                .cloned()
+                .collect::<Vec<_>>();
+            return Err(error(
+                e.line,
+                format!("名前付き引数が不足しています: {}", missing.join(", ")),
+            ));
+        }
+        for (index, ((actual, _), expected)) in fields.iter().zip(&expected).enumerate() {
+            if actual != expected {
+                return Err(error(
+                    e.line,
+                    format!(
+                        "名前付き引数は宣言順に指定してください（{}番目は {expected}、実際は {actual}）",
+                        index + 1
+                    ),
+                ));
+            }
+        }
+
+        let E::Record(name, fields) = std::mem::replace(&mut e.kind, E::Null) else {
+            unreachable!()
+        };
+        e.kind = E::Call(
+            name,
+            vec![],
+            fields.into_iter().map(|(_, value)| value).collect(),
+        );
+        Ok(())
     }
     fn expr_scoped(
         &mut self,
@@ -4165,6 +4420,7 @@ impl Checker {
         self.editor_capture(e);
         let line = e.line;
         let expression = ExprUseId::of(e);
+        let mut future_capture = None;
         if e.resolution == Some(NameResolution::Module) {
             let alias = match &e.kind {
                 E::Name(name) | E::Call(name, _, _) | E::Record(name, _) => name.as_str(),
@@ -4691,7 +4947,8 @@ impl Checker {
                             ),
                         ));
                     }
-                    for (arg, t) in args.iter_mut().zip(&signature) {
+                    let mut arguments = Vec::new();
+                    for (index, (arg, t)) in args.iter_mut().zip(&signature).enumerate() {
                         let got = self.expr(arg, Some(t))?;
                         if self.contains_task(&got) {
                             return Err(error(arg.line, "Taskを関数または別taskへ渡せません"));
@@ -4699,6 +4956,32 @@ impl Checker {
                         self.demand(&got, t, line)?;
                         self.consume(arg)?;
                         self.hold_value(arg, false);
+                        if ret.is_future() {
+                            // Snapshot before the next argument can mutate a
+                            // container's transitive origins. Rechecks replace
+                            // the complete call facts with the final pass.
+                            arguments.push(self.user_async_argument(expression, index, arg, got)?);
+                        }
+                    }
+                    if ret.is_future() {
+                        let callee = if e.resolution == Some(NameResolution::Local) {
+                            self.vars
+                                .get(n)
+                                .and_then(|v| v.async_function.clone())
+                                .ok_or_else(|| {
+                                    error(
+                                        line,
+                                        "internal compiler error: missing async callee identity",
+                                    )
+                                })?
+                        } else {
+                            n.clone()
+                        };
+                        future_capture = Some(checked::FutureCapture {
+                            callee,
+                            resolution: e.resolution.ok_or("missing Future callee resolution")?,
+                            arguments,
+                        });
                     }
                     ret
                 } else {
@@ -4711,6 +4994,9 @@ impl Checker {
         e.ty = Some(t.clone());
         if matches!(e.kind, E::Name(..)) {
             self.record_view_use(e, ExprUseMode::Borrow);
+        }
+        if let Some(capture) = future_capture {
+            self.future_captures.insert(expression, capture);
         }
         Ok(t)
     }
@@ -5474,6 +5760,47 @@ def restore(flag: bool, parts: List[view[str]]) -> List[view[str]]:
         .unwrap()
         .to_string()
         .contains("internal owning-view lowering"));
+    }
+
+    #[test]
+    fn sealed_enum_constructor_and_match_identities_are_revalidated() {
+        let source = "enum State:\n    Ready\n    Busy\ndef select(value: State) -> i64:\n    match value:\n        case State.Ready:\n            return 1\n        case State.Busy:\n            return 2\ndef main():\n    print(select(State.Ready))\n";
+        let mut program = resolved_high(source);
+        check(&mut program).unwrap();
+        let main = root_function(&program, "main").name.clone();
+        let select = root_function(&program, "select").name.clone();
+        let mut checked = checked::CheckedProgram::seal_rechecked(
+            program,
+            crate::source::SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        checked.validate_for_emission().unwrap();
+
+        let constructor = checked.enums.functions[&main].constructors.clone();
+        checked
+            .enums
+            .functions
+            .get_mut(&main)
+            .unwrap()
+            .constructors
+            .clear();
+        assert!(checked
+            .validate_for_emission()
+            .unwrap_err()
+            .contains("checked enum facts"));
+        checked.enums.functions.get_mut(&main).unwrap().constructors = constructor;
+
+        checked
+            .enums
+            .functions
+            .get_mut(&select)
+            .unwrap()
+            .matches
+            .clear();
+        assert!(checked
+            .validate_for_emission()
+            .unwrap_err()
+            .contains("checked enum facts"));
     }
 
     #[test]

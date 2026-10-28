@@ -55,7 +55,7 @@ STEP = r'''      - name: Observe B1 bootstrap only after original acceptance fai
           # Unsupported resource fields remain explicitly unavailable.
           PYB1RESOURCE
           set +e
-          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests::pool_readiness_tests:: -- --show-output 2>&1 | python -c 'import sys
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib worker2_ -- --show-output 2>&1 | python -c 'import sys
           remaining=256*1024+1
           while True:
            chunk=sys.stdin.buffer.read(8192)

@@ -1,0 +1,36 @@
+{
+  "date_utc": "2026-10-27T03:42:45Z",
+  "source_commit": "0d1884cb5a24235a440811a9f5d16be1bf5a664a",
+  "binary_sha256": "1b0a7ae0eac3cc6c63377574eeb61affabe733083ddae2be3bd4db19a7c73bb6",
+  "vegeta_sha256": "c54d905541485153542dfcb850f9ab8ef801e7ab1a652d2cfc69cafdd4a5363f",
+  "harness_sha256": "b71d44af990d1a8e607e343f4d5492fd8b0fada3b5ac587040f381d42a92676a",
+  "http_helper_sha256": "64b15afe9d436a02842ed0fffa2dc1e8bbff82d20cf2db4050e5890e4bea368c",
+  "request_budget": 50000,
+  "fixed_request_upper_bound": 30405,
+  "probe_request_budget": 19595,
+  "server_rss_ceiling_bytes": 2147483648,
+  "cgroup_memory_ceiling_bytes": 12884901888,
+  "cgroup_memory_limit": "17179869184",
+  "cgroup_before": {
+    "memory_current": 4869677056,
+    "cpu_stat": {
+      "usage_usec": 38047903049,
+      "user_usec": 34541422405,
+      "system_usec": 3506480644,
+      "nice_usec": 0,
+      "nr_periods": 327492,
+      "nr_throttled": 24936,
+      "throttled_usec": 1173366306,
+      "nr_bursts": 0,
+      "burst_usec": 0
+    }
+  },
+  "server_cpus": "0",
+  "client_cpus": "2,3",
+  "limitations": [
+    "loopback HTTP/1.1 without TLS",
+    "finite local overload, not an Internet or distributed DDoS test",
+    "queue length is not exposed by this public sample",
+    "one process and one NAGI_THREADS worker"
+  ]
+}

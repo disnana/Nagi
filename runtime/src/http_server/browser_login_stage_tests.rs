@@ -6,7 +6,10 @@ use crate::{
     auth::{self, prelogin, session},
     sqlite, FromRow,
 };
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    Mutex,
+};
 
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 struct Directory(std::path::PathBuf);
@@ -115,6 +118,7 @@ enum Mode {
     PrepareLate,
     Issue,
     HandlerErr,
+    HandlerBusy,
     HandlerPanic,
     HandlerPending,
 }
@@ -128,6 +132,7 @@ struct Stats {
     issue_ack: AtomicBool,
     fault_entered: AtomicUsize,
     release_issue: tokio::sync::Notify,
+    held_responses: Mutex<Vec<Response>>,
 }
 struct State {
     mode: Mode,
@@ -187,6 +192,15 @@ async fn handler(request: Request, state: Arc<State>, scope: AuthScope) -> Resul
         Mode::HandlerErr => {
             state.stats.fault_entered.store(3, Ordering::SeqCst);
             Err(Error::internal("owned stage handler Err"))
+        }
+        Mode::HandlerBusy => {
+            state.stats.fault_entered.store(5, Ordering::SeqCst);
+            loop {
+                match text(response_context(&request), Status::OK, "held") {
+                    Ok(held) => state.stats.held_responses.lock().unwrap().push(held),
+                    Err(error) => break Err(error),
+                }
+            }
         }
         Mode::HandlerPanic => {
             state.stats.fault_entered.store(4, Ordering::SeqCst);
@@ -462,6 +476,7 @@ async fn check(mode: Mode, security: i64, expected: u16, issued: bool) {
         Mode::PrepareErr => 1,
         Mode::PreparePanic => 2,
         Mode::HandlerErr => 3,
+        Mode::HandlerBusy => 5,
         Mode::HandlerPanic => 4,
         _ => 0,
     };
@@ -542,6 +557,10 @@ async fn committed_issue_live_200_delivers_auth_cookie_once() {
 #[tokio::test]
 async fn committed_issue_handler_err_1000_returns_500_without_cookie() {
     check(Mode::HandlerErr, 1000, 500, true).await;
+}
+#[tokio::test]
+async fn committed_issue_busy_mapper_returns_503_and_deletes_consumed_cookie() {
+    check(Mode::HandlerBusy, 1000, 503, true).await;
 }
 #[tokio::test]
 async fn committed_issue_handler_panic_1000_returns_500_without_cookie() {

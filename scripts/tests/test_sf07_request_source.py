@@ -28,6 +28,41 @@ def function(source, name):
 
 
 class RequestSourceTests(unittest.TestCase):
+    def test_browser_handler_inverse_is_exact_and_cannot_renew_or_move_scope(self):
+        source = read('runtime/src/http_server/browser_login.rs')
+        restored = projection.inverse_browser_handler(source)
+        self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
+                         '363cf9c8e60369ad0e9996b6323c7c4f9e2a47eddc7bb160e514c1522b58b3a4')
+        for before, added, after in projection.BROWSER_HANDLER_ADDITIONS:
+            for changed in (source.replace(added, '', 1), source.replace(added, added * 2, 1),
+                            source.replace(added, added.replace('nagi_browser_login_diag', 'test'), 1),
+                            source.replace(before + added + after, added + before + after, 1)):
+                self.assertNotEqual(changed, source)
+                with self.assertRaises(ValueError):
+                    projection.approved_production('browser', changed)
+        for old, new in (('            admitted,\n            until,', '            Instant::now(),\n            until,'),
+                         ('            until,', '            until + Duration::from_secs(1),'),
+                         ('HandlerLateReady);', 'HandlerTimer);'),
+                         ('owner.request_until()', 'owner.lease_owner().request_until()')):
+            self.assertIn(old, source)
+            with self.assertRaises(ValueError):
+                projection.approved_production('browser', source.replace(old, new, 1))
+        native = read('runtime/src/http_server/browser_handler_diagnostic_tests.rs')
+        names = re.findall(r'#\[tokio::test\]\s*async fn (\w+)\(', native)
+        self.assertEqual(len(names), 3)
+        self.assertTrue(all('native_finish' not in name for name in names))
+        self.assertIn('session::issue', native)
+        self.assertIn('HTTP/security assertions precede diagnostic assertions', native)
+        coverage = read('scripts/ci/browser_login_stage_coverage.py')
+        restored_coverage = projection.inverse_browser_handler_coverage(coverage)
+        self.assertEqual(hashlib.sha256(restored_coverage.encode()).hexdigest(),
+                         '5ada31eed9ecdc841dd06bbcd8ce056a30c75916c8a7c596fab1c03428af5502')
+        addition = projection.BROWSER_HANDLER_COVERAGE
+        for changed in (coverage.replace(addition, '', 1), coverage.replace(addition, addition * 2, 1),
+                        coverage.replace(addition, addition.replace('original_handler_timer_', 'foreign_timer_'), 1)):
+            with self.assertRaises(ValueError):
+                projection.inverse_browser_handler_coverage(changed)
+
     def test_every_native_send_fixture_binding_matches_actual_source(self):
         workflow = read('.github/workflows/ci.yml')
         paths = (
@@ -225,6 +260,12 @@ class RequestSourceTests(unittest.TestCase):
     def test_u2_workflow_inverse_is_exact_and_keeps_unrelated_changes_visible(self):
         workflow = read('.github/workflows/ci.yml')
         self.assertEqual(hashlib.sha256(projection.inverse_workflow(workflow).encode()).hexdigest(), BASE_WORKFLOW_SHA)
+        deadline = '"sf03-b1-csrf-deadline.log":15'
+        self.assertEqual(workflow.count(deadline), 2)
+        for replacement in ('', deadline + deadline, '"sf03-b1-csrf-deadline.log":14',
+                            '"sf03-b1-csrf-deadline.log":16'):
+            with self.subTest(deadline_replacement=replacement), self.assertRaises(ValueError):
+                projection.inverse_workflow(workflow.replace(deadline, replacement, 1))
         for line in projection.U2_NATIVE_LINES:
             for changed in (workflow.replace(line, '', 1), workflow.replace(line, line + line, 1)):
                 with self.assertRaises(ValueError):

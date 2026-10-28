@@ -20,17 +20,19 @@ def release(**overrides):
     return result
 
 
-def needs(level='1', full='true', plan=None):
+def needs(level='1', full='true', plan=None, go=None):
     plan = plan or release(package_nagi='true')
-    selected = levels.expected(level, full, plan['package_nagi'])
+    go = full if go is None else go
+    selected = levels.expected(level, full, plan['package_nagi'], go)
     yes = lambda flag: {'result': 'success' if flag else 'skipped'}
     return {'ci-plan': {'result': 'success', 'outputs': selected},
-            'changes': {'result': 'success', 'outputs': {'full_checks': full, 'jetbrains_checks': 'false'}},
+            'changes': {'result': 'success', 'outputs': {'full_checks': full, 'jetbrains_checks': 'false', 'go_checks': go}},
             'release-plan': {'result': 'success', 'outputs': plan},
             'critical': yes(selected['critical_checks'] == 'true'),
             'linux': yes(selected['comprehensive_checks'] == 'true'),
             'linux-workspace': yes(selected['comprehensive_checks'] == 'true'),
             'rust-1-88': yes(selected['comprehensive_checks'] == 'true'),
+            'go-backend': yes(selected['go_checks'] == 'true'),
             'nagi-package': yes(selected['package_checks'] == 'true'),
             'nagi-regression': yes(selected['package_checks'] == 'true'),
             'windows-contracts': yes(selected['package_checks'] == 'true'),
@@ -46,14 +48,14 @@ class LevelsTests(unittest.TestCase):
         self.assertIn('python -m pip install -r website/requirements.txt', pages)
         self.assertIn("python -m unittest discover -s website -p 'test_*.py'", pages)
 
-        website = levels.select('pull_request', ['website/test_discovery.py'], 'false', release())
+        website = levels.select('pull_request', ['website/test_discovery.py'], 'false', 'false', release())
         self.assertEqual(website['level'], '1')
         self.assertEqual(website['critical_checks'], 'false')
         self.assertEqual(website['comprehensive_checks'], 'false')
         self.assertEqual(website['package_checks'], 'false')
         website_needs = needs('1', full='false', plan=release())
         self.assertEqual(gate.errors(website_needs), [])
-        for name in ('critical', 'linux', 'linux-workspace', 'rust-1-88', 'nagi-package', 'nagi-regression', 'windows-contracts', 'sf08-browser'):
+        for name in ('critical', 'go-backend', 'linux', 'linux-workspace', 'rust-1-88', 'nagi-package', 'nagi-regression', 'windows-contracts', 'sf08-browser'):
             self.assertEqual(website_needs[name]['result'], 'skipped', name)
 
         protected_paths = (
@@ -65,13 +67,15 @@ class LevelsTests(unittest.TestCase):
         for path in protected_paths:
             with self.subTest(path=path):
                 mixed = levels.select(
-                    'pull_request', ['website/test_discovery.py', path], 'true', release())
+                    'pull_request', ['website/test_discovery.py', path], 'true',
+                    'false' if path.startswith('runtime/') else 'true', release())
                 self.assertEqual(mixed['level'], '2')
                 self.assertEqual(mixed['comprehensive_checks'], 'true')
                 self.assertEqual(mixed['package_checks'], 'true')
                 self.assertEqual(len(json.loads(mixed['matrix'])['include']), 3)
 
-                mixed_needs = needs('2', full='true', plan=release())
+                mixed_needs = needs('2', full='true', plan=release(),
+                                    go='false' if path.startswith('runtime/') else 'true')
                 self.assertEqual(gate.errors(mixed_needs), [])
                 broken = copy.deepcopy(mixed_needs)
                 broken['nagi-package']['result'] = 'skipped'
@@ -79,7 +83,7 @@ class LevelsTests(unittest.TestCase):
 
     def test_recognized_pr_critical_and_unknown_security_dependency_escalation(self):
         for path in ['compiler/src/lexer.rs', 'compiler/src/parser.rs', 'compiler/tests/enum_parser.rs']:
-            value = levels.select('pull_request', [path], 'true', release(package_nagi='true'))
+            value = levels.select('pull_request', [path], 'true', 'true', release(package_nagi='true'))
             self.assertEqual((value['level'], value['critical_checks'], value['package_checks']), ('1', 'true', 'false'))
         for paths in [None, [], ['new/unknown'], ['Cargo.lock'], ['.github/workflows/ci.yml'],
                       ['runtime/src/auth/session.rs'], ['runtime/src/http_server.rs'], ['compiler/src/check/security.rs'],
@@ -88,29 +92,32 @@ class LevelsTests(unittest.TestCase):
                       ['compiler/src/emit.rs'], ['compiler/src/lowering.rs'],
                       ['runtime/src/task.rs'], ['runtime/src/actor.rs'], ['runtime/src/owned.rs'],
                       ['compiler/src/new_unreviewed.rs']]:
-            self.assertEqual(levels.select('pull_request', paths, 'true', release())['level'], '2')
+            self.assertEqual(levels.select('pull_request', paths, 'true', 'true', release())['level'], '2')
 
     def test_main_schedule_and_formal_release_platforms(self):
         for event in ['push', 'schedule', 'workflow_dispatch', 'unfamiliar']:
-            value = levels.select(event, ['compiler/src/parser.rs'], 'true', release())
+            value = levels.select(event, ['compiler/src/parser.rs'], 'true', 'true', release())
             self.assertEqual(value['level'], '2')
             self.assertEqual(len(json.loads(value['matrix'])['include']), 3)
         for component in ['nagi', 'vscode', 'jetbrains']:
-            value = levels.select('pull_request', ['README.md'], 'false', release(**{'release_' + component: 'true'}))
+            value = levels.select('pull_request', ['README.md'], 'false', 'false', release(**{'release_' + component: 'true'}))
             self.assertEqual(value['level'], '3')
             self.assertEqual(len(json.loads(value['matrix'])['include']), 4)
-        self.assertEqual(levels.select('workflow_dispatch', None, 'true', release(), 'release')['level'], '3')
-        self.assertEqual(levels.select('pull_request', ['compiler/src/parser.rs'], 'true', release(), 'release')['level'], '1')
+        self.assertEqual(levels.select('workflow_dispatch', None, 'true', 'true', release(), 'release')['level'], '3')
+        self.assertEqual(levels.select('pull_request', ['compiler/src/parser.rs'], 'true', 'true', release(), 'release')['level'], '1')
 
     def test_invalid_inputs_do_not_select_empty_or_optional_coverage(self):
         for bad in [None, '', 'TRUE', True, False]:
             for key in ['package_nagi', 'release_nagi', 'release_vscode', 'release_jetbrains']:
-                with self.assertRaises(ValueError):levels.select('push', None, 'true', release(**{key: bad}))
-        with self.assertRaises(ValueError):levels.select('pull_request', [], 'true', release(), 'skip')
+                with self.assertRaises(ValueError):levels.select('push', None, 'true', 'true', release(**{key: bad}))
+        with self.assertRaises(ValueError):levels.select('pull_request', [], 'true', 'true', release(), 'skip')
+        for bad in [None, '', 'TRUE', True, False]:
+            with self.assertRaises(ValueError):levels.select('push', None, 'true', bad, release())
         # Validate package independently even when full already selects Nagi.
         for bad in [None, '', 'TRUE', True, False]:
             for level in ['1', '2', '3']:
-                with self.assertRaises(ValueError):levels.expected(level, 'true', bad)
+                with self.assertRaises(ValueError):levels.expected(level, 'true', bad, 'true')
+                with self.assertRaises(ValueError):levels.expected(level, 'true', 'false', bad)
             broken = needs('2')
             broken['release-plan']['outputs']['package_nagi'] = bad
             self.assertTrue(levels.validation_errors(broken))
@@ -170,7 +177,7 @@ class LevelsTests(unittest.TestCase):
         self.assertEqual(restored.count('          - os: macos-15-intel\n'),2)
         self.assertIn("    if: github.event_name == 'pull_request' && always()",restored)
         for original, bad in [
-            ('    needs: [changes, ci-plan, critical, linux,', '    needs: [changes, linux,'),
+            ('critical, go-backend, linux', 'critical, linux'),
             ('      matrix: ${{ fromJSON(needs.ci-plan.outputs.matrix) }}', '      matrix: {}'),
             ("    name: Ready to merge\n    if: always() && !cancelled()\n", "    name: Ready to merge\n    if: false\n"),
             ('      - run: cargo test --locked --doc', '      - run: true'),

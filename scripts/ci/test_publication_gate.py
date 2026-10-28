@@ -14,12 +14,13 @@ def valid(component="nagi"):
     for name in ("nagi", "vscode", "jetbrains"):
         plan["release_" + name] = plan["package_" + name] = str(name == component).lower()
     needs = {name: {"result": "success"} for name in ("changes", "release-plan", "ci-plan", "ready")}
-    needs["changes"]["outputs"] = {"full_checks": str(nagi).lower(), "jetbrains_checks": str(nagi or component == "jetbrains").lower()}
+    needs["changes"]["outputs"] = {"full_checks": str(nagi).lower(), "jetbrains_checks": str(nagi or component == "jetbrains").lower(), "go_checks": str(nagi).lower()}
     needs["release-plan"]["outputs"] = plan
-    needs["ci-plan"]["outputs"] = levels.expected("3", str(nagi).lower(), plan["package_nagi"])
+    needs["ci-plan"]["outputs"] = levels.expected("3", str(nagi).lower(), plan["package_nagi"], str(nagi).lower())
     for name in ("linux", "linux-workspace", "rust-1-88", "sf08-browser", "nagi-package", "nagi-regression", "windows-contracts"):
         needs[name] = {"result": "success" if nagi else "skipped"}
     needs["critical"] = {"result": "skipped"}
+    needs["go-backend"] = {"result": "success" if nagi else "skipped"}
     needs["jetbrains"] = {"result": "success" if nagi or component == "jetbrains" else "skipped"}
     needs["vscode-package"] = {"result": "success" if component == "vscode" else "skipped"}
     return needs
