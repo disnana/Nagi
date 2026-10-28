@@ -558,7 +558,7 @@ function activate(context) {
     vscode.languages.registerDefinitionProvider([{ language: 'nagi', scheme: 'file' }, { language: 'nagi-low', scheme: 'file' }], { provideDefinition }),
     vscode.languages.registerHoverProvider(assistanceSelector, { provideHover }),
     vscode.languages.registerCompletionItemProvider(assistanceSelector, { provideCompletionItems }, '.'),
-    vscode.languages.registerSignatureHelpProvider(assistanceSelector, { provideSignatureHelp }, '(', ','),
+    vscode.languages.registerSignatureHelpProvider(assistanceSelector, { provideSignatureHelp }, '(', ',', '='),
     { dispose() { for (const job of pending.values()) job.child?.kill(); pending.clear(); for (const child of navigation) child.kill(); navigation.clear(); } },
     vscode.workspace.onDidOpenTextDocument(d => { if (optionsForAuto(d)) check(d); }),
     vscode.workspace.onDidSaveTextDocument(d => {

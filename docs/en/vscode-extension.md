@@ -98,6 +98,8 @@ Types, functions, and constants from `std.http.server` and `std.actor` are suppo
 
 Unknown types and moved values do not receive guessed field candidates. Unparseable edits fall back to declarations marked “保存済み” (saved), without local types, fields, or F12. Completion is suppressed in comments and strings. See the [walkthrough](editor.md).
 
+The unpublished main implementation also completes class/record field labels. For example, `Point(y=2.5, x` offers the remaining `x=` field, and parameter hints select `x` after its equals sign. Existing equals signs are preserved. Incomplete syntax can use names and declared types explicitly marked as saved declarations; this does not infer a value's type or ownership, or enable named calls to ordinary functions. Published extension 0.1.13 does not include this change.
+
 Find References, rename, debugging, and Rust implementation analysis are not supported.
 
 ## Development
