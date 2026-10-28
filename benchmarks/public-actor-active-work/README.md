@@ -65,3 +65,22 @@ RSSのallocator retentionは実値で残し、RSSが元へ戻らないことだ�
 
 実測と原データは[2026-10-27 active-work結果](../results/public-actor-active-work-2026-10-27/README.md)。
 Linux x86_64だけの短時間実測で、長時間安定性、Go Actor、インターネットDDoS耐性へ外挿しない。
+
+公開版0.2.2をhard 1 GiB・1/2 CPUへ隔離した追加測定は
+[0.2.2 cgroup結果](../results/public-actor-hard-cgroup-0.2.2-2026-10-27-reviewed/README.md)に保存した。
+`prepare_public_actor_cgroup_image.py`は信頼するnative binaryと`ldd`で解決したlibraryを
+network-free scratch contextへコピーする。生成したimageを次のcontrollerへ渡す。
+
+```sh
+python scripts/prepare_public_actor_cgroup_image.py \
+  --binary /absolute/nagi-native-binary --context /absolute/new-context
+docker build --network=none -t nagi-actor-bench:measured /absolute/new-context
+python scripts/public_actor_cgroup_probe.py --image nagi-actor-bench:measured \
+  --output /absolute/new-results --clients 4 16 64 128 --cpus 1 2 \
+  --iterations 5000 --rounds 3
+```
+
+controllerはDocker HostConfigのmemory/swap/NanoCpus/cpuset/PID/network/read-only/capabilityを
+各caseで検査し、cgroup v2のmemory peak・OOM event・CPU・PIDをcheckpointで保存する。
+Docker socket権限が必要であり、外部や本番へ負荷を送らない。image buildと実行の前後にも
+空き8 GiBを要求する。

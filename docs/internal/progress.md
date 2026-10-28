@@ -719,6 +719,22 @@ Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが�
 ### 2026-10-27: 公開Nagi Supervisorの有限回帰・実測
 
 Rust backendの実std.actor APIをHigh・独立保存Low・手書きLowから実runtimeへ通す7シナリオを追加した。予算0/2、worker Err/panic/PERMANENT正常終了、業務Err、兄弟と状態再初期化、明示shutdown・親scope取消、重複generationとguard/state/context破棄を確認。compiler/runtime/既定/CIは変更しない。新native3forms成功、既存actor_stdlib13成功、focusedclippy/fmt、Python集計10成功。実Nagi benchmarkは1/2 CPU affinity×1/32/128/512actors×3round、全72phaseの2,880,000正常返信と18故障、全caseの最終FD/task baselineを確認しrawを固定した。RSS/CPU/公平性は条件付き実測で、BEAM同等・最大容量・長期安定性・Go実装を主張しない。別担当の独立reviewとexact-head CIは未完、Draftを維持する。[詳細](public-supervisor-validation.md)。
+
+### 2026-10-27: 公開0.2.2 Actorのhard 1 GiB・1/2 CPU実測
+
+公開`nagi-v0.2.2`配布compilerと同梱runtimeで同じ公開Actor active-workを再構築し、
+Docker cgroup v2のmemory 1 GiB・swap 0・CPU quota/cpuset 1/2・PID512、networkなし、
+read-only rootfsで4/16/64/128 active Actorを各3回測定した。HostConfigだけでなくkernelの
+`memory.max`、`memory.swap.max`、`cpu.max`、`cpuset.cpus.effective`、`pids.max`を各checkpointで
+照合した。24 caseで6,360,000正常返信、正常失敗0、24 worker故障・24 public restart、OOM0、
+最終task差0。128 activeの中央値は1 CPU 1,481,229成功/s・p99 390.559µs・CPU675ns/成功、
+2 CPU 2,251,778成功/s・p99 254.335µs・CPU870ns/成功。最大cgroup memory peakは194.88MiB。
+
+これは短時間i64 counterであり、最大収容数、soak、HTTP/I/O、panic/OOM/native crash隔離、
+BEAM同等性、Go実装を示さない。clientと観測vectorはtarget process内、controllerとDocker daemonは
+cgroup外である。全raw、3回の範囲、再集計、release/build/image hashと再現手順は
+[hard-cgroup結果](../../benchmarks/results/public-actor-hard-cgroup-0.2.2-2026-10-27-reviewed/README.md)へ保存した。
+compiler/runtime製品コードと公開設定は変更せず、独立reviewとexact-head CIまではDraftを維持する。
 ## 2026-10-27: Go backend共有conformanceの第一段階
 
 payloadなしenum段階のHEAD `f9fe618`を基点に、既存Rust専用corpus・bounded生成・batch・fuzz・shrinkerを維持したまま、少数の共通同期programをRust/Goで直接実行するtyped観測runnerを追加した。High、独立保存Low、手書きLowを区別し、成功時はraw stdout/stderrとstatusを期待値へ個別照合してからbackend間も比較する。境界外List indexはnative build成功後のnon-zero、事前marker一回、backend別primary panicを要求し、stack traceとbackend固有exit codeを同一化しない。

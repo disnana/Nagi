@@ -1,0 +1,682 @@
+[
+  {
+    "cpu_quota_count": 1,
+    "active_clients": 4,
+    "total_actors": 5,
+    "completed_successes_per_second": {
+      "median": 1527552.5804602043,
+      "min": 1181573.5960837924,
+      "max": 1626077.0728010966,
+      "defined": 3,
+      "missing": 0
+    },
+    "process_cpu_ns_per_success": {
+      "median": 644.8101,
+      "min": 612.1265,
+      "max": 841.3266,
+      "defined": 3,
+      "missing": 0
+    },
+    "elapsed_ns": {
+      "median": 13092839,
+      "min": 12299540,
+      "max": 16926580,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p50_ns": {
+      "median": 3425,
+      "min": 3355,
+      "max": 3425,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p95_ns": {
+      "median": 4477,
+      "min": 4006,
+      "max": 6040,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p99_ns": {
+      "median": 8213,
+      "min": 7301,
+      "max": 26400,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_completions_during_fault": {
+      "median": 16208,
+      "min": 15110,
+      "max": 16574,
+      "defined": 3,
+      "missing": 0
+    },
+    "fault_duration_ns": {
+      "median": 10182710,
+      "min": 10157402,
+      "max": 10364628,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 8133,
+      "min": 7281,
+      "max": 10816,
+      "defined": 3,
+      "missing": 0
+    },
+    "common_interval_jain_index": {
+      "median": 0.9999999899939974,
+      "min": 0.9999999899939974,
+      "max": 0.9999999899939974,
+      "defined": 3,
+      "missing": 0
+    },
+    "cgroup_memory_peak_bytes": {
+      "median": 7876608,
+      "min": 7749632,
+      "max": 7954432
+    },
+    "cgroup_final_memory_current_bytes": {
+      "median": 4362240,
+      "min": 4313088,
+      "max": 4505600
+    }
+  },
+  {
+    "cpu_quota_count": 1,
+    "active_clients": 16,
+    "total_actors": 17,
+    "completed_successes_per_second": {
+      "median": 1498466.7126670973,
+      "min": 1473498.9917030588,
+      "max": 1513265.7223863339,
+      "defined": 3,
+      "missing": 0
+    },
+    "process_cpu_ns_per_success": {
+      "median": 665.222625,
+      "min": 659.9398,
+      "max": 677.99615,
+      "defined": 3,
+      "missing": 0
+    },
+    "elapsed_ns": {
+      "median": 53387906,
+      "min": 52865798,
+      "max": 54292538,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p50_ns": {
+      "median": 15493,
+      "min": 15443,
+      "max": 15514,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p95_ns": {
+      "median": 19589,
+      "min": 18658,
+      "max": 23996,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p99_ns": {
+      "median": 73752,
+      "min": 69455,
+      "max": 92089,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_completions_during_fault": {
+      "median": 16440,
+      "min": 14122,
+      "max": 17416,
+      "defined": 3,
+      "missing": 0
+    },
+    "fault_duration_ns": {
+      "median": 10827184,
+      "min": 10453420,
+      "max": 10976370,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 59901,
+      "min": 47011,
+      "max": 114673,
+      "defined": 3,
+      "missing": 0
+    },
+    "common_interval_jain_index": {
+      "median": 0.9999999956217169,
+      "min": 0.9999999956217169,
+      "max": 0.9999999956217169,
+      "defined": 3,
+      "missing": 0
+    },
+    "cgroup_memory_peak_bytes": {
+      "median": 26636288,
+      "min": 26501120,
+      "max": 26886144
+    },
+    "cgroup_final_memory_current_bytes": {
+      "median": 12517376,
+      "min": 12390400,
+      "max": 12668928
+    }
+  },
+  {
+    "cpu_quota_count": 1,
+    "active_clients": 64,
+    "total_actors": 65,
+    "completed_successes_per_second": {
+      "median": 1363860.4978358475,
+      "min": 1289766.1765567288,
+      "max": 1364783.5999550407,
+      "defined": 3,
+      "missing": 0
+    },
+    "process_cpu_ns_per_success": {
+      "median": 732.551071875,
+      "min": 731.5982875,
+      "max": 774.874465625,
+      "defined": 3,
+      "missing": 0
+    },
+    "elapsed_ns": {
+      "median": 234628102,
+      "min": 234469406,
+      "max": 248106987,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p50_ns": {
+      "median": 65148,
+      "min": 64779,
+      "max": 66021,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p95_ns": {
+      "median": 136877,
+      "min": 132322,
+      "max": 150079,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p99_ns": {
+      "median": 303083,
+      "min": 247875,
+      "max": 332617,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_completions_during_fault": {
+      "median": 14556,
+      "min": 11384,
+      "max": 15410,
+      "defined": 3,
+      "missing": 0
+    },
+    "fault_duration_ns": {
+      "median": 10791887,
+      "min": 10777610,
+      "max": 11038424,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 316443,
+      "min": 293654,
+      "max": 954997,
+      "defined": 3,
+      "missing": 0
+    },
+    "common_interval_jain_index": {
+      "median": 0.9999999987881083,
+      "min": 0.9999999987881083,
+      "max": 0.9999999987881083,
+      "defined": 3,
+      "missing": 0
+    },
+    "cgroup_memory_peak_bytes": {
+      "median": 102424576,
+      "min": 102084608,
+      "max": 102477824
+    },
+    "cgroup_final_memory_current_bytes": {
+      "median": 67559424,
+      "min": 67461120,
+      "max": 67588096
+    }
+  },
+  {
+    "cpu_quota_count": 1,
+    "active_clients": 128,
+    "total_actors": 129,
+    "completed_successes_per_second": {
+      "median": 1481229.2679109052,
+      "min": 1321084.6411230122,
+      "max": 1572703.111092789,
+      "defined": 3,
+      "missing": 0
+    },
+    "process_cpu_ns_per_success": {
+      "median": 674.8954015625,
+      "min": 634.3307125,
+      "max": 756.819765625,
+      "defined": 3,
+      "missing": 0
+    },
+    "elapsed_ns": {
+      "median": 432073558,
+      "min": 406942668,
+      "max": 484450413,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p50_ns": {
+      "median": 106599,
+      "min": 97788,
+      "max": 120733,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p95_ns": {
+      "median": 239786,
+      "min": 208726,
+      "max": 267526,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p99_ns": {
+      "median": 390559,
+      "min": 343170,
+      "max": 553134,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_completions_during_fault": {
+      "median": 12654,
+      "min": 11190,
+      "max": 14604,
+      "defined": 3,
+      "missing": 0
+    },
+    "fault_duration_ns": {
+      "median": 10684984,
+      "min": 10671327,
+      "max": 10975015,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 527238,
+      "min": 417965,
+      "max": 2201438,
+      "defined": 3,
+      "missing": 0
+    },
+    "common_interval_jain_index": {
+      "median": 0.999999999384277,
+      "min": 0.999999999384277,
+      "max": 0.999999999384277,
+      "defined": 3,
+      "missing": 0
+    },
+    "cgroup_memory_peak_bytes": {
+      "median": 203063296,
+      "min": 202895360,
+      "max": 203075584
+    },
+    "cgroup_final_memory_current_bytes": {
+      "median": 89464832,
+      "min": 89227264,
+      "max": 89550848
+    }
+  },
+  {
+    "cpu_quota_count": 2,
+    "active_clients": 4,
+    "total_actors": 5,
+    "completed_successes_per_second": {
+      "median": 1788431.264103457,
+      "min": 1728358.4034600353,
+      "max": 1800395.5469016542,
+      "defined": 3,
+      "missing": 0
+    },
+    "process_cpu_ns_per_success": {
+      "median": 857.18745,
+      "min": 757.7017,
+      "max": 886.5932,
+      "defined": 3,
+      "missing": 0
+    },
+    "elapsed_ns": {
+      "median": 11182985,
+      "min": 11108670,
+      "max": 11571674,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p50_ns": {
+      "median": 761,
+      "min": 551,
+      "max": 811,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p95_ns": {
+      "median": 2524,
+      "min": 2444,
+      "max": 4557,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p99_ns": {
+      "median": 4256,
+      "min": 3254,
+      "max": 5769,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_completions_during_fault": {
+      "median": 20000,
+      "min": 18430,
+      "max": 20000,
+      "defined": 3,
+      "missing": 0
+    },
+    "fault_duration_ns": {
+      "median": 11078916,
+      "min": 10489077,
+      "max": 11154873,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 4256,
+      "min": 3295,
+      "max": 5769,
+      "defined": 3,
+      "missing": 0
+    },
+    "common_interval_jain_index": {
+      "median": 0.7239816176318958,
+      "min": 0.6882237871029595,
+      "max": 0.9960473030711757,
+      "defined": 3,
+      "missing": 0
+    },
+    "cgroup_memory_peak_bytes": {
+      "median": 8069120,
+      "min": 8032256,
+      "max": 8101888
+    },
+    "cgroup_final_memory_current_bytes": {
+      "median": 4227072,
+      "min": 4218880,
+      "max": 4440064
+    }
+  },
+  {
+    "cpu_quota_count": 2,
+    "active_clients": 16,
+    "total_actors": 17,
+    "completed_successes_per_second": {
+      "median": 2374436.1085247896,
+      "min": 2143828.6034757462,
+      "max": 2422732.1811000784,
+      "defined": 3,
+      "missing": 0
+    },
+    "process_cpu_ns_per_success": {
+      "median": 828.5104625,
+      "min": 814.884525,
+      "max": 906.7644875,
+      "defined": 3,
+      "missing": 0
+    },
+    "elapsed_ns": {
+      "median": 33692210,
+      "min": 33020571,
+      "max": 37316416,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p50_ns": {
+      "median": 1983,
+      "min": 1513,
+      "max": 2233,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p95_ns": {
+      "median": 19239,
+      "min": 13360,
+      "max": 20140,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p99_ns": {
+      "median": 29484,
+      "min": 28543,
+      "max": 42042,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_completions_during_fault": {
+      "median": 22309,
+      "min": 22249,
+      "max": 24121,
+      "defined": 3,
+      "missing": 0
+    },
+    "fault_duration_ns": {
+      "median": 10296744,
+      "min": 10225065,
+      "max": 10334845,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 37836,
+      "min": 36315,
+      "max": 42042,
+      "defined": 3,
+      "missing": 0
+    },
+    "common_interval_jain_index": {
+      "median": 0.5589720333765332,
+      "min": 0.43773031173573285,
+      "max": 0.9893351625393284,
+      "defined": 3,
+      "missing": 0
+    },
+    "cgroup_memory_peak_bytes": {
+      "median": 27074560,
+      "min": 26693632,
+      "max": 27123712
+    },
+    "cgroup_final_memory_current_bytes": {
+      "median": 11726848,
+      "min": 11198464,
+      "max": 12296192
+    }
+  },
+  {
+    "cpu_quota_count": 2,
+    "active_clients": 64,
+    "total_actors": 65,
+    "completed_successes_per_second": {
+      "median": 2198167.5827736147,
+      "min": 2123553.914532078,
+      "max": 2431104.142013435,
+      "defined": 3,
+      "missing": 0
+    },
+    "process_cpu_ns_per_success": {
+      "median": 855.206925,
+      "min": 818.026009375,
+      "max": 875.239046875,
+      "defined": 3,
+      "missing": 0
+    },
+    "elapsed_ns": {
+      "median": 145575798,
+      "min": 131627434,
+      "max": 150690782,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p50_ns": {
+      "median": 951,
+      "min": 881,
+      "max": 1062,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p95_ns": {
+      "median": 60602,
+      "min": 51808,
+      "max": 66871,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p99_ns": {
+      "median": 134994,
+      "min": 86931,
+      "max": 136386,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_completions_during_fault": {
+      "median": 18328,
+      "min": 13295,
+      "max": 20753,
+      "defined": 3,
+      "missing": 0
+    },
+    "fault_duration_ns": {
+      "median": 10752606,
+      "min": 10095004,
+      "max": 11031772,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 235566,
+      "min": 163146,
+      "max": 587136,
+      "defined": 3,
+      "missing": 0
+    },
+    "common_interval_jain_index": {
+      "median": 0.04139705226389747,
+      "min": 0.04139705226389747,
+      "max": 0.04139705226389747,
+      "defined": 1,
+      "missing": 2
+    },
+    "cgroup_memory_peak_bytes": {
+      "median": 102465536,
+      "min": 102379520,
+      "max": 102531072
+    },
+    "cgroup_final_memory_current_bytes": {
+      "median": 67764224,
+      "min": 67682304,
+      "max": 69267456
+    }
+  },
+  {
+    "cpu_quota_count": 2,
+    "active_clients": 128,
+    "total_actors": 129,
+    "completed_successes_per_second": {
+      "median": 2251777.687885718,
+      "min": 2210847.2442663074,
+      "max": 2425177.440381029,
+      "defined": 3,
+      "missing": 0
+    },
+    "process_cpu_ns_per_success": {
+      "median": 870.0175703125,
+      "min": 821.04081875,
+      "max": 884.9386984375,
+      "defined": 3,
+      "missing": 0
+    },
+    "elapsed_ns": {
+      "median": 284219887,
+      "min": 263898216,
+      "max": 289481782,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p50_ns": {
+      "median": 6349,
+      "min": 1562,
+      "max": 6600,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p95_ns": {
+      "median": 123687,
+      "min": 116755,
+      "max": 124126,
+      "defined": 3,
+      "missing": 0
+    },
+    "latency_p99_ns": {
+      "median": 254335,
+      "min": 201072,
+      "max": 265609,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_completions_during_fault": {
+      "median": 20567,
+      "min": 20478,
+      "max": 23715,
+      "defined": 3,
+      "missing": 0
+    },
+    "fault_duration_ns": {
+      "median": 10676785,
+      "min": 10622793,
+      "max": 10753629,
+      "defined": 3,
+      "missing": 0
+    },
+    "healthy_latency_p99_ns_during_fault": {
+      "median": 489305,
+      "min": 369946,
+      "max": 826140,
+      "defined": 3,
+      "missing": 0
+    },
+    "common_interval_jain_index": {
+      "median": 0.14020291553977302,
+      "min": 0.06039907002168218,
+      "max": 0.18772199721387972,
+      "defined": 3,
+      "missing": 0
+    },
+    "cgroup_memory_peak_bytes": {
+      "median": 204046336,
+      "min": 203403264,
+      "max": 204349440
+    },
+    "cgroup_final_memory_current_bytes": {
+      "median": 76525568,
+      "min": 76230656,
+      "max": 89358336
+    }
+  }
+]

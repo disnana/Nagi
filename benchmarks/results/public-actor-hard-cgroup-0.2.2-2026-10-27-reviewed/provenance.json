@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "release_tag": "nagi-v0.2.2",
+  "release_commit": "7c92045a04519609ae287803a31ac0816c728086",
+  "compiler_version": "nagic 0.2.2",
+  "docker_image_id": "sha256:e77fe059ccc555603adc87bac908be6acd362d8fa5aefdd41f4852796e2a187e",
+  "docker_server_version": "28.4.0",
+  "host_platform": "Linux-6.18.55-x86_64-with-glibc2.41",
+  "host_cpu_model": "AMD EPYC 9V74 80-Core Processor",
+  "measurement_cases": 24,
+  "resource_contract": {
+    "memory_bytes": 1073741824,
+    "memory_swap_max_bytes": 0,
+    "cpu_quota_counts": [
+      1,
+      2
+    ],
+    "cpuset_counts": [
+      1,
+      2
+    ],
+    "pids_limit": 512,
+    "network": "none",
+    "read_only_rootfs": true,
+    "cap_drop": [
+      "ALL"
+    ],
+    "security_opt": [
+      "no-new-privileges"
+    ]
+  },
+  "rust_toolchain": {
+    "release": "1.99.1",
+    "commit": "58cf8f9c35b355199727627d07ae34a4e2846d67",
+    "commit_date": "2026-10-13",
+    "host": "x86_64-unknown-linux-gnu",
+    "llvm": "23.1.1"
+  },
+  "sha256": {
+    "nagi_source": "53efb4ad6ff34fbe242f6c759571544eae130b9f418cde36184078bb74257d6c",
+    "observer_source": "3297e3546489ce81aa2f1cc4d076478a3439888dc80171de3bc1e6a86b94261c",
+    "controller_source": "d56d23d97f3c6946786cbc1cad71a4792f3697fffc792b0a60ea07480d991fa9",
+    "shared_controller_source": "52869d9db6508281d104850b58199e5db4a5a43d438b286d021560ed551b5655",
+    "image_preparation_source": "fd5a8524f89e282288e02b168d66e4e5d9faf26e783f310427d13d085dbb64af",
+    "verification_source": "0bd6345704090cfbcdfa316c4108011f066f948b29586356037d406896c3587c",
+    "release_archive": "0dc1b8d42d5283c7ba41663a1420f041ed2461e6ced8b3eadfcc0383be1ee0b0",
+    "release_compiler": "2c917055b4ec1aba5d6695f750101bb4a8956a8535c58cb42eb261446c83fa19",
+    "native_binary": "f4198164f93f0f11e27c420ef58183fac4ee15c015f5425dfb54c64581431e60",
+    "generated_rust": "0ba80d2b85f7210eb995e250fb01f5c109d00774e30296e85a713acb2a759aa6",
+    "generated_low": "ca5ccf12c4dae4d213aa9bfd93179e12d07f38c645a161c493e5ae0c1d78b092",
+    "native_lock": "7bdc88dfc1aa149d7dbd3fb77712dc87ec61660e6deca800d47a32e1888734c1",
+    "native_manifest": "b2304803a2310be046bdeeeefe0eedbb661433a2ee6a2370e58342e9070c0dc3",
+    "image_rootfs_manifest": "7cb3d76967bae4b4ccdfd4748931212fb2a54f9136a8b2b01b39715667e86027",
+    "measured_dockerfile": "801fadf2e191c47c39e89e3577e9a7edf0b3775a63ed0614f08633a6586c9ca4"
+  }
+}
