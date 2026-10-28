@@ -411,6 +411,31 @@ impl fmt::Display for CallClosed {
     }
 }
 
+#[cfg(nagi_browser_login_diag)]
+pub(super) struct BrowserCallClosed {
+    snapshot: super::Closed,
+    request: u64,
+    terminal: u8,
+}
+#[cfg(nagi_browser_login_diag)]
+impl BrowserCallClosed {
+    pub(super) fn new(snapshot: super::Closed, request: u64, terminal: u8) -> Self {
+        Self {
+            snapshot,
+            request,
+            terminal,
+        }
+    }
+}
+#[cfg(nagi_browser_login_diag)]
+impl fmt::Display for BrowserCallClosed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let n = self.snapshot.native_call;
+        write!(f,"browser_handler_native_call_diag request={} status=504 origin=4 terminal={} diagnostic_valid={} native_call_state={} generation={} call_enter_us={} call_return_us={} native_state={} commit_result={} settled_us={} begins={} commits={} selected_deadline_passed={}",
+            self.request,self.terminal,u8::from(n.valid),n.state,n.generation,n.entered,n.returned,n.native_state,n.commit_result,n.settled,n.begins,n.commits,u8::from(n.valid && self.snapshot.selected_deadline_passed))
+    }
+}
+
 #[cfg(test)]
 #[path = "session_native_finish_tests.rs"]
 mod tests;

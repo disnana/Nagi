@@ -107,7 +107,56 @@ PRODUCTION_SOURCES = {'http': {'path': 'runtime/src/http_server.rs',
             'tokens': 'fe23e1f3098b190113722979aed4fbaffeb10153f0869ba083dabf3674ac8156'}}
 
 
+BROWSER_HANDLER_ADDITIONS = (
+    ("        .catch_unwind();\n", '''        #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+        let handler_observer = crate::auth::session_deadline_observer::BrowserHandlerObserver::new(
+            &owner.lease_owner().lease,
+            admitted,
+            until,
+        );
+        #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+        let future = handler_observer.scope(future);
+''', "        match tokio::time::timeout_at(\n"),
+    ("                diag::exit(Exit::HandlerLateReady);\n", '''                #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+                handler_observer
+                    .emit(crate::auth::session_deadline_observer::BrowserTerminal::LateReady);
+''', "                terminal(Status::GATEWAY_TIMEOUT, pool, owner)\n"),
+    ("                diag::exit(Exit::HandlerTimer);\n", '''                #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+                handler_observer
+                    .emit(crate::auth::session_deadline_observer::BrowserTerminal::Timer);
+''', "                terminal(Status::GATEWAY_TIMEOUT, pool, owner)\n"),
+    ("mod stage_tests;\n", '''
+#[cfg(all(test, nagi_auth_stage_diag, nagi_browser_login_diag))]
+#[path = "browser_handler_diagnostic_tests.rs"]
+mod handler_diagnostic_tests;
+''', ""),
+)
+BROWSER_HANDLER_COVERAGE = '''    "http_server::browser_login::handler_diagnostic_tests::original_handler_timer_preserves_pending_issue_witness",
+    "http_server::browser_login::handler_diagnostic_tests::original_handler_late_ready_preserves_committed_issue_witness",
+    "http_server::browser_login::handler_diagnostic_tests::released_native_startup_preserves_success_without_terminal_record",
+    "auth::session_deadline_observer::tests::browser_request_key_and_guarded_scope_remain_independent",
+    "auth::session_deadline_observer::tests::browser_terminal_copy_survives_later_native_metadata_and_cancellation",
+'''
+
+
+def inverse_browser_handler_coverage(source):
+    before = '    "http_server::tests::security_tests::late_verifier_failure_uses_the_exhausted_security_budget",\n'
+    if source.count(BROWSER_HANDLER_COVERAGE) != 1 or source.count(before + BROWSER_HANDLER_COVERAGE + ')\n') != 1:
+        raise ValueError('Browser Handler coverage addition mismatch')
+    return source.replace(BROWSER_HANDLER_COVERAGE, '', 1)
+
+
+def inverse_browser_handler(source):
+    for before, added, after in BROWSER_HANDLER_ADDITIONS:
+        if source.count(added) != 1 or source.count(before + added + after) != 1:
+            raise ValueError('Browser Handler observer placement mismatch')
+        source = source.replace(added, '', 1)
+    return source
+
+
 def approved_production(name, source):
+    if name == 'browser':
+        source = inverse_browser_handler(source)
     expected = PRODUCTION_SOURCES.get(name)
     if expected is None or hashlib.sha256(source.encode()).hexdigest() != expected['sha256']:
         raise ValueError('approved U4 production source identity mismatch')

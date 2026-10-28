@@ -464,6 +464,8 @@ class BackportSourceTests(unittest.TestCase):
                     continue
                 if path == 'scripts/ci/session_private_deadline_diagnostic.py':
                     value = projection.inverse_collector(value)
+                if path == 'scripts/ci/browser_login_stage_coverage.py':
+                    value = projection.inverse_browser_handler_coverage(value)
                 if path == 'runtime/src/auth/prelogin/http_bridge.rs':
                     value = projection.inverse_prelogin_wire(value)
                 self.assertEqual(hashlib.sha256(value.encode()).hexdigest(), expected, path)
