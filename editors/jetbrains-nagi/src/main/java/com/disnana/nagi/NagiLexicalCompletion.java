@@ -59,6 +59,7 @@ final class NagiLexicalCompletion {
         else {
             result.addAll(COMMON);
             if (low) result.add("let");
+            else result.add("elif");
             // Declaration hints retain the existing conservative top-level guard.
             if (before.isBlank() && lineStart == start && NagiDeclarationContext.isCertainTopLevel(text, start, low)) {
                 result.add(low ? "record" : "class");

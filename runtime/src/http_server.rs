@@ -542,6 +542,16 @@ impl PreparedCompletion {
         }
     }
 }
+
+// A mapper can fail because the ordinary response pool is already exhausted.
+// Preserve that typed load-shedding signal when switching to the independent
+// fallback ledger; all other mapper failures remain opaque internal errors.
+fn mapper_failure_status(error: &Error) -> Status {
+    match error.kind {
+        ErrorKind::Busy => Status::SERVICE_UNAVAILABLE,
+        _ => Status::INTERNAL_SERVER_ERROR,
+    }
+}
 type ResponseFuture = Pin<Box<dyn Future<Output = PreparedCompletion> + Send>>;
 type PolicyFuture<A> = Pin<Box<dyn Future<Output = Result<A, Failure>> + Send>>;
 type PolicyFactory<S, A> = dyn Fn(Request, Arc<S>, Arc<Lease>) -> PolicyFuture<A> + Send + Sync;
@@ -1784,7 +1794,9 @@ where
                 finalize_authenticated(response.into_replacement_http(&context, head), source, head)
             }
             Ok(Ok(PreparedCompletion::Terminal(response))) => response,
-            Ok(Ok(PreparedCompletion::MapperFailure(error))) => { drop(error); transport(Status::INTERNAL_SERVER_ERROR, head, true) },
+            Ok(Ok(PreparedCompletion::MapperFailure(error))) => {
+                transport(mapper_failure_status(&error), head, true)
+            }
             Ok(Err(_)) => transport(Status::INTERNAL_SERVER_ERROR, head, true),
             Err(_) => {
                 #[cfg(all(test, nagi_auth_stage_diag))]

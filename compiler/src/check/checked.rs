@@ -25,7 +25,8 @@ pub struct CheckedProgram {
     program: Program,
     provenance: SourceProvenance,
     pub(crate) emission: EmissionPlan,
-    _final_check_facts: FinalCheckFacts,
+    pub(crate) enums: EnumFacts,
+    final_check_facts: FinalCheckFacts,
 }
 impl CheckedProgram {
     pub fn program(&self) -> &Program {
@@ -37,7 +38,13 @@ impl CheckedProgram {
     pub(crate) fn validate_for_emission(&self) -> Result<(), String> {
         self.emission
             .validate()
+            .map_err(|e| FinalizeError::defect(e).to_string())?;
+        self.enums
+            .validate(&self.program)
             .map_err(|e| FinalizeError::defect(e).to_string())
+    }
+    pub(crate) fn final_check_facts(&self) -> &FinalCheckFacts {
+        &self.final_check_facts
     }
     pub(super) fn seal(
         program: Program,
@@ -54,34 +61,206 @@ impl CheckedProgram {
                 "missing or inconsistent final Future capture facts".into(),
             ));
         }
+        let enums = EnumFacts::build(&program).map_err(FinalizeError::defect)?;
         let emission = EmissionPlan::build(&program, &provenance).map_err(FinalizeError::defect)?;
         Ok(Self {
             program,
             provenance,
             emission,
-            _final_check_facts: facts,
+            enums,
+            final_check_facts: facts,
         })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct EnumVariantFact {
+    pub enumeration: String,
+    pub variant: String,
+    pub ordinal: usize,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct FunctionEnumFacts {
+    pub constructors: BTreeMap<ExpressionKey, EnumVariantFact>,
+    pub matches: BTreeMap<ExpressionKey, Vec<EnumVariantFact>>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct EnumFacts {
+    pub functions: BTreeMap<String, FunctionEnumFacts>,
+}
+
+impl EnumFacts {
+    fn variant(program: &Program, name: &str) -> Result<EnumVariantFact, String> {
+        let (owner, variant) = name
+            .rsplit_once('.')
+            .ok_or_else(|| format!("invalid checked enum variant {name}"))?;
+        let enumeration = program
+            .enums
+            .iter()
+            .find(|item| item.name == owner)
+            .ok_or_else(|| format!("missing checked enum owner {owner}"))?;
+        let ordinal = enumeration
+            .variants
+            .iter()
+            .position(|item| item.name == variant)
+            .ok_or_else(|| format!("missing checked enum variant {name}"))?;
+        Ok(EnumVariantFact {
+            enumeration: owner.to_owned(),
+            variant: variant.to_owned(),
+            ordinal,
+        })
+    }
+
+    fn expression_variant(program: &Program, expression: &Expr) -> Result<EnumVariantFact, String> {
+        let name = match &expression.kind {
+            E::Field(owner, variant) => {
+                let E::Name(owner) = &owner.kind else {
+                    return Err("invalid checked enum owner".into());
+                };
+                format!("{owner}.{variant}")
+            }
+            E::Call(name, _, _) | E::Record(name, _) => name.clone(),
+            _ => return Err("invalid checked enum constructor".into()),
+        };
+        Self::variant(program, &name)
+    }
+
+    fn collect_matches(
+        program: &Program,
+        statements: &[Stmt],
+        facts: &mut FunctionEnumFacts,
+    ) -> Result<(), String> {
+        for statement in statements {
+            match &statement.kind {
+                S::Match(value, arms) => {
+                    if arms
+                        .first()
+                        .is_some_and(|arm| matches!(arm.pattern, MatchPattern::Enum { .. }))
+                    {
+                        let variants = arms
+                            .iter()
+                            .map(|arm| match &arm.pattern {
+                                MatchPattern::Enum { name, .. } => Self::variant(program, name),
+                                _ => Err("mixed checked enum match".into()),
+                            })
+                            .collect::<Result<Vec<_>, _>>()?;
+                        if facts
+                            .matches
+                            .insert(ExpressionKey::of(value), variants)
+                            .is_some()
+                        {
+                            return Err("duplicate checked enum match identity".into());
+                        }
+                    }
+                    for arm in arms {
+                        Self::collect_matches(program, &arm.body, facts)?;
+                    }
+                }
+                S::If(_, yes, no) => {
+                    Self::collect_matches(program, yes, facts)?;
+                    Self::collect_matches(program, no, facts)?;
+                }
+                S::While(_, body) | S::For(_, _, body) | S::Scope(body) => {
+                    Self::collect_matches(program, body, facts)?;
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    fn build(program: &Program) -> Result<Self, String> {
+        let mut result = Self::default();
+        for function in &program.functions {
+            if function.external {
+                continue;
+            }
+            let mut facts = FunctionEnumFacts::default();
+            visit_expressions(&function.body, &mut |expression| {
+                if expression.resolution == Some(NameResolution::Enum) {
+                    let fact = Self::expression_variant(program, expression)?;
+                    if facts
+                        .constructors
+                        .insert(ExpressionKey::of(expression), fact)
+                        .is_some()
+                    {
+                        return Err("duplicate checked enum constructor identity".into());
+                    }
+                }
+                Ok(())
+            })?;
+            Self::collect_matches(program, &function.body, &mut facts)?;
+            result.functions.insert(function.name.clone(), facts);
+        }
+        Ok(result)
+    }
+
+    fn validate(&self, program: &Program) -> Result<(), String> {
+        if self != &Self::build(program)? {
+            return Err("missing or inconsistent checked enum facts".into());
+        }
+        Ok(())
     }
 }
 
 // Private checker proof: no syntax field can assert safe task transfer.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct FinalCheckFacts {
+pub(crate) struct FinalCheckFacts {
     pub functions: BTreeMap<String, BTreeMap<ExprUseId, FutureCapture>>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct FutureCapture {
+pub(crate) struct FutureCapture {
     pub callee: String,
     pub resolution: NameResolution,
     pub arguments: Vec<FutureArgument>,
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct FutureArgument {
+pub(crate) struct FutureArgument {
     pub index: usize,
     pub expression: ExprUseId,
     pub ty: Type,
     pub passing: crate::stdlib::Passing,
     pub owners: Vec<(ExprUseId, BindingId)>,
+    pub capture: ArgumentCaptureFacts,
+}
+
+/// Target-neutral argument facts, sealed but not yet a runtime release plan.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ArgumentCaptureFacts {
+    UserAsync(UserAsyncArgumentFacts),
+    /// Registered standard operations and legacy builtin Future calls retain
+    /// their existing capture behavior without a user argument plan.
+    UnplannedStandard,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct UserAsyncArgumentFacts {
+    pub slot: ArgumentCaptureSlot,
+    /// User calls transfer arguments by value: only Copy or Move is possible.
+    pub transfer: ExprUseMode,
+    /// Index is the content depth, including depth zero. Empty origins do not
+    /// prove static storage, absence of borrowing, or a release schedule.
+    pub depths: Vec<OriginDepthFacts>,
+    pub views_absent: bool,
+    pub release: ArgumentRelease,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ArgumentCaptureSlot {
+    pub call: ExprUseId,
+    pub argument: usize,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct OriginDepthFacts {
+    pub origins: Vec<FlowOrigin>,
+    pub borrows_temporary: bool,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ArgumentRelease {
+    /// A Copy argument whose type contains no views needs no owner release.
+    NotRequired,
+    /// Release has not been planned; no backend may infer cleanup from this.
+    Deferred,
 }
 
 #[cfg(test)]

@@ -39,6 +39,8 @@ public final class NagiLexicalCompletionTest extends BasePlatformTestCase {
         }
     }
     public void testDeclarationLanguageAndTopLevelGuardsRemainIntact() {
+        assertTrue(complete(".nagi", "eli<caret>").contains("elif"));
+        assertFalse(complete(".low", "eli<caret>").contains("elif"));
         assertTrue(complete(".nagi", "cl<caret>").contains("class"));
         assertFalse(complete(".nagi", "rec<caret>").contains("record"));
         assertTrue(complete(".low", "rec<caret>").contains("record"));

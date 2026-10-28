@@ -1,0 +1,26 @@
+{"completed":1000,"elapsed_ms":0.822657,"max_pending":1000,"n":1000,"name":"task_create_join","pending_rss_kib":2528,"repeat":0,"rss_after_kib":2472,"rss_before_kib":2108,"unfinished":0}
+{"completed":1000,"elapsed_ms":0.566389,"max_pending":1000,"n":1000,"name":"task_create_join","pending_rss_kib":2532,"repeat":1,"rss_after_kib":2532,"rss_before_kib":2472,"unfinished":0}
+{"completed":1000,"elapsed_ms":0.662054,"max_pending":1000,"n":1000,"name":"task_create_join","pending_rss_kib":2536,"repeat":2,"rss_after_kib":2536,"rss_before_kib":2532,"unfinished":0}
+{"completed":10000,"elapsed_ms":6.679569,"max_pending":10000,"n":10000,"name":"task_create_join","pending_rss_kib":5912,"repeat":0,"rss_after_kib":5912,"rss_before_kib":2536,"unfinished":0}
+{"completed":10000,"elapsed_ms":5.734345,"max_pending":10000,"n":10000,"name":"task_create_join","pending_rss_kib":5916,"repeat":1,"rss_after_kib":5916,"rss_before_kib":5912,"unfinished":0}
+{"completed":10000,"elapsed_ms":4.745916,"max_pending":10000,"n":10000,"name":"task_create_join","pending_rss_kib":5916,"repeat":2,"rss_after_kib":5920,"rss_before_kib":5916,"unfinished":0}
+{"completed":50000,"elapsed_ms":32.672882,"max_pending":50000,"n":50000,"name":"task_create_join","pending_rss_kib":20920,"repeat":0,"rss_after_kib":20924,"rss_before_kib":5920,"unfinished":0}
+{"completed":50000,"elapsed_ms":29.015616,"max_pending":50000,"n":50000,"name":"task_create_join","pending_rss_kib":20924,"repeat":1,"rss_after_kib":20924,"rss_before_kib":20924,"unfinished":0}
+{"completed":50000,"elapsed_ms":28.815562999999997,"max_pending":50000,"n":50000,"name":"task_create_join","pending_rss_kib":20924,"repeat":2,"rss_after_kib":20924,"rss_before_kib":20924,"unfinished":0}
+{"completed":100000,"elapsed_ms":64.37374899999999,"max_pending":100000,"n":100000,"name":"task_create_join","pending_rss_kib":39676,"repeat":0,"rss_after_kib":39676,"rss_before_kib":20924,"unfinished":0}
+{"completed":100000,"elapsed_ms":60.46354,"max_pending":100000,"n":100000,"name":"task_create_join","pending_rss_kib":39676,"repeat":1,"rss_after_kib":39676,"rss_before_kib":39676,"unfinished":0}
+{"completed":100000,"elapsed_ms":59.577102,"max_pending":100000,"n":100000,"name":"task_create_join","pending_rss_kib":39676,"repeat":2,"rss_after_kib":39676,"rss_before_kib":39676,"unfinished":0}
+{"final":20000,"mailbox_capacity":64,"mean_roundtrip_us":20.5387175,"messages":20000,"messages_s":48688.53179367212,"name":"actor_rpc","repeat":0,"rss_kib":39676}
+{"final":20000,"mailbox_capacity":64,"mean_roundtrip_us":21.44127455,"messages":20000,"messages_s":46639.01848129639,"name":"actor_rpc","repeat":1,"rss_kib":39676}
+{"final":20000,"mailbox_capacity":64,"mean_roundtrip_us":23.9773457,"messages":20000,"messages_s":41706.03420878234,"name":"actor_rpc","repeat":2,"rss_kib":39676}
+{"final":20000,"mailbox_capacity":64,"mean_roundtrip_us":27.364058449999998,"messages":20000,"messages_s":36544.28679967974,"name":"actor_rpc","repeat":3,"rss_kib":39676}
+{"final":20000,"mailbox_capacity":64,"mean_roundtrip_us":27.455818400000002,"messages":20000,"messages_s":36422.15232600752,"name":"actor_rpc","repeat":4,"rss_kib":39676}
+{"batch":32,"final":20000,"mailbox_capacity":64,"mean_completion_us":1.0340764,"messages":20000,"messages_s":967046.5354397411,"name":"actor_pipelined","repeat":0,"rss_kib":39876}
+{"batch":32,"final":20000,"mailbox_capacity":64,"mean_completion_us":0.7144180499999999,"messages":20000,"messages_s":1399740.6700460606,"name":"actor_pipelined","repeat":1,"rss_kib":39876}
+{"batch":32,"final":20000,"mailbox_capacity":64,"mean_completion_us":0.60106555,"messages":20000,"messages_s":1663712.052703736,"name":"actor_pipelined","repeat":2,"rss_kib":39876}
+{"batch":32,"final":20000,"mailbox_capacity":64,"mean_completion_us":0.6755899999999999,"messages":20000,"messages_s":1480187.687798813,"name":"actor_pipelined","repeat":3,"rss_kib":39876}
+{"batch":32,"final":20000,"mailbox_capacity":64,"mean_completion_us":0.75979095,"messages":20000,"messages_s":1316151.5019361577,"name":"actor_pipelined","repeat":4,"rss_kib":39876}
+{"name":"supervisor_recovery","stats":{"restart_latency_ns":[2042079,2110203,2152746],"restarts":3,"stopped_by_intensity":false,"unaffected_iterations":11}}
+{"name":"supervisor_crash_loop","stats":{"restart_latency_ns":[2064579,2170288],"restarts":2,"stopped_by_intensity":true,"unaffected_iterations":9}}
+{"name":"queue","rss_kib":39880,"stats":{"completed":909,"dead_letter":91,"peak_in_flight":8,"retries":312}}
+{"close":"actual native close/join awaited","name":"sqlite_pool_lifecycle","opened_closed":100}

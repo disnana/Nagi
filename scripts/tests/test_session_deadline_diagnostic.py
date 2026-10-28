@@ -1715,5 +1715,199 @@ class BrowserFailureCounterSupplementTests(unittest.TestCase):
                 self.assertNotIn("PRIVATE_SENTINEL", console.getvalue() + output.read_text())
 
 
+class BrowserHandlerDiagnosticTests(unittest.TestCase):
+    CASE = "input_and_strict_json_rejections_do_not_consume_or_call_verifier"
+    HEADER = ("browser_handler_deadline_diag request=7 status=504 phase=15 event=2 db=14 terminal=9 "
+              "polls=6 begins=1 commands=10 commits=1 budget_ms=1000 entry_remaining_ms=999 "
+              "phase_remaining_ms=999 exit_remaining_ms=0 selected_deadline_passed=1")
+    CALL = ("browser_handler_native_call_diag request=7 status=504 origin=4 terminal=9 diagnostic_valid=1 "
+            "native_call_state=4 generation=1 call_enter_us=100 call_return_us=200 native_state=7 "
+            "commit_result=1 settled_us=210 begins=1 commits=1 selected_deadline_passed=1")
+    PHASE = ("browser_login_phase_diag request=7 status=504 phase=16 event=2 before_gate=1 poll_gate=2 "
+             "saw_pending=1 pending_phase=16 pending_gate=1 saw_live_pending=1 live_pending_phase=16 "
+             "gate_refused=0 row_missing=0 rollback_ack=0 restore_commit_ack=0 exit=9 exit_gate=2 consumed=1")
+
+    def diagnose(self, markers):
+        return parse_both(browser_raw=cargo_log(diag.BROWSER_CASES, failed={self.CASE},
+                                              markers={self.CASE: markers}), browser_exit=101)
+
+    def test_audit_impossible_late_ready_and_unpolled_activity_are_never_closed_facts(self):
+        valid, _ = self.diagnose([self.HEADER, self.CALL, self.PHASE])
+        bad_clock_header = self.HEADER.replace("selected_deadline_passed=1", "selected_deadline_passed=0").replace("exit_remaining_ms=0", "exit_remaining_ms=100")
+        bad_clock_call = self.CALL.replace("selected_deadline_passed=1", "selected_deadline_passed=0")
+        unpolled = self.HEADER.replace("event=2", "event=0").replace("polls=6", "polls=0")
+        samples = [
+            (bad_clock_header, bad_clock_call, self.PHASE),
+            (self.HEADER.replace("exit_remaining_ms=0", "exit_remaining_ms=100"), self.CALL, self.PHASE),
+            (self.HEADER.replace("terminal=9", "terminal=8").replace("exit_remaining_ms=0", "exit_remaining_ms=100"),
+             self.CALL.replace("terminal=9", "terminal=8"), self.PHASE.replace("exit=9", "exit=8")),
+            (unpolled, self.CALL, self.PHASE),
+            (unpolled.replace("terminal=9", "terminal=8"), self.CALL.replace("terminal=9", "terminal=8"), self.PHASE.replace("exit=9", "exit=8")),
+            (self.HEADER.replace("polls=6", "polls=0"), self.CALL, self.PHASE),
+            (self.HEADER.replace("event=2", "event=0"), self.CALL, self.PHASE),
+        ]
+        for header, native, phase in samples:
+            with self.subTest(header=header):
+                record, _ = self.diagnose([header, native, phase])
+                self.assertEqual(record["status"], "diagnostic_invalid")
+                self.assertFalse(record["suites"]["browser"].get("browser_handler"))
+                self.assertFalse(record["suites"]["browser"].get("browser_handler_call"))
+                # The artifact validator must also reject fabricated JSON that
+                # bypasses raw parsing; no status-only admission is sufficient.
+                forged = json.loads(json.dumps(valid))
+                forged["suites"]["browser"]["browser_handler"][0].update(
+                    dict((key, int(value)) for key, value in
+                         (field.split("=") for field in header.split()[1:])))
+                forged["suites"]["browser"]["browser_handler_call"][0].update(
+                    dict((key, int(value)) for key, value in
+                         (field.split("=") for field in native.split()[1:])))
+                self.assertFalse(diag._closed_record_shape(forged, False))
+
+    def test_audit_matching_phase_must_follow_terminal_pair_for_both_terminals(self):
+        for terminal in (8, 9):
+            header = self.HEADER.replace("terminal=9", f"terminal={terminal}")
+            native = self.CALL.replace("terminal=9", f"terminal={terminal}")
+            phase = self.PHASE.replace("exit=9", f"exit={terminal}")
+            for markers in ([phase, header, native], [header, phase, native]):
+                with self.subTest(terminal=terminal, markers=markers):
+                    record, _ = self.diagnose(markers)
+                    self.assertEqual(record["status"], "diagnostic_invalid")
+                    self.assertFalse(record["suites"]["browser"].get("browser_handler"))
+                    self.assertFalse(record["suites"]["browser"].get("browser_handler_call"))
+
+    def test_audit_timer_clock_domains_and_zero_ms_rounding_remain_distinct(self):
+        header = self.HEADER.replace("terminal=9", "terminal=8").replace("event=2", "event=1")
+        native = self.CALL.replace("terminal=9", "terminal=8")
+        phase = self.PHASE.replace("exit=9", "exit=8").replace("event=2", "event=1")
+        for remaining in (0, 100):
+            timer = header.replace("selected_deadline_passed=1", "selected_deadline_passed=0").replace("exit_remaining_ms=0", f"exit_remaining_ms={remaining}")
+            call = native.replace("selected_deadline_passed=1", "selected_deadline_passed=0")
+            self.assertEqual(self.diagnose([timer, call, phase])[0]["status"], "tests_failed")
+        # Other requests may interleave; only same-request order is fixed.
+        header2, call2, phase2 = (text.replace("request=7", "request=8")
+                                 for text in (self.HEADER, self.CALL, self.PHASE))
+        interleaved = [self.HEADER, self.CALL, header2, call2, phase2, self.PHASE]
+        record, _ = self.diagnose(interleaved)
+        self.assertEqual(record["status"], "tests_failed")
+        self.assertTrue(diag._closed_record_shape(record, False))
+
+    def test_audit_rejected_order_does_not_publish_supplement_fragments(self):
+        raw = cargo_log(diag.BROWSER_CASES, failed={self.CASE},
+                        markers={self.CASE: [self.PHASE, self.HEADER, self.CALL]})
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            (root / "session-deadline-session.raw").write_bytes(cargo_log(diag.SESSION_CASES))
+            (root / "session-deadline-browser.raw").write_bytes(raw)
+            output = root / "result.json"
+            console = io.StringIO()
+            with contextlib.redirect_stdout(console):
+                self.assertEqual(diag.main(["diag", str(root), "0", "101", str(output)]), 1)
+            self.assertNotIn("browser_handler=", console.getvalue())
+            self.assertNotIn("browser_handler_call=", console.getvalue())
+            record = json.loads(output.read_text())
+            self.assertEqual(record["status"], "diagnostic_invalid")
+            self.assertNotIn("browser_handler", record["suites"]["browser"])
+            self.assertNotIn("browser_handler_call", record["suites"]["browser"])
+
+    def test_exact_request_and_native_pair_saved_with_legacy_phase_lf_crlf(self):
+        raw = cargo_log(diag.BROWSER_CASES, failed={self.CASE},
+                        markers={self.CASE: [self.HEADER, self.CALL, self.PHASE]})
+        for value in (raw, raw.replace(b"\n", b"\r\n")):
+            record, status = parse_both(browser_raw=value, browser_exit=101)
+            self.assertEqual((status, record["status"]), (1, "tests_failed"))
+            self.assertTrue(diag._closed_record_shape(record, False))
+            suite = record["suites"]["browser"]
+            self.assertEqual(suite["browser_handler"][0]["request"], 7)
+            self.assertEqual(suite["browser_handler_call"][0]["request"], 7)
+            self.assertEqual(suite["browser_handler_call"][0]["native_call_state"], 4)
+
+    def test_timer_unavailable_never_borrows_header_counts_or_deadline_boolean(self):
+        header = self.HEADER.replace("terminal=9", "terminal=8")
+        call = self.CALL.replace("terminal=9", "terminal=8")
+        for old, new in (("diagnostic_valid=1", "diagnostic_valid=0"), ("native_call_state=4", "native_call_state=0"),
+                         ("generation=1", "generation=0"), ("call_enter_us=100", "call_enter_us=60000001"),
+                         ("call_return_us=200", "call_return_us=60000001"), ("native_state=7", "native_state=0"),
+                         ("commit_result=1", "commit_result=0"), ("settled_us=210", "settled_us=60000001"),
+                         ("begins=1", "begins=0"), ("commits=1", "commits=0"),
+                         ("selected_deadline_passed=1", "selected_deadline_passed=0")):
+            call = call.replace(old, new)
+        record, _ = self.diagnose([header, call, self.PHASE.replace("exit=9", "exit=8")])
+        self.assertEqual(record["status"], "tests_failed")
+        self.assertEqual(record["suites"]["browser"]["browser_handler_call"][0]["begins"], 0)
+        # Timer is a selected branch; virtual Tokio and std clocks may differ.
+        header = header.replace("selected_deadline_passed=1", "selected_deadline_passed=0")
+        header = header.replace("exit_remaining_ms=0", "exit_remaining_ms=9")
+        self.assertIsNotNone(diag.parse_browser_handler_marker(header))
+
+    def test_missing_duplicate_wrong_request_terminal_suite_and_owner_reject(self):
+        for markers in ([self.HEADER, self.CALL], [self.HEADER, self.PHASE], [self.CALL, self.PHASE],
+                        [self.CALL, self.HEADER, self.PHASE], [self.HEADER, self.CALL, self.PHASE, self.CALL],
+                        [self.HEADER, self.CALL.replace("request=7", "request=8"), self.PHASE],
+                        [self.HEADER, self.CALL.replace("terminal=9", "terminal=8"), self.PHASE],
+                        [self.HEADER, self.CALL, self.PHASE.replace("request=7", "request=8")],
+                        [self.HEADER, self.CALL, self.PHASE.replace("consumed=1", "consumed=0")],
+                        [self.HEADER, self.CALL, self.PHASE.replace("phase=16", "phase=15")],
+                        [self.HEADER, self.CALL, self.PHASE] * 2):
+            with self.subTest(markers=markers):
+                self.assertEqual(self.diagnose(markers)[0]["status"], "diagnostic_invalid")
+        other = next(name for name in diag.BROWSER_CASES if name != self.CASE)
+        raw = cargo_log(diag.BROWSER_CASES, failed={self.CASE, other}, markers={
+            self.CASE: [self.HEADER, self.CALL], other: [self.PHASE]})
+        self.assertEqual(parse_both(browser_raw=raw, browser_exit=101)[0]["status"], "diagnostic_invalid")
+        wrong_suite = cargo_log(diag.SESSION_CASES, failed={next(iter(diag.SESSION_CASES))},
+                               markers={next(iter(diag.SESSION_CASES)): [self.HEADER, self.CALL, self.PHASE]})
+        self.assertEqual(parse_both(session_raw=wrong_suite, session_exit=101)[0]["status"], "diagnostic_invalid")
+
+    def test_decimal_bounds_unknown_fields_native_incoherence_and_legacy_origin(self):
+        for old, new in (("request=7", "request=0"), ("request=7", "request=18446744073709551615"),
+                         ("request=7", "request=07"), ("phase=15", "phase=14"),
+                         ("terminal=9", "terminal=7"), ("polls=6", "polls=1024"),
+                         ("budget_ms=1000", "budget_ms=60001"), ("exit_remaining_ms=0", "exit_remaining_ms=1001")):
+            self.assertIsNone(diag.parse_browser_handler_marker(self.HEADER.replace(old, new)))
+        for old, new in (("origin=4", "origin=0"), ("generation=1", "generation=2"),
+                         ("call_return_us=200", "call_return_us=99"), ("settled_us=210", "settled_us=199"),
+                         ("diagnostic_valid=1", "diagnostic_valid=2")):
+            self.assertIsNone(diag.parse_browser_call_marker(self.CALL.replace(old, new)))
+        self.assertIsNone(diag.parse_browser_call_marker(self.CALL + " token=PRIVATE_SENTINEL"))
+        legacy = self.CALL.replace("browser_handler_native_call_diag request=7", "session_native_call_diag")
+        self.assertIsNone(diag.parse_native_call_marker(legacy))
+        bad = diag.parse_browser_handler_marker(self.HEADER)
+        bad["request"] = True
+        self.assertFalse(diag._browser_handler_valid(bad))
+
+    def test_source_pin_unbound_success_foreign_block_and_marker_limits_stay_strict(self):
+        with mock.patch.object(diag, "_browser_native_call_source_current", return_value=False):
+            self.assertEqual(self.diagnose([self.HEADER, self.CALL, self.PHASE])[0]["status"], "diagnostic_invalid")
+        for raw in (cargo_log(diag.BROWSER_CASES) + (self.HEADER + "\n" + self.CALL + "\n").encode(),
+                    cargo_log(diag.BROWSER_CASES) + b"---- foreign_unit_control stdout ----\n" + self.HEADER.encode(),
+                    b"x" * (diag.RAW_LIMIT + 1)):
+            self.assertEqual(parse_both(browser_raw=raw)[0]["status"], "diagnostic_invalid")
+        self.assertEqual(self.diagnose([self.HEADER, self.CALL, self.PHASE] * 6)[0]["status"], "diagnostic_invalid")
+
+    def test_cli_rebuilds_closed_facts_and_never_prints_injected_or_panic_material(self):
+        for header in (self.HEADER, self.HEADER + " token=PRIVATE_SENTINEL"):
+            raw = cargo_log(diag.BROWSER_CASES, failed={self.CASE}, markers={self.CASE: [header, self.CALL, self.PHASE]})
+            with tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                (root / "session-deadline-session.raw").write_bytes(cargo_log(diag.SESSION_CASES))
+                (root / "session-deadline-browser.raw").write_bytes(raw)
+                output = root / "result.json"
+                console = io.StringIO()
+                with contextlib.redirect_stdout(console):
+                    self.assertEqual(diag.main(["diag", str(root), "0", "101", str(output)]), 1)
+                public = console.getvalue() + (output.read_text() if output.exists() else "")
+                self.assertNotIn("PRIVATE_SENTINEL", public)
+                self.assertNotIn("/private/path", public)
+                if header == self.HEADER:
+                    self.assertIn("browser_handler_call=", console.getvalue())
+                    self.assertEqual(json.loads(output.read_text())["status"], "tests_failed")
+
+    def test_legacy_record_bytes_have_no_empty_new_fact_arrays(self):
+        record, _ = parse_both()
+        for suite in record["suites"].values():
+            self.assertNotIn("browser_handler", suite)
+            self.assertNotIn("browser_handler_call", suite)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

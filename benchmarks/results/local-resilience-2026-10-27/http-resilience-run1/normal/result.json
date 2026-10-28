@@ -1,0 +1,101 @@
+{
+  "case": "health",
+  "target_rps": 100,
+  "duration_s": 3,
+  "wall_seconds": 3.012928826996358,
+  "client_max_workers": 512,
+  "aborted": null,
+  "client_max_connections": 256,
+  "client_local_address": "127.0.20.1",
+  "rate_attainment": 1.0026502854465151,
+  "scheduled_requests_estimate": 300,
+  "unsent_vs_schedule_estimate": 0,
+  "metrics": {
+    "latencies": {
+      "total": 91314430,
+      "mean": 304381,
+      "50th": 250671,
+      "90th": 429292,
+      "95th": 502137,
+      "99th": 1528232,
+      "max": 2566387,
+      "min": 155445
+    },
+    "bytes_in": {
+      "total": 0,
+      "mean": 0
+    },
+    "bytes_out": {
+      "total": 0,
+      "mean": 0
+    },
+    "earliest": "2026-10-27T03:42:29.679729845Z",
+    "latest": "2026-10-27T03:42:32.671800005Z",
+    "end": "2026-10-27T03:42:32.672633565Z",
+    "duration": 2992070160,
+    "wait": 833560,
+    "requests": 300,
+    "rate": 100.26502854465151,
+    "throughput": 100.23710351765007,
+    "success": 1,
+    "status_codes": {
+      "200": 300
+    },
+    "errors": []
+  },
+  "server_before": {
+    "pid": 791078,
+    "cpu_ticks": 0,
+    "rss_kib": 5060,
+    "hwm_kib": 5060,
+    "fds": 10,
+    "threads": 4
+  },
+  "server_after": {
+    "pid": 791078,
+    "cpu_ticks": 3,
+    "rss_kib": 5060,
+    "hwm_kib": 5060,
+    "fds": 10,
+    "threads": 4
+  },
+  "server_cpu_seconds": 0.03,
+  "server_cpu_percent_of_one_core": 0.9957088840331992,
+  "server_peak_rss_kib": 5060,
+  "server_peak_fds": 11,
+  "client_cpu_seconds_total": 0.172337,
+  "client_cpu_seconds": {
+    "attack": 0.1,
+    "reporter": 0.03
+  },
+  "commands": {
+    "attack": [
+      "taskset",
+      "-c",
+      "2,3",
+      "/workspace/.toolchains/vegeta-12.13.0/vegeta",
+      "attack",
+      "-targets=/workspace/Nagi-local-resilience/build/local-resilience/http-resilience-run13/normal/target.txt",
+      "-rate=100/s",
+      "-duration=3s",
+      "-workers=32",
+      "-max-workers=512",
+      "-max-body=0",
+      "-timeout=5s",
+      "-redirects=0",
+      "-http2=false",
+      "-keepalive=true",
+      "-max-connections=256",
+      "-laddr=127.0.20.1"
+    ],
+    "report": [
+      "taskset",
+      "-c",
+      "2,3",
+      "/workspace/.toolchains/vegeta-12.13.0/vegeta",
+      "report",
+      "-type=json",
+      "-output=/workspace/Nagi-local-resilience/build/local-resilience/http-resilience-run13/normal/reports.jsonl"
+    ]
+  }
+}

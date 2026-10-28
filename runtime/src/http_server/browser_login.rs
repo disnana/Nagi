@@ -342,6 +342,14 @@ where
             }
         })
         .catch_unwind();
+        #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+        let handler_observer = crate::auth::session_deadline_observer::BrowserHandlerObserver::new(
+            &owner.lease_owner().lease,
+            admitted,
+            until,
+        );
+        #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+        let future = handler_observer.scope(future);
         match tokio::time::timeout_at(
             tokio::time::Instant::from_std(until),
             observed!(Handler, future),
@@ -351,6 +359,9 @@ where
             Ok(_) if Instant::now() >= until => {
                 #[cfg(nagi_browser_login_diag)]
                 diag::exit(Exit::HandlerLateReady);
+                #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+                handler_observer
+                    .emit(crate::auth::session_deadline_observer::BrowserTerminal::LateReady);
                 terminal(Status::GATEWAY_TIMEOUT, pool, owner)
             }
             Ok(Ok(PreparedCompletion::HandlerOk(response))) => {
@@ -382,13 +393,15 @@ where
             }
             Ok(Ok(PreparedCompletion::Terminal(response))) => finish(response, pool, owner),
             Ok(Ok(PreparedCompletion::MapperFailure(error))) => {
-                drop(error);
-                terminal(Status::INTERNAL_SERVER_ERROR, pool, owner)
+                terminal(mapper_failure_status(&error), pool, owner)
             }
             Ok(Err(_)) => terminal(Status::INTERNAL_SERVER_ERROR, pool, owner),
             Err(_) => {
                 #[cfg(nagi_browser_login_diag)]
                 diag::exit(Exit::HandlerTimer);
+                #[cfg(all(nagi_auth_stage_diag, nagi_browser_login_diag))]
+                handler_observer
+                    .emit(crate::auth::session_deadline_observer::BrowserTerminal::Timer);
                 terminal(Status::GATEWAY_TIMEOUT, pool, owner)
             }
         }
@@ -406,3 +419,7 @@ where
 #[cfg(test)]
 #[path = "browser_login_stage_tests.rs"]
 mod stage_tests;
+
+#[cfg(all(test, nagi_auth_stage_diag, nagi_browser_login_diag))]
+#[path = "browser_handler_diagnostic_tests.rs"]
+mod handler_diagnostic_tests;

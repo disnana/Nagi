@@ -27,6 +27,7 @@ jobs:
     outputs:
       full_checks: ${{ steps.changes.outputs.full_checks }}
       jetbrains_checks: ${{ steps.changes.outputs.jetbrains_checks }}
+      go_checks: ${{ steps.changes.outputs.go_checks }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
         with:
@@ -64,6 +65,7 @@ jobs:
       critical_checks: ${{ steps.level.outputs.critical_checks }}
       comprehensive_checks: ${{ steps.level.outputs.comprehensive_checks }}
       package_checks: ${{ steps.level.outputs.package_checks }}
+      go_checks: ${{ steps.level.outputs.go_checks }}
       matrix: ${{ steps.level.outputs.matrix }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
@@ -79,9 +81,63 @@ jobs:
           CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           CI_HEAD: ${{ github.sha }}
           CI_FULL: ${{ needs.changes.outputs.full_checks }}
+          CI_GO: ${{ needs.changes.outputs.go_checks }}
           CI_RELEASE_PLAN: ${{ toJSON(needs.release-plan.outputs) }}
           CI_REQUESTED: ${{ inputs.level || 'default' }}
         run: python -B scripts/ci/levels.py
+
+  go-backend:
+    name: Go backend (${{ matrix.platform }})
+    needs: [changes, ci-plan]
+    if: needs.changes.result == 'success' && needs.ci-plan.result == 'success' && needs.ci-plan.outputs.go_checks == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.ci-plan.outputs.matrix) }}
+    env:
+      CARGO_TERM_COLOR: never
+      GOTOOLCHAIN: local
+      NAGI_GO: go
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # ci-pin:v7
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Verify the selected Go toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(go env GOTOOLCHAIN)" = "local"
+          go version
+      - name: Run the real Go backend build and execution contract
+        env:
+          GOCACHE: ${{ runner.temp }}/nagi-go-build-cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/ci-evidence/go-backend
+          cargo test --locked -p nagic --test go_backend 2>&1 | tee "build/ci-evidence/go-backend/${{ matrix.platform }}.log"
+      - name: Reject missing, skipped, or partial Go backend execution
+        run: >-
+          python -B scripts/ci/assert_go_backend_summary.py
+          "build/ci-evidence/go-backend/${{ matrix.platform }}.log"
+          --expected "${{ matrix.go_tests }}"
+      - name: Preserve Go backend failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: go-backend-failures-${{ matrix.platform }}
+          path: build/ci-evidence/go-backend/
+          if-no-files-found: ignore
 
   critical:
     name: Critical compiler and runtime (Linux)
@@ -661,7 +717,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":14, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":15, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -723,7 +779,7 @@ jobs:
           # Unsupported resource fields remain explicitly unavailable.
           PYB1RESOURCE
           set +e
-          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests::pool_readiness_tests:: -- --show-output 2>&1 | python -c 'import sys
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib worker2_ -- --show-output 2>&1 | python -c 'import sys
           remaining=256*1024+1
           while True:
            chunk=sys.stdin.buffer.read(8192)
@@ -2003,7 +2059,7 @@ jobs:
           python - <<'PYCODE'
           import os, pathlib, re
           root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":14, "sf03-b1-csrf-public.log":10}.items():
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":15, "sf03-b1-csrf-public.log":10}.items():
               text=(root/name).read_text(encoding="utf-8")
               if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
@@ -2065,7 +2121,7 @@ jobs:
           # Unsupported resource fields remain explicitly unavailable.
           PYB1RESOURCE
           set +e
-          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests::pool_readiness_tests:: -- --show-output 2>&1 | python -c 'import sys
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib worker2_ -- --show-output 2>&1 | python -c 'import sys
           remaining=256*1024+1
           while True:
            chunk=sys.stdin.buffer.read(8192)
@@ -2339,7 +2395,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
+              'runtime/src/http_server.rs': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
               'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
               'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
@@ -2610,7 +2666,7 @@ jobs:
           python - <<'PYSOURCE'
           import hashlib, pathlib
           expected = {
-              'runtime/src/http_server.rs': 'e4af47720616a8f6818a47d2cb35408004cf35f3be1f4e6f71567e6318efca31',
+              'runtime/src/http_server.rs': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
               'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
               'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
               'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
@@ -2758,7 +2814,7 @@ jobs:
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
       - name: Check CLI, installation, ownership, and diagnostics on the target platform
-        run: cargo test --locked -p nagic --lib --test cli --test installation --test codegen --test loop_ownership --test ownership_calls --test ownership_boundaries --test comparison_ownership --test owned_copy_codegen --test build_diagnostics --test rust_dependencies --test expression_contracts --test frontend_contracts --test source_read_retention --test literal_contracts --test http_route_conflicts --test symbols --test editor_assistance --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test enum_patterns --test nullable_database --test nullable_roundtrip --test owned_database --test borrow_free_returns --test static_callback_views --test view_iteration --test view_parameter_rebinding --test sql_check --test typed_errors --test error_routes --test class_field_types --test resource_contract_characterization --test stdlib_imports --test option_match --test http_stdlib --test http_codegen --test actor_stdlib --test actor_codegen --test graph_types --test graph_relations --test graph_render --test graph_html --test map_cli --test low_multiline --test list_ownership_inference --test list_borrow_iteration --test result_stdlib
+        run: cargo test --locked -p nagic --lib --test cli --test installation --test codegen --test loop_ownership --test ownership_calls --test ownership_boundaries --test comparison_ownership --test owned_copy_codegen --test build_diagnostics --test rust_dependencies --test expression_contracts --test high_elif --test frontend_contracts --test source_read_retention --test literal_contracts --test http_route_conflicts --test symbols --test editor_assistance --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test enum_patterns --test nullable_database --test nullable_roundtrip --test owned_database --test borrow_free_returns --test static_callback_views --test view_iteration --test view_parameter_rebinding --test sql_check --test typed_errors --test error_routes --test class_field_types --test resource_contract_characterization --test stdlib_imports --test option_match --test http_stdlib --test http_codegen --test actor_stdlib --test actor_codegen --test graph_types --test graph_relations --test graph_render --test graph_html --test map_cli --test low_multiline --test list_ownership_inference --test list_borrow_iteration --test result_stdlib
       - name: Check generated output protection and native expression behavior
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test task_handles --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
       - name: Preserve regression compiler and application failure evidence
@@ -2783,7 +2839,7 @@ jobs:
   ready:
     name: Ready to merge
     if: always() && !cancelled()
-    needs: [changes, ci-plan, critical, linux, linux-workspace, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]
+    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
@@ -2798,7 +2854,7 @@ jobs:
         run: python scripts/ci/gate.py
 
   publish-release:
-    needs: [changes, ci-plan, critical, linux, linux-workspace, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]
+    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]
     if: >-
       always() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       needs.ready.result == 'success' && needs.ci-plan.result == 'success' &&

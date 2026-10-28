@@ -451,7 +451,7 @@ function completionCandidates(index, text, offset, low = false, source = {}) {
     return bindings.has(item.name) ? { ...item, nameOnly: true } : item;
   });
   if (local && !values.some(item => item.name === local.name)) values.unshift(localItem(local));
-  return [...values, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
+  return [...values, ...[...(low ? ['fn', 'record', 'let'] : ['def', 'class', 'elif']), ...keywords].map(name => ({ name, kind: 'keyword', signature: name }))];
 }
 
 function insertion(item, following) {

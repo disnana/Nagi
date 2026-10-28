@@ -8,6 +8,7 @@ import publication_projection
 import linux_workspace_projection
 import windows_contract_projection
 import parallel_cache_projection
+import go_backend_projection
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -117,7 +118,8 @@ class OptimizationTests(unittest.TestCase):
                               ('python -B scripts/ci/publication_gate.py', 'echo bypass')):
             with self.subTest(change=after), self.assertRaises(ValueError):
                 levels_projection.inverse_workflow(source.replace(before, after, 1))
-        historical_caches = parallel_cache_projection.inverse_workflow(source)
+        historical_caches = parallel_cache_projection.inverse_workflow(
+            go_backend_projection.inverse_workflow(source))
         without_windows = windows_contract_projection.inverse_workflow(historical_caches)
         plain = opt.inverse_infrastructure(linux_workspace_projection.inverse_workflow(without_windows))
         self.assertEqual(publication_projection.inverse_publication(plain).count('  publish-release:\n'), 1)

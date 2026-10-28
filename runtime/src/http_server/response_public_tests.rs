@@ -425,6 +425,184 @@ async fn public_mapper_failure_and_business_error_remain_distinct_completion_kin
         refusal_status(Status::FORBIDDEN, Diagnostic::Fault),
         Status::INTERNAL_SERVER_ERROR
     );
+    assert_eq!(
+        mapper_failure_status(&Error {
+            kind: ErrorKind::Busy,
+            message: "ordinary response capacity unavailable".into(),
+        }),
+        Status::SERVICE_UNAVAILABLE,
+    );
+    assert_eq!(
+        mapper_failure_status(&Error::internal("private mapper failure")),
+        Status::INTERNAL_SERVER_ERROR,
+    );
+}
+
+#[test]
+fn exhausted_ordinary_mapper_preserves_busy_as_fallback_503() {
+    let options = with_response_limits(
+        capacity(default_options(), 1, 1).unwrap(),
+        limits_fixture(256, 1),
+    )
+    .unwrap();
+    let runtime = RuntimeResponses::checked(&options, 0).unwrap();
+    let context = runtime.context();
+    let held = text(&context, Status::OK, "held ordinary response").unwrap();
+
+    let error = default_error(
+        &context,
+        Error {
+            kind: ErrorKind::Busy,
+            message: "response capacity unavailable".into(),
+        },
+    )
+    .unwrap_err();
+    assert!(matches!(error.kind, ErrorKind::Busy));
+    let response = transport(&context, mapper_failure_status(&error), false, true);
+    assert_eq!(response.status(), Status::SERVICE_UNAVAILABLE.0);
+    assert_eq!(response.body().bytes.as_ref(), b"service unavailable");
+
+    drop(held);
+    assert!(empty(&context, Status::OK).is_ok());
+}
+
+#[tokio::test]
+async fn public_dispatch_preserves_busy_mapper_failure_as_503_on_the_wire() {
+    const WAIT: Duration = Duration::from_secs(2);
+    struct State {
+        held: Mutex<Option<Response>>,
+    }
+    let app = route(
+        app(
+            State {
+                held: Mutex::new(None),
+            },
+            default_error,
+        ),
+        Method::GET,
+        "/busy",
+        public_policy(),
+        |request: Request, state, ()| async move {
+            let context = response_context(&request);
+            *state.held.lock().unwrap() = Some(text(context, Status::OK, "held")?);
+            Err::<Response, Error>(Error {
+                kind: ErrorKind::Busy,
+                message: "private response pool detail".into(),
+            })
+        },
+    )
+    .unwrap();
+    let app = rate_route(app, Method::GET, "/busy", rate_policy(4, 60_000).unwrap()).unwrap();
+    let mut options = with_response_limits(
+        capacity(default_options(), 1, 1).unwrap(),
+        limits_fixture(256, 1),
+    )
+    .unwrap();
+    options = with_rate_limits(
+        options,
+        rate_limits(1, 1, 1, 4 * 1024 * 1024, 10_000).unwrap(),
+    )
+    .unwrap();
+    options = authority(
+        options,
+        "https://localhost",
+        vec!["localhost".into()],
+        1,
+        128,
+    )
+    .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (stop, stopped) = oneshot::channel();
+    let server = tokio::spawn(serve_listener(listener, app, options, async {
+        let _ = stopped.await;
+    }));
+    let mut client = TcpStream::connect(address).await.unwrap();
+    client
+        .write_all(b"GET /busy HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut response = Vec::new();
+    tokio::time::timeout(WAIT, client.read_to_end(&mut response))
+        .await
+        .unwrap()
+        .unwrap();
+    let wire = std::str::from_utf8(&response).unwrap();
+    assert_eq!(wire.split_whitespace().nth(1), Some("503"));
+    assert!(wire.ends_with("service unavailable"));
+    assert!(!wire.contains("private response pool detail"));
+
+    stop.send(()).unwrap();
+    tokio::time::timeout(WAIT, server)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+}
+
+#[tokio::test]
+async fn public_dispatch_keeps_internal_mapper_failure_opaque_on_the_wire() {
+    const WAIT: Duration = Duration::from_secs(2);
+    struct BusinessError;
+    fn broken(_: &ResponseContext, _: BusinessError) -> Result<Response, Error> {
+        Err(Error::internal("private mapper failure"))
+    }
+    let app = route(
+        app((), broken),
+        Method::GET,
+        "/broken",
+        public_policy(),
+        |_: Request, _, ()| async { Err::<Response, BusinessError>(BusinessError) },
+    )
+    .unwrap();
+    let app = rate_route(app, Method::GET, "/broken", rate_policy(4, 60_000).unwrap()).unwrap();
+    let mut options = with_response_limits(
+        capacity(default_options(), 1, 1).unwrap(),
+        limits_fixture(256, 1),
+    )
+    .unwrap();
+    options = with_rate_limits(
+        options,
+        rate_limits(1, 1, 1, 4 * 1024 * 1024, 10_000).unwrap(),
+    )
+    .unwrap();
+    options = authority(
+        options,
+        "https://localhost",
+        vec!["localhost".into()],
+        1,
+        128,
+    )
+    .unwrap();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (stop, stopped) = oneshot::channel();
+    let server = tokio::spawn(serve_listener(listener, app, options, async {
+        let _ = stopped.await;
+    }));
+    let mut client = TcpStream::connect(address).await.unwrap();
+    client
+        .write_all(b"GET /broken HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut response = Vec::new();
+    tokio::time::timeout(WAIT, client.read_to_end(&mut response))
+        .await
+        .unwrap()
+        .unwrap();
+    let wire = std::str::from_utf8(&response).unwrap();
+    assert_eq!(wire.split_whitespace().nth(1), Some("500"));
+    assert!(wire.ends_with("Internal Server Error"));
+    assert!(!wire.contains("private mapper failure"));
+
+    stop.send(()).unwrap();
+    tokio::time::timeout(WAIT, server)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
 }
 #[test]
 fn managed_header_refusal_keeps_denial_and_independent_fallback_exhaustion_closes() {

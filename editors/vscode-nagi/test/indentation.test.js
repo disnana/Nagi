@@ -37,6 +37,37 @@ test('else uses the matching if indentation after nested bodies and comments', (
   assert.equal(format('if a:\n    print(1)\nprint(2)\n    else:|', ':'), 'if a:\n    print(1)\nprint(2)\n    else:');
 });
 
+test('elif chains retain the matching if for later elif and else headers', () => {
+  const chain = 'if a:\n    print(1)\nelif b:\n    print(2)';
+  assert.equal(format(chain + '\n    elif c:|', ':'), chain + '\nelif c:');
+  assert.equal(format(chain + '\n    else:|', ':'), chain + '\nelse:');
+  assert.equal(format('if a:\n    print(1)\n    elif b:\n        |'), 'if a:\n    print(1)\nelif b:\n    ');
+  assert.equal(format('elif b:\n|'), 'elif b:\n    ');
+});
+
+test('typing an elif local annotation preserves its nested indentation', () => {
+  const prefix = 'def main():\n    if ready:\n        print(1)\n        ';
+  for (const name of ['elif', 'elif ']) {
+    const annotation = prefix + name + ':';
+    assert.equal(format(annotation + '|', ':'), annotation);
+    // Enter also resolves branch alignment using the preceding header.
+    assert.equal(format(annotation + '\n        |'), annotation + '\n        ');
+  }
+});
+
+test('same-name elif statements never align as contextual branches', () => {
+  const prefix = 'if ready:\n    print(1)\n    ';
+  for (const statement of ['elif = 4; if True:', 'elif(2); if True:', 'elif : i64 = 2 # local:']) {
+    assert.equal(format(prefix + statement + '|', ':'), prefix + statement);
+  }
+});
+
+test('multiline elif headers align as one logical statement', () => {
+  const before = 'if a:\n    work()\n    elif (\n        b and c\n    ):';
+  const expected = 'if a:\n    work()\nelif (\n    b and c\n):';
+  assert.equal(format(before + '|', ':'), expected);
+});
+
 test('first and following cases align under their nearest match', () => {
   assert.equal(format('def main():\n    match result:\n        case Ok(value):|', ':'), 'def main():\n    match result:\n        case Ok(value):');
   assert.equal(format('def main():\n    match result:\n        case Ok(value):\n            print(value)\n            case Err(problem):|', ':'), 'def main():\n    match result:\n        case Ok(value):\n            print(value)\n        case Err(problem):');

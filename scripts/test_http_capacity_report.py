@@ -39,6 +39,23 @@ class ReportTests(unittest.TestCase):
         value = report(10, {"0": 0, "1000000": 10}, "2026-10-01T00:00:01Z")
         self.assertIsNone(windows([value])[0]["p99_bucket_upper_ms"])
 
+    def test_current_vegeta_json_without_buckets_keeps_counts_and_labels_cumulative_p99(self):
+        value = report(10, {}, "2026-10-01T00:00:01Z")
+        del value["buckets"]
+
+        self.assertEqual(metrics(value)["requests"], 10)
+        row = windows([value])[0]
+        self.assertIsNone(row["p99_bucket_upper_ms"])
+        self.assertEqual(row["p99_cumulative_ms"], 0.0003)
+
+    def test_mixed_histogram_formats_are_rejected(self):
+        old = report(10, {"0": 10}, "2026-10-01T00:00:01Z")
+        current = report(20, {}, "2026-10-01T00:00:02Z")
+        del current["buckets"]
+
+        with self.assertRaisesRegex(AssertionError, "Mixed histogram"):
+            windows([old, current])
+
 
 if __name__ == "__main__":
     unittest.main()

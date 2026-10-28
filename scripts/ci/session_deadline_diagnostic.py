@@ -66,6 +66,17 @@ DEC = r"(?:0|[1-9][0-9]{0,4})"
 STATUS = r"(?:[1-5][0-9]{2})"
 BOOL = r"(?:true|false)"
 BROWSER_PHASE_PREFIX = "browser_login_phase_diag"
+BROWSER_HANDLER_PREFIX = "browser_handler_deadline_diag"
+BROWSER_CALL_PREFIX = "browser_handler_native_call_diag"
+BROWSER_HANDLER_FIELDS = (
+    "request", "status", "phase", "event", "db", "terminal", "polls", "begins", "commands", "commits",
+    "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "selected_deadline_passed",
+)
+BROWSER_CALL_FIELDS = (
+    "request", "status", "origin", "terminal", "diagnostic_valid", "native_call_state", "generation",
+    "call_enter_us", "call_return_us", "native_state", "commit_result", "settled_us", "begins", "commits",
+    "selected_deadline_passed",
+)
 SESSION_PREFIX = "session_deadline_diag"
 TOKEN_PREFIX = "csrf_token_deadline_diag"
 BOOTSTRAP_DEADLINE_PREFIX = "prelogin_bootstrap_deadline_diag"
@@ -196,6 +207,8 @@ KNOWN_MARKER_PREFIXES = (
     native_finish.PREFIX,
     ASSERTION_PREFIX,
     BROWSER_PHASE_PREFIX,
+    BROWSER_HANDLER_PREFIX,
+    BROWSER_CALL_PREFIX,
     SESSION_PREFIX,
     TOKEN_PREFIX,
     BOOTSTRAP_DEADLINE_PREFIX,
@@ -692,6 +705,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
         "token_deadline": [], "native_finish": [],
         "claim_initial": [], "claim_retry": [], "claim_replay_proof": [],
         "public": [], "http_test_io": [],
+        "browser_handler": [], "browser_handler_call": [],
     }
     invalid = False
     blocks, bad_blocks = _test_output_blocks(text, stdout_pattern)
@@ -706,6 +720,7 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
     claim_order: list[tuple[str, dict]] = []
     assertion_tests: set[str] = set()
     assertion_marker_count = 0
+    browser_order: list[tuple[str, int, str]] = []
     output_blocks = blocks
     for test_name, block in output_blocks.items():
         # A malformed inventory or an unknown stdout header may contain arbitrary
@@ -750,6 +765,20 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                     invalid = True
                     continue
                 key = ("native_finish", test_name)
+            elif prefix in (BROWSER_HANDLER_PREFIX, BROWSER_CALL_PREFIX):
+                if suite_name != "browser" or not _browser_native_call_source_current():
+                    invalid = True
+                    continue
+                if prefix == BROWSER_HANDLER_PREFIX:
+                    parsed = parse_browser_handler_marker(line)
+                    key = ("browser_handler", test_name)
+                else:
+                    parsed = parse_browser_call_marker(line)
+                    previous = parse_browser_handler_marker(block_lines[line_index - 1]) if line_index else None
+                    if not browser_handler_pair(previous, parsed):
+                        invalid = True
+                        continue
+                    key = ("browser_handler_call", test_name)
             elif prefix == BROWSER_PHASE_PREFIX:
                 if suite_name != "browser":
                     invalid = True
@@ -860,11 +889,13 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
                 # Stalled-response markers belong to another fixed suite, not these APIs.
                 invalid = True
                 continue
-            if parsed is None or key is None or (key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline", "native_finish") and key in seen_case_kinds):
+            if parsed is None or key is None or (key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline", "native_finish", "browser_handler", "browser_handler_call") and key in seen_case_kinds):
                 invalid = True
                 continue
+            if key[0] in ("browser_handler", "browser_handler_call", "browser_phase"):
+                browser_order.append((test_name, parsed["request"], key[0]))
             parsed["test"] = test_name
-            if key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline", "native_finish"):
+            if key[0] not in ("session_deadline", "bootstrap_deadline", "browser_phase", "token_deadline", "native_finish", "browser_handler", "browser_handler_call"):
                 seen_case_kinds.add(key)
             facts[key[0]].append(parsed)
 
@@ -896,8 +927,20 @@ def _marker_facts(suite_name: str, text: str, exit_code: int, failed_cases: set[
     )
     if global_marker_count != marker_count:
         invalid = True
+    if not _browser_handler_binding(facts):
+        invalid = True
+    for header in facts["browser_handler"]:
+        order = [kind for test, request, kind in browser_order
+                 if test == header["test"] and request == header["request"]]
+        if order != ["browser_handler", "browser_handler_call", "browser_phase"]:
+            invalid = True
     if marker_count > MARKER_LIMIT:
         invalid = True
+    if invalid:
+        # Do not retain apparently valid supplement fragments from a raw suite
+        # whose ordering/identity/envelope could not be established.
+        facts["browser_handler"] = []
+        facts["browser_handler_call"] = []
     return facts, marker_count, invalid
 
 
@@ -924,6 +967,8 @@ def diagnose(session_raw: bytes | None, session_input_status: str, session_exit:
             text = ""
         facts, marker_count, marker_invalid = _marker_facts(name, text, exit_code, failed, cases)
         summary.update(facts)
+        if not summary["browser_handler"] and not summary["browser_handler_call"]:
+            del summary["browser_handler"], summary["browser_handler_call"]
         summary["diagnostic_status"] = "invalid" if marker_invalid else "valid"
         record["marker_count"] += marker_count
         if summary["inventory_status"] != "passed":
@@ -972,6 +1017,7 @@ def diagnose_delivery(raw: bytes | None, input_status: str, cargo_exit: int,
             for line in text.splitlines()
         )
     summary.update(facts)
+    del summary["browser_handler"], summary["browser_handler_call"]
     summary["diagnostic_status"] = "invalid" if invalid else "valid"
     inventory = summary["inventory_status"]
     status = ("diagnostic_invalid" if invalid or inventory not in {"passed", "failed", "no_test_execution"}
@@ -1019,6 +1065,7 @@ FACT_LISTS = (
     "session_deadline", "bootstrap", "pair", "json_bound", "bootstrap_deadline",
     "browser_phase", "assertion", "token_deadline", "claim_initial", "claim_retry",
     "claim_replay_proof", "public", "http_test_io", "native_finish",
+    "browser_handler", "browser_handler_call",
 )
 SUITE_KEYS = frozenset({
     "cargo_exit", "input_status", "inventory_status", "running_count", "passed_count",
@@ -1041,9 +1088,11 @@ FACT_KEYS = frozenset({
     "marker_count", "suites", "cargo_exit", "input_status", "inventory_status", "running_count",
     "passed_count", "failed_count", "ignored_count", "failed_cases", "diagnostic_status",
     "session_tests", "browser_tests", "delivery_tests", "session", "browser", "delivery",
-    *FACT_LISTS, *native_finish.FIELDS,
+    *FACT_LISTS, *native_finish.FIELDS, *BROWSER_CALL_FIELDS,
 })
 FACT_SHAPES = {
+    "browser_handler": frozenset({*BROWSER_HANDLER_FIELDS, "test"}),
+    "browser_handler_call": frozenset({*BROWSER_CALL_FIELDS, "test"}),
     "native_finish": frozenset({*native_finish.FIELDS, "test"}),
     "session_deadline": frozenset({"status", "phase", "event", "db", "exit", "polls", "begins", "commands", "commits", "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "test"}),
     "token_deadline": frozenset({"status", "phase", "event", "db", "exit", "polls", "begins", "commands", "commits", "budget_ms", "entry_remaining_ms", "phase_remaining_ms", "exit_remaining_ms", "terminal", "test"}),
@@ -1091,7 +1140,7 @@ FACT_INT_KEYS = frozenset({
     "expected_status", "session_rows", "request", "before_gate", "poll_gate", "pending_phase",
     "pending_gate", "live_pending_phase", "exit_gate", "saw_pending", "saw_live_pending",
     "gate_refused", "row_missing", "rollback_ack", "restore_commit_ack", "consumed",
-    *native_finish.FIELDS,
+    *native_finish.FIELDS, *BROWSER_CALL_FIELDS,
 })
 FACT_BOOL_KEYS = frozenset({
     "auth_cookie", "deletion", "a_auth_cookie", "b_auth_cookie", "a_deletion", "b_deletion",
@@ -1159,7 +1208,11 @@ def _closed_record_shape(record: object, delivery: bool) -> bool:
         return False
     for suite_name in suite_names:
         suite = suites[suite_name]
-        if type(suite) is not dict or set(suite) != SUITE_KEYS:
+        browser_fields = {"browser_handler", "browser_handler_call"}
+        extended = type(suite) is dict and bool(browser_fields.intersection(suite))
+        expected_keys = SUITE_KEYS if extended else SUITE_KEYS - browser_fields
+        if (type(suite) is not dict or set(suite) != expected_keys or
+                (extended and (suite_name != "browser" or not suite["browser_handler"]))):
             return False
         if type(suite.get("input_status")) is not str or suite["input_status"] not in INPUT_STATUSES:
             return False
@@ -1177,7 +1230,7 @@ def _closed_record_shape(record: object, delivery: bool) -> bool:
         if any(type(test) is not str or test not in test_names for test in suite["failed_cases"]):
             return False
         for fact_list in FACT_LISTS:
-            values = suite[fact_list]
+            values = suite.get(fact_list, [])
             if type(values) is not list or len(values) > 32:
                 return False
             shapes = FACT_SHAPES[fact_list]
@@ -1192,6 +1245,13 @@ def _closed_record_shape(record: object, delivery: bool) -> bool:
                     if not native_finish.valid({key: value for key, value in fact.items() if key != "test"}):
                         return False
                     if fact["origin"] not in {"session": {0, 1}, "browser": {2}, "delivery": {0, 3}}[suite_name]:
+                        return False
+                if fact_list in ("browser_handler", "browser_handler_call"):
+                    if suite_name != "browser" or not _browser_native_call_source_current():
+                        return False
+                    clean = {key: value for key, value in fact.items() if key != "test"}
+                    check = _browser_handler_valid if fact_list == "browser_handler" else _browser_call_valid
+                    if not check(clean):
                         return False
                 if "test" in fact and (type(fact["test"]) is not str or fact["test"] not in test_names):
                     return False
@@ -1232,6 +1292,8 @@ def _closed_record_shape(record: object, delivery: bool) -> bool:
                         return False
                     else:
                         return False
+        if not _browser_handler_binding(suite):
+            return False
     return True
 
 
@@ -1334,8 +1396,18 @@ def _native_call_fact_valid(value) -> bool:
     if (type(value) is not dict or set(value) != set(NATIVE_CALL_FIELDS) or
             any(type(value[key]) is not int for key in NATIVE_CALL_FIELDS)):
         return False
-    if (value["status"] != 504 or value["origin"] not in range(4) or
-            value["diagnostic_valid"] not in (0, 1) or
+    if value["origin"] not in range(4) or not _native_call_bounds_valid(value):
+        return False
+    origin, terminal = value["origin"], value["terminal"]
+    if ((origin in (0, 2) and terminal != 0) or
+            (origin == 1 and terminal not in range(7)) or
+            (origin == 3 and terminal not in range(1, 5))):
+        return False
+    return _native_call_payload_valid(value)
+
+
+def _native_call_bounds_valid(value) -> bool:
+    return not (value["status"] != 504 or value["diagnostic_valid"] not in (0, 1) or
             value["native_call_state"] not in range(5) or
             value["generation"] not in range(1024) or
             value["call_enter_us"] not in range(NATIVE_CALL_UNSEEN_US + 1) or
@@ -1343,14 +1415,10 @@ def _native_call_fact_valid(value) -> bool:
             value["native_state"] not in range(8) or value["commit_result"] not in range(3) or
             value["settled_us"] not in range(NATIVE_CALL_UNSEEN_US + 1) or
             value["begins"] not in range(1024) or value["commits"] not in range(1024) or
-            value["selected_deadline_passed"] not in (0, 1)):
-        return False
-    origin, terminal = value["origin"], value["terminal"]
-    if ((origin in (0, 2) and terminal != 0) or
-            (origin == 1 and terminal not in range(7)) or
-            (origin == 3 and terminal not in range(1, 5))):
-        return False
+            value["selected_deadline_passed"] not in (0, 1))
 
+
+def _native_call_payload_valid(value) -> bool:
     state = value["native_call_state"]
     entered, returned = value["call_enter_us"], value["call_return_us"]
     native_state, result, settled = value["native_state"], value["commit_result"], value["settled_us"]
@@ -1377,6 +1445,90 @@ def _native_call_fact_valid(value) -> bool:
                 result == 0 and settled == NATIVE_CALL_UNSEEN_US)
     return (entered <= returned <= NATIVE_CALL_LIMIT_US and 2 <= native_state <= 7 and
             result in (1, 2) and (native_state != 7 or settled >= returned))
+
+
+def _browser_numeric_marker(line, prefix, fields):
+    match = re.fullmatch(re.escape(prefix) + " " + " ".join(
+        re.escape(key) + r"=(0|[1-9][0-9]{0,19})" for key in fields), line)
+    return dict(zip(fields, map(int, match.groups()))) if match else None
+
+
+def _browser_request_valid(value):
+    # NEXT_REQUEST fails rather than wrapping; u64::MAX is never allocated.
+    return type(value) is int and 1 <= value < 18446744073709551615
+
+
+def _browser_handler_valid(value):
+    if (type(value) is not dict or set(value) != set(BROWSER_HANDLER_FIELDS) or
+            any(type(n) is not int for n in value.values()) or not _browser_request_valid(value["request"])):
+        return False
+    unpolled = value["event"] == 0
+    if (unpolled != (value["polls"] == 0) or
+            (unpolled and any(value[k] != 0 for k in ("db", "begins", "commands", "commits")))):
+        return False
+    # Both fields sample the same std::Instant; the converse is false because
+    # integer milliseconds may round down to zero before the deadline.
+    if value["selected_deadline_passed"] == 1 and value["exit_remaining_ms"] != 0:
+        return False
+    # This branch is selected after std::Instant::now() >= until and after
+    # observe() has recorded Ready. Never infer these facts from Timer (8).
+    if value["terminal"] == 9 and (value["event"] != 2 or
+            value["selected_deadline_passed"] != 1 or value["exit_remaining_ms"] != 0):
+        return False
+    return (value["status"] == 504 and value["phase"] == 15 and value["terminal"] in (8, 9) and
+            value["event"] in range(3) and value["db"] in range(15) and
+            all(value[k] in range(1024) for k in ("polls", "begins", "commands", "commits")) and
+            value["commits"] <= value["begins"] and
+            0 <= value["exit_remaining_ms"] <= value["phase_remaining_ms"] <=
+            value["entry_remaining_ms"] <= value["budget_ms"] <= 60000 and
+            value["selected_deadline_passed"] in (0, 1))
+
+
+def parse_browser_handler_marker(line):
+    value = _browser_numeric_marker(line, BROWSER_HANDLER_PREFIX, BROWSER_HANDLER_FIELDS)
+    return value if _browser_handler_valid(value) else None
+
+
+def _browser_call_valid(value):
+    return (type(value) is dict and set(value) == set(BROWSER_CALL_FIELDS) and
+            all(type(n) is int for n in value.values()) and _browser_request_valid(value["request"]) and
+            value["origin"] == 4 and value["terminal"] in (8, 9) and
+            _native_call_bounds_valid(value) and _native_call_payload_valid(value))
+
+
+def parse_browser_call_marker(line):
+    value = _browser_numeric_marker(line, BROWSER_CALL_PREFIX, BROWSER_CALL_FIELDS)
+    return value if _browser_call_valid(value) else None
+
+
+def browser_handler_pair(header, native):
+    if not _browser_handler_valid(header) or not _browser_call_valid(native):
+        return False
+    if any(header[k] != native[k] for k in ("request", "status", "terminal")):
+        return False
+    # Unavailable native payloads keep zero/UNSEEN; never fill from the header.
+    return native["diagnostic_valid"] == 0 or all(
+        header[k] == native[k] for k in ("begins", "commits", "selected_deadline_passed"))
+
+
+def _browser_handler_binding(facts):
+    headers, calls = facts.get("browser_handler", []), facts.get("browser_handler_call", [])
+    if len(headers) != len(calls) or len({h["request"] for h in headers}) != len(headers):
+        return False
+    if len({c["request"] for c in calls}) != len(calls):
+        return False
+    for header in headers:
+        native = [c for c in calls if c["request"] == header["request"]]
+        phase = [p for p in facts["browser_phase"] if p["request"] == header["request"]]
+        if len(native) != 1 or len(phase) != 1:
+            return False
+        native, phase = native[0], phase[0]
+        if (header["test"] != native["test"] or header["test"] != phase["test"] or
+                phase["phase"] != 16 or phase["exit"] != header["terminal"] or phase["consumed"] != 1 or
+                not browser_handler_pair({k: v for k, v in header.items() if k != "test"},
+                                         {k: v for k, v in native.items() if k != "test"})):
+            return False
+    return True
 
 
 def parse_native_call_marker(line: str) -> dict | None:
@@ -1720,6 +1872,9 @@ def main(argv: list[str]) -> int:
             print("csrf_token_deadline=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
         for fact in record["suites"]["browser"]["browser_phase"]:
             print("browser_login_phase=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
+        for family in ("browser_handler", "browser_handler_call"):
+            for fact in record["suites"]["browser"].get(family, []):
+                print(family + "=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
         for fact in record["suites"]["browser"]["assertion"]:
             print("browser_login_assertion=" + json.dumps(fact, sort_keys=True, separators=(",", ":")))
         if CSRF_REUSABLE_CASE in record["suites"]["session"]["failed_cases"]:
