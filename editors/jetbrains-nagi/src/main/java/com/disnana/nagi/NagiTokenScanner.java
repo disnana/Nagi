@@ -62,7 +62,8 @@ public final class NagiTokenScanner {
         if (isLetter(first) || first == '_') {
             while (offset < end && (isLetter(text.charAt(offset)) || isDigit(text.charAt(offset)) || text.charAt(offset) == '_')) offset++;
             String word = text.subSequence(start, offset).toString();
-            Kind kind = COMMON.contains(word) || (low ? LOW : HIGH).contains(word) ? Kind.KEYWORD
+            Kind kind = COMMON.contains(word) || (low ? LOW : HIGH).contains(word)
+                    || !low && word.equals("elif") && highElifHeader(text, start, offset, end) ? Kind.KEYWORD
                     : TYPES.contains(word) || state == TYPE_NAME ? Kind.TYPE : Kind.IDENTIFIER;
             return new Token(kind, start, offset);
         }
@@ -126,6 +127,53 @@ public final class NagiTokenScanner {
     }
     private static boolean typeDeclarationKeyword(String word, boolean low) {
         return word.equals("enum") || word.equals(low ? "record" : "class");
+    }
+    /** Match the same contextual shape as the High parser without stealing an existing identifier. */
+    private static boolean highElifHeader(CharSequence text, int start, int wordEnd, int end) {
+        int lineStart = start;
+        while (lineStart > 0 && text.charAt(lineStart - 1) != '\n' && text.charAt(lineStart - 1) != '\r') lineStart--;
+        for (int index = lineStart; index < start; index++) if (!horizontalSpace(text.charAt(index))) return false;
+        int depth = 0;
+        boolean condition = false;
+        char quote = 0;
+        for (int index = wordEnd; index < end; index++) {
+            char value = text.charAt(index);
+            if (value == '\n' || value == '\r') {
+                if (depth > 0) continue;
+                return false;
+            }
+            if (quote != 0) {
+                if (value == '\\' && index + 1 < end) index++;
+                else if (value == quote) quote = 0;
+                condition = true;
+                continue;
+            }
+            if (value == '#') {
+                if (depth == 0) return false;
+                while (index + 1 < end && text.charAt(index + 1) != '\n'
+                        && text.charAt(index + 1) != '\r') index++;
+                continue;
+            }
+            if (value == '\'' || value == '"') { quote = value; condition = true; continue; }
+            if (value == '(' || value == '[') { depth++; condition = true; continue; }
+            if (value == ')' || value == ']') { depth = Math.max(0, depth - 1); condition = true; continue; }
+            if (value == ';' && depth == 0) return false;
+            if (value == '=' && depth == 0
+                    && (index == wordEnd || "=!<>".indexOf(text.charAt(index - 1)) < 0)
+                    && (index + 1 >= end || text.charAt(index + 1) != '=')) return false;
+            if (value == ':' && depth == 0) {
+                if (!condition) return false;
+                for (int tail = index + 1; tail < end; tail++) {
+                    char rest = text.charAt(tail);
+                    if (rest == '\n' || rest == '\r') return true;
+                    if (rest == '#') return true;
+                    if (!horizontalSpace(rest)) return false;
+                }
+                return true;
+            }
+            if (!Character.isWhitespace(value)) condition = true;
+        }
+        return false;
     }
     private static boolean isDigit(char value) { return value >= '0' && value <= '9'; }
     private static boolean isLetter(char value) { return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z'; }

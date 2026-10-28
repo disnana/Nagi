@@ -2,11 +2,98 @@
 
 ## 2026-10-27: 宣言順の名前付き関数引数（独立開発・未リリース）
 
-base `origin/main` `0d1884c`、branch `feat/named-call-args-20261027`。従来の`f(a, b)`を維持したまま、通常関数・組み込み・登録済み標準APIを`f(first=a, second=b)`の全名前付き形式でも呼べるようにした。parserが既存class/enum構築と同じ一時形を保持し、checkerが対象名を解決してから既存の位置`E::Call`へ正規化する。backend固有ASTを増やさず、型・move・borrow・Policy・async captureとRust/将来Go loweringは既存経路を通る。
+初期base `origin/main` `0d1884c`、branch `feat/named-call-args-20261027`。従来の`f(a, b)`を維持したまま、通常関数・組み込み・登録済み標準APIを`f(first=a, second=b)`の全名前付き形式でも呼べるようにした。parserが既存class/enum構築と同じ一時形を保持し、checkerが対象名を解決してから既存の位置`E::Call`へ正規化する。backend固有ASTを増やさず、型・move・borrow・Policy・async captureとRust/Go loweringは既存経路を通る。
 
-初版は評価順を曖昧にしないため、位置引数との混在、名前の並べ替え、明示型引数との組合せ、引数名を型に持たない関数値を拒否する。全引数を宣言順に名前付きで書き、各式をソース順に一度だけ評価する。重複・未知・不足・順序違いを個別診断し、class/enum payloadの既存の順不同named fieldは変更しない。公開0.2.1で動くと約束したREADME・既存examplesは位置引数のまま維持し、未リリースsource checkout専用の`http.response_limits`完成例を別tutorialとして追加した。
+初版は評価順を曖昧にしないため、位置引数との混在、名前の並べ替え、明示型引数との組合せ、引数名を型に持たない関数値を拒否する。全引数を宣言順に名前付きで書き、各式をソース順に一度だけ評価する。重複・未知・不足・順序違いを個別診断し、class/enum payloadの既存の順不同named fieldは変更しない。公開0.2.2で動くと約束するREADME・既存examplesは位置引数のまま維持し、未リリースsource checkout専用の`http.response_limits`完成例を別tutorialとして追加した。
 
-ローカルLinuxでは名前付き引数14件、builtin/標準API署名在庫2件、frontend contracts 23件、conformance 6件、codegen 16件、editor assistance 42件、all-target Clippy `-D warnings`、fmtが成功した。frontend nativeの初回4失敗は通常sandboxからcrates.io proxyへ接続不能だったためで、同じsourceを既存lock/cacheの`CARGO_NET_OFFLINE=true`で再実行し23件すべて成功した。独立reviewで、同名global関数がlocal関数値/データを迂回するmodule解決、内部canonical名を診断へ出す経路、non-function localの誤誘導、公開0.2.1例の先行更新を検出した。resolverでlocalを優先しつつ既存class/enum constructor優先規則を保持し、利用者向け固定診断と回帰へ修正した。修正後の独立最終再監査は重大・中程度の追加所見なし。全workspaceの記録可能な最終終了コード、最新HEAD CI、Windows/macOS、Go branchとの実結合は未確認。commit/push/PR・merge・版更新・tag/releaseは行っていない。
+初期ローカルLinux検証では名前付き引数14件、builtin/標準API署名在庫2件、frontend contracts 23件、conformance 6件、codegen 16件、editor assistance 42件、all-target Clippy `-D warnings`、fmtが成功した。独立reviewで、同名global関数がlocal関数値/データを迂回するmodule解決、内部canonical名を診断へ出す経路、non-function localの誤誘導、公開例の先行更新を検出した。resolverでlocalを優先しつつ既存class/enum constructor優先規則を保持し、利用者向け固定診断と回帰へ修正した。修正後の独立再監査は重大・中程度の追加所見なし。現在は公開済み0.2.2とHigh `elif`、統合済みGo backendを含むmainへ順序付きで再統合し、最終HEADの回帰とCIを改めて検証する。
+
+## 2026-10-27: Highのelif構文（独立開発・未リリース）
+
+base `origin/main` `0d1884c`、独立worktree `Nagi-high-elif` / branch `feat/high-elif-20261027`。Highの`elif 条件:`だけを既存`S::If`のelse内ifへlowerし、Rust/Go別の実装やLow構文を増やしていない。lexerの全wordは元から`K::Id`で、同名の関数/引数/変数、if直後の`elif(...)`・`elif: i64 = ...`も既存の有効入力となるため、予約語化を避けた。ブロック見出しの末尾`:`だけを文脈認識し、同一行`else if`は引き続き拒否。合成ifの元行と既存64段nesting上限、move/return flow、保存Low経路を維持する。
+
+compilerの新harnessは連鎖・ネスト・else省略・旧if/else・識別子互換・不正indent/条件/孤立句・元行restore・return/move join・High/保存Low双方の生成Rust実行を検査する。assistでは条件/本文内の既存型/定義位置metadataとimport元diagnosticを確認する。VS Code/JetBrainsはHighだけのkeyword色/補完とelif連鎖後elseの字下げ、High snippetを更新し、日英文法/入門、未リリースの完成例、アプリAI向け参照を揃えた。4 OS明示CIに新harnessを登録したが、ここで4 OS成功とは報告しない。0.2.2 #177とGo #178/#179へは混ぜず、版更新・commit/push/PR・merge/tag/releaseは行っていない。
+
+現時点のローカルLinux結果: High elif 9件、editor assistance 43件、conformance 6件、expression contracts 2件、frontend contracts 23件、VS Code全200件が成功。all-target Clippy `-D warnings`とfmt、conformance登録検査も成功。初回shellのcargo/rustc PATH不足を専有既設toolchainで解決した。通常sandboxのfrontend native 4件はcrates.ioへのproxy接続不能で失敗し、依存cacheを使う`CARGO_NET_OFFLINE=true`で23件すべて成功した。VS Codeの初回spawnSync EPERMもmanaged network access付きで200件成功。Gradleは通常のJava接続でwrapper取得に失敗し、session proxyのsystem property指定でwrapper/依存取得へ進んだ。以降の最終結果は次段落に記す。独立最終review・最新HEAD CI・Windows/macOS・実GUI受入は未確認。
+
+最終追加testも9件成功し、初心者完成例そのもののHigh/保存Low Rust nativeと、lower後64段に収まる62個のelif受理・63個目の拒否を確認した。通常CLIでも完成例をrelease build/runし、High sourceを削除後に独立した保存Lowを別outへbuild/runして、双方の出力`negative\nzero\npositive`を照合した。fuzz smokeは1000 mutation / 16 bounded native / panic 0。最終差分のClippy/fmtも成功。JetBrainsはOSのJava21がJREだけのため取得済みprivate JBR21 JDKへ切り替え、session CAを含むsystem truststoreを明示してTLS検証を維持した。IC2025.1.1でCore18・lexical completion3・typed editing22、計43件がfailure/error/skip 0で成功した。matching compilerを使うJetBrains全335件（32 suites）もfailure/error/skip 0で成功した。自己確認で、旧Highの`elif(2); if True:`・`elif = 4; if True:`を句の見出しと誤認しないよう、top-levelセミコロンで見出し探索を止めた。両形の回帰を追加し、修正後のHigh elif9・conformance6・editor assistance43・frontend23・Clippy/fmt・fuzzを再確認した。広い全workspaceの初回はexit 0、top-level 123 result blocksで2066 passed / 0 failed / 既存ignored 4（runtime/coreの計測用各1とHTTP production-profile計測用2）だった。このrunの開始後にセミコロン互換修正を加えたため、最終sourceで全workspaceを再実行し、以下の結果でsnapshotを揃えた。
+
+最終sourceの全workspace `cargo test --locked` もexit 0。top-level 123 result blocksの最後のsummaryだけを集計し、2066 passed / 0 failed / 既存ignored 4だった（graph子processのsummaryを重複加算していない）。環境はLinux、Rust 1.99.1、test/devのdebug情報のみ0、Cargo依存offline cache、socket/native用のmanaged network access。最終差分のfmt、all-target Clippy、fuzz、conformance登録、変更JSON・日英tutorialリンクも成功した。source/testの変更は完了しており、独立最終reviewは親agentへ渡す。最新HEAD CI、4 OS実行、IDEA以外のSDK、Plugin Verifier、実GUI受入は未実施。公開機能としては扱わず、commit/push/PR作成・merge・release/tagも未実行。ローカル証拠は`/tmp/nagi-high-elif-final-all-tests.log`、`/tmp/nagi-high-elif-final-full-results.json`、`/tmp/nagi-high-elif-jetbrains-all-results.json`、`/tmp/nagi-high-elif-vscode-network.log`、`/tmp/nagi-high-elif-cli-tutorial.log`に保持した。
+
+独立監査後の修正: P1として4 OS commandへの`--test high_elif`追加をstrict CI projectionへ登録し忘れており、初回の検証ではPython CI suiteも漏れていた。実際に211件中3 failures/5 errorsを再現した。`high_elif_projection.py`はnagi-regression内の完全な旧command＋追加flag一つだけを逆変換し、欠落・重複・移動・既存harness削除・旧command重複を拒否する。CI-level入口と中間historyの証明へ合成し、既存parallel job/command定数、BASE/PRE_POLICY/LINUXの固定history hashは変更していない。base `0d1884c`のraw workflow hash `f688bcbd5c21bf37ca5ab80d9d0eb655c80f848b2ddcaa1564d3da2695da6418`も別の固定期待として照合する。新しいmutation回帰を含むPython CI全214件が成功し、関連source guard全416件も失敗0/既存skip2だった。
+
+P2として、nested blockで型注釈を入力中の`elif:` / `elif :`をeditorが句と誤認してdedentする問題を両editorのtyped-input回帰でRED→GREEN確認した。空条件を分岐整列から除外し、VS CodeではEnter時もannotationの字下げを保持する。通常の`elif condition:`整列は既存回帰で維持する。parser/Rust production sourceは変更していない。nestedな同名型注釈のcompiler fixtureも加え、High elif9件が成功。修正後のVS Code全201件、JetBrains対象44件（Core18/lexical3/typed23）、fmt/all-target Clippyが成功し、editorのfailure/error/skipは0。先行snapshotの全workspace2066件・JetBrains全335件の結果と、今回の対象再検査を区別する。修正後の独立再監査とCI/4 OS/GUI確認は親へ戻す。証拠は`/tmp/nagi-high-elif-review-{ci,jetbrains,vscode}-red.log`、`/tmp/nagi-high-elif-review-ci-green.log`、`/tmp/nagi-high-elif-review-source-guards.log`、`/tmp/nagi-high-elif-review-jetbrains-results.json`、`/tmp/nagi-high-elif-review-vscode-all.log`に保持し、commit/push/PRは未実行。
+
+再監査で、全位置の`elif`をkeyword色にすると、互換入力の同名関数・変数からJetBrainsの引数説明/意味色とVS Codeの識別子色を奪う問題を検出した。両editorを、行頭かつ非空条件と末尾colonを持つ実High headerだけの文脈色へ修正し、call・代入・型注釈・宣言・memberの負例を追加した。JetBrains scannerは括弧内の複数行条件も認識する。VS CodeのTextMate grammarは未来行を確認してから先頭tokenを分類できないため、互換な`elif (value)`呼出しをkeywordへ誤分類しないことを優先し、keyword色は単一行headerに限定する。構文・補完・字下げ・compiler検査は複数行でも有効である。Unreleased changelogも日英で追記。修正後JetBrains Core18件とVS Code対象34件（High snippet13件を含む）が成功した。通常sandboxでのchild `nagic`起動はEPERMだったため許可されたテスト実行経路で再実行し、testをskip/緩和していない。最新差分の独立再確認とexact-head CIは引き続きDraft gateとする。
+
+## 2026-10-28: Go backendの統合候補と段階計画
+
+[0.3.0段階計画](go-backend-0.3-plan.md)を、0.2.2公開後の実装状況へ更新した。単一のRust製`nagic`、共有High/Low・checker、Rust既定、CLI > project > Rustのbackend選択、target別native資産とfail-closed診断を維持する。最小Go backend、3 OS必須gate、List/Range、明示move、payloadなしenum、共有conformance、private lifecycle、cold user async、callback identity、限定`view[str]`とsealed capture factsは統合候補まで進んだ。HTTP/DB/auth/actor/task/scope、一般borrowと実release planは未対応であり、main反映・本番対応・性能優位とは扱わない。細分化した段階はcommitとtest単位で保持し、review/mergeは統合branchの最終HEADで行う。
+
+## 2026-10-27: Go user async / awaitのcold最小段階
+
+#188のprivate lifecycle kernel上で、共有checkerが受理したユーザー定義async関数と
+直接awaitをGo生成へ接続した。呼出し引数はFuture作成前に一度だけ評価し、本文はawaitまで
+開始しない。async main、Result / try await、Highと保存Lowを実Go build/runで照合する。
+標準async operation、task/scope/spawn、actor/HTTP等はGo起動前の拒否を維持し、goroutine、
+cancel、joinを暗黙に追加しない。[契約と制限](go-cold-async.md)。Go integration必須件数は
+Linux/macOS 29、Windows 28へ増やし、zero/skip/欠落を成功にしない。
+
+## 2026-10-27: Go private lifecycle kernel
+
+#186の`3c0ad0d`から独立stackとしてstd-only Go kernelを追加した。生成applicationへは
+組み込まず、public std.actor/async/scope/taskの未対応拒否を維持する。private Factory(ctx)、
+generation/manager状態、global sliding-window再起動予算、one-for-one、停止要求と実join、
+lock外の明示cleanupをnative testへ接続した。blocked worker/defer/cleanupはIncompleteと
+retained recordを維持し、別waiterによる実終了確認後だけ完了する。finalizer/GCを根拠にしない。
+business結果とworker failureの境界はnative例で分けるが、Turn/mailbox/READY/events/chargeは
+未実装。public owner/shared cleanupや任意native資源の保証も追加しない。
+
+Go integrationの追加2件はnative Go test13件の完全な名前集合とHigh/手書きLowのactor事前拒否を
+確認し、3 OS件数gateをLinux/macOS27・Windows26へ更新する。実行結果と独立final review、
+exact-head CIは下記の追記とPRで区別する。merge/releaseは行わない。
+[契約と有限測定条件](go-lifecycle-kernel.md)、[native module](../../compiler/go-runtime/README.md)。
+
+独立監査でqueued context.Canceledの後発Stopによる再分類P2、登録名substringの巨大backing保持P3を
+検出した。worker境界で取消outcomeをself-cancel前に封印し、登録名を独立copyする修正と、barrier/
+8MiB backingの保持量回帰を追加した。旧kernel＋新回帰は両方RED、修正後native13件race・Go27件・
+Python CI policy223件・Clippy/vet/fmtは成功した。更新HEADの独立再reviewと3 OS CIは別gateである。
+
+## 2026-10-27: Go backendのpayloadなしenum段階
+
+明示move段階のstack上で、全variantがpayloadなしのenumを追加した。共有checkerはconstructorとenum matchのcanonical identityをRust固有名とは別の私有factsへ封印し、Go emitterはsource spellingやaliasを再解決しない。Goではenumごとの固有整数型とvariant定数を生成し、match subjectを一度だけ評価してchecked arm identityでswitchする。Goで比較可能な表現を使ってもNagiのenum比較は新たに受理しない。
+
+payload付きvariantは未使用でもenum宣言単位でGo起動前に拒否する。enumを含む`main`のResult error型とenumのconsole表示も、Rust DebugとGo表示の一致をまだ保証できないためfail-closedにした。High・生成保存Low・手書きLowの実Go実行ではimport alias、宣言順と異なる網羅match、List反復、Copy enumの明示move後再利用を確認する。封印したconstructor/match factsの欠落を再検証で検出するunit testと、payload・main error・表示の事前拒否を追加した。専用Go integrationはLinux/macOS 23件、Windows 22件をexact-head CIで要求する。payload enum、async/task/actor、HTTP/DB/auth、Go adapterは未対応であり、stacked Draftの依存解消・独立監査・CI完了前に本番対応とは扱わない。
+
+## 2026-10-27: Go backendの明示move段階
+
+List・Range段階のstack上で、既存対応型に対する`std.ownership.move`を追加した。Go emitterは呼出名を特別扱いせず、共有checkerが封印した関数別`IdentityTransfer`計画だけを受理する。入力は型付きtemporaryへ一度だけ値として評価し、clone・deep copy・allocationを挿入しない。Copy値の再利用、非Copy値のuse-after-move・二重move、borrow等の所有権規則は共有checkerに残す。別名・module-qualified呼出しを受理し、同名のユーザー関数は通常関数のまま、`std.http.server.status`等の別の標準operationはGo起動前に未対応として拒否する。
+
+High・生成保存Low・手書きLowの実Go実行、`str`・List・class・Result/`try`・整数Copy、評価順、同名shadowを追加検査した。負例はGo toolchainを欠損させた状態でもuse-after-move、二重move、別標準operationが先に拒否されることを確認する。専用Go integration 21件とcompiler library 191件がLinuxで成功した。Rust codegen/checkerは変更しておらず、既存の明示move回帰がRust側契約の基点である。全workspace、独立監査、3 OS exact-head CIはDraft PRのgateとして残す。enum、非Copy List反復、async/task/actor、HTTP/DB/auth、Go adapterは未対応であり、この段階を本番対応やRust完全同等とは扱わない。
+
+## 2026-10-27: Go backendのList・Range段階
+
+0.3.0向け最小Go backendと3 OS必須gateのstack上で、`List[T]`のliteral・`len`・Copy要素index・`append`、`range`とCopy要素Listの`for`を追加した。class等の非Copy要素を反復する境界はGoの値copyへ置き換えず、Go toolchain起動前に明示的に拒否する。List生成、appendの値、indexのcontainerと添字はNagiの左から右の評価順で一度だけ評価する。負indexと範囲外indexはbackend固有stack traceを許容した実行時panicとし、既存Rust backendの失敗契約を維持する。
+
+Linux実Goの追加実行検査3件（正常2件・index境界失敗1件）と事前拒否1件を含む専用18件が成功した。正常例はliteral/index/append/len、List/range反復、関数呼出しを含む各要素とindexの評価順・一回性を実行結果で照合する。Windowsはsymlink固有1件を除く17件、macOSは18件をstacked CIで確認する。enum、非Copy Listのindex/反復、async/task/actor、HTTP/DB/auth、native adapterは引き続き未対応で、自動fallbackしない。独立最終監査とexact-head CIはこの段階のDraft PR gateとして残す。
+
+## 2026-10-26: 0.3.0向け最小Go backend候補
+
+0.2.2の公開準備と分離した開発branchで、単一のRust製`nagic`へ実験的なGo targetを追加した。Rustを既定に保ち、CLI `--backend`、project設定、Rust既定の順で選ぶ。Highから保存Lowを経由して独立parserとfinalizeを通る共通検査を維持し、Go固有のlowering/buildだけを分離した。同期関数、基本型、値class、`Option`/`Result`/`try`、基本演算とconsoleを実Go toolchainでbuild/runする。未対応のasync/task/actor、HTTP/DB/auth、enum/List等と逆backendのnative資産は、自動fallbackせずGo起動前にsource位置・到達chain付きで拒否する。
+
+独立Sol High監査が、retained実行ファイルを壊せるhardlink投影、整数overflow、完全matchのreturn、文字列による誤import、浮動小数剰余・負のゼロ・console表示の7件を検出した。temporaryからdirectory entryを置換する投影、profile別整数helper、完全matchのfinal `else`、型に基づくimport、`math.Mod`とbit表現、Rust表示互換formatterへ修正した。再監査で先頭ゼロ整数のGo八進解釈と最短浮動表示の中点差を追加検出し、10進正規化とexact rationalによるRust側候補選択へ修正した。親の有限f32 199,219件・f64 199,903件と、独立監査の境界f32 1,804件・f64 14,386件でRust Displayとの差分0。全値の形式証明ではない。Linux実Go integrationは14件へ拡張し、最終sourceの`cargo test --locked`、all-target Clippy、fmt、Python CI 211件をgateとした。独立再監査は未解決P1/P2なしで承認し、exact-head CIはDraft PRのgateとして残す。
+
+Linux x86_64、AMD EPYC 9V74割当5 CPU、Go 1.27.3、Rust 1.99.1、release buildした`nagic`で、Point・関数・Result/try・consoleの小規模appを測った。Goはclean 4.330秒、変更なし中央値0.180秒、関数本体変更0.186秒。Rust dev/full-runtime incrementalは45.283秒、0.570秒、0.638秒。機能・依存量が同等でないためbuild feedbackの観測に限り、native性能や本番優位性は主張しない。Windows/macOS、HTTP等、output lock競合、power-loss、同機能appのRSS/throughputは未検証。build receiptは監査用で完全なcache keyではなく、独自native cache再利用には使わない。詳細と受入条件は[最小backend記録](go-backend-0.3-minimum.md)を参照する。merge、version、tag、releaseは行っていない。
+
+2026-10-28追記: cold asyncとcallback identityに続き、Go backendのborrowをread-only
+`view[str]` inputへ限定して接続した。関数入力とlocal値だけをGo `string` valueへ落とし、
+return・field・aggregate・他viewは従来どおり拒否する。High、保存Low、手書きLow、nested await、
+temporary、local callback、import aliasを実Goで照合し、owner上書きと広いview型のnegativeを
+Go起動前に固定する。`FutureArgument.owners`をtransitive origin証明と扱わず、一般borrow、
+resource view、owner cleanupには中立planが残る。設計と境界は
+[string borrow記録](go-async-string-borrow.md)を参照する。merge、version、tag、releaseは行っていない。
+
+2026-10-27追記: 最小実装のDraft PR #178はHEAD `308edd5`で通常CI 21成功・想定skip 3、CodeQL 6成功を確認した。ただし通常Linux job内の14件だけで、Windows/macOSの実Go実行保証ではない。次の独立差分ではchange classifierへ`go_checks`を追加し、shared/compiler・未知path・package時はfail-closedでGoを選択する。Go 1.27.3と自動toolchain取得禁止を固定し、L2はLinux/Windows/macOS arm64、L3はmacOS Intelを含む4platformで実`go build/run` integrationを行う。実行件数・失敗・ignore・filterを別parserで厳密に検査し、選択jobの欠落/skipをReady/publication aggregateが拒否する。Rust runtimeのみ・editorのみ・通常Docsは対象外だが、未知/mixed変更は広い側へ倒す。ローカルではCI policy 223件、Linux実Go 14件、workflow投影roundtrip、fmtを確認。remote exact-head、Windows/macOS実行と独立最終監査はDraft PRのgateとして残す。
 
 ## 2026-10-23: 完成コードの末尾空行でeditor情報を失う不具合
 
@@ -619,3 +706,48 @@ Windowsの0.2.1候補CIでsupervised-workerの最終イベント件数assertが�
 ### 2026-10-23: PR #150のauth-stage診断行境界
 
 #150のLinux通常検査は成功したが、補助診断gateがbroadのslot 1欠落で失敗した。rawが削除済みのため根因は未確定。改行のないlibtest出力にheaderが連結される可能な失敗を再現し、test-only producerの既存有限buffer内へ先頭改行を追加した。strict parser、必要slot、loss拒否、認証処理、期限、並列度を維持する。実encoderのRED/GREENとPython41件、workflowと同じ実採集で両slot・閉鎖46 records、runtime909成功/既存1 ignored、native coverage17件を確認。独立最終auditと新HEAD CIは別gateとしてPRへ集約する。[設計・限界](auth-stage-producer-framing.md)。
+
+## 2026-10-27: Go backend共有conformanceの第一段階
+
+payloadなしenum段階のHEAD `f9fe618`を基点に、既存Rust専用corpus・bounded生成・batch・fuzz・shrinkerを維持したまま、少数の共通同期programをRust/Goで直接実行するtyped観測runnerを追加した。High、独立保存Low、手書きLowを区別し、成功時はraw stdout/stderrとstatusを期待値へ個別照合してからbackend間も比較する。境界外List indexはnative build成功後のnon-zero、事前marker一回、backend別primary panicを要求し、stack traceとbackend固有exit codeを同一化しない。
+
+共通checkerによるu64符号反転拒否、Rustでは動くview programのGo validation拒否、rustc/Go toolchain欠落をそれぞれfrontend／backend unsupported／infrastructureとして分けた。timeout、compile failure、同じ誤stdout、CRLF差、警告内のpanic文字列を成功やruntime faultへ流さない。期限切れ時はUnix process group／Windows process treeを終了し、Unixでは停止しない孫processの消滅を実行確認する。`nagic run`のCLI stderrは比較せず、成功generationの実行ファイルを直接観測する。専用Go integrationはLinux/macOS 25件、Windows 24件へ増える。全42 corpusのRust-Go同等性、async/view/HTTP/DB/actor対応、backend共通shrinkerは未実装のまま明示する。
+
+## 2026-10-27: Go backendのasync callback identity
+
+直接awaitの後続として、同じユーザー定義async関数をローカル変数へ保持し、そこから
+呼び出してawaitする最小経路を追加した。Go emitterは変数名や関数名の文字列から
+呼出先を推測せず、共有checkerが封印したFuture capture identityをreachabilityと
+validationに使用する。引数評価、cold開始、一回消費、Result/tryの契約は直接awaitと
+同じで、別のasync関数への再代入は既存checkerがGo toolchain起動前に拒否する。
+
+High、独立保存Low、手書きLowの実Go build/runと、同一callback再代入、異なるcallbackの
+negativeを1件へまとめる。必須件数はLinux/macOS 30、Windows 29。callbackを引数・戻り値・
+containerへ保存すること、view/borrow capture、owner cleanup、task/scope/spawnは未対応のまま。
+
+## 2026-10-28: user async引数のtarget-neutral capture facts
+
+#195の確定commit `7d1f1a9fd37c977e9a216785b05e274d0158bf78`を基点に、各user async引数へ
+call/argument slot、Copy/Move、content depth別のtransitiveな`FlowOrigin`とtemporary marker、
+views absence、未計画のrelease状態を封印した。各引数のexpr/demand/consume/hold成功直後に
+call-localでsnapshotし、全引数成功後だけ公開する。後の引数のcontainer mutationを先のsnapshotへ
+逆流させず、loopと再checkでは最終passのfactsで置換する。標準asyncとlegacy builtin Futureは
+`UnplannedStandard`とし、既存Passing・capture検査を維持する。
+
+新factsはbackendが生成・releaseへ使用しない。`NotRequired`はviewを含まないCopy型だけ、
+他は`Deferred`であり、empty originや`views_absent`からcleanupを推定しない。
+checker受理・診断・Low serialization・Rust/Go出力・runtime・allocation・Drop/close/cancel順序、
+一般borrow対応とowner lifetimeは変更しない。temporary owner identity、実release schedule、
+match/loopのrelease anchorは未計画のまま。[範囲と保証](go-async-string-borrow.md)。
+
+Linuxでfmt/check、`cargo clippy --locked -p nagic --all-targets -- -D warnings`、sealed unit 26件
+（新7件、slot/transfer/origin/temp/depth/absence/release等の改竄13経路を含む）、conformance 6件、
+Go integration 32件、ownership_calls 9件、async_value_types 6件、view_origins 10件、codegen 17件を
+成功確認した。新factsはdirect/local callback、aliasとowner、field/static/parameter、nested viewの
+depth 0/1/2、後引数のappend、最終loop pass、空view containerでもDeferredをHigh・保存Low・
+手書きLowで検査する。static/標準metadataは実file resolverを通し、nested viewはGo生成前の
+unsupported診断を維持した。追加native Rust回帰はHigh・保存Low・手書きLowそれぞれで
+mutation/nested view/callback/loopを実build/runする。Go 32件は#195の既存raw出力・negativeも維持する。
+
+共有cacheを使い、最終確認時の空きは約15.3 GiB。全workspace suite、独立最終audit、exact-headの
+Windows/macOS/CIは別gateとして残す。merge・push・PR作成・release・publishは行わない。

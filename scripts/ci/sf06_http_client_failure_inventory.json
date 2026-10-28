@@ -105,7 +105,7 @@
     "runtime/src/http_server/origin.rs": 132,
     "runtime/src/http_server/panic_tests.rs": 147,
     "runtime/src/http_server/prelogin_http.rs": 272,
-    "runtime/src/http_server/prelogin_tests.rs": 601,
+  "runtime/src/http_server/prelogin_tests.rs": 613,
     "runtime/src/http_server/private_deadline_calibration.rs": 255,
     "runtime/src/http_server/rate_public.rs": 314,
     "runtime/src/http_server/rate_public_tests.rs": 211,

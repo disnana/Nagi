@@ -1,5 +1,17 @@
 [
   {
+    "name": "High_elif_existing_if_lowering",
+    "contract": "未リリースHigh elifは既存if/elseへlowerし、識別子互換・元位置・return/move flow・High/保存Lowのnative実行を保つ。Low elifと同一行else ifは追加しない",
+    "files": ["compiler/tests/high_elif.rs"],
+    "test_names": [
+      "chain_nested_optional_and_legacy_branches_execute_in_high_and_saved_low",
+      "elif_remains_an_identifier_in_high_and_low_even_after_if",
+      "malformed_or_orphaned_clauses_fail_at_the_source_line",
+      "returning_elif_paths_do_not_pollute_continuing_ownership_joins"
+    ],
+    "command": ["cargo", "test", "--locked", "-p", "nagic", "--test", "high_elif"]
+  },
+  {
     "name": "HTTP_handler_panic_isolation",
     "contract": "標準HTTP handler構築/poll/error-mapper panicはpayloadを公開せずHTTP 500、HEADは空body、serverは次のrequestを処理する",
     "files": [

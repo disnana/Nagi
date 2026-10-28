@@ -14,6 +14,7 @@ PINS = {
     ('actions/upload-artifact', 'v4'): 'ea165f8d65b6e75b540449e92b4886f43607fa02',
     ('actions/download-artifact', 'v4'): 'd3f86a106a0bac45b974a628896c90dbdf5c8093',
     ('actions/setup-node', 'v4'): '49933ea5288caeca8642d1e84afbd3f7d6820020',
+    ('actions/setup-go', 'v7'): 'b7ad1dad31e06c5925ef5d2fc7ad053ef454303e',
     ('actions/deploy-pages', 'v4'): 'd6db90164ac5ed86f2b6aed7e0febac5b3c0c03e',
     ('actions/upload-pages-artifact', 'v3'): '56afc609e74202658d3ffba0e8f6dda462b719fa',
     ('dtolnay/rust-toolchain', 'stable'): 'b725eda525362e7cf34af9a7243cac1e3f01a7ec',

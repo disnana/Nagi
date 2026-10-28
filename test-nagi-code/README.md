@@ -21,6 +21,8 @@ CLI、HTTP API、SQLite、actor、Rust連携の例です。Nagiで書く処理�
 
 ## 成功と失敗を分ける小さなAPI
 
+[Resultとtryの入門](result-try-tutorial/README.md)では、コンソール入力から関数境界を越えるErrの伝播と、matchでの回復を扱います。
+
 [Result API](result-api/README.md)は、数値変換とSQLiteの1件取得を使い、入力不正・対象なし・DB失敗・代替データを`match`で書き分けます。
 
 ## タスク管理JSON API

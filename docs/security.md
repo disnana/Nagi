@@ -3,11 +3,11 @@
 認証は「誰か」を確認し、認可は「この対象へこの操作をしてよいか」を確認します。Nagi 0.2.0には標準HTTPの明示Policy、requestに結び付くproofと終了時の失効、永続Session/Cookie、Session CSRF、CORS、Ed25519 verifier、typed HTML subset、outbound HTTPが含まれます。[4 OS・browser受入](https://github.com/disnana/Nagi/actions/runs/39422234923)を経て[2026-10-20に公開しました](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.0)。任意のactive HTMLはサポートしません。公開済み0.1.xへ遡及適用しません。
 
 
-## Tokioタイマー依存の更新（未リリース）
+## Tokioタイマー依存の更新（Nagi 0.2.1以降）
 
-開発中のruntimeはTokio `>=1.54.1,<2`を要求します。[Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692)はタイマーentryの破棄前の同期を復元し、[1.54.1](https://github.com/tokio-rs/tokio/releases/tag/tokio-1.54.1)で公開されました。報告対象の1.54.0では、intervalの並行pollでdata raceと解放済みメモリへのアクセスが発生し得ます。Nagiの従来の追跡済みlockは1.53.1/1.53.2で、1.54.0ではありません。Nagiへの外部攻撃の成立は確認していません。
+Nagi 0.2.1以降のruntimeはTokio `>=1.54.1,<2`を要求します。[Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692)はタイマーentryの破棄前の同期を復元し、[1.54.1](https://github.com/tokio-rs/tokio/releases/tag/tokio-1.54.1)で公開されました。報告対象の1.54.0では、intervalの並行pollでdata raceと解放済みメモリへのアクセスが発生し得ます。Nagiの従来の追跡済みlockは1.53.1/1.53.2で、1.54.0ではありません。Nagiへの外部攻撃の成立は確認していません。
 
-生成アプリは独自の`Cargo.lock`を持つため、リポジトリのlock変更だけではアプリや既存の実行ファイルは更新されません。更新済みruntimeを使い、同じsource・project・出力先・profileで通常の`nagic build`/`run`を再実行してください。生成Rustを再利用してもCargoはruntime依存を再検証します。`cargo tree --manifest-path <出力先>/Cargo.toml -i tokio`で実際の解決版を確認し、配備する各実行ファイルを再ビルドして新しい成果物を配備します。依存解決やbuildが失敗した場合は以前の成功成果物を維持し、更新手順としてlockやキャッシュを削除しないでください。Tokio 1.54.0を明示固定するプロジェクトは先に要求版の更新が必要です。この未リリースのsource更新は公開済みNagi 0.2.0配布物や既存バイナリを変更しません。
+生成アプリは独自の`Cargo.lock`を持つため、Nagiの更新だけではアプリや既存の実行ファイルは更新されません。更新済みruntimeを使い、同じsource・project・出力先・profileで通常の`nagic build`/`run`を再実行してください。生成Rustを再利用してもCargoはruntime依存を再検証します。`cargo tree --manifest-path <出力先>/Cargo.toml -i tokio`で実際の解決版を確認し、配備する各実行ファイルを再ビルドして新しい成果物を配備します。依存解決やbuildが失敗した場合は以前の成功成果物を維持し、更新手順としてlockやキャッシュを削除しないでください。Tokio 1.54.0を明示固定するプロジェクトは先に要求版の更新が必要です。Nagi 0.2.0配布物や既存バイナリは自動では変更されません。
 
 ## すべてのrouteで方針を選ぶ
 

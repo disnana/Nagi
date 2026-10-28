@@ -65,7 +65,7 @@ def show(value: i64):
     return
 ```
 
-Parameter types are required. An omitted return type means unit. Value-returning functions must return on every path. **Unreleased source checkout:** Calls can use positional arguments such as `add(1, 2)`, or a compiler built from this source checkout can name every argument as in `add(left=1, right=2)`. Published 0.2.1 requires positional calls. Named arguments follow declaration order and cannot be mixed with positional arguments, so each expression is still evaluated exactly once in source order. Function-value types do not retain parameter names, so call function values positionally. Combining named arguments with explicit type arguments, default/variadic arguments, and user-defined generic functions is unavailable. Class and enum-payload construction retains its existing all-fields-named syntax and does not require field order.
+Parameter types are required. An omitted return type means unit. Value-returning functions must return on every path. **Unreleased source checkout:** Calls can use positional arguments such as `add(1, 2)`, or a compiler built from this source checkout can name every argument as in `add(left=1, right=2)`. Published 0.2.2 requires positional calls. Named arguments follow declaration order and cannot be mixed with positional arguments, so each expression is still evaluated exactly once in source order. Function-value types do not retain parameter names, so call function values positionally. Combining named arguments with explicit type arguments, default/variadic arguments, and user-defined generic functions is unavailable. Class and enum-payload construction retains its existing all-fields-named syntax and does not require field order.
 
 See the unreleased [named response-limits example](../../examples/tutorial/named-response-limits.nagi) for a twelve-argument HTTP budget whose names remain visible at the call site.
 
@@ -77,6 +77,8 @@ This is a function-body fragment:
 score = 80
 if score >= 80:
     print("Passed")
+elif score >= 60:
+    print("Almost there")
 else:
     print("Try again")
 
@@ -88,7 +90,11 @@ while count < 3:
     count += 1
 ```
 
-Conditions require bool. `range(n)` takes one argument and runs from zero up to but excluding n. List/view iteration copies Copy elements and borrows non-Copy elements for reading. See [ownership](ownership.md) for the restrictions. `elif`, `break`, `continue`, and `pass` are unavailable.
+`elif` is an unreleased addition to High in the development compiler. With a released compiler, indent another `if` inside `else`.
+
+Conditions in `if`/`elif` are evaluated from top to bottom. Only the first true branch runs; later conditions are skipped. Multiple `elif` clauses are allowed, and the final `else` is optional. Align each header with its `if`. Same-line `else if` and Low `elif` are unsupported. Low output uses the existing nested `if` inside `else`. The compiler recognizes `elif` only as a clause header, preserving existing variables and functions with that name.
+
+Conditions require bool. `range(n)` takes one argument and runs from zero up to but excluding n. List/view iteration copies Copy elements and borrows non-Copy elements for reading. See [ownership](ownership.md) for the restrictions. `break`, `continue`, and `pass` are unavailable.
 
 ## Operators
 

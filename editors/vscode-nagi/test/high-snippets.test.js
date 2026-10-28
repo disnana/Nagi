@@ -27,7 +27,7 @@ for (const [name, snippet] of Object.entries(snippets)) {
     if (name === 'GET handler' || name === 'POST handler') {
       text = 'class State:\n    greeting: str\n' + text;
     }
-    if (['Loop', 'Result match', 'Nullable match'].includes(name)) {
+    if (['Loop', 'Result match', 'Nullable match', 'Conditional branches'].includes(name)) {
       const setup = name === 'Result match' ? '    result = parse_i64("7")\n'
         : name === 'Nullable match' ? '    optional = some(7)\n' : '';
       text = 'def main():\n' + setup + text.split('\n').map(line => '    ' + line).join('\n');

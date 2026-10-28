@@ -1,4 +1,4 @@
-# 未リリースのsource checkout用。公開Nagi 0.2.1では位置引数を使用する。
+# 未リリースのsource checkout用。公開Nagi 0.2.2では位置引数を使用する。
 # 名前が単位と用途を示すため、12個の上限値を読み違えにくい。
 import std.http.server as http
 

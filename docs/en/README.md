@@ -17,7 +17,8 @@ The quick reference routes everyday commands, symptoms, and API questions to the
 1. [Setup and first run](getting-started.md): install the compiler and run Hello World.
 2. [Learn by writing code](language-guide.md): try values, functions, lists, borrowing, and Results.
 3. [Your first small CLI app](first-app.md): connect input, typed failures, and a manual boundary check.
-4. [End-to-end task API](task-api-tutorial.md): connect HTTP, JSON, SQLite, tests, and a release build.
+4. [Short Result and try tutorial](../../test-nagi-code/result-try-tutorial/README.en.md): follow Result propagation and recovery with match.
+5. [End-to-end task API](task-api-tutorial.md): connect HTTP, JSON, SQLite, tests, and a release build.
 
 See the [VS Code guide](editor.md) for editor support. See [JetBrains installation and Release ZIP selection](../../editors/jetbrains-nagi/README.en.md) for IntelliJ IDEA and PyCharm.
 
@@ -29,7 +30,7 @@ Run an example and check its expected result, then read the detail page for cond
 |---|---|---|---|
 | Values, annotations, assignment, and reassignment | [Guide #1: values and types](language-guide.md#1-values-and-types) updates a number and prints `11` | A variable keeps its inferred type; reassignment cannot change it | [Types](types.md), [values and variables](syntax.md#values-and-variables) |
 | Functions, parameters, return, and function values | [Guide #2: define functions](language-guide.md#2-define-functions) returns `42` | Annotate parameter/return types; call executable code from `main` | [function syntax](syntax.md#functions-and-return), [function types](types.md#pass-a-function-as-a-value) |
-| if, match, for, while, and operators | [Guide #3: lists, classes, branches, and loops](language-guide.md#3-lists-classes-branches-and-loops) prints `OK` and loop results | Conditions require bool. `break`, `continue`, and `elif` are unsupported | [branches, loops, operators](syntax.md#branches-and-loops), [match](error-handling.md#separate-success-and-failure) |
+| if, match, for, while, and operators | [Guide #3: lists, classes, branches, and loops](language-guide.md#3-lists-classes-branches-and-loops) prints `OK` and loop results | Conditions require bool. Development High adds `elif` (unreleased). `break` and `continue` are unsupported | [branches, loops, operators](syntax.md#branches-and-loops), [match](error-handling.md#separate-success-and-failure) |
 | Lists, classes, fields, and enums | [Guide #3: lists, classes, branches, and loops](language-guide.md#3-lists-classes-branches-and-loops) and the [class example](classes.md) print a sum and field values | Lists have one element type. Classes use named fields; methods, inheritance, and field reassignment are unsupported | [types and enums](types.md#distinguish-variants-with-an-enum), [classes](classes.md) |
 | Nullable `T?` / `Option[T]` | [Absent-value example](error-handling.md#handle-an-absent-value) handles `Some` and `None` | Match both cases. There is no `unwrap` or Python-style `if value is not None` narrowing | [types](types.md), [match syntax](syntax.md#result-async-and-scopes) |
 | `Result[T, E]`, `try`, `match`, and custom Errors | [First CLI app](first-app.md) propagates bad input; [Guide #5: return failures with Result](language-guide.md#5-return-failures-with-result) shows recovery | `try` returns Err to the caller. Use `match` with both Ok and Err to recover locally | [failure types and examples](error-handling.md), [built-ins](builtins.md#conversion-success-and-failure) |

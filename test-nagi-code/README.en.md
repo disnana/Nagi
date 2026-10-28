@@ -21,6 +21,8 @@ Shared verification commands are in the [application index](application-examples
 
 ## Result API
 
+The [Result and try tutorial](result-try-tutorial/README.en.md) follows console input, Err propagation across function boundaries, and recovery with match.
+
 The [Result API](../docs/en/result-api.md) uses integer parsing and a single-row SQLite query to distinguish invalid input, missing data, database failures, and fallback data with `match`.
 
 ## Task management JSON API
