@@ -7,8 +7,8 @@
 use crate::{
     ast::{Expr, Function, MatchPattern, NameResolution, Program, Stmt, Type, E, S},
     checked::{
-        CheckedProgram, EnumFacts, EnumVariantFact, ExpressionKey, FinalCheckFacts,
-        FutureCapture, OperationPlan,
+        CheckedProgram, EnumFacts, EnumVariantFact, ExpressionKey, FinalCheckFacts, FutureCapture,
+        OperationPlan,
     },
     project::BuildProfile,
     source::Sources,
@@ -126,10 +126,9 @@ fn go_type(
     line: usize,
 ) -> Result<String, String> {
     if ty.is_async_function() {
-        let (result, arguments) = ty
-            .1
-            .split_last()
-            .expect("async function type has a Future result");
+        let (result, arguments) =
+            ty.1.split_last()
+                .expect("async function type has a Future result");
         let result = result
             .1
             .first()
@@ -796,13 +795,9 @@ impl<'a> Emitter<'a> {
                     Some(NameResolution::Local) => {
                         let capture = self.future_capture(expression)?;
                         if capture.resolution != NameResolution::Local
-                            || !self
-                                .program
-                                .functions
-                                .iter()
-                                .any(|function| {
-                                    function.name == capture.callee && function.asynchronous
-                                })
+                            || !self.program.functions.iter().any(|function| {
+                                function.name == capture.callee && function.asynchronous
+                            })
                         {
                             return Err(error(
                                 expression.line,

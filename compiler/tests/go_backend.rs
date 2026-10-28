@@ -316,8 +316,7 @@ fn go_backend_uses_checked_identity_for_local_async_callbacks() {
     assert!(go.contains("func(int64) *nagiFuture[nagiResult[int64, nagiError]]"));
     assert!(go.contains("= nagiFn_"));
 
-    let generated =
-        fs::read_to_string(fixture.0.join("out-high-callback/generated.low")).unwrap();
+    let generated = fs::read_to_string(fixture.0.join("out-high-callback/generated.low")).unwrap();
     fixture.write("saved.low", &generated);
     fs::remove_file(fixture.0.join("main.nagi")).unwrap();
     let saved = fixture.go("run", "saved.low", "out-saved-callback");
@@ -367,10 +366,7 @@ fn go_backend_uses_checked_identity_for_local_async_callbacks() {
         !diagnostic.contains("Go toolchain was not found"),
         "{diagnostic}"
     );
-    assert!(!fixture
-        .0
-        .join("out-invalid-callback/.nagi/apps")
-        .exists());
+    assert!(!fixture.0.join("out-invalid-callback/.nagi/apps").exists());
 
     fixture.write(
         "library.nagi",
