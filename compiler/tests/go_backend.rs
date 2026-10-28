@@ -496,8 +496,8 @@ fn go_borrow_stage_rejects_wider_views_before_the_toolchain() {
         (
             "bytes-callback",
             "async def bad(part: view[bytes]) -> i64:\n    return len(part)\nasync def main():\n    callback = bad\n    print(0)\n",
-            4,
-            "type fn[view[bytes]",
+            1,
+            "type view[bytes] is not supported",
         ),
         (
             "view-return",
