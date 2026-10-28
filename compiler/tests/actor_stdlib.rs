@@ -1,4 +1,8 @@
 use nagic::{ast::DefKind, check, emit, modules, parser, source};
+#[path = "support/native_triple.rs"]
+mod native_triple;
+#[path = "support/public_supervisor_resilience.rs"]
+mod public_supervisor_resilience;
 use std::{
     fs,
     path::{Path, PathBuf},

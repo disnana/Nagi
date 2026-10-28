@@ -1,0 +1,15 @@
+test_capacity_guard_is_enforced (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_capacity_guard_is_enforced) ... ok
+test_exact_capacity_boundary_is_permitted (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_exact_capacity_boundary_is_permitted) ... ok
+test_failed_reply_is_excluded_from_rate_cpu_denominator_and_latency (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_failed_reply_is_excluded_from_rate_cpu_denominator_and_latency) ... ok
+test_fault_cannot_be_reported_in_unfaulted_phase (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_fault_cannot_be_reported_in_unfaulted_phase) ... ok
+test_incomplete_samples_are_rejected (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_incomplete_samples_are_rejected) ... ok
+test_missing_recovery_interval_is_rejected (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_missing_recovery_interval_is_rejected) ... ok
+test_nearest_rank_quantile_is_not_interpolated (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_nearest_rank_quantile_is_not_interpolated) ... ok
+test_negative_latency_is_rejected (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_negative_latency_is_rejected) ... ok
+test_no_success_has_no_latency_or_cpu_per_success (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_no_success_has_no_latency_or_cpu_per_success) ... ok
+test_zero_cpu_observation_is_unavailable_not_free_work (scripts.tests.test_public_supervisor_probe.MeasurementAccounting.test_zero_cpu_observation_is_unavailable_not_free_work) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.001s
+
+OK

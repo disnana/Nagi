@@ -223,6 +223,23 @@ def native_summary(raw):
     return "passed" if len(lines)==len(rows)==10 and {name for name,_ in rows}==set(EXPECTED) else "invalid"
 
 
+def native_failed_case(raw):
+    """Return only the stable EXPECTED index; never echo native output."""
+    if len(raw) > 65536:
+        return "unavailable"
+    raw = raw.replace(b"\r\n", b"\n")
+    if b"\r" in raw:
+        return "unavailable"
+    try:
+        text = raw.decode("utf-8", errors="strict")
+    except UnicodeError:
+        return "unavailable"
+    failed = re.findall(r"(?m)^test ([^ \n]+) \.\.\. FAILED$", text)
+    if len(failed) != 1 or failed[0] not in EXPECTED:
+        return "unavailable"
+    return str(EXPECTED.index(failed[0]))
+
+
 # These eight workflow-only RC deltas were reviewed independently: six exact
 # Windows TMP/TEMP guards and two concrete SF03 deadline inventory counts.
 _WINDOWS_TEMP_GUARD = (
@@ -705,6 +722,22 @@ class BackportSourceTests(unittest.TestCase):
                 self.assertNotIn(b'\r', stdout)
                 self.assertEqual(stdout, ('browser_login_stage native10=' + status + '\n').encode())
                 self.assertEqual(result.stderr, b'')
+            failed = raw.replace(
+                ('test ' + EXPECTED[3] + ' ... ok').encode(),
+                ('test ' + EXPECTED[3] + ' ... FAILED').encode(),
+            ).replace(
+                b'test result: ok. 10 passed; 0 failed;',
+                b'test result: FAILED. 9 passed; 1 failed;',
+            )
+            result = subprocess.run(command, input=failed, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, check=False)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(
+                result.stdout.replace(b'\r\n', b'\n'),
+                b'browser_login_stage native10=test_failed\n'
+                b'browser_login_stage failed_case=3\n',
+            )
+            self.assertEqual(result.stderr, b'')
 
     def test_lf_crlf_native10_and_closed_failures(self):
         raw = ('running 10 tests\n' + ''.join('test ' + name + ' ... ok\n' for name in EXPECTED) + 'test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 200 filtered out; finished in 0.20s\n').encode()
@@ -715,10 +748,22 @@ class BackportSourceTests(unittest.TestCase):
         self.assertEqual(native_summary(b'error[E0382]: private\n'), 'compile_failed')
         self.assertEqual(native_summary(b''), 'unavailable')
         self.assertEqual(native_summary(b'running 10 tests\ntest result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s\n'), 'test_failed')
+        failed = raw.replace(
+            ('test ' + EXPECTED[7] + ' ... ok').encode(),
+            ('test ' + EXPECTED[7] + ' ... FAILED').encode(),
+        ).replace(
+            b'test result: ok. 10 passed; 0 failed;',
+            b'test result: FAILED. 9 passed; 1 failed;',
+        )
+        self.assertEqual(native_failed_case(failed), '7')
+        self.assertEqual(native_failed_case(failed.replace(EXPECTED[7].encode(), b'/private/path')), 'unavailable')
 
 if __name__=="__main__":
     if sys.argv[1:]==["--native-summary"]:
-        state=native_summary(sys.stdin.buffer.read(65537))
+        raw = sys.stdin.buffer.read(65537)
+        state=native_summary(raw)
         print("browser_login_stage native10="+state)
+        if state == "test_failed":
+            print("browser_login_stage failed_case="+native_failed_case(raw))
         raise SystemExit(0 if state=="passed" else 1)
     unittest.main()

@@ -1033,9 +1033,9 @@ pub fn deadline_reaps_descendant() -> Result<(), String> {
 pub fn deadline_reaps_descendant() -> Result<(), String> {
     let fixture = Fixture::new("job-tree").map_err(|error| error.to_string())?;
     let pid_path = fixture.0.join("child.pid");
+    let pid_path = pid_path.display().to_string().replace('\'', "''");
     let parent = format!(
-        "$p=Start-Process powershell.exe -PassThru -ArgumentList @('-NoProfile','-Command','Start-Sleep -Seconds 300'); Set-Content -NoNewline -Path '{}' -Value $p.Id; exit 0",
-        pid_path.display()
+        "$p=[System.Diagnostics.Process]::Start('powershell.exe','-NoProfile -Command Start-Sleep -Seconds 300'); [System.IO.File]::WriteAllText('{pid_path}',$p.Id.ToString()); [System.Environment]::Exit(0)"
     );
     let mut command = Command::new("powershell.exe");
     command
@@ -1058,7 +1058,7 @@ pub fn deadline_reaps_descendant() -> Result<(), String> {
             String::from_utf8_lossy(&output.stderr)
         ));
     }
-    let pid: u32 = fs::read_to_string(pid_path)
+    let pid: u32 = fs::read_to_string(fixture.0.join("child.pid"))
         .map_err(|error| format!("missing descendant PID: {error}"))?
         .trim()
         .parse()

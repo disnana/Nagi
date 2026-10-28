@@ -1,0 +1,471 @@
+{
+  "verified_raw_phases": 72,
+  "successful_replies": 2880000,
+  "failed_healthy_replies": 0,
+  "groups": [
+    {
+      "cpus": 1,
+      "actors": 1,
+      "idle_rss_bytes": {
+        "minimum": 2039808,
+        "median": 2134016,
+        "maximum": 2142208
+      },
+      "idle_rss_delta_bytes_per_actor": {
+        "minimum": 172032.0,
+        "median": 172032.0,
+        "maximum": 172032.0
+      },
+      "observed_peak_rss_bytes": 8908800,
+      "healthy_completed_successes_per_second": {
+        "minimum": 1330008.6663364698,
+        "median": 1448885.5681714406,
+        "maximum": 1674057.7011697353
+      },
+      "healthy_process_cpu_ns_per_success": {
+        "minimum": 539.452275,
+        "median": 665.5046375,
+        "maximum": 799.904875
+      },
+      "healthy_roundtrip_p99_ns": {
+        "minimum": 3024,
+        "median": 3279.5,
+        "maximum": 3396
+      },
+      "fault_healthy_completions": null,
+      "fault_healthy_successes_per_second": null,
+      "fault_healthy_roundtrip_p99_ns": null,
+      "minimum_common_interval_jain_index": 0.99999999749975,
+      "retained_rss_delta_bytes_after_release": {
+        "minimum": 1961984,
+        "median": 1961984,
+        "maximum": 1961984
+      },
+      "released_fd_deltas": [
+        0,
+        0,
+        0
+      ],
+      "released_task_deltas": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cpus": 1,
+      "actors": 32,
+      "idle_rss_bytes": {
+        "minimum": 2228224,
+        "median": 2228224,
+        "maximum": 2228224
+      },
+      "idle_rss_delta_bytes_per_actor": {
+        "minimum": 10112.0,
+        "median": 10112.0,
+        "maximum": 10240.0
+      },
+      "observed_peak_rss_bytes": 9269248,
+      "healthy_completed_successes_per_second": {
+        "minimum": 1281859.4139915595,
+        "median": 1695535.8837718675,
+        "maximum": 1765936.1945178718
+      },
+      "healthy_process_cpu_ns_per_success": {
+        "minimum": 486.218275,
+        "median": 547.2081499999999,
+        "maximum": 699.20275
+      },
+      "healthy_roundtrip_p99_ns": {
+        "minimum": 2104,
+        "median": 2393.5,
+        "maximum": 2884
+      },
+      "fault_healthy_completions": {
+        "minimum": 12624,
+        "median": 13722,
+        "maximum": 17138
+      },
+      "fault_healthy_successes_per_second": {
+        "minimum": 1218520.5862798288,
+        "median": 1320836.8803992888,
+        "maximum": 1607671.6462461974
+      },
+      "fault_healthy_roundtrip_p99_ns": {
+        "minimum": 2143,
+        "median": 2414,
+        "maximum": 2845
+      },
+      "minimum_common_interval_jain_index": 0.9999999993749688,
+      "retained_rss_delta_bytes_after_release": {
+        "minimum": 1982464,
+        "median": 1982464,
+        "maximum": 1986560
+      },
+      "released_fd_deltas": [
+        0,
+        0,
+        0
+      ],
+      "released_task_deltas": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cpus": 1,
+      "actors": 128,
+      "idle_rss_bytes": {
+        "minimum": 2629632,
+        "median": 2629632,
+        "maximum": 2633728
+      },
+      "idle_rss_delta_bytes_per_actor": {
+        "minimum": 5664.0,
+        "median": 5664.0,
+        "maximum": 5696.0
+      },
+      "observed_peak_rss_bytes": 9654272,
+      "healthy_completed_successes_per_second": {
+        "minimum": 1668755.5314031006,
+        "median": 1727574.8014185475,
+        "maximum": 1807808.1221384092
+      },
+      "healthy_process_cpu_ns_per_success": {
+        "minimum": 489.1719,
+        "median": 564.7749375000001,
+        "maximum": 599.9758
+      },
+      "healthy_roundtrip_p99_ns": {
+        "minimum": 2123,
+        "median": 2213.5,
+        "maximum": 2484
+      },
+      "fault_healthy_completions": {
+        "minimum": 13030,
+        "median": 17178,
+        "maximum": 18154
+      },
+      "fault_healthy_successes_per_second": {
+        "minimum": 1278880.8193003237,
+        "median": 1642952.34845204,
+        "maximum": 1689053.5578097978
+      },
+      "fault_healthy_roundtrip_p99_ns": {
+        "minimum": 2234,
+        "median": 2544,
+        "maximum": 2864
+      },
+      "minimum_common_interval_jain_index": 0.9999999993749688,
+      "retained_rss_delta_bytes_after_release": {
+        "minimum": 2383872,
+        "median": 2383872,
+        "maximum": 2387968
+      },
+      "released_fd_deltas": [
+        0,
+        0,
+        0
+      ],
+      "released_task_deltas": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cpus": 1,
+      "actors": 512,
+      "idle_rss_bytes": {
+        "minimum": 4231168,
+        "median": 4231168,
+        "maximum": 4235264
+      },
+      "idle_rss_delta_bytes_per_actor": {
+        "minimum": 4544.0,
+        "median": 4544.0,
+        "maximum": 4552.0
+      },
+      "observed_peak_rss_bytes": 11169792,
+      "healthy_completed_successes_per_second": {
+        "minimum": 1268910.775555411,
+        "median": 1362544.4117396118,
+        "maximum": 1676481.9094190118
+      },
+      "healthy_process_cpu_ns_per_success": {
+        "minimum": 573.35555,
+        "median": 696.8709125,
+        "maximum": 799.832025
+      },
+      "healthy_roundtrip_p99_ns": {
+        "minimum": 2594,
+        "median": 2880.0,
+        "maximum": 3335
+      },
+      "fault_healthy_completions": {
+        "minimum": 12702,
+        "median": 13434,
+        "maximum": 14532
+      },
+      "fault_healthy_successes_per_second": {
+        "minimum": 1240486.7450446207,
+        "median": 1247666.8935574081,
+        "maximum": 1394426.3248345486
+      },
+      "fault_healthy_roundtrip_p99_ns": {
+        "minimum": 2854,
+        "median": 2904,
+        "maximum": 2915
+      },
+      "minimum_common_interval_jain_index": 0.9999999993749688,
+      "retained_rss_delta_bytes_after_release": {
+        "minimum": 3985408,
+        "median": 3985408,
+        "maximum": 3989504
+      },
+      "released_fd_deltas": [
+        0,
+        0,
+        0
+      ],
+      "released_task_deltas": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cpus": 2,
+      "actors": 1,
+      "idle_rss_bytes": {
+        "minimum": 2093056,
+        "median": 2097152,
+        "maximum": 2138112
+      },
+      "idle_rss_delta_bytes_per_actor": {
+        "minimum": 172032.0,
+        "median": 176128.0,
+        "maximum": 217088.0
+      },
+      "observed_peak_rss_bytes": 13672448,
+      "healthy_completed_successes_per_second": {
+        "minimum": 669369.8610697752,
+        "median": 988002.6352344167,
+        "maximum": 1023658.6450557313
+      },
+      "healthy_process_cpu_ns_per_success": {
+        "minimum": 1505.66525,
+        "median": 1574.3866874999999,
+        "maximum": 2372.168875
+      },
+      "healthy_roundtrip_p99_ns": {
+        "minimum": 8503,
+        "median": 11102.0,
+        "maximum": 14151
+      },
+      "fault_healthy_completions": null,
+      "fault_healthy_successes_per_second": null,
+      "fault_healthy_roundtrip_p99_ns": null,
+      "minimum_common_interval_jain_index": 0.9896140885839079,
+      "retained_rss_delta_bytes_after_release": {
+        "minimum": 2265088,
+        "median": 6184960,
+        "maximum": 6524928
+      },
+      "released_fd_deltas": [
+        0,
+        0,
+        0
+      ],
+      "released_task_deltas": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cpus": 2,
+      "actors": 32,
+      "idle_rss_bytes": {
+        "minimum": 2252800,
+        "median": 2318336,
+        "maximum": 2330624
+      },
+      "idle_rss_delta_bytes_per_actor": {
+        "minimum": 10368.0,
+        "median": 10496.0,
+        "maximum": 11008.0
+      },
+      "observed_peak_rss_bytes": 10194944,
+      "healthy_completed_successes_per_second": {
+        "minimum": 1617426.999555248,
+        "median": 1953761.9924722728,
+        "maximum": 2209560.33671269
+      },
+      "healthy_process_cpu_ns_per_success": {
+        "minimum": 862.143125,
+        "median": 936.5588375,
+        "maximum": 1074.618425
+      },
+      "healthy_roundtrip_p99_ns": {
+        "minimum": 1342,
+        "median": 1522.5,
+        "maximum": 1993
+      },
+      "fault_healthy_completions": {
+        "minimum": 22314,
+        "median": 22458,
+        "maximum": 24527
+      },
+      "fault_healthy_successes_per_second": {
+        "minimum": 2119473.366813933,
+        "median": 2208571.436438813,
+        "maximum": 2271863.735971401
+      },
+      "fault_healthy_roundtrip_p99_ns": {
+        "minimum": 1162,
+        "median": 1171,
+        "maximum": 1212
+      },
+      "minimum_common_interval_jain_index": 0.9955977439040868,
+      "retained_rss_delta_bytes_after_release": {
+        "minimum": 2150400,
+        "median": 2281472,
+        "maximum": 2457600
+      },
+      "released_fd_deltas": [
+        0,
+        0,
+        0
+      ],
+      "released_task_deltas": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cpus": 2,
+      "actors": 128,
+      "idle_rss_bytes": {
+        "minimum": 2641920,
+        "median": 2658304,
+        "maximum": 2732032
+      },
+      "idle_rss_delta_bytes_per_actor": {
+        "minimum": 5728.0,
+        "median": 5824.0,
+        "maximum": 5824.0
+      },
+      "observed_peak_rss_bytes": 13021184,
+      "healthy_completed_successes_per_second": {
+        "minimum": 859424.5125875934,
+        "median": 1263639.9611402582,
+        "maximum": 2146944.618704783
+      },
+      "healthy_process_cpu_ns_per_success": {
+        "minimum": 866.904975,
+        "median": 1372.004625,
+        "maximum": 1809.27675
+      },
+      "healthy_roundtrip_p99_ns": {
+        "minimum": 1422,
+        "median": 6920.5,
+        "maximum": 10065
+      },
+      "fault_healthy_completions": {
+        "minimum": 13901,
+        "median": 17717,
+        "maximum": 25173
+      },
+      "fault_healthy_successes_per_second": {
+        "minimum": 1275856.7266404685,
+        "median": 1625610.1543334113,
+        "maximum": 2343869.5887459996
+      },
+      "fault_healthy_roundtrip_p99_ns": {
+        "minimum": 1192,
+        "median": 1533,
+        "maximum": 3125
+      },
+      "minimum_common_interval_jain_index": 0.9164311793791938,
+      "retained_rss_delta_bytes_after_release": {
+        "minimum": 2314240,
+        "median": 2551808,
+        "maximum": 5382144
+      },
+      "released_fd_deltas": [
+        0,
+        0,
+        0
+      ],
+      "released_task_deltas": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "cpus": 2,
+      "actors": 512,
+      "idle_rss_bytes": {
+        "minimum": 4268032,
+        "median": 4268032,
+        "maximum": 4268032
+      },
+      "idle_rss_delta_bytes_per_actor": {
+        "minimum": 4584.0,
+        "median": 4584.0,
+        "maximum": 4584.0
+      },
+      "observed_peak_rss_bytes": 12107776,
+      "healthy_completed_successes_per_second": {
+        "minimum": 1604632.8317264472,
+        "median": 1904275.9472495269,
+        "maximum": 2247732.2348516053
+      },
+      "healthy_process_cpu_ns_per_success": {
+        "minimum": 894.2068,
+        "median": 982.9265625,
+        "maximum": 1186.04275
+      },
+      "healthy_roundtrip_p99_ns": {
+        "minimum": 1211,
+        "median": 1447.0,
+        "maximum": 2444
+      },
+      "fault_healthy_completions": {
+        "minimum": 18977,
+        "median": 23044,
+        "maximum": 23570
+      },
+      "fault_healthy_successes_per_second": {
+        "minimum": 1782026.8548263658,
+        "median": 2107751.2359623117,
+        "maximum": 2177729.5234061573
+      },
+      "fault_healthy_roundtrip_p99_ns": {
+        "minimum": 1172,
+        "median": 1191,
+        "maximum": 1191
+      },
+      "minimum_common_interval_jain_index": 0.9790090696817639,
+      "retained_rss_delta_bytes_after_release": {
+        "minimum": 4382720,
+        "median": 4448256,
+        "maximum": 4464640
+      },
+      "released_fd_deltas": [
+        0,
+        0,
+        0
+      ],
+      "released_task_deltas": [
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

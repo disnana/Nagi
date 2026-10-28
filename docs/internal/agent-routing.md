@@ -160,4 +160,6 @@ cold最終guard後の全243件77秒・ZIP21秒・IC251 Verifier11秒Compatible�
 
 2026-10-23、#150のLinux診断gate失敗をLuna Maxが読み取り調査し、通常検査成功・broad slot欠落・原raw未保存をHighへ引き継いだ。Sol 6.1 Highが可能な行境界欠落を合成再現し、親採用の有限buffer内改行と実encoder共通化を実装。厳格parser・CI workflow・期限・認証意味論を変えず、RED/GREENと実並列採集を検証した。必要検証後に別Highの最終auditを行う。同tierの並行実行・子spawnなし、原ログは非公開で保持。transport一時切断は既存sessionへ再接続し、重複実行しなかった。model時間・費用は未計測。[詳細](auth-stage-producer-framing.md)。
 
+
+2026-10-27、Sol 6.1 Highが親の明示委任でmain 0d1884cの専用worktreeへ公開Nagi Supervisor試験と有限benchmarkを実装した（子spawnなし、追加speed/tier指定interfaceなし）。初回fixtureのCopy+Drop境界とresource List view拒否をtest側で修正し、compilerの受理や意味論を変更しなかった。High/保存Low/手書きLow native3forms3.03秒、既存actor_stdlib13件260.31秒、focusedclippy9.46秒、release初回248秒、固定24processの計測累計17.13秒。smokeのCPU時計0nsを欠測とする集計へ直し、本測定の72phaseはpositive。共有buildと計測窓を親が調整し空き8GiB下限を維持、rawとsource hashesを保存した。独立reviewは別Highへ順次引継ぎ、CIは別gate。model時間/費用は未計測。[契約と限界](public-supervisor-validation.md)。
 2026-10-27、#186 `3c0ad0d`後のGo private lifecycle kernelを既存delegateが専有worktreeで実装した（model/effortは親設定を継承、worker側ではIDを再確認していない）。追加spawnなし。std-only native/race、Go integration、compiler lib、Clippy/vet/fmtを分けて検査し、public std.actorの事前拒否を維持した。別agentの独立監査がqueued cancellation再分類P2と登録名backing保持P3を検出し、旧kernel＋新回帰のRED確認後にworkerが修正した。shared cache・低並列・空き8GiB下限を守り、親の性能測定quiet windowでは新規build/testを停止した。更新差分を独立再reviewとexact-head CIへ渡す。model時間・費用・速度差は未計測。

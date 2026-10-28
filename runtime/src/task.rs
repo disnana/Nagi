@@ -1143,7 +1143,10 @@ mod tests {
         assert_eq!(scope.stats().joined, 2);
         assert_eq!(scope.stats().entries, 0);
     }
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    // Both child cleanups synchronously occupy a runtime worker until the
+    // parent releases their gates. Keep a third worker available for the
+    // parent; two workers can deadlock until the cleanup watchdog fires.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
     async fn legacy_structured_cause_preserves_kind_message_and_primary_after_later_fault() {
         let mut scope = TaskScope::new();
         let first = Arc::new(DropGate::default());

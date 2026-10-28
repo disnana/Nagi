@@ -1,0 +1,9 @@
+    Blocking waiting for file lock on build directory
+   Compiling nagic v0.2.1 (/workspace/Nagi-public-supervisor/compiler)
+    Finished `test` profile [unoptimized] target(s) in 2.93s
+     Running tests/actor_stdlib.rs (/workspace/.cache/nagi-go-conformance-target/debug/deps/actor_stdlib-a43bcf47a638cf1d)
+
+running 1 test
+test public_supervisor_resilience::public_supervisor_restart_budget_and_cleanup_in_three_forms ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 3.03s
