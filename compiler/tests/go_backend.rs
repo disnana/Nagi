@@ -366,6 +366,22 @@ fn go_backend_uses_checked_identity_for_local_async_callbacks() {
         !diagnostic.contains("Go toolchain was not found"),
         "{diagnostic}"
     );
+
+    fixture.write(
+        "library.nagi",
+        "async def imported(value: i64) -> i64:\n    return value + 1\n",
+    );
+    fixture.write(
+        "imported.nagi",
+        "import \"library.nagi\" as library\nasync def main():\n    callback = library.imported\n    print(await callback(41))\n",
+    );
+    let imported = fixture.go("run", "imported.nagi", "out-imported-callback");
+    assert!(
+        imported.status.success(),
+        "{}",
+        String::from_utf8_lossy(&imported.stderr)
+    );
+    assert_eq!(String::from_utf8_lossy(&imported.stdout), "42\n");
 }
 
 #[test]

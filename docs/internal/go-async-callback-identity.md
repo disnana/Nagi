@@ -38,9 +38,9 @@ GoのGCが値を保持することをNagiのborrow lifetimeやcleanup成功の�
 
 ## 検証
 
-High、Highから保存したLow、独立した手書きLowを実Go toolchainでbuild/runし、同じraw出力を
-要求する。同じcallbackの再代入と`Result` / `try await`を含める。異なるasync関数への再代入は
-Go toolchainを欠損させた状態でも元source位置のchecker診断となることを確認する。
+High、Highから保存したLow、独立した手書きLow、import aliasを実Go toolchainでbuild/runし、
+同じraw出力を要求する。同じcallbackの再代入と`Result` / `try await`を含める。異なるasync関数
+への再代入はGo toolchainを欠損させた状態でも元source位置のchecker診断となることを確認する。
 
 この1件を加えた専用integrationの必須件数はLinux/macOS 30、Windows 29。Windowsだけ少ない
 1件は既存のUnix symlink保護ケースであり、callback検査のskipではない。
