@@ -11,6 +11,7 @@ struct StartupState {
     store: session::Store,
     calls: AtomicUsize,
     window: Mutex<Option<(Instant, Arc<Lease>)>>,
+    held_responses: Mutex<Vec<Response>>,
 }
 struct StartupServer {
     address: std::net::SocketAddr,
@@ -28,6 +29,7 @@ impl StartupServer {
                 store: session::clone_store(store),
                 calls: AtomicUsize::new(0),
                 window: Mutex::new(None),
+                held_responses: Mutex::new(Vec::new()),
             }),
             Method::POST,
             "/issue",
@@ -60,43 +62,69 @@ impl StartupServer {
             },
         )
         .unwrap();
+        let busy_policy = session_csrf_policy(
+            session_authenticated_policy(session::clone_store(store)),
+            csrf::clone_store(csrf),
+        )
+        .unwrap();
+        app = route(
+            app,
+            Method::POST,
+            "/write-busy",
+            busy_policy,
+            |request, state: Arc<StartupState>, _: AuthScope| async move {
+                state.calls.fetch_add(1, Ordering::SeqCst);
+                let context = response_context(&request);
+                loop {
+                    match text(context, Status::OK, "held") {
+                        Ok(response) => state.held_responses.lock().unwrap().push(response),
+                        Err(error) => break Err(error),
+                    }
+                }
+            },
+        )
+        .unwrap();
         // Observe the production-constrained original lease before its real
         // Session lookup. This wrapper delegates unchanged and adds no await.
-        let routes = app.routes.remove("/write").unwrap();
-        let mut wrapped = Vec::new();
-        for route in routes {
-            let RouteKind::Guarded { store, prepare } = route.kind else {
-                panic!("guarded fixture route required")
-            };
-            let prepare: GuardedPrepare<StartupState> = Box::new(move |request, state, lease| {
-                let until = csrf::live_deadline(&lease).unwrap();
-                #[cfg(nagi_auth_stage_diag)]
-                {
-                    let observer = crate::auth::session_deadline_observer::current().unwrap();
-                    let (admitted, original) = observer.admission_window_for_test();
-                    assert_eq!(original, admitted + Duration::from_millis(1000));
-                    assert_eq!(
-                        until, original,
-                        "startup uses original admitted security deadline"
-                    );
-                }
-                let previous = state
-                    .window
-                    .lock()
-                    .unwrap()
-                    .replace((until, Arc::clone(&lease)));
-                assert!(
-                    previous.is_none(),
-                    "one guarded request per independent arm"
-                );
-                prepare(request, state, lease)
-            });
-            wrapped.push(Route {
-                kind: RouteKind::Guarded { store, prepare },
-                ..route
-            });
+        for path in ["/write", "/write-busy"] {
+            let routes = app.routes.remove(path).unwrap();
+            let mut wrapped = Vec::new();
+            for route in routes {
+                let RouteKind::Guarded { store, prepare } = route.kind else {
+                    panic!("guarded fixture route required")
+                };
+                let prepare: GuardedPrepare<StartupState> =
+                    Box::new(move |request, state, lease| {
+                        let until = csrf::live_deadline(&lease).unwrap();
+                        #[cfg(nagi_auth_stage_diag)]
+                        {
+                            let observer =
+                                crate::auth::session_deadline_observer::current().unwrap();
+                            let (admitted, original) = observer.admission_window_for_test();
+                            assert_eq!(original, admitted + Duration::from_millis(1000));
+                            assert_eq!(
+                                until, original,
+                                "startup uses original admitted security deadline"
+                            );
+                        }
+                        let previous = state
+                            .window
+                            .lock()
+                            .unwrap()
+                            .replace((until, Arc::clone(&lease)));
+                        assert!(
+                            previous.is_none(),
+                            "one guarded request per independent arm"
+                        );
+                        prepare(request, state, lease)
+                    });
+                wrapped.push(Route {
+                    kind: RouteKind::Guarded { store, prepare },
+                    ..route
+                });
+            }
+            app.routes.insert(path.to_owned(), wrapped);
         }
-        app.routes.insert("/write".to_owned(), wrapped);
         let state = Arc::clone(&app.state);
         let (app, options) = crate::http_server::tests::with_rate_fixture(app, options);
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -323,4 +351,63 @@ async fn cold_worker2_startup_spends_original_guarded_http_budget() {
 #[tokio::test]
 async fn ready_worker2_setup_preserves_same_guarded_http_budget() {
     startup_case(true).await;
+}
+
+#[tokio::test]
+async fn guarded_busy_mapper_returns_503_retires_owner_and_recovers_capacity() {
+    let f = Fixture::new().await;
+    let options = authority(
+        security_timeout(options(4, 1000, 1000, 1000).unwrap(), 1000).unwrap(),
+        "https://localhost",
+        vec!["localhost".to_owned()],
+        1,
+        128,
+    )
+    .unwrap();
+    let options = crate::http_server::tests::with_response_fixture(options);
+    let csrf = csrf::open(
+        &f.store,
+        csrf::options(2, 176, 1, 10_000, 2).unwrap(),
+        &options,
+    )
+    .await
+    .unwrap();
+    let (running, state) = StartupServer::new(&f.store, &csrf, options).await;
+    let cookie = f
+        .headers
+        .authentication_headers()
+        .get(names::COOKIE)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let (status, _, body) = running
+        .request("GET", "/csrf", &format!("Cookie: {cookie}\r\n"))
+        .await;
+    assert_eq!(status, 200);
+    let json: crate::serde_json::Value = crate::serde_json::from_str(&body).unwrap();
+    let token = json["csrf_token"].as_str().unwrap();
+    let headers =
+        format!("Cookie: {cookie}\r\nOrigin: https://localhost\r\nX-CSRF-Token: {token}\r\n");
+
+    let (status, _, body) = running.request("POST", "/write-busy", &headers).await;
+    assert_eq!(status, 503);
+    assert_eq!(body, "service unavailable");
+    assert!(!body.contains("response capacity"));
+    let lease = state.window.lock().unwrap().as_ref().unwrap().1.clone();
+    assert!(
+        lease.validate().is_err(),
+        "guarded owner must retire on 503"
+    );
+    assert_eq!(state.calls.load(Ordering::SeqCst), 1);
+
+    state.held_responses.lock().unwrap().clear();
+    state.window.lock().unwrap().take();
+    let (status, _, _) = running.request("POST", "/write", &headers).await;
+    assert_eq!(status, 200);
+    assert_eq!(state.calls.load(Ordering::SeqCst), 2);
+
+    assert!(running.stop().await);
+    drop(state);
+    drop(csrf);
+    f.stop().await;
 }

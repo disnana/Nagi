@@ -1,0 +1,17 @@
+class Quote:
+    amount: i64
+    doubled: i64
+
+def make_quote(text: view[str]) -> Result[Quote, Error]:
+    amount = try parse_i64(text)
+    if amount < 0:
+        return error("金額は0以上で入力してください")
+    return ok(Quote(amount=amount, doubled=amount * 2))
+
+def main() -> Result[unit, Error]:
+    write("金額を入力してください > ")
+    text = try read_line()
+    quote = try make_quote(view(text))
+    print(quote.amount)
+    print(quote.doubled)
+    return ok(print("完了"))

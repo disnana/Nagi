@@ -274,6 +274,62 @@ fn async_function_values_keep_their_future_return_type() {
 }
 
 #[test]
+fn async_capture_fact_boundaries_keep_rust_execution_in_high_saved_and_manual_low() {
+    let source = r#"async def read(part: view[str], ignored: unit) -> i64:
+    return len(part)
+async def nested(parts: view[view[view[str]]]) -> i64:
+    return len(parts[0][0])
+async def answer(first: view[str], second: view[str], count: i64) -> i64:
+    parts = [first]
+    before = await read(parts[0], append(parts, second))
+    rows = [view(parts)]
+    depth = await nested(view(rows))
+    selected = first
+    total = 0
+    callback = read
+    for index in range(count):
+        total += await callback(selected, print(0))
+        selected = second
+    return before + depth + total
+"#;
+    let manual = r#"async fn read(part: view[str], ignored: unit) -> i64 { return len(part); }
+async fn nested(parts: view[view[view[str]]]) -> i64 { return len(parts[0][0]); }
+async fn answer(first: view[str], second: view[str], count: i64) -> i64 {
+    let parts: List[view[str]] = [first];
+    let before: i64 = await read(parts[0], append(parts, second));
+    let rows: List[view[view[str]]] = [view(parts)];
+    let depth: i64 = await nested(view(rows));
+    let selected: view[str] = first;
+    let total: i64 = 0;
+    let callback: fn[view[str], unit, Future[i64]] = read;
+    for index in range(count) {
+        total += await callback(selected, print(0));
+        selected = second;
+    }
+    return before + depth + total;
+}"#;
+    let mut high = parser::parse(source, true).unwrap();
+    check::check(&mut high).unwrap();
+    let saved = emit::low(&high);
+    for (text, is_high) in [(source, true), (&saved, false), (manual, false)] {
+        let mut program = parser::parse(text, is_high).unwrap();
+        check::check(&mut program).unwrap();
+        let mut code = emit::rust(&checked_emission::seal(&program)).unwrap();
+        code.push_str(r#"
+#[test] fn snapshot_boundaries() {
+    for (count, expected) in [(0, 2), (1, 3), (2, 7), (3, 11)] {
+        let future = answer("a", "long", count);
+        let mut future = std::pin::pin!(future);
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        assert_eq!(std::future::Future::poll(future.as_mut(), &mut context), std::task::Poll::Ready(expected));
+    }
+}
+"#);
+        compile_and_run(code);
+    }
+}
+
+#[test]
 fn a_record_named_fn_does_not_become_a_copy_function_value() {
     let source = "class fn:\n    text: str\ndef take(value: fn):\n    print(value.text)\ndef main():\n    value = fn(text=\"Nagi\")\n    take(value)\n    take(value)\n";
     let mut p = parser::parse(source, true).unwrap();

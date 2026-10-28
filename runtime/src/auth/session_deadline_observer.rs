@@ -33,6 +33,8 @@ pub(crate) enum Phase {
     GuardedCheckpoint = 12,
     DeferredTouch = 13,
     GuardedHandler = 14,
+    #[cfg(nagi_browser_login_diag)]
+    BrowserHandler = 15,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -132,6 +134,8 @@ struct State {
     record: Mutex<Record>,
     native_call_enter: AtomicU64,
     native_call_return: AtomicU64,
+    #[cfg(all(test, nagi_browser_login_diag))]
+    browser_terminal: Mutex<Option<BrowserHandlerClosed>>,
     #[cfg(test)]
     native_call_changed: tokio::sync::Notify,
 }
@@ -151,6 +155,8 @@ impl Observer {
             security_until: until,
             native_call_enter: AtomicU64::new(native_finish::tagged(0, native_finish::UNSEEN_US)),
             native_call_return: AtomicU64::new(native_finish::tagged(0, native_finish::UNSEEN_US)),
+            #[cfg(all(test, nagi_browser_login_diag))]
+            browser_terminal: Mutex::new(None),
             #[cfg(test)]
             native_call_changed: tokio::sync::Notify::new(),
             record: Mutex::new(Record {
@@ -210,6 +216,10 @@ impl Observer {
             0,
         )
         .to_string()
+    }
+    #[cfg(all(test, nagi_browser_login_diag))]
+    pub(crate) fn take_browser_terminal_for_test(&self) -> Option<BrowserHandlerClosed> {
+        self.0.browser_terminal.lock().unwrap().take()
     }
     #[cfg(test)]
     pub(crate) fn hold_native_record_for_test(
@@ -443,6 +453,83 @@ struct Closed {
     exit_remaining_ms: u16,
     selected_deadline_passed: bool,
 }
+
+// This key is copied from the same actual lease used by Browser's phase
+// observer. It is never independently allocated or an authority/lease handle.
+#[cfg(nagi_browser_login_diag)]
+#[derive(Clone, Copy)]
+struct BrowserRequestKey(u64);
+#[cfg(nagi_browser_login_diag)]
+pub(crate) struct BrowserHandlerObserver {
+    observer: Observer,
+    key: BrowserRequestKey,
+}
+#[cfg(nagi_browser_login_diag)]
+#[derive(Clone, Copy)]
+pub(crate) enum BrowserTerminal {
+    Timer = 8,
+    LateReady = 9,
+}
+#[cfg(nagi_browser_login_diag)]
+impl BrowserHandlerObserver {
+    pub(crate) fn new(lease: &super::Lease, admitted: Instant, until: Instant) -> Self {
+        Self {
+            observer: Observer::new(admitted, until),
+            key: BrowserRequestKey(lease.id),
+        }
+    }
+    pub(crate) async fn scope<F: Future>(&self, future: F) -> F::Output {
+        // guarded_terminal stays None; shared Guarded marks remain disabled.
+        self.observer
+            .scope(observe(Phase::BrowserHandler, future))
+            .await
+    }
+    pub(crate) fn emit(&self, terminal: BrowserTerminal) {
+        self.observer.update(|r| {
+            r.exit = match terminal {
+                BrowserTerminal::Timer => Exit::Timer,
+                BrowserTerminal::LateReady => Exit::LateReady,
+            }
+        });
+        if let Some(closed) = self.observer.closed(504) {
+            let envelope = BrowserHandlerClosed {
+                closed,
+                key: self.key,
+                terminal,
+            };
+            #[cfg(test)]
+            if let Ok(mut slot) = self.observer.0.browser_terminal.lock() {
+                if slot.is_none() {
+                    *slot = Some(envelope);
+                }
+            }
+            // Both lines use this immutable terminal copy, including any
+            // unavailable native snapshot. Never resample after formatting.
+            eprintln!("{envelope}");
+        }
+    }
+}
+#[cfg(nagi_browser_login_diag)]
+#[derive(Clone, Copy)]
+pub(crate) struct BrowserHandlerClosed {
+    closed: Closed,
+    key: BrowserRequestKey,
+    terminal: BrowserTerminal,
+}
+#[cfg(nagi_browser_login_diag)]
+impl fmt::Display for BrowserHandlerClosed {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let c = self.closed;
+        let r = c.record;
+        writeln!(f,"browser_handler_deadline_diag request={} status=504 phase=15 event={} db={} terminal={} polls={} begins={} commands={} commits={} budget_ms={} entry_remaining_ms={} phase_remaining_ms={} exit_remaining_ms={} selected_deadline_passed={}",
+            self.key.0,r.event as u8,r.db as u8,self.terminal as u8,r.polls,r.begins,r.commands,r.commits,r.budget_ms,r.entry_remaining_ms,r.phase_remaining_ms,c.exit_remaining_ms,u8::from(c.selected_deadline_passed))?;
+        write!(
+            f,
+            "{}",
+            native_finish::BrowserCallClosed::new(c, self.key.0, self.terminal as u8)
+        )
+    }
+}
 impl fmt::Display for Closed {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let r = self.record;
@@ -505,6 +592,87 @@ impl fmt::Display for BootstrapClosed {
 mod tests {
     use super::*;
     use std::{task::Poll, time::Duration};
+    #[cfg(nagi_browser_login_diag)]
+    #[tokio::test]
+    async fn browser_request_key_and_guarded_scope_remain_independent() {
+        let start = Instant::now();
+        let first = super::super::LeaseOwner::new(start + Duration::from_secs(10)).unwrap();
+        let second = super::super::LeaseOwner::new(start + Duration::from_secs(10)).unwrap();
+        let browser =
+            BrowserHandlerObserver::new(&first.lease, start, start + Duration::from_secs(1));
+        let other =
+            BrowserHandlerObserver::new(&second.lease, start, start + Duration::from_secs(1));
+        assert_ne!(browser.key.0, other.key.0);
+        assert_eq!(browser.key.0, first.lease.id);
+        assert_eq!(Arc::strong_count(&first.lease), 1);
+        let guarded = Observer::new_guarded(start, start + Duration::from_secs(1));
+        tokio::join!(
+            browser.scope(async {
+                observe_guarded(Phase::DeferredTouch, async {}).await;
+                tokio::task::yield_now().await;
+                assert_eq!(
+                    current().unwrap().0.record.lock().unwrap().phase,
+                    Phase::BrowserHandler
+                );
+            }),
+            guarded.scope(observe_guarded(Phase::GuardedHandler, async {
+                tokio::task::yield_now().await;
+            }))
+        );
+        assert!(current().is_none());
+        assert!(browser
+            .observer
+            .0
+            .record
+            .lock()
+            .unwrap()
+            .guarded_terminal
+            .is_none());
+        assert_eq!(
+            guarded.0.record.lock().unwrap().phase,
+            Phase::GuardedHandler
+        );
+        assert!(browser.observer.take_browser_terminal_for_test().is_none());
+        let weak = Arc::downgrade(&first.lease);
+        drop(first);
+        assert!(
+            weak.upgrade().is_none(),
+            "diagnostics must not retain lease authority"
+        );
+    }
+    #[cfg(nagi_browser_login_diag)]
+    #[tokio::test]
+    async fn browser_terminal_copy_survives_later_native_metadata_and_cancellation() {
+        let start = Instant::now();
+        let owner = super::super::LeaseOwner::new(start + Duration::from_secs(10)).unwrap();
+        let browser =
+            BrowserHandlerObserver::new(&owner.lease, start, start + Duration::from_secs(1));
+        let mut pending = Box::pin(browser.scope(std::future::pending::<()>()));
+        assert!(futures_util::poll!(pending.as_mut()).is_pending());
+        drop(pending);
+        assert!(
+            browser.observer.take_browser_terminal_for_test().is_none(),
+            "cancellation is not a selected504 terminal"
+        );
+        // Metadata seam, not a claim that this unit test committed SQL. Real
+        // native operations are covered by the Browser Handler controls.
+        let native = browser.observer.native_finish();
+        native.commit_enter();
+        native.call_enter();
+        browser.emit(BrowserTerminal::Timer);
+        let before = browser.observer.take_browser_terminal_for_test().unwrap();
+        let frozen = before.to_string();
+        assert!(frozen.contains("native_call_state=2"));
+        native.call_return();
+        native.commit_return(true);
+        native.checkout_returned();
+        assert!(browser
+            .observer
+            .native_call_for_test()
+            .contains("native_call_state=4"));
+        assert_eq!(before.to_string(), frozen);
+        assert!(browser.observer.take_browser_terminal_for_test().is_none());
+    }
     #[test]
     fn guarded_closed_fields_are_numeric_and_terminal_is_independent_of_last_db() {
         let admitted = Instant::now() - Duration::from_secs(2);

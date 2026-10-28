@@ -71,6 +71,9 @@ class ChangeTests(unittest.TestCase):
     def jetbrains(self, head=None, base=None, event="pull_request"):
         return changes.classify(event, base or self.first, head or self.run_git("rev-parse", "HEAD"))["jetbrains_checks"]
 
+    def go(self, head=None, base=None, event="pull_request"):
+        return changes.classify(event, base or self.first, head or self.run_git("rev-parse", "HEAD"))["go_checks"]
+
     def test_docs_and_site_files_skip_full_checks(self):
         for path in ("README.md", "README.en.md", "CONTRIBUTING.md", "CONTRIBUTING.en.md",
                      "SECURITY.md", "SECURITY.en.md", "PERFORMANCE.md", "CHANGELOG.md",
@@ -293,6 +296,7 @@ class ChangeTests(unittest.TestCase):
     def test_empty_comparison_runs_full_checks(self):
         self.assertEqual(self.full(), "true")
         self.assertEqual(self.jetbrains(), "true")
+        self.assertEqual(self.go(), "true")
 
     def test_new_branches_and_invalid_commit_ranges_run_full_checks(self):
         self.write("docs/start.md", "# Docs\n")
@@ -302,11 +306,13 @@ class ChangeTests(unittest.TestCase):
                 plan = changes.classify("push", base, head)
                 self.assertEqual(plan["full_checks"], "true")
                 self.assertEqual(plan["jetbrains_checks"], "true")
+                self.assertEqual(plan["go_checks"], "true")
         for value in ("", "0" * 40, "invalid", "--help", "a" * 40):
             with self.subTest(head=value):
                 plan = changes.classify("push", self.first, value)
                 self.assertEqual(plan["full_checks"], "true")
                 self.assertEqual(plan["jetbrains_checks"], "true")
+                self.assertEqual(plan["go_checks"], "true")
 
     def test_manual_scheduled_and_unknown_events_run_full_checks(self):
         self.write("docs/start.md", "# Docs\n")
@@ -360,6 +366,43 @@ class ChangeTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(changes.requires_jetbrains(path))
 
+    def test_go_checks_route_shared_changes_and_fail_closed_unknown_inputs(self):
+        selected = (
+            "compiler/src/check.rs", "compiler/src/go_backend.rs", "compiler/tests/go_backend.rs",
+            "Cargo.toml", "Cargo.lock", ".github/workflows/ci.yml", "scripts/ci/changes.py",
+            "test-nagi-code/new-example/main.nagi", "new/unknown.file",
+            "docs/internal/go-backend-0.3-minimum.md",
+        )
+        skipped = (
+            "runtime/src/lib.rs", "runtime-core/src/lib.rs", "website/assets/site.css",
+            "README.md", "docs/http.md", "editors/jetbrains-nagi/build.gradle.kts",
+            "editors/vscode-nagi/src/features.js",
+        )
+        for path in selected:
+            with self.subTest(path=path):
+                self.assertTrue(changes.requires_go(path))
+        for path in skipped:
+            with self.subTest(path=path):
+                self.assertFalse(changes.requires_go(path))
+        for path in ("", "compiler/../runtime/src/lib.rs", "runtime\\src\\lib.rs"):
+            with self.subTest(malformed=path):
+                self.assertTrue(changes.requires_go(path))
+
+    def test_complete_ranges_select_go_checks_only_when_any_path_requires_them(self):
+        base = self.run_git("rev-parse", "HEAD")
+        self.write("runtime/src/lib.rs", "// rust runtime only\n")
+        runtime = self.commit()
+        self.assertEqual(self.go(runtime, base), "false")
+        base = runtime
+        self.write("compiler/src/lib.rs", "// shared compiler\n")
+        shared = self.commit()
+        self.assertEqual(self.go(shared, base), "true")
+        base = shared
+        self.write("runtime/src/lib.rs", "// rust runtime again\n")
+        self.write("compiler/src/lib.rs", "// shared compiler again\n")
+        mixed = self.commit()
+        self.assertEqual(self.go(mixed, base), "true")
+
     def test_incomplete_git_output_runs_full_checks(self):
         head = "a" * 40
         with patch.object(changes, "git", side_effect=[self.first.encode(), head.encode(), b"", b"docs/start.md"]):
@@ -383,7 +426,7 @@ class ChangeTests(unittest.TestCase):
                 self.assertEqual(plan["full_checks"], "true")
                 self.assertEqual(plan["jetbrains_checks"], "true")
 
-    def test_cli_exports_both_check_plans_without_overwriting_other_outputs(self):
+    def test_cli_exports_all_check_plans_without_overwriting_other_outputs(self):
         self.write("editors/jetbrains-nagi/build.gradle.kts", "// plugin update\n")
         head = self.commit()
         output = self.root / "github-output"
@@ -393,7 +436,7 @@ class ChangeTests(unittest.TestCase):
         with patch("sys.argv", arguments), patch("builtins.print"):
             changes.main()
         self.assertEqual(output.read_text(encoding="utf-8"),
-                         "existing=value\nfull_checks=false\njetbrains_checks=true\n")
+                         "existing=value\nfull_checks=false\njetbrains_checks=true\ngo_checks=false\n")
 
 
 class JetBrainsBuildContractTests(unittest.TestCase):
@@ -634,12 +677,17 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
 
 class GateTests(unittest.TestCase):
     def needs(self, full="true", package_nagi="false", package_vscode="false",
-              package_jetbrains="false", jetbrains="false"):
-        selected = levels.expected("2" if full == "true" else "1", full, package_nagi if package_nagi in ("true", "false") else "false")
+              package_jetbrains="false", jetbrains="false", go=None):
+        go = full if go is None else go
+        selected = levels.expected(
+            "2" if full == "true" else "1", full,
+            package_nagi if package_nagi in ("true", "false") else "false", go,
+        )
         return {
             "ci-plan": {"result": "success", "outputs": selected},
             "critical": {"result": "success" if selected["critical_checks"] == "true" else "skipped"},
-            "changes": {"result": "success", "outputs": {"full_checks": full, "jetbrains_checks": jetbrains}},
+            "changes": {"result": "success", "outputs": {"full_checks": full, "jetbrains_checks": jetbrains, "go_checks": go}},
+            "go-backend": {"result": "success" if selected["go_checks"] == "true" else "skipped"},
             "linux": {"result": "success" if full == "true" else "skipped"},
             "linux-workspace": {"result": "success" if full == "true" else "skipped"},
             "rust-1-88": {"result": "success" if full == "true" else "skipped"},
@@ -678,6 +726,30 @@ class GateTests(unittest.TestCase):
                 needs = self.needs(full=full, package_nagi=package_nagi)
                 self.assertEqual(needs["sf08-browser"]["result"], expected)
                 self.assertEqual(gate.errors(needs), [])
+
+    def test_go_backend_selected_result_is_fail_closed(self):
+        for selected, expected in (("true", "success"), ("false", "skipped")):
+            needs = self.needs(full="false", go=selected)
+            self.assertEqual(needs["go-backend"]["result"], expected)
+            self.assertEqual(gate.errors(needs), [])
+            wrong = ("failure", "cancelled", "skipped", "") if selected == "true" else (
+                "failure", "cancelled", "success", "",
+            )
+            for result in wrong:
+                with self.subTest(selected=selected, result=result):
+                    broken = copy.deepcopy(needs)
+                    broken["go-backend"]["result"] = result
+                    self.assertIn(f"go-backend: {result}, expected {expected}", gate.errors(broken))
+            missing = copy.deepcopy(needs)
+            del missing["go-backend"]
+            self.assertIn(f"go-backend: missing, expected {expected}", gate.errors(missing))
+
+    def test_invalid_go_plan_cannot_make_the_job_optional(self):
+        for value in (None, "", "TRUE", True, False):
+            with self.subTest(value=value):
+                needs = self.needs(full="false", go="false")
+                needs["changes"]["outputs"]["go_checks"] = value
+                self.assertTrue(gate.errors(needs))
 
     def test_sf08_browser_selected_result_must_succeed_including_missing_or_cancelled(self):
         for full, package_nagi in (("true", "false"), ("false", "true")):

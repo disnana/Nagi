@@ -1,0 +1,13 @@
+{
+  "date_utc": "2026-10-27T03:43:15Z",
+  "source_commit": "0d1884cb5a24235a440811a9f5d16be1bf5a664a",
+  "binary_sha256": "1b0a7ae0eac3cc6c63377574eeb61affabe733083ddae2be3bd4db19a7c73bb6",
+  "harness_sha256": "5c4bf7120761e0fdd0b635c1b3f79c4e85b9614522d9de8aaecbdc2a6d3543d6",
+  "http_helpers_sha256": "64b15afe9d436a02842ed0fffa2dc1e8bbff82d20cf2db4050e5890e4bea368c",
+  "connections_per_group": 25,
+  "observation_seconds": 15,
+  "server_cpus": "0",
+  "server_workers": 1,
+  "server_rss_ceiling_bytes": 2147483648,
+  "cgroup_memory_ceiling_bytes": 12884901888
+}

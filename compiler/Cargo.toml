@@ -16,6 +16,9 @@ unicode-ident = "1.0"
 sha2 = "=0.10.9"
 rusqlite = { version = "0.40", optional = true, features = ["bundled", "hooks", "limits"] }
 
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
 [[example]]
 name = "fuzz-smoke"
 path = "../fuzz/smoke.rs"

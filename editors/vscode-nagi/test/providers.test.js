@@ -516,6 +516,68 @@ function separateProjects(h) {
   return ['app', 'other'].map(name => h.document('def main():\n    print(1)\n', 'file', 'nagi', `${name}/main.nagi`));
 }
 const fileIndex = cwd => ({ format: 'nagi-symbols-v1', definitions: [], files: [path.join(cwd, 'main.nagi')] });
+
+test('High and Low providers complete constructor field labels and select reordered fields', async t => {
+  const point = { name: 'Point', kind: 'class', signature: 'class Point\n    x: f64\n    y: f64',
+    fields: [{ name: 'x', type: 'f64' }, { name: 'y', type: 'f64' }] };
+  const h = host(t, true, 0, () => ({ format: 'nagi-symbols-v1', definitions: [point], references: [], files: [] }));
+  for (const language of ['nagi', 'nagi-low']) {
+    const text = language === 'nagi' ? 'class Point:\n    x: f64\n    y: f64\ndef main():\n    print("😀"); p = Point(y=2.5, x=1.5)\n'
+      : 'record Point { x: f64; y: f64; }\nfn main() { print("😀"); let p = Point(y=2.5, x=1.5); }\n';
+    const doc = h.document(text, 'file', language);
+    const offset = text.lastIndexOf('x=') + 1;
+    const items = await h.providers.CompletionItem.provideCompletionItems(doc, doc.positionAt(offset), h.token);
+    assert.deepEqual(Array.from(items, item => item.label), ['x']);
+    assert.equal(items[0].kind, h.vscode.CompletionItemKind.Field);
+    assert.equal(items[0].detail, 'x: f64');
+    assert.equal(items[0].insertText.value, 'x', 'the original equals sign and value stay in the buffer');
+    assert.deepEqual(items[0].range.start, doc.positionAt(offset - 1));
+    const help = await h.providers.SignatureHelp.provideSignatureHelp(doc, doc.positionAt(offset + 1), h.token);
+    assert.equal(help.activeParameter, 0);
+    assert.equal(help.signatures[0].parameters[help.activeParameter].label, 'x: f64');
+    assert.equal(help.signatures[0].label, 'Point(x: f64, y: f64) -> Point');
+  }
+});
+
+test('constructor field labels preserve the existing saved-declaration fallback warning', async t => {
+  const h = host(t, true, 1, undefined, { defer: true });
+  const doc = h.document('Point(y=2.5, x');
+  doc.isDirty = true;
+  fs.writeFileSync(doc.uri.fsPath, 'class Point:\n    x: f64\n    y: f64\ndef main():\n    p = Point(x=1.5, y=2.5)\n');
+  const pending = h.providers.CompletionItem.provideCompletionItems(doc, doc.positionAt(doc.getText().length), h.token);
+  assert.equal(h.calls.length, 1);
+  assert.ok(h.calls[0].args.includes('--editor-input'));
+  h.calls[0].callback({ error: Object.assign(new Error('parse failed'), { code: 1 }), output: 'error: expected =' });
+  await Promise.resolve();
+  assert.equal(h.calls.length, 2);
+  assert.ok(!h.calls[1].args.includes('--editor-input'));
+  h.calls[1].callback({ error: null, output: JSON.stringify({ format: 'nagi-symbols-v1', references: [], files: [],
+    definitions: [{ name: 'Point', kind: 'class', signature: 'class Point\n    x: f64\n    y: f64',
+      fields: [{ name: 'x', type: 'f64' }, { name: 'y', type: 'f64' }] }] }) });
+  const items = await pending;
+  assert.deepEqual(Array.from(items, item => item.label), ['x']);
+  assert.match(items[0].detail, /保存済み/);
+  assert.match(items[0].documentation.value, /保存済みの宣言/);
+  assert.equal(items[0].insertText.value, 'x=${1:x}');
+});
+
+test('High and Low field insertion preserves comments before an existing equals sign', async t => {
+  const point = { name: 'Point', kind: 'class', signature: 'class Point\n    x: f64\n    y: f64',
+    fields: [{ name: 'x', type: 'f64' }, { name: 'y', type: 'f64' }] };
+  const h = host(t, true, 0, () => ({ format: 'nagi-symbols-v1', definitions: [point], references: [], files: [] }));
+  for (const language of ['nagi', 'nagi-low']) {
+    const text = language === 'nagi' ? 'class Point:\n    x: f64\n    y: f64\ndef main():\n    p = Point(\n        y=2.5,\n        x # label comment 😀\n        =1.5\n    )\n'
+      : 'record Point { x: f64; y: f64; }\nfn main() { let p = Point(\n y=2.5,\n x # label comment 😀\n =1.5\n); }\n';
+    const doc = h.document(text, 'file', language);
+    const offset = text.indexOf('x #') + 1;
+    const items = await h.providers.CompletionItem.provideCompletionItems(doc, doc.positionAt(offset), h.token);
+    assert.deepEqual(Array.from(items, item => item.label), ['x']);
+    assert.equal(items[0].insertText.value, 'x');
+    const inserted = text.slice(0, doc.offsetAt(items[0].range.start)) + items[0].insertText.value
+      + text.slice(doc.offsetAt(items[0].range.end));
+    assert.equal(inserted, text, 'the existing comment, equals sign and argument value remain byte-identical');
+  }
+});
 const projectError = cwd => `error: line 2: expected i32\n --> ${path.join(cwd, 'main.nagi')}:2\n`;
 async function loadDependencyIndex(h, document) {
   return h.providers.Hover.provideHover(document, document.positionAt(document.getText().indexOf('print') + 2), h.token);

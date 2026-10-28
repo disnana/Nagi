@@ -626,6 +626,19 @@ pub fn map_lines(program: &mut Program, map: impl Fn(usize) -> usize) {
 }
 
 pub fn resolve_assets(program: &mut Program, source: &Path) -> Result<(), String> {
+    fn include_text(value: &mut Expr, line: usize, source: &Path) -> Result<(), String> {
+        let E::Str(file) = &mut value.kind else {
+            return Ok(());
+        };
+        let path = source.parent().unwrap_or(Path::new(".")).join(&*file);
+        let resolved = std::fs::canonicalize(&path)
+            .map_err(|err| format!("line {line}: include_text {}: {err}", path.display()))?;
+        std::fs::read_to_string(&resolved)
+            .map_err(|err| format!("line {line}: include_text {}: {err}", path.display()))?;
+        *file = resolved.display().to_string();
+        Ok(())
+    }
+
     fn expr(e: &mut Expr, source: &Path) -> Result<(), String> {
         match &mut e.kind {
             E::Call(name, _, args) => {
@@ -633,16 +646,7 @@ pub fn resolve_assets(program: &mut Program, source: &Path) -> Result<(), String
                     && args.len() == 1
                     && matches!(e.resolution, None | Some(NameResolution::Builtin))
                 {
-                    if let E::Str(file) = &mut args[0].kind {
-                        let path = source.parent().unwrap_or(Path::new(".")).join(&*file);
-                        let resolved = std::fs::canonicalize(&path).map_err(|err| {
-                            format!("line {}: include_text {}: {err}", e.line, path.display())
-                        })?;
-                        std::fs::read_to_string(&resolved).map_err(|err| {
-                            format!("line {}: include_text {}: {err}", e.line, path.display())
-                        })?;
-                        *file = resolved.display().to_string();
-                    }
+                    include_text(&mut args[0], e.line, source)?;
                 }
                 for arg in args {
                     expr(arg, source)?;
@@ -653,7 +657,18 @@ pub fn resolve_assets(program: &mut Program, source: &Path) -> Result<(), String
                 expr(b, source)?;
             }
             E::Unary(_, a) | E::Try(a) | E::Await(a) | E::Field(a, _) => expr(a, source)?,
-            E::Record(_, fields) => {
+            E::Record(name, fields) => {
+                // Named function calls keep the record parser shape until the
+                // checker resolves their parameter names. Resolve only the
+                // exact builtin call form here; local values and constructors
+                // have already been marked by the module resolver.
+                if name == "include_text"
+                    && fields.len() == 1
+                    && fields[0].0 == "path"
+                    && matches!(e.resolution, None | Some(NameResolution::Builtin))
+                {
+                    include_text(&mut fields[0].1, e.line, source)?;
+                }
                 for (_, value) in fields {
                     expr(value, source)?;
                 }

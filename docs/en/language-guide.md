@@ -117,7 +117,18 @@ Output, in order: `10`, `7`, `OK`, `0`, `1`, `2`, `2`.
 - `for value in values` reads elements in order. Elements such as numbers are copied; strings and classes containing them are borrowed for reading. The property that permits implicit copying is called Copy. The source list cannot change during the borrow. See [ownership](ownership.md) for examples.
 - `range(3)` gives `0, 1, 2`. It takes one argument and excludes the end.
 - `while` repeats while its condition is `True`. `break`/`continue` are not supported.
-- Combine conditions with `and`/`or`/`not`. There is no `elif`; put another `if` inside `else` when needed.
+- Combine conditions with `and`/`or`/`not`. Development High supports an aligned `elif` for another condition (unreleased). With a released compiler, put another `if` inside `else`.
+
+With the development compiler, test multiple conditions as follows. The first matching branch runs, and `else` is optional. The [complete program](../../examples/tutorial/branches.nagi) exercises negative, zero, and positive inputs.
+
+```nagi
+if total < 0:
+    print("negative")
+elif total == 0:
+    print("zero")
+else:
+    print("positive")
+```
 
 Nagi does not support `values.append(4)`; use `append(values, 4)`. Read lists with loops and group named values with classes. See [branches and loops](syntax.md#branches-and-loops) and [types](types.md).
 

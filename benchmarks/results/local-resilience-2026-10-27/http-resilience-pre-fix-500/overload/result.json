@@ -1,0 +1,106 @@
+{
+  "case": "health",
+  "target_rps": 10000,
+  "duration_s": 3,
+  "wall_seconds": 3.011196451014257,
+  "client_max_workers": 512,
+  "aborted": null,
+  "client_max_connections": 256,
+  "client_local_address": "127.0.20.2",
+  "rate_attainment": 1.0000125504908461,
+  "scheduled_requests_estimate": 30000,
+  "unsent_vs_schedule_estimate": 0,
+  "metrics": {
+    "latencies": {
+      "total": 76105169316,
+      "mean": 2536838,
+      "50th": 1452893,
+      "90th": 6377798,
+      "95th": 8927952,
+      "99th": 13215968,
+      "max": 30694516,
+      "min": 24147
+    },
+    "bytes_in": {
+      "total": 0,
+      "mean": 0
+    },
+    "bytes_out": {
+      "total": 0,
+      "mean": 0
+    },
+    "earliest": "2026-10-27T03:13:00.841560255Z",
+    "latest": "2026-10-27T03:13:03.841522604Z",
+    "end": "2026-10-27T03:13:03.841880605Z",
+    "duration": 2999962349,
+    "wait": 358001,
+    "requests": 30000,
+    "rate": 10000.125504908461,
+    "throughput": 218.3100214615416,
+    "success": 0.021833333333333333,
+    "status_codes": {
+      "200": 655,
+      "429": 29295,
+      "500": 50
+    },
+    "errors": [
+      "500 Internal Server Error",
+      "429 Too Many Requests"
+    ]
+  },
+  "server_before": {
+    "pid": 762606,
+    "cpu_ticks": 4,
+    "rss_kib": 5048,
+    "hwm_kib": 5048,
+    "fds": 10,
+    "threads": 4
+  },
+  "server_after": {
+    "pid": 762606,
+    "cpu_ticks": 139,
+    "rss_kib": 7876,
+    "hwm_kib": 8032,
+    "fds": 10,
+    "threads": 4
+  },
+  "server_cpu_seconds": 1.35,
+  "server_cpu_percent_of_one_core": 44.83267770673951,
+  "server_peak_rss_kib": 7868,
+  "server_peak_fds": 99,
+  "client_cpu_seconds_total": 4.590701,
+  "client_cpu_seconds": {
+    "attack": 3.86,
+    "reporter": 0.35
+  },
+  "commands": {
+    "attack": [
+      "taskset",
+      "-c",
+      "2,3",
+      "/workspace/.toolchains/vegeta-12.13.0/vegeta",
+      "attack",
+      "-targets=/workspace/Nagi-local-resilience/build/local-resilience/http-resilience-run12/overload/target.txt",
+      "-rate=10000/s",
+      "-duration=3s",
+      "-workers=32",
+      "-max-workers=512",
+      "-max-body=0",
+      "-timeout=5s",
+      "-redirects=0",
+      "-http2=false",
+      "-keepalive=true",
+      "-max-connections=256",
+      "-laddr=127.0.20.2"
+    ],
+    "report": [
+      "taskset",
+      "-c",
+      "2,3",
+      "/workspace/.toolchains/vegeta-12.13.0/vegeta",
+      "report",
+      "-type=json",
+      "-output=/workspace/Nagi-local-resilience/build/local-resilience/http-resilience-run12/overload/reports.jsonl"
+    ]
+  }
+}

@@ -111,7 +111,7 @@ Response and rate budgets have no implicit defaults. `default_options()` retains
 
 The adopted consumption order is entry checks → route bucket → authentication/CSRF/body checks → verified-subject bucket → handler/Session issuance or update. A route 429 can precede 401/403. Errors and cancellation do not refund tokens. Normal preflight does not consume a route token, but remains subject to entry capacity, concurrency and deadlines. Subject buckets require a profile that supplies a verified subject. This is process-local control with sharing limited to one route; it is not an aggregate limit across routes, processes or machines.
 
-Token shortage maps to 429; table/quota capacity exhaustion or closing/clock faults map to 503. Internal or mapper failure maps to 500. Existing security/deadline rejections keep their priority. A finite fallback is attempted only within its independent allowance; if that allowance is exhausted, the transport closes.
+Token shortage maps to 429; table/quota capacity exhaustion or closing/clock faults map to 503. When ordinary response capacity is exhausted and the mapper also returns `Busy`, the independent fallback returns 503. Other internal or mapper failures remain an opaque 500. Existing security/deadline rejections keep their priority. A finite fallback is attempted only within its independent allowance; if that allowance is exhausted, the transport closes.
 
 Arithmetically accepted settings do not guarantee total process memory or a latency SLA. See the measured small configuration below and choose budgets for the deployment.
 

@@ -1,4 +1,4 @@
-"""B1/CORS5 source inverses and bounded native9 CI summary; no native proof."""
+"""B1/CORS5 source inverses and bounded native10 CI summary; no native proof."""
 import hashlib
 import inspect
 from pathlib import Path
@@ -12,7 +12,7 @@ projection = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(projection)
 ROOT = Path(__file__).resolve().parents[2]
 
-EXPECTED = ('http_server::browser_login::stage_tests::live_claimed_200_runs_verifier_and_handler_and_returns_200', 'http_server::browser_login::stage_tests::consumed_prepare_err_1000_returns_401_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_pending_200_returns_504_and_drops_once', 'http_server::browser_login::stage_tests::consumed_prepare_non_yielding_200_late_ready_returns_504', 'http_server::browser_login::stage_tests::committed_issue_live_200_delivers_auth_cookie_once', 'http_server::browser_login::stage_tests::committed_issue_handler_err_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_pending_200_returns_504_and_drops_once')
+EXPECTED = ('http_server::browser_login::stage_tests::live_claimed_200_runs_verifier_and_handler_and_returns_200', 'http_server::browser_login::stage_tests::consumed_prepare_err_1000_returns_401_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::consumed_prepare_pending_200_returns_504_and_drops_once', 'http_server::browser_login::stage_tests::consumed_prepare_non_yielding_200_late_ready_returns_504', 'http_server::browser_login::stage_tests::committed_issue_live_200_delivers_auth_cookie_once', 'http_server::browser_login::stage_tests::committed_issue_handler_err_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_busy_mapper_returns_503_and_deletes_consumed_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_panic_1000_returns_500_without_cookie', 'http_server::browser_login::stage_tests::committed_issue_handler_pending_200_returns_504_and_drops_once')
 
 
 # Current U4 factory/config migration at the reviewed public RC; old CHILD_* is historical.
@@ -204,7 +204,7 @@ INVERSE_PUBLIC_FRAGMENT_SHA256 = {
     'wire_locals': 'fe27fc5dac6c5975072f7d6e5aa087f3baea4f8fc1c355a5d91b489d2b9d9266',
     'wire_eprintln': '2f88404d46f468c32dc7c4a321dd4cea7a6ac0324aca85aa939751f51599ab48',
 }
-CHILD_BYTES = {'.github/workflows/ci.yml': 'd6a2753c59ad16e9ab03af39abd09b7e4b30403f52429da4766a7d4c345ae202', 'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6', 'runtime/src/auth/prelogin/browser.rs': '2428b3e1cdc49dbd922c9b9ce026192972ded7bfa04ae6b82f704d0cc1301f74', 'runtime/src/auth/prelogin/http_bridge.rs': 'd64e052c191e0b8c3853feb07cf5b1e04f0c1d57da2c399099cd7dfc5a031d55', 'scripts/ci/session_private_deadline_diagnostic.py': '1d0dd3c92e07c374de80d4f968c101141eb6290ba2b935bf9c06dcb85ac60913', 'scripts/ci/browser_login_stage_coverage.py': '19ef03623734ac9bbb505b02cab555fa8fd96a09fbc23dcda6f06f691b6ac33a'}
+CHILD_BYTES = {'.github/workflows/ci.yml': 'd6a2753c59ad16e9ab03af39abd09b7e4b30403f52429da4766a7d4c345ae202', 'runtime/src/http_server.rs': '3fa9bf11de875398966537bb275057c6bc23ffffb888ed3bddbe0ea2ff8e25f6', 'runtime/src/auth/prelogin/browser.rs': '2428b3e1cdc49dbd922c9b9ce026192972ded7bfa04ae6b82f704d0cc1301f74', 'runtime/src/auth/prelogin/http_bridge.rs': 'd64e052c191e0b8c3853feb07cf5b1e04f0c1d57da2c399099cd7dfc5a031d55', 'scripts/ci/session_private_deadline_diagnostic.py': '1d0dd3c92e07c374de80d4f968c101141eb6290ba2b935bf9c06dcb85ac60913', 'scripts/ci/browser_login_stage_coverage.py': '5ada31eed9ecdc841dd06bbcd8ce056a30c75916c8a7c596fab1c03428af5502'}
 
 def native_summary(raw):
     if len(raw)>65536: return "invalid"
@@ -213,14 +213,14 @@ def native_summary(raw):
     try: text=raw.decode("utf-8",errors="strict")
     except UnicodeError: return "invalid"
     if re.search(r"(?m)^error(?:\[E[0-9]+\]|:)",text): return "compile_failed"
-    if text.splitlines().count("running 9 tests") != 1: return "unavailable"
+    if text.splitlines().count("running 10 tests") != 1: return "unavailable"
     summaries=re.findall(r"(?m)^test result: ([^\n]+)$",text)
     if len(summaries)!=1: return "unavailable"
     if summaries[0].startswith("FAILED."): return "test_failed"
-    if not re.fullmatch(r"ok\. 9 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out; finished in [0-9.]+s",summaries[0]): return "invalid"
+    if not re.fullmatch(r"ok\. 10 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out; finished in [0-9.]+s",summaries[0]): return "invalid"
     lines=[line for line in text.splitlines() if line.startswith("test ") and not line.startswith("test result:")]
     rows=re.findall(r"(?m)^test ([^ \n]+) \.\.\. (ok)$",text)
-    return "passed" if len(lines)==len(rows)==9 and {name for name,_ in rows}==set(EXPECTED) else "invalid"
+    return "passed" if len(lines)==len(rows)==10 and {name for name,_ in rows}==set(EXPECTED) else "invalid"
 
 
 # These eight workflow-only RC deltas were reviewed independently: six exact
@@ -341,7 +341,7 @@ class BackportSourceTests(unittest.TestCase):
         self.assertEqual(digest(projection.approved_production('stage', source)), projection.PRODUCTION_SOURCES['stage']['tokens'])
         cases = re.findall(r'#\[tokio::test\]\s*async fn (\w+)\(', source)
         self.assertEqual({'http_server::browser_login::stage_tests::' + n for n in cases}, set(EXPECTED))
-        self.assertEqual(len(cases), 9)
+        self.assertEqual(len(cases), 10)
         for token in ('drop(operation)', 'drop(resume)', 'f.stop().await', 'pending_progress',
                       'verifier_drops', 'handler_drops', 'stage_until < original_until',
                       'session::issue', 'session::apply', 'issue_ack', 'claim_stage_for_test',
@@ -464,6 +464,8 @@ class BackportSourceTests(unittest.TestCase):
                     continue
                 if path == 'scripts/ci/session_private_deadline_diagnostic.py':
                     value = projection.inverse_collector(value)
+                if path == 'scripts/ci/browser_login_stage_coverage.py':
+                    value = projection.inverse_browser_handler_coverage(value)
                 if path == 'runtime/src/auth/prelogin/http_bridge.rs':
                     value = projection.inverse_prelogin_wire(value)
                 self.assertEqual(hashlib.sha256(value.encode()).hexdigest(), expected, path)
@@ -602,13 +604,17 @@ class BackportSourceTests(unittest.TestCase):
             'echo "RUNNER_TEMP must be an existing directory on Windows"', 1)
         moved_within_step = workflow.replace(
             first_anchor, run_open + f'          {first_command}\n' + _WINDOWS_TEMP_GUARD, 1)
-        wrong_count_site = workflow.replace(_CSRF_DEADLINE_CURRENT,
-                                             '"sf03-b1-csrf-deadline.log":13', 1)
-        missing_count_site = workflow.replace(_CSRF_DEADLINE_CURRENT,
+        # The raw workflow carries #183's fifteenth deadline case.  The shared
+        # projection validates and restores that addition before this helper
+        # handles its inherited fourteen-to-twelve residual.
+        raw_deadline_count = '"sf03-b1-csrf-deadline.log":15'
+        wrong_count_site = workflow.replace(raw_deadline_count,
+                                             '"sf03-b1-csrf-deadline.log":14', 1)
+        missing_count_site = workflow.replace(raw_deadline_count,
                                               _CSRF_DEADLINE_HISTORICAL, 1)
         duplicate_count_site = workflow.replace(
             '"sf04-html-core.log": 20,',
-            '"sf04-html-core.log": 20, "sf03-b1-csrf-deadline.log":14', 1)
+            '"sf04-html-core.log": 20, "sf03-b1-csrf-deadline.log":15', 1)
         for label, mutant in (
             ('missing guard', missing),
             ('duplicated guard', duplicated),
@@ -677,7 +683,7 @@ class BackportSourceTests(unittest.TestCase):
 
     def test_native_cli_has_fixed_exit_and_never_echoes_unknown_material(self):
         import subprocess
-        raw = ('running 9 tests\n' + ''.join('test ' + name + ' ... ok\n' for name in EXPECTED) + 'test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 200 filtered out; finished in 0.20s\n').encode()
+        raw = ('running 10 tests\n' + ''.join('test ' + name + ' ... ok\n' for name in EXPECTED) + 'test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 200 filtered out; finished in 0.20s\n').encode()
         cases = (
             (raw, 'passed', 0),
             (raw.replace(b'\n', b'\r\n'), 'passed', 0),
@@ -697,22 +703,22 @@ class BackportSourceTests(unittest.TestCase):
                 self.assertEqual(result.returncode, code)
                 stdout = result.stdout.replace(b'\r\n', b'\n')
                 self.assertNotIn(b'\r', stdout)
-                self.assertEqual(stdout, ('browser_login_stage native9=' + status + '\n').encode())
+                self.assertEqual(stdout, ('browser_login_stage native10=' + status + '\n').encode())
                 self.assertEqual(result.stderr, b'')
 
-    def test_lf_crlf_native9_and_closed_failures(self):
-        raw = ('running 9 tests\n' + ''.join('test ' + name + ' ... ok\n' for name in EXPECTED) + 'test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 200 filtered out; finished in 0.20s\n').encode()
+    def test_lf_crlf_native10_and_closed_failures(self):
+        raw = ('running 10 tests\n' + ''.join('test ' + name + ' ... ok\n' for name in EXPECTED) + 'test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 200 filtered out; finished in 0.20s\n').encode()
         for value in (raw, raw.replace(b'\n', b'\r\n')):
             self.assertEqual(native_summary(value), 'passed')
-        for value in (raw.replace(b'9 passed', b'0 passed'), raw.replace(b'0 ignored', b'1 ignored'), raw.replace(EXPECTED[0].encode(), b'unknown'), raw + b'test unknown ... ok\n', raw + b'\r', raw + b'\xff', b'x' * 65537):
+        for value in (raw.replace(b'10 passed', b'0 passed'), raw.replace(b'0 ignored', b'1 ignored'), raw.replace(EXPECTED[0].encode(), b'unknown'), raw + b'test unknown ... ok\n', raw + b'\r', raw + b'\xff', b'x' * 65537):
             self.assertEqual(native_summary(value), 'invalid')
         self.assertEqual(native_summary(b'error[E0382]: private\n'), 'compile_failed')
         self.assertEqual(native_summary(b''), 'unavailable')
-        self.assertEqual(native_summary(b'running 9 tests\ntest result: FAILED. 8 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s\n'), 'test_failed')
+        self.assertEqual(native_summary(b'running 10 tests\ntest result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s\n'), 'test_failed')
 
 if __name__=="__main__":
     if sys.argv[1:]==["--native-summary"]:
         state=native_summary(sys.stdin.buffer.read(65537))
-        print("browser_login_stage native9="+state)
+        print("browser_login_stage native10="+state)
         raise SystemExit(0 if state=="passed" else 1)
     unittest.main()

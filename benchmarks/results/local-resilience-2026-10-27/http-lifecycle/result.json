@@ -1,0 +1,1367 @@
+{
+  "baseline": {
+    "pid": 791211,
+    "cpu_ticks": 0,
+    "rss_kib": 4976,
+    "hwm_kib": 4976,
+    "fds": 10,
+    "threads": 4
+  },
+  "observations": [
+    {
+      "elapsed_s": 0.0008055469952523708,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7400,
+        "hwm_kib": 7400,
+        "fds": 110,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14168,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.3823369916062802
+      }
+    },
+    {
+      "elapsed_s": 1.0318860979896272,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7416,
+        "hwm_kib": 7416,
+        "fds": 110,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14169,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.6432220106944442
+      }
+    },
+    {
+      "elapsed_s": 2.0580086769914487,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7416,
+        "hwm_kib": 7416,
+        "fds": 110,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14170,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.7485710084438324
+      }
+    },
+    {
+      "elapsed_s": 3.0853225569881033,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7416,
+        "hwm_kib": 7416,
+        "fds": 110,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14171,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.7056559988996014
+      }
+    },
+    {
+      "elapsed_s": 4.112435629998799,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7416,
+        "hwm_kib": 7416,
+        "fds": 111,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14171,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.6258009962039068
+      }
+    },
+    {
+      "elapsed_s": 5.225805410998873,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7416,
+        "hwm_kib": 7416,
+        "fds": 110,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14172,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.625625005341135
+      }
+    },
+    {
+      "elapsed_s": 6.252033306998783,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7416,
+        "hwm_kib": 7416,
+        "fds": 110,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14173,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.6240429938770831
+      }
+    },
+    {
+      "elapsed_s": 7.279797690993291,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7416,
+        "hwm_kib": 7416,
+        "fds": 110,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14174,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.6443739985115826
+      }
+    },
+    {
+      "elapsed_s": 8.306803007988492,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7416,
+        "hwm_kib": 7416,
+        "fds": 111,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14174,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.702240999089554
+      }
+    },
+    {
+      "elapsed_s": 9.333336682990193,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7416,
+        "hwm_kib": 7416,
+        "fds": 110,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14175,
+        "ESTABLISHED": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 25,
+        "partial_header": 25,
+        "partial_body": 25,
+        "idle_keepalive": 25
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {},
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.5777229962404817
+      }
+    },
+    {
+      "elapsed_s": 10.359196744000656,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7464,
+        "hwm_kib": 7464,
+        "fds": 11,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14175,
+        "FIN_WAIT2": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 25,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 25
+        },
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.7561319944215938
+      }
+    },
+    {
+      "elapsed_s": 11.387355105995084,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7468,
+        "hwm_kib": 7468,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14176,
+        "FIN_WAIT2": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 25
+        },
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.6608789990423247
+      }
+    },
+    {
+      "elapsed_s": 12.41438411299896,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7472,
+        "hwm_kib": 7472,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14177,
+        "FIN_WAIT2": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 25
+        },
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.8549729973310605
+      }
+    },
+    {
+      "elapsed_s": 13.44179947799421,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7472,
+        "hwm_kib": 7472,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14178,
+        "FIN_WAIT2": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 25
+        },
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.8847370045259595
+      }
+    },
+    {
+      "elapsed_s": 14.469165126996813,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7472,
+        "hwm_kib": 7472,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14175,
+        "FIN_WAIT2": 100
+      },
+      "client_sockets_without_eof": {
+        "no_request": 0,
+        "partial_header": 0,
+        "partial_body": 0,
+        "idle_keepalive": 0
+      },
+      "response_first_lines": {
+        "no_request": {},
+        "partial_header": {},
+        "partial_body": {
+          "HTTP/1.1 408 Request Timeout": 25
+        },
+        "idle_keepalive": {}
+      },
+      "normal_probe": {
+        "status": 200,
+        "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+        "latency_ms": 0.6385849992511794
+      }
+    }
+  ],
+  "normal_probes": [
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.3823369916062802
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.6432220106944442
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.7485710084438324
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.7056559988996014
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.6258009962039068
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.625625005341135
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.6240429938770831
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.6443739985115826
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.702240999089554
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.5777229962404817
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.7561319944215938
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.6608789990423247
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.8549729973310605
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.8847370045259595
+    },
+    {
+      "status": 200,
+      "body_sha256": "10ce604fbdda59b978797a2b6fb55e2cb5b5f46c3b165cdb3ff8830ac475d923",
+      "latency_ms": 0.6385849992511794
+    }
+  ],
+  "after_client_close": [
+    {
+      "elapsed_s": 0.001250319997780025,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7472,
+        "hwm_kib": 7472,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14276
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877434880,
+        "cpu_stat": {
+          "usage_usec": 38062811526,
+          "user_usec": 34549664711,
+          "system_usec": 3513146815,
+          "nice_usec": 0,
+          "nr_periods": 327718,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7142699905671179
+    },
+    {
+      "elapsed_s": 0.5281860769900959,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7476,
+        "hwm_kib": 7476,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14277
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877205504,
+        "cpu_stat": {
+          "usage_usec": 38062838978,
+          "user_usec": 34549675522,
+          "system_usec": 3513163455,
+          "nice_usec": 0,
+          "nr_periods": 327721,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.744826000300236
+    },
+    {
+      "elapsed_s": 1.0530579420010326,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7476,
+        "hwm_kib": 7476,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14278
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877238272,
+        "cpu_stat": {
+          "usage_usec": 38062864164,
+          "user_usec": 34549684174,
+          "system_usec": 3513179990,
+          "nice_usec": 0,
+          "nr_periods": 327723,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.770124010159634
+    },
+    {
+      "elapsed_s": 1.605250320993946,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7476,
+        "hwm_kib": 7476,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14279
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877271040,
+        "cpu_stat": {
+          "usage_usec": 38062916447,
+          "user_usec": 34549718549,
+          "system_usec": 3513197898,
+          "nice_usec": 0,
+          "nr_periods": 327726,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8289520046673715
+    },
+    {
+      "elapsed_s": 2.1350809869909426,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7476,
+        "hwm_kib": 7476,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14280
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877303808,
+        "cpu_stat": {
+          "usage_usec": 38062946361,
+          "user_usec": 34549723892,
+          "system_usec": 3513222469,
+          "nice_usec": 0,
+          "nr_periods": 327729,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8811220031930134
+    },
+    {
+      "elapsed_s": 2.662586623991956,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7476,
+        "hwm_kib": 7476,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14281
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877332480,
+        "cpu_stat": {
+          "usage_usec": 38062974071,
+          "user_usec": 34549731314,
+          "system_usec": 3513242756,
+          "nice_usec": 0,
+          "nr_periods": 327731,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7088610000209883
+    },
+    {
+      "elapsed_s": 3.1971953909960575,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7476,
+        "hwm_kib": 7476,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14230
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877103104,
+        "cpu_stat": {
+          "usage_usec": 38063008916,
+          "user_usec": 34549747771,
+          "system_usec": 3513261144,
+          "nice_usec": 0,
+          "nr_periods": 327733,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.847019997308962
+    },
+    {
+      "elapsed_s": 3.727171020989772,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7476,
+        "hwm_kib": 7476,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14231
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877135872,
+        "cpu_stat": {
+          "usage_usec": 38063039470,
+          "user_usec": 34549761844,
+          "system_usec": 3513277625,
+          "nice_usec": 0,
+          "nr_periods": 327738,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7475800084648654
+    },
+    {
+      "elapsed_s": 4.2667631980002625,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7476,
+        "hwm_kib": 7476,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14232
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877168640,
+        "cpu_stat": {
+          "usage_usec": 38063078944,
+          "user_usec": 34549781586,
+          "system_usec": 3513297357,
+          "nice_usec": 0,
+          "nr_periods": 327740,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 1.0567569988779724
+    },
+    {
+      "elapsed_s": 4.799379131989554,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 1,
+        "rss_kib": 7476,
+        "hwm_kib": 7476,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14233
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877201408,
+        "cpu_stat": {
+          "usage_usec": 38063111810,
+          "user_usec": 34549791047,
+          "system_usec": 3513320763,
+          "nice_usec": 0,
+          "nr_periods": 327742,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7789369992678985
+    }
+  ],
+  "abrupt_disconnect_count": 200,
+  "abrupt_before": {
+    "pid": 791211,
+    "cpu_ticks": 1,
+    "rss_kib": 7476,
+    "hwm_kib": 7476,
+    "fds": 10,
+    "threads": 4
+  },
+  "after_abrupt_disconnect": [
+    {
+      "elapsed_s": 0.0007151610043365508,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14050
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877217792,
+        "cpu_stat": {
+          "usage_usec": 38063196828,
+          "user_usec": 34549823297,
+          "system_usec": 3513373531,
+          "nice_usec": 0,
+          "nr_periods": 327745,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.4603950073942542
+    },
+    {
+      "elapsed_s": 0.5278320140059805,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14051
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877246464,
+        "cpu_stat": {
+          "usage_usec": 38063224211,
+          "user_usec": 34549830271,
+          "system_usec": 3513393940,
+          "nice_usec": 0,
+          "nr_periods": 327747,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.8599290013080463
+    },
+    {
+      "elapsed_s": 1.052435338991927,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14052
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877279232,
+        "cpu_stat": {
+          "usage_usec": 38063249142,
+          "user_usec": 34549842969,
+          "system_usec": 3513406172,
+          "nice_usec": 0,
+          "nr_periods": 327750,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.6389560003299266
+    },
+    {
+      "elapsed_s": 1.5763817760016536,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14053
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877312000,
+        "cpu_stat": {
+          "usage_usec": 38063273272,
+          "user_usec": 34549854858,
+          "system_usec": 3513418414,
+          "nice_usec": 0,
+          "nr_periods": 327752,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7455059967469424
+    },
+    {
+      "elapsed_s": 2.1042626239941455,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14047
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877307904,
+        "cpu_stat": {
+          "usage_usec": 38063301386,
+          "user_usec": 34549862291,
+          "system_usec": 3513439094,
+          "nice_usec": 0,
+          "nr_periods": 327754,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7072389998938888
+    },
+    {
+      "elapsed_s": 2.63037070199789,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14048
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877340672,
+        "cpu_stat": {
+          "usage_usec": 38063327828,
+          "user_usec": 34549872034,
+          "system_usec": 3513455793,
+          "nice_usec": 0,
+          "nr_periods": 327758,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.6657960038864985
+    },
+    {
+      "elapsed_s": 3.1579307159991004,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14049
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877373440,
+        "cpu_stat": {
+          "usage_usec": 38063355815,
+          "user_usec": 34549883457,
+          "system_usec": 3513472358,
+          "nice_usec": 0,
+          "nr_periods": 327761,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7995479973033071
+    },
+    {
+      "elapsed_s": 3.6823879400035366,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14050
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877406208,
+        "cpu_stat": {
+          "usage_usec": 38063380346,
+          "user_usec": 34549891561,
+          "system_usec": 3513488784,
+          "nice_usec": 0,
+          "nr_periods": 327763,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.6996470037847757
+    },
+    {
+      "elapsed_s": 4.208768951997627,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14051
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877434880,
+        "cpu_stat": {
+          "usage_usec": 38063407133,
+          "user_usec": 34549897750,
+          "system_usec": 3513509382,
+          "nice_usec": 0,
+          "nr_periods": 327767,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.7043450023047626
+    },
+    {
+      "elapsed_s": 4.737085508997552,
+      "server": {
+        "pid": 791211,
+        "cpu_ticks": 2,
+        "rss_kib": 7492,
+        "hwm_kib": 7492,
+        "fds": 10,
+        "threads": 4
+      },
+      "tcp_states_local_port_8080": {
+        "LISTEN": 1,
+        "TIME_WAIT": 14052
+      },
+      "fd_types": {
+        "file_or_device": 3,
+        "anon_inode:[eventpoll]": 2,
+        "anon_inode:[eventfd]": 1,
+        "socket": 4
+      },
+      "cgroup": {
+        "memory_current": 4877205504,
+        "cpu_stat": {
+          "usage_usec": 38063435866,
+          "user_usec": 34549906806,
+          "system_usec": 3513529060,
+          "nice_usec": 0,
+          "nr_periods": 327769,
+          "nr_throttled": 24936,
+          "throttled_usec": 1173366306,
+          "nr_bursts": 0,
+          "burst_usec": 0
+        }
+      },
+      "status": 200,
+      "body_ok": true,
+      "latency_ms": 0.9140019974438474
+    }
+  ]
+}
