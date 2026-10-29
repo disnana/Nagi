@@ -172,10 +172,10 @@ def evaluate(expression: str, context: dict) -> bool:
 
 # Handwritten platform contract, independent of the selector implementation.
 RELEASE_MATRIX = {'include': [
-    {'os':'ubuntu-latest', 'platform':'linux-x86_64', 'executable':'nagic', 'rust_host':'x86_64-unknown-linux-gnu', 'go_tests':'33'},
-    {'os':'windows-latest', 'platform':'windows-x86_64', 'executable':'nagic.exe', 'rust_host':'x86_64-pc-windows-msvc', 'go_tests':'32'},
-    {'os':'macos-15', 'platform':'macos-arm64', 'executable':'nagic', 'rust_host':'aarch64-apple-darwin', 'go_tests':'33'},
-    {'os':'macos-15-intel', 'platform':'macos-x86_64', 'executable':'nagic', 'rust_host':'x86_64-apple-darwin', 'go_tests':'33'},
+    {'os':'ubuntu-latest', 'platform':'linux-x86_64', 'executable':'nagic', 'rust_host':'x86_64-unknown-linux-gnu', 'go_tests':'34'},
+    {'os':'windows-latest', 'platform':'windows-x86_64', 'executable':'nagic.exe', 'rust_host':'x86_64-pc-windows-msvc', 'go_tests':'33'},
+    {'os':'macos-15', 'platform':'macos-arm64', 'executable':'nagic', 'rust_host':'aarch64-apple-darwin', 'go_tests':'34'},
+    {'os':'macos-15-intel', 'platform':'macos-x86_64', 'executable':'nagic', 'rust_host':'x86_64-apple-darwin', 'go_tests':'34'},
 ]}
 
 

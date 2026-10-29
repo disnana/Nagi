@@ -1324,7 +1324,7 @@ def closed_verdict_line(record: object, delivery: bool = False) -> str:
 
 
 CSRF_REUSABLE_CASE = "one_reusable_token_admits_two_distinct_actual_requests"
-CSRF_REUSABLE_SOURCE = "e2bbb82f28b1de03810de7184e8a781ee282bb4c90f7ddee2c90611a7d14bf91"
+CSRF_REUSABLE_SOURCE = "e1f0fc415198a424fdcac0ba318c579d343c5ca9eb39a3a32a44b2f72896d277"
 BROWSER_NATIVE_CALL_SOURCE = "4999e44ad29bf7777a9f92d349eee025c9d3c1112162b7cc7d0524c74e745050"
 NATIVE_CALL_PREFIX = "session_native_call_diag"
 NATIVE_CALL_LINE_LIMIT = 4096
@@ -1612,7 +1612,7 @@ def _csrf_observation_valid(value) -> bool:
     if (value["status"] != "observed" or type(location) is not dict or
             set(location) != {"file", "line", "column"} or type(location["file"]) is not str or
             location["file"] != "session_csrf_public_api.rs" or
-            type(location["line"]) is not int or not 1 <= location["line"] <= 1249 or
+            type(location["line"]) is not int or not 1 <= location["line"] <= 1256 or
             type(location["column"]) is not int or not 1 <= location["column"] <= 4096):
         return False
     assertion = value["assertion"]
