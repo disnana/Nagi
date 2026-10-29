@@ -1,0 +1,28 @@
+---
+title: ターゲット別の対応表
+description: 公開Nagi 0.2.2のRustターゲットと開発中のGoターゲットを分けて確認します。
+status: released
+since: "0.2.2"
+backends: [rust, go]
+---
+
+教材を先に動かす場合は[コードを書く](../../writing)から始めてください。この表は、動作例の後で採用範囲を確認するためのものです。
+
+| 機能 | Rustターゲット 0.2.2 | Goターゲット | 次に読む |
+|---|---|---|---|
+| 基本型、関数、class、`Option`、`Result`、`try` | 公開済み | 0.3.0向け部分的な実装・未公開 | [Resultとtry](../../writing/result) |
+| ownership、`view`、move検査 | 公開済み | 共通フロントエンドの意味一致を検証中 | [関数](../../writing/functions) |
+| ネイティブビルド/実行 | 公開済み、既定ターゲット | 最小構成を開発中、未公開 | [変更履歴](../../changelog/unreleased) |
+| async、スコープ、タスク | 公開済み | 開発中・未公開 | [async](../../concurrency/async) |
+| HTTP、JSON | 公開済み | 未対応 | [HTTP](../../backend/http) |
+| SQLite Pool/Tx | 公開済み | 未対応 | [SQLite](../../backend/sqlite) |
+| Actor、Supervisor | 公開済み | 未対応 | [Actor](../../concurrency/actor) |
+| Rust crateアダプター | 公開済み | GoターゲットではRust資産を拒否 | [完全なRust例](https://github.com/disnana/Nagi/tree/main/test-nagi-code/rust-library) |
+| Goネイティブアダプター | 対象外 | 設計・実装中、未公開 | [未リリース](../../changelog/unreleased) |
+
+## 現在の主な制約
+
+- 標準HTTP APIはPostgreSQL、WebSocket、HTTP/2、ストリーミング、サーバー側TLSを提供しません。
+- Actorは同一プロセスのTokioタスクです。BEAMプロセスと同じ障害隔離を保証しません。
+- Goターゲットの機能や性能値を、Rustターゲットの結果から推定して対応済みとは扱いません。
+- `elif`と関数の名前付き引数は未リリースです。公開0.2.2向けソースでは使いません。

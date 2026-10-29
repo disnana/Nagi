@@ -1,0 +1,33 @@
+---
+title: JetBrains 0.1.5
+description: 末尾改行時に公開コンパイラ 0.2.1のsymbol情報が欠けても、同じ未保存スナップショットから色・説明・移動を回復する版です。
+status: released
+since: "0.1.5"
+backends: []
+canonicalId: "jetbrains-0-1-5"
+canonicalTitle: "JetBrains 0.1.5"
+canonicalSource: "CHANGELOG.md"
+canonicalDate: "2026-10-24"
+canonicalSourceHash: "sha256:a85c549f1d17bde9ca24b1b108062bdc1d555b6a403d66da03777b49a5b2e0e1"
+canonicalRawBulletCount: 5
+canonicalItemCount: 3
+---
+末尾改行時に公開コンパイラ 0.2.1のシンボル情報が欠けても、同じ未保存スナップショットから色・説明・移動を回復する版です。
+
+- 公開日：`2026-10-24`
+- 正本ID：`jetbrains-0-1-5`
+- 状態：`公開済み`
+
+## 変更項目
+
+{/* canonical-item: item-001 */}
+- 正常なHigh/Lowソース末尾で改行したとき、公開Nagi 0.2.1のカーソル回復解析が索引を省略しても、同じ未保存バッファーから現在のシンボル情報を回復します。型付き`Point`レコードを含め、意味色、説明、移動を維持します。この修正は0.1.4公開後に統合されました。
+
+{/* canonical-item: item-002 */}
+- 元のフロントエンド判定、診断、補完候補を維持します。既存の共有期限、取消、スナップショット同一性、信頼済みプロジェクトの検査内で最大1回だけ再試行し、修正済みコンパイラでは互換再試行を行いません。
+
+{/* canonical-item: item-003 */}
+- 既存のプラグインID、対応IDE向けIDEA/PyCharm共通ZIP、Development/リリース Run設定を保った0.1.5を用意します。コンパイラは別途インストールするもので、この修正はNagi 0.2.2の公開やJetBrains Marketplaceへの送信を行いません。
+## 正本との対応
+
+版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`5`件を、明確な日英重複だけ統合した`3`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

@@ -1,0 +1,36 @@
+---
+title: Start writing Nagi
+description: Check and run a first native CLI with the published Nagi 0.2.2 compiler.
+status: released
+since: "0.2.2"
+backends: [rust]
+---
+
+```nagi title="hello.nagi"
+def main() -> Result[unit, Error]:
+    name = try read_line("Name > ")
+    print("Hello")
+    return ok(print(name))
+```
+
+`read_line` prints its prompt before reading and returns output, flush, or input failures as `Result[str, Error]`. On success, `try` extracts the `str`; on failure, it returns the same failure to the caller of `main`. The final `ok(...)` marks normal completion.
+
+```sh
+nagic check hello.nagi --no-project
+printf 'Nagi\n' | nagic run hello.nagi --no-project --profile dev
+```
+
+The application output is shown below. Compiler progress can appear separately.
+
+```text
+Name > Hello
+Nagi
+```
+
+Continue with [values and types](./variables) to keep input in typed variables.
+
+You can also inspect the [complete published-version input example](https://github.com/disnana/Nagi/blob/main/examples/tutorial/prompt-input.nagi) that uses the same API.
+
+## Support
+
+This example targets the Rust backend in Nagi 0.2.2. The Go target is under development for 0.3.0 and is not in the published release.

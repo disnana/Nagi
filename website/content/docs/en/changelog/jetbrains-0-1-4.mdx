@@ -1,0 +1,46 @@
+---
+title: JetBrains 0.1.4
+description: Improves hover/Quick Documentation, color retention while typing, Parameter Info, and IDE Run behavior.
+status: released
+since: "0.1.4"
+backends: []
+canonicalId: "jetbrains-0-1-4"
+canonicalTitle: "JetBrains 0.1.4"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:4a0f5eb92ad6329e06e50bcf99d31170eeea20012844fc24b8f9b0fc40ad28c0"
+canonicalRawBulletCount: 8
+canonicalItemCount: 8
+---
+Improves hover/Quick Documentation, color retention while typing, Parameter Info, and IDE Run behavior.
+
+- Canonical ID: `jetbrains-0-1-4`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Add compiler-backed hover/Quick Documentation for exact function/class/variable targets, including available arguments, return types and fields. Complete the same initial documentation request after background analysis, without waiting on the UI thread or starting a Rust build. Keep bounded waits, cancellation, current-snapshot and trusted-project restrictions; do not invent missing builtin signatures.
+
+{/* canonical-item: item-002 */}
+- Keep colors for untouched identifiers visible during background analysis, independently of invalidated types, diagnostics and navigation. Discard touched tokens and hard-invalidated presentation data with bounded ownership.
+
+{/* canonical-item: item-003 */}
+- Render diagnostic tooltips with escaped readable framing while preserving original descriptions, unknown details and hints. Show compiler-provided return types in Parameter Info.
+
+{/* canonical-item: item-004 */}
+- Preserve manually chosen High indentation on Enter, and add a consecutive-Enter gesture to leave one block at a time. Keep delimiter continuations, Low brace context, smart-indent settings and undo behavior. Align supported High `else`/`case` headers and standalone High/Low closing delimiters with their known owner; preserve ordinary input when context is unknown.
+
+{/* canonical-item: item-005 */}
+- Default IDE Run to Development when the compiler advertises support; keep explicit Release available in Run Configuration. Validate bounded compiler capabilities off the UI thread. Known older compilers retain Release with an explanatory notice; unknown or failed probes do not silently run. CLI defaults and Check remain unchanged.
+
+{/* canonical-item: item-006 */}
+- Fix a standard Run handoff race that could dispose an already accepted new Run descriptor when the old environment closes. Preserve cancellation before handoff and process cleanup when the project closes. The reported Windows green console still requires validation with the new candidate.
+
+{/* canonical-item: item-007 */}
+- Improve hover documentation for functions, classes, and variables, initial analysis waits, color retention while typing, diagnostic presentation, and editing assistance. Add IDE Development Run and screen-handoff fixes while preserving the plugin ID and common IDEA/PyCharm ZIP. Do not reuse acceptance of an earlier hover candidate as GUI acceptance of the later fixes.
+
+{/* canonical-item: item-008 */}
+- Prepare version 0.1.4 for publication. The user confirmed the hover/color candidate works; this is not exhaustive GUI coverage. Publish only after the final version's required CI and four IDE test/Verifier paths succeed. GitHub Release and Marketplace submission/approval are separate; this entry does not claim either has already happened. Full PyCharm Python parity, whole-file formatting, Rename and automatic imports remain out of scope.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `8` raw bullets to `8` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

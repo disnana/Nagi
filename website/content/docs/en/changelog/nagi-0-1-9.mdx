@@ -1,0 +1,67 @@
+---
+title: Nagi 0.1.9
+description: Adds non-Copy List iteration, Result error conversion, Supervisor readiness, nullable SQLite, and runnable applications.
+status: released
+since: "0.1.9"
+backends: [rust]
+canonicalId: "nagi-0-1-9"
+canonicalTitle: "Nagi 0.1.9"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:fb5592dca1996dc550060d398fdfa23ff57868ad6f4e41b20cc73f1039bcd090"
+canonicalRawBulletCount: 15
+canonicalItemCount: 15
+---
+Adds non-Copy List iteration, Result error conversion, Supervisor readiness, nullable SQLite, and runnable applications.
+
+- Canonical ID: `nagi-0-1-9`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Allow read-only `for` loops over non-Copy List elements, with ownership and lifetime checks. Keep Copy iteration unchanged.
+
+{/* canonical-item: item-002 */}
+- Add `std.result.map_error` for explicit, typed error conversion through synchronous functions. Preserve `try` error identity and borrowed success values.
+
+{/* canonical-item: item-003 */}
+- Add explicit task readiness and typed, bounded Supervisor event waits. Reject duplicate, stale, and inactive readiness signals.
+
+{/* canonical-item: item-004 */}
+- Add borrowed JSON Content-Type validation. The quote API sample retains request IDs in its handler wrapper without intermediate copies.
+
+{/* canonical-item: item-005 */}
+- Accept multiline calls, constructors, lists, indexing, and function types in handwritten Low, preserving statement boundaries and source diagnostics.
+
+{/* canonical-item: item-006 */}
+- Reject overlapping generated output before writing, including aliases to source files, embedded assets, Rust adapters, and manifests.
+
+{/* canonical-item: item-007 */}
+- Catch additional moves that conflict with borrows in indexing, comparisons, and stored views. Keep supported immediate reads, independent fields, copies, and loop reassignment valid.
+
+{/* canonical-item: item-008 */}
+- Decode nullable SQLite columns for supported scalar row types, including bool, floats, and bytes. Preserve nested Option types through saved Low.
+
+{/* canonical-item: item-009 */}
+- Keep HTTP response send deadlines active during graceful shutdown while healthy in-flight requests finish.
+
+{/* canonical-item: item-010 */}
+- Map Rust backend cause notes to Nagi source locations and show readable imported names. Preserve native Rust diagnostics and suggestions.
+
+{/* canonical-item: item-011 */}
+- Preserve release wrapping and debug overflow checks for constant integer arithmetic. Treat local callbacks named `include_text` as ordinary calls and report the actual Clone requirement for copied list views.
+
+{/* canonical-item: item-012 */}
+- Keep cross-module edges inside the HTML map viewport and label group counts accurately.
+
+{/* canonical-item: item-013 */}
+- Add runnable stock-report, device-settings, seat-reservations, file-json, quote-api, supervised-worker, and handwritten Low order-quote projects. Verify their native behavior through High, saved Low, and direct Low.
+
+{/* canonical-item: item-014 */}
+- Send compiler progress to stderr and keep `nagic run` stdout for application output, including when cost reporting is enabled.
+
+{/* canonical-item: item-015 */}
+- Make distribution archives reproducible for identical inputs so a resumed draft release can reuse verified assets.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `15` raw bullets to `15` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

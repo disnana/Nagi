@@ -1,0 +1,65 @@
+---
+title: Resultとtry
+description: 成功値と失敗を型で分け、回復する場所と呼び出し元へ返す場所を選びます。
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+まず、成功と失敗をその場で分けます。
+
+```nagi title="result_match.nagi"
+def number_or_zero(text: view[str]) -> i64:
+    match parse_i64(text):
+        case Ok(value):
+            return value
+        case Err(problem):
+            print(error_message(problem))
+            return 0
+
+def main():
+    print(number_or_zero(view("21")))
+    print(number_or_zero(view("not-a-number")))
+```
+
+`parse_i64`の戻り値は`Result[i64, Error]`です。`Ok(value)`では整数を使えます。`Err(problem)`では失敗を記録して、この関数が決めた代替値`0`へ回復します。
+
+```sh
+nagic check result_match.nagi --no-project
+nagic run result_match.nagi --no-project --profile dev
+```
+
+最初に`21`を表示します。次に数値変換のエラーメッセージ、最後に代替値`0`を表示します。エラーメッセージの完全な文面はAPI契約ではありません。
+
+## tryで呼び出し元へ返す
+
+```nagi title="result_try.nagi"
+def double_number(text: view[str]) -> Result[i64, Error]:
+    number = try parse_i64(text)
+    return ok(number * 2)
+
+def main() -> Result[unit, Error]:
+    doubled = try double_number(view("21"))
+    return ok(print(doubled))
+```
+
+1. `parse_i64`が`Ok(21)`なら、`try`は中の`21`を`number`へ入れます。
+2. `parse_i64`が`Err`なら、`double_number`の残りを実行せず、その`Err`を呼び出し元へ返します。
+3. `main`の`try`も同じ規則です。失敗は最終的にNagiのエントリーポイントへ届き、プロセスは失敗として終了します。
+
+```sh
+nagic check result_try.nagi --no-project
+nagic run result_try.nagi --no-project --profile dev
+```
+
+```text
+42
+```
+
+`Result`自体はNagi独自の発明ではありません。Nagiでは、失敗する標準操作が`Result`を返し、未処理の`Result`を検査で見つけ、`try`を現在の関数境界に沿って伝播させることが言語の契約です。
+
+次は[HTTP](../../backend/http)で、型付きハンドラーをルートへ登録して`Result`を返す流れを確認します。 より詳しい実行教材は[リポジトリの結果/try教材](https://github.com/disnana/Nagi/tree/main/test-nagi-code/result-try-tutorial)にあります。
+
+## 対応範囲
+
+このページはNagi 0.2.2のRustターゲット向けです。Goターゲットの`Result`/`try`意味論は0.3.0に向けて検証中で、公開済みとは扱いません。

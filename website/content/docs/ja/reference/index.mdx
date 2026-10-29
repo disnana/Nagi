@@ -1,0 +1,18 @@
+---
+title: リファレンスの入口
+description: 教材を動かした後に、現在の機能と制約を目的別に確認します。
+status: released
+since: "0.2.2"
+backends: [rust, go]
+---
+
+まず[コードを書く](../writing)で最小例を動かしてください。用途に応じて[HTTP](../backend/http)、[SQLite](../backend/sqlite)、[async](../concurrency/async)、[Actor](../concurrency/actor)へ進みます。
+
+## すぐ確認する
+
+- [ターゲット別の対応表](./support)：公開Rustターゲットと開発中Goターゲットを区別します。
+- [変更履歴](../changelog)：公開済みの版と未リリース変更を分けます。
+- [完全なソース例](https://github.com/disnana/Nagi/tree/main/test-nagi-code)：HTTP、SQLite、Actor、Rustアダプターのプロジェクトです。
+- [公開版の取得](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.2)：Nagi 0.2.2のコンパイラと配布物です。
+
+API名だけを探す場合も、最初に対象版とターゲットを確認してください。`Unreleased`の構文や0.3.0向けGo実装は、公開Nagi 0.2.2に含まれません。

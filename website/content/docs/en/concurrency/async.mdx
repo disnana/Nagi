@@ -1,0 +1,44 @@
+---
+title: Async and scopes
+description: Let two child tasks progress concurrently and wait for them before leaving the scope.
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+```nagi title="async_scope.nagi"
+async def work(label: str, milliseconds: i64):
+    await sleep(milliseconds)
+    print(label)
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        spawn work("first", 10)
+        spawn work("second", 15)
+    return ok(print("all joined"))
+```
+
+An `async def` function can wait. Other tasks can progress while it executes `await sleep(...)`. The scope owns children started by `spawn`; on normal exit, it joins every child before continuing. If the scope body fails, it requests cancellation of remaining children and joins them.
+
+```sh
+nagic check async_scope.nagi --no-project
+nagic run async_scope.nagi --no-project --profile dev
+```
+
+These delays usually produce this order, but ordering between independent tasks is not an API guarantee. Only `all joined` is guaranteed to appear after both children finish.
+
+```text
+first
+second
+all joined
+```
+
+These delays normally produce this order, but ordering between independent tasks is not a general API contract. `all joined` does appear only after every scoped child finishes.
+
+The [complete Task result example](https://github.com/disnana/Nagi/tree/main/test-nagi-code/library-examples/task-results) awaits a handle once and separates Task failure from the business `Result`. Continue with [Actors](../actor) when one worker should own mutable state.
+
+A shorter scope sample is available in the [async tutorial source](https://github.com/disnana/Nagi/blob/main/examples/async.nagi).
+
+## Support
+
+Async, scopes, and Tasks are released on the Rust target in Nagi 0.2.2. Async lowering for the Go target remains under development and is not published support.

@@ -1,0 +1,94 @@
+---
+title: Nagi 0.1.7 / VS Code 0.1.9
+description: async/type/ownership/JSON/HTTP/SQLiteの検査とVS Code編集・配布を広く強化した同時版です。
+status: released
+since: "0.1.7"
+backends: [rust]
+canonicalId: "nagi-0-1-7-vscode-0-1-9"
+canonicalTitle: "Nagi 0.1.7 / VS Code 0.1.9"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:05df6b4d6a4745b0237fd56404b04ebf607b2ff383098e71a6f6bc930d219226"
+canonicalRawBulletCount: 24
+canonicalItemCount: 24
+---
+async/型/ownership/JSON/HTTP/SQLiteの検査とVS Code編集・配布を広く強化した同時版です。
+
+- 正本ID：`nagi-0-1-7-vscode-0-1-9`
+- 状態：`公開済み`
+
+## 変更項目
+
+{/* canonical-item: item-001 */}
+- 通常class `Future`とasync結果を区別し、そのclassを返すsync 関数 別名の置換を許可し、異なるasync 関数 別名間の未対応変更をRust生成前に診断します。
+
+{/* canonical-item: item-002 */}
+- class JSON encode/デコードでshared フィールドを支持し、未対応serialization/型のマップ keyをソース行で報告します。抽出配布物の4 ターゲットで検証します。
+
+{/* canonical-item: item-003 */}
+- VS CodeでHigh ブロック ヘッダー、else/分岐 alignment、multiline 呼び出し/List、Low braceのindentを追加し、エディター設定を尊重して文字列/comment内delimiterを無視し、Extension Hostでtyping/スニペット/Undoを検証します。
+
+{/* canonical-item: item-004 */}
+- temporary ownerの保存した viewを拒否し、借用した JSON 入力を追跡します。immediate view、所有 コピー、match-ローカル 借用は維持します。
+
+{/* canonical-item: item-005 */}
+- 新規/不完全バッファでもコンパイラなしでkeyword/型 補完、組み込み hover/シグネチャ ヘルプを提供し、shadowed nameや未解決インポートへの推測説明を避けます。
+
+{/* canonical-item: item-006 */}
+- 未対応JSON 値 型とnon-class DB 行 型を組み込み 呼び出しのソース行で診断し、shared data、借用した JSON 文字列/バイト、利用者 class Rust bridgeを維持します。
+
+{/* canonical-item: item-007 */}
+- `print`/`write`でunit、関数、byte/List view、timestampなど非表示値を型検査で拒否し、数値/bool/文字列/借用した 文字列/UUIDは支持します。
+
+{/* canonical-item: item-008 */}
+- 数値 negation、UUID/timestamp ordering、借用した 要素 comparisonをRust生成前に検査します。未対応async シグネチャ/container/保存した Futureを拒否しローカル async 別名を維持し、無関係な一律コピー/ownership ヒントを削除します。
+
+{/* canonical-item: item-009 */}
+- null許容/結果/所有 ラッパー経由のrecursive class layoutを検出し、validated class 依存関係をキャッシュしてinvalid フィールド 型をフィールド行で報告します。
+
+{/* canonical-item: item-010 */}
+- Marketplace publisher `Disnana`とextension名をVSIX manifest 同一性に使い、IDを`Disnana.nagi-lang`とします。MIT licenseと必要ファイルだけを含め、未変更バージョンを公開せず同一性とVSIXを検証します。
+
+{/* canonical-item: item-011 */}
+- ページ移動時にDocs sidebar scrollを保持し、入門ガイドと言語参照を分け、組み込み引数型と日英の説明・実行例を明確化します。
+
+{/* canonical-item: item-012 */}
+- Cargo欠如を他のlaunch 失敗と区別し、全Cargo 失敗をNagi プログラム拒否扱いせずビルド診断を維持します。
+
+{/* canonical-item: item-013 */}
+- spawn タスク引数を親で評価して所有 コピーのソースを再利用可能にし、Futureが保持するviewを拒否します。未対応scope エラー 型を診断し独自 Rust エラー conversionを維持し、親 drop時にSupervisor テスト ワーカーを停止します。
+
+{/* canonical-item: item-014 */}
+- インストーラー成功・次手順・アプリ ビルド前提を分け、利用可能ならterminal色を使い、色off時もplain labelを保ちます。
+
+{/* canonical-item: item-015 */}
+- インストーラー再実行で最新公開Nagiへ更新し、固定パス コマンドを維持します。activation失敗時に旧コマンドを戻し、成功後だけ未変更旧配布物を削除し、明示バージョン選択も維持します。
+
+{/* canonical-item: item-016 */}
+- Rust呼出し前にエントリー 箇所/HTTP ハンドラー シグネチャを検査して元Nagi/Low ファイルへ診断し、duplicate 経路と複数リクエスト-本文 引数を拒否します。
+
+{/* canonical-item: item-017 */}
+- パス captureなし経路ではHTTP 500でなく`id` query 引数を読みます。
+
+{/* canonical-item: item-018 */}
+- punctuation、emoji、decomposed accentを含むソース ファイル名をビルド可能にします。
+
+{/* canonical-item: item-019 */}
+- ローカル パス、パッケージ 別名、Cargo feature選択を持つRust 依存関係 tableを受理し、バージョン文字列と完全CLI overrideを維持します。ローカル Rust ライブラリ例を別directoryと4配布platformで検証します。
+
+{/* canonical-item: item-020 */}
+- 入門language/HTTP ガイド全体でinstalled `nagic` コマンドを使います。
+
+{/* canonical-item: item-021 */}
+- distribution検証でネイティブ 依存関係をキャッシュし、4 ターゲット platform全てでHTTP 経路 引数を検査します。
+
+{/* canonical-item: item-022 */}
+- ownership検査で`try`の結果 operandを消費し、最初のinferred List 要素を1回だけ検査してmoving コンストラクター/関数 呼び出しを有効に保ちます。
+
+{/* canonical-item: item-023 */}
+- 組み込み `serve`呼出し時に利用者 経路なしHTTP サーバーをビルドし、通常またはローカル 別名の`serve` 関数はHTTP ランタイム生成と独立させます。
+
+{/* canonical-item: item-024 */}
+- 既存全組み込みとジェネリック 引数のVS Code catalogを完成し、補完受理時に既存型 引数/呼び出し parenthesesを維持してfn/Option 型 annotationを提示します。
+## 正本との対応
+
+版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`24`件を、明確な日英重複だけ統合した`24`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

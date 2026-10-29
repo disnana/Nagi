@@ -1,0 +1,94 @@
+---
+title: Nagi 0.1.7 / VS Code 0.1.9
+description: A combined release broadly strengthening async, type, ownership, JSON, HTTP, SQLite, VS Code editing, and distribution.
+status: released
+since: "0.1.7"
+backends: [rust]
+canonicalId: "nagi-0-1-7-vscode-0-1-9"
+canonicalTitle: "Nagi 0.1.7 / VS Code 0.1.9"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:05df6b4d6a4745b0237fd56404b04ebf607b2ff383098e71a6f6bc930d219226"
+canonicalRawBulletCount: 24
+canonicalItemCount: 24
+---
+A combined release broadly strengthening async, type, ownership, JSON, HTTP, SQLite, VS Code editing, and distribution.
+
+- Canonical ID: `nagi-0-1-7-vscode-0-1-9`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Distinguish a normal class named Future from an async result. Keep synchronous function aliases replaceable when they return that class, and diagnose unsupported changes between different async function aliases before Rust generation.
+
+{/* canonical-item: item-002 */}
+- Support shared fields in class JSON encoding and decoding. Report class fields with unsupported serialization or built-in Map key types at their Nagi source line. Verify these paths in extracted distributions on all four target platforms.
+
+{/* canonical-item: item-003 */}
+- Add VS Code indentation support for High block headers, else/case alignment, multiline calls and lists, and Low braces. Respect editor indentation settings and ignore delimiters in strings/comments. Verify real typing, snippets, and Undo in the Extension Host without requiring the compiler.
+
+{/* canonical-item: item-004 */}
+- Reject stored views of temporary owners and track borrowed JSON inputs before Rust generation. Keep immediate views, owned copies, and match-local borrows available.
+
+{/* canonical-item: item-005 */}
+- Keep VS Code keyword/type completion, builtin hover, and signature help available in new or incomplete buffers without requiring the compiler. Avoid guessed builtin explanations for shadowed names or unresolved imports.
+
+{/* canonical-item: item-006 */}
+- Diagnose unsupported JSON value types and non-class database row types at the built-in call's source line. Preserve shared data, borrowed JSON strings/bytes, and Rust bridge implementations for user classes.
+
+{/* canonical-item: item-007 */}
+- Reject non-printable values in `print` and `write` during type checking, including `unit`, function values, byte/list views, and timestamps. Keep numeric, boolean, string, borrowed string, and UUID output supported.
+
+{/* canonical-item: item-008 */}
+- Check numeric negation, UUID/timestamp ordering, and borrowed element comparisons before Rust generation. Reject unsupported async function signatures, containers, and stored futures while keeping local async aliases working. Remove the unrelated blanket copy/ownership hint from source diagnostics.
+
+{/* canonical-item: item-009 */}
+- Detect recursive class layouts through nullable, Result, and owned wrappers. Cache validated class dependencies and report invalid field types at the field's line.
+
+{/* canonical-item: item-010 */}
+- Use the Marketplace publisher `Disnana` and the extension name as the VSIX manifest identity. The extension ID is `Disnana.nagi-lang`. Include the MIT license and limit Marketplace packages to files needed by the extension. Verify the identity and build a VSIX artifact for extension changes without publishing unchanged versions.
+
+{/* canonical-item: item-011 */}
+- Keep the Docs sidebar's scroll position when changing pages. Separate introductory guides from language references, list built-in argument types, and clarify explanations and runnable examples in both languages.
+
+{/* canonical-item: item-012 */}
+- Distinguish missing Cargo from other launch failures. Preserve build diagnostics without treating every Cargo failure as a rejected Nagi program.
+
+{/* canonical-item: item-013 */}
+- Evaluate spawned task arguments in the parent so owned copies keep their source usable, and reject views retained by the future. Diagnose unsupported scope error types while keeping custom Rust error conversions. Stop supervisor test workers when their parent is dropped.
+
+{/* canonical-item: item-014 */}
+- Separate installer success, next steps, and app build prerequisites. Use terminal colors where available and keep plain-text labels when colors are disabled.
+
+{/* canonical-item: item-015 */}
+- Re-running the installer updates to the latest published Nagi release. Keep a fixed command on PATH, restore the previous command if activation fails, and remove unchanged older distributions only after a successful update. Explicit version selection remains available.
+
+{/* canonical-item: item-016 */}
+- Check entry-point and HTTP handler signatures before invoking Rust, with diagnostics pointing to the original Nagi or Low file. Reject duplicate HTTP routes and multiple request-body parameters.
+
+{/* canonical-item: item-017 */}
+- Read an `id` query parameter when the route has no path capture, instead of returning an HTTP 500 response.
+
+{/* canonical-item: item-018 */}
+- Build source files whose names contain punctuation, emoji, or decomposed accents.
+
+{/* canonical-item: item-019 */}
+- Accept Rust dependency tables with local paths, package aliases, and Cargo feature selection while retaining version strings and complete CLI overrides. Add a local Rust library example and verify it from another directory and all four distribution platforms.
+
+{/* canonical-item: item-020 */}
+- Use the installed `nagic` command throughout the introductory language and HTTP guides.
+
+{/* canonical-item: item-021 */}
+- Cache native dependencies during distribution verification and check HTTP route parameters on all four target platforms.
+
+{/* canonical-item: item-022 */}
+- Consume the Result operand of `try` during ownership checking. Check the first inferred list element once so moving constructors and function calls remain valid.
+
+{/* canonical-item: item-023 */}
+- Build HTTP servers with no user routes when the builtin `serve` is called. Keep ordinary and locally aliased functions named `serve` independent of HTTP runtime generation.
+
+{/* canonical-item: item-024 */}
+- Complete the VS Code catalog for all existing builtins and their generic arguments. Preserve type arguments and call parentheses already present when accepting completion, and offer fn/Option type annotations.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `24` raw bullets to `24` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

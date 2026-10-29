@@ -1,0 +1,47 @@
+---
+title: Branches and loops
+description: Express control flow with the released if, else, for, and while syntax.
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+```nagi title="control_flow.nagi"
+def main():
+    total = 10
+    if total >= 10:
+        print("enough")
+    else:
+        print("short")
+
+    for index in range(3):
+        print(index)
+
+    remaining = 2
+    while remaining > 0:
+        remaining -= 1
+    print(remaining)
+```
+
+`if` runs only the branch whose condition is `True`. The `for` loop receives values `0` through `2` from `range(3)`, and `while` repeats while its condition remains `True`. Indentation defines each block.
+
+```sh
+nagic check control_flow.nagi --no-project
+nagic run control_flow.nagi --no-project --profile dev
+```
+
+```text
+enough
+0
+1
+2
+0
+```
+
+Next, use [Result and try](../result) to return a failure to the caller instead of only choosing a branch.
+
+The [complete fundamentals example](https://github.com/disnana/Nagi/blob/main/examples/tutorial/basics.nagi) combines the same control flow with Lists and a class.
+
+## Support
+
+Nagi 0.2.2 High syntax uses `if` and `else`. `elif` is an Unreleased feature under development, so it does not appear in published-version code.

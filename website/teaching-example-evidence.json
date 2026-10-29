@@ -1,0 +1,148 @@
+{
+  "schema": 1,
+  "publicRelease": {
+    "tag": "nagi-v0.2.2",
+    "commit": "7c92045a04519609ae287803a31ac0816c728086",
+    "linuxAssetSha256": "0dc1b8d42d5283c7ba41663a1420f041ed2461e6ced8b3eadfcc0383be1ee0b0",
+    "compilerSha256": "2c917055b4ec1aba5d6695f750101bb4a8956a8535c58cb42eb261446c83fa19"
+  },
+  "compilerCheck": {
+    "checkedAt": "2026-10-29",
+    "result": "passed",
+    "blocks": [
+      {
+        "page": "backend/http.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "4ab82cc76512ee5e9a788ebebd629ae19c564b8cbaffa70978a4b5e103247595",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "backend/sqlite.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "f50363c53b9e64e146e45661060f3fc51bf85b90012c8bde032234cb900dbf77",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "concurrency/actor.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "331f9ed0635056a4df773e87745f9e77af74b6b9aa49059cb74fc38c0e848856",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "concurrency/async.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "deb27629570d051e945f5437c8aee2648ec965855c9dffb7c8254248f02863b0",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "writing/control-flow.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "77b8d3fedb4be4c5baee41dc1f73b231187fd494c903ab2d667916882eea2e74",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "writing/functions.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "106b9cd3da0dd31c1b3fceaca0e2db5596c7a3923b455c9c7b5d6c15a5cc6b2d",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "writing/index.mdx",
+        "block": 1,
+        "locales": [
+          "ja"
+        ],
+        "sha256": "4c90659083dc740bb0460d97e8683ee9f2ed9dc5eef33e3292d82a53cc3c25c2",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "writing/result.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "71955e37392e62d86c45ffa08f37574e424a548011e5356f0b55118da66cc101",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "writing/result.mdx",
+        "block": 2,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "6d6dcd1fd39921e3f28c36b1623c588e8ffe2d4073650ea1ec9b64e79f09df66",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "writing/variables.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "26d40795e8d93ca93397660427ba53f69d1ff8e6dd408d0cc5d81c8f01aaa1e6",
+        "validation": "nagic-check-public-0.2.2"
+      },
+      {
+        "page": "writing/index.mdx",
+        "block": 1,
+        "locales": [
+          "en"
+        ],
+        "sha256": "74b898f2d4b402616c17a0776a6ad0ce4c227ab7c8ff17be66ecd83942966bf9",
+        "validation": "nagic-check-public-0.2.2"
+      }
+    ]
+  },
+  "nativeContractEvidence": {
+    "run": "https://github.com/disnana/Nagi/actions/runs/40492013697",
+    "head": "7c92045a04519609ae287803a31ac0816c728086",
+    "jobs": [
+      {
+        "url": "https://github.com/disnana/Nagi/actions/runs/40492013697/job/122148242940",
+        "covers": [
+          "build and run tracked examples",
+          "bilingual first-app High/saved Low",
+          "bilingual SQLite High/saved Low"
+        ]
+      },
+      {
+        "url": "https://github.com/disnana/Nagi/actions/runs/40492013697/job/122148242994",
+        "covers": [
+          "standard HTTP High/saved Low",
+          "scoped task captures",
+          "actor lifecycle and supervisor cancellation",
+          "SQLite row and lifecycle contracts"
+        ]
+      }
+    ],
+    "scope": "Corresponding public APIs and tracked release examples; not an exact native run capture of every Fumadocs block."
+  },
+  "displayedOutputStatus": "expected-output-checked-by-language-contract-not-exact-native-capture"
+}

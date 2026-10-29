@@ -1,0 +1,35 @@
+---
+title: Functions
+description: Define and call a function with typed parameters and a typed result.
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+```nagi title="functions.nagi"
+def double(value: i64) -> i64:
+    return value * 2
+
+def main():
+    answer = double(21)
+    print(answer)
+```
+
+`value: i64` declares the parameter type, and `-> i64` declares the result type. The compiler checks that the value after `return` agrees with the declaration. The caller also infers `answer` as `i64`.
+
+```sh
+nagic check functions.nagi --no-project
+nagic run functions.nagi --no-project --profile dev
+```
+
+```text
+42
+```
+
+Continue with [branches and loops](../control-flow), then use [Result and try](../result) for functions that can fail.
+
+See the [complete fundamentals example](https://github.com/disnana/Nagi/blob/main/examples/tutorial/basics.nagi) for a function that receives several values.
+
+## Support
+
+Positional calls are released in Nagi 0.2.2. Named arguments for function calls are Unreleased and are not used in this lesson.

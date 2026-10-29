@@ -1,0 +1,34 @@
+---
+title: 未リリース
+description: 開発中の変更です。公開版へ入った機能として扱わないでください。
+status: unreleased
+since: "unreleased"
+backends: [rust]
+canonicalId: "unreleased"
+canonicalTitle: "未リリース / Unreleased"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:6106f9a8b6f7b06ecfa660549d7f274c9b7df44a5747528da4d69b209558eaf4"
+canonicalRawBulletCount: 8
+canonicalItemCount: 4
+---
+開発中の変更です。公開版へ入った機能として扱わないでください。
+
+- 正本ID：`unreleased`
+- 状態：`未リリース`
+
+## 変更項目
+
+{/* canonical-item: item-001 */}
+- VS Codeでclass/レコード呼び出しの名前付きフィールド名を補完し、入力順ではなくフィールド名に対応する引数ヒントを選びます。既存の`=`、入力済みフィールド、名前の隠蔽防止、保存済み宣言の警告を維持し、公開0.1.13には含みません。
+
+{/* canonical-item: item-002 */}
+- ハンドラー応答とエラー マッパーが通常の応答poolを使い切った場合も、型付き負荷 sheddingを維持して有限のフォールバック 503を返します。他のマッパー失敗は非公開500のままです。Internet DDoSやBEAM同等を主張せず、loopback限定の過負荷・低速接続・切断・回復・Actor/Supervisor証拠を追加します。
+
+{/* canonical-item: item-003 */}
+- 関数・組み込み・登録済み標準APIの全引数を、宣言順の`name=value`で指定可能にします。位置引数とclass/enum構築を維持し、混在・重複・未知・不足・順序違いはビルド時に拒否します。検査済み フロントエンドで位置呼び出しへ正規化し、評価順・所有権検査・バックエンド 低水準化を変えません。
+
+{/* canonical-item: item-004 */}
+- Highへ文脈依存の`elif condition:`を追加し、既存の検査済み`if`表現へ低水準化します。Low構文と従来の`elif`識別子を維持し、VS CodeとJetBrainsの補完・色・字下げも文脈内だけで有効にします。
+## 正本との対応
+
+版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`8`件を、明確な日英重複だけ統合した`4`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

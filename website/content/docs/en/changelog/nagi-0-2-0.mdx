@@ -1,0 +1,43 @@
+---
+title: Nagi 0.2.0
+description: Expands secure standard boundaries for HTTP, authentication, Session/CSRF, HTTPS, and SQLite.
+status: released
+since: "0.2.0"
+backends: [rust]
+canonicalId: "nagi-0-2-0"
+canonicalTitle: "Nagi 0.2.0"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:f7c4db415b7dd97a96494d08e987b6b6bbea4690f1d7e43b42b9df7bf15dfaba"
+canonicalRawBulletCount: 7
+canonicalItemCount: 7
+---
+Expands secure standard boundaries for HTTP, authentication, Session/CSRF, HTTPS, and SQLite.
+
+- Canonical ID: `nagi-0-2-0`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Require an explicit HTTP authentication policy, bounded Host/authority configuration, finite response/rate budgets and route rate rules. Response factories return Result and borrow the actual Request's ResponseContext; error mappers receive that context explicitly. Missing budgets are rejected before listen. See the [migration guide](https://github.com/disnana/Nagi/blob/main/docs/en/migration-0.2.0.md).
+
+{/* canonical-item: item-002 */}
+- Connect durable Session issuance/rotation/revocation, bounded reusable authenticated CSRF tokens, separate finite one-use pre-login state, CORS finalization and the fixed Ed25519 verification-only profile. Keep business errors separate from authentication/runtime failures and preserve original deadlines, revocation gates and actual cancellation joins.
+
+{/* canonical-item: item-003 */}
+- Connect typed HTML/SQL and registered HTTPS operations. Outbound requests use checked DNS candidates, TCP-only finite failover, one-operation TTL=0 results, ordinary TLS verification and finite bodies; no automatic resend after request sending begins or implicit decompression. Compression remains a separate 0.2.1 task.
+
+{/* canonical-item: item-004 */}
+- Connect the candidate security foundation with explicit HTTP policies, Host and response/rate budgets. ResponseContext borrows the actual Request, while factories and mappers return failures through Result. See the migration guide for Session/CSRF/CORS, Ed25519, typed HTML/SQL, and purpose-specific HTTPS guarantees. Process-local limits are not aggregate limits across several machines and do not promise universal recovery from OOM.
+
+{/* canonical-item: item-005 */}
+- Publish the canonical `std.db.sqlite` Pool and affine Tx API with owned Parameters, opaque direct-literal Query values, structured Failure/Outcome and observed close. Acquisition budgets remain separate from SQL execution and busy handling; cancellation does not undo already committed work.
+
+{/* canonical-item: item-006 */}
+- Remove legacy Db/db_* execution without a downgrade path. Preserve original-source migration diagnostics, parameter binding, transaction cleanup and actual native joins. See the bilingual migration guide for replacement code and guarantees.
+
+{/* canonical-item: item-007 */}
+- Use the existing Tokio semaphore and lazy SQLite adapter instead of deadpool. Checked capacity and recoverable reservation refusal do not guarantee universal recovery from OOM.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `7` raw bullets to `7` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

@@ -1,0 +1,66 @@
+---
+title: Nagi 0.1.11
+description: 型付きタスク結果、明示move、安定したビルド世代、sealed checked programを追加した版です。
+status: released
+since: "0.1.11"
+backends: [rust]
+canonicalId: "nagi-0-1-11"
+canonicalTitle: "Nagi 0.1.11"
+canonicalSource: "CHANGELOG.md"
+canonicalDate: "2026-10-07"
+canonicalSourceHash: "sha256:07ecf577fa9da357aafd28357446fb316a9899a0d56f4a2a966905124c09f48d"
+canonicalRawBulletCount: 14
+canonicalItemCount: 14
+---
+型付きタスク結果、明示move、安定したビルド世代、封印済み 検査済み プログラムを追加した版です。
+
+- 公開日：`2026-10-07`
+- 正本ID：`nagi-0-1-11`
+- 状態：`公開済み`
+
+## 変更項目
+
+{/* canonical-item: item-001 */}
+- High、保存済みLow、手書きLowにスコープローカルなタスク結果ハンドルを追加。各結果型は一度の`await`か明示的な破棄を必須とし、moveはハンドルと責務を移す。内側の業務`Result`と保持される`TaskFailure`を分離し、障害時は兄弟の取消を要求し、正常・異常のスコープ終了前に直接の子を合流する。従来のspawn、元の本体・従来エラー、同期的Dropの限界を維持する。HTTP失敗伝播やfault escalation APIを変えず、親の`try`を使うSupervisor監視移行、実行可能なタスク例、分離配布物のタスク検証を提供。
+
+{/* canonical-item: item-002 */}
+- 入力を1つ推論する正規の`std.ownership.move`を追加し、入れ子viewの起点、async関数別名の由来、定数検証、後始末責務を維持。新しいランタイム helper、clone、allocationなしでRustの値渡し`std::convert::identity`を生成する。所有された非コピーローカルの裸代入を拒否し、fresh 値と既存の引数・戻り・フィールド/索引・try・match消費は維持。現行コピー規則とFuture制限も維持。
+
+{/* canonical-item: item-003 */}
+- 安定したアプリケーション 同一性、共有依存関係 キャッシュ、成功したネイティブ ビルド世代を分離。同じ生成directoryへのwriterをOS ロックで直列化し、以前の成功実行ファイルを保護し、成功後だけlatestを更新する。出力された`native:` パスを使い、`NAGI_NATIVE_TARGET_DIR`は実行ファイル位置ではなく依存関係 キャッシュを選ぶ。
+
+{/* canonical-item: item-004 */}
+- Rust生成を`check::finalize`と不変な`check::checked::CheckedProgram`の背後に封印。Rust埋込側はfinalize済み値を`emit::rust`/`emit::rust_with_lines`へ渡し、mutableなプログラム入力は廃止。パーサー constructionで外部`ast::Stmt` struct リテラルを置換し、公開 AST/standard メタデータ enumへownership、タスク、auth variantを追加。日英0.1.11 移行 ガイドを参照。
+
+{/* canonical-item: item-005 */}
+- 8つの整数幅に対し、compound/別名のゼロ除算と符号付きMINの除算・剰余を扱う共通型付き 定数 validatorを追加。デバッグ/リリースのoverflow挙動を維持し、到達不能な定数失敗も文書どおり拒否する。範囲外Rust リテラルを生成せず符号付きMIN leafを出力する。
+
+{/* canonical-item: item-006 */}
+- 実験的`std.auth.Principal`とnominalな`Grant[P]` proof境界を追加し、Nagiからの構築、JSON デコード、コピー、shareを禁止。信頼済み Rust/Axum アダプターによる独自 authorizationを例示するが、固定credentialを使い、JWS検証や一般的authorization解析は実装しない。
+
+{/* canonical-item: item-007 */}
+- マップ済みRust エラーは既定で簡潔にし、`build/run --rust-diagnostics`で生成Rust詳細を保持。ネイティブ、依存関係、マップ不能エラーは表示を維持。明示move、関数 値、複数借用 ソース、pure async 結果/Optionを含め、conformance corpusを42 ソース、有限 世代を18 grammarへ拡張。
+
+{/* canonical-item: item-008 */}
+- viewを含むList、結果、Optionの復元を、別名、入れ子 値、分岐、ループ、asyncを含む単一非公開 検査済み-flow planで低水準化。payloadをcloneせず、ソース 後始末位置、replacement前のRHS評価、cancellationを維持。組み込み名から再構築せずcheckerのmove/借用 factsとfinal ループ factsを使う。
+
+{/* canonical-item: item-009 */}
+- 本文がviewを使うが返さない関数を含め、scope 本文を同じcoroutineに保ち、ローカル viewが追加async 境界を越えないようにする。High、保存済みLow、手書きLowを通じ、入れ子 本文/合流 エラー、通常エラー時の完了済み兄弟取消、親 Future破棄、本文 パニックを実ランタイムで検証。
+
+{/* canonical-item: item-010 */}
+- クロージャを使わずlazyな`env` フォールバックを生成し、ソース-levelの`try`/`await`のエラー・async contextを維持。skipされたshort-circuit operandとenv フォールバックのタスク 受領記録責務を維持し、常に評価されるleft/key 受領記録を強制評価せず保持。3形式でpresent/missing、フォールバック 失敗、conditional consumptionを検証。
+
+{/* canonical-item: item-011 */}
+- リポジトリ開発用AGENTS.md、model別独自 agent、明示language contract、コンパイラ pipeline/research 注記、失敗 成果物とshrinkingを伴う有限 プログラム 世代、段階的fuzz smokeを追加。PR CIで有限 corpus、weeklyでより大きいfixed-seed探索を実行。
+
+{/* canonical-item: item-012 */}
+- 戻りで終了するブロック内の連続direct-view代入へ別々の推論生存期間を付与。High、保存済みLow、手書きLowで復元された入力 viewと以前の入れ子 戻りをコンパイル・executeし、継続分岐とループ 更新を維持。
+
+{/* canonical-item: item-013 */}
+- Rust externの引数不一致とsync/async不一致を、High、保存済みLow、手書きLowでソース-マップ付きビルド診断として検証。
+
+{/* canonical-item: item-014 */}
+- 生成されたscope codeを実ランタイムで動かし、子 エラー、子 パニック、本文 エラー伝播、完了済み兄弟取消を3 ソース形式すべてで検証。
+## 正本との対応
+
+版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`14`件を、明確な日英重複だけ統合した`14`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

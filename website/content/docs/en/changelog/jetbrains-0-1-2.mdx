@@ -1,0 +1,34 @@
+---
+title: JetBrains 0.1.2
+description: Moves to a common IntelliJ IDEA/PyCharm ZIP and the public project-trust API.
+status: released
+since: "0.1.2"
+backends: []
+canonicalId: "jetbrains-0-1-2"
+canonicalTitle: "JetBrains 0.1.2"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:8dfd63efa562d1656b8ac7214d373d1c60a3eef5bb36a790c0497e68d260cbb9"
+canonicalRawBulletCount: 4
+canonicalItemCount: 4
+---
+Moves to a common IntelliJ IDEA/PyCharm ZIP and the public project-trust API.
+
+- Canonical ID: `jetbrains-0-1-2`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Prepare Nagi for JetBrains as one common IntelliJ IDEA/PyCharm ZIP, preserving plugin ID com.disnana.nagi and the existing Marketplace listing. Use version 0.1.2 so GUI testers and Marketplace can distinguish it from published 0.1.1; the repository owner performs Marketplace upload. This PR does not publish the package.
+
+{/* canonical-item: item-002 */}
+- Require IDEA 2025.1.1 build 251.25410.109 or PyCharm 2025.1.1 build 251.25410.122 for the public project-trust API. Older IDE users can retain published 0.1.1 or upgrade their IDE. Replace deprecated ProcessAdapter and project-trust calls while keeping untrusted-project execution blocked.
+
+{/* canonical-item: item-003 */}
+- Verify the same candidate ZIP with independent stable/EAP tests and Plugin Verifier for both IDEs, then promote those exact bytes to the CI distribution artifact. Resolve EAP test dependencies with the official Gradle plugin and keep the common plugin's Java API and bytecode at 21.
+
+{/* canonical-item: item-004 */}
+- Keep the English/Japanese Marketplace Description in plugin.xml and unify README, documentation, and website installation guidance. The compiler remains a separate installation; compiler-backed completion, definition navigation, and live diagnostics belong to the next PR.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `4` raw bullets to `4` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

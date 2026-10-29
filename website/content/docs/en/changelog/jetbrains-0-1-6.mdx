@@ -1,0 +1,31 @@
+---
+title: JetBrains 0.1.6
+description: Stabilizes semantic colors while typing and removes the custom consecutive-Enter dedent gesture.
+status: released
+since: "0.1.6"
+backends: []
+canonicalId: "jetbrains-0-1-6"
+canonicalTitle: "JetBrains 0.1.6"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:a96db860836a4d5707725f8ebe7c0b736b461e4e2ac8299ffbcbcdfa010d0bfc"
+canonicalRawBulletCount: 6
+canonicalItemCount: 3
+---
+Stabilizes semantic colors while typing and removes the custom consecutive-Enter dedent gesture.
+
+- Canonical ID: `jetbrains-0-1-6`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Keep unchanged semantic colors visible through typing, Enter, and rejected or coalesced analysis passes. Own the visual highlighters separately from diagnostics, revalidate complete tokens after edits, and replace colors from complete current results, including empty results. Preserve invalidation, storage limits, theme keys and current-snapshot requirements for types, documentation, diagnostics and navigation.
+
+{/* canonical-item: item-002 */}
+- Remove the custom consecutive-Enter block-exit gesture. Keep the current blank-line indentation while preserving manual Backspace, undo/redo, delimiter continuations, Low braces and configured indent widths. Published 0.1.5 assets remain unchanged.
+
+{/* canonical-item: item-003 */}
+- Retain only lexical-checked visual styles while input is incomplete, prioritizing provided current partial colors. Keep the plugin ID, common ZIP, Java 21 bytecode and supported IDE minimum. The compiler remains a separate installation; this plugin release does not publish Nagi 0.2.2.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `6` raw bullets to `3` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

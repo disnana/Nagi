@@ -8,3 +8,11 @@ target/release/
 local-only/
 examples/native-target/release/
 examples/native-target/
+website/.next/
+website/.source/
+website/.generated/
+website/node_modules/
+website/out/
+website/playwright-report/
+website/test-results/
+website/tsconfig.tsbuildinfo

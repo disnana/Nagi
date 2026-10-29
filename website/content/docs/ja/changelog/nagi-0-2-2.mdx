@@ -1,0 +1,54 @@
+---
+title: Nagi 0.2.2
+description: 小さな変更の開発待ち時間と初回依存解決を改善しながら、0.2.1互換と完全な検査を維持した版です。
+status: released
+since: "0.2.2"
+backends: [rust]
+canonicalId: "nagi-0-2-2"
+canonicalTitle: "Nagi 0.2.2"
+canonicalSource: "CHANGELOG.md"
+canonicalDate: "2026-10-27"
+canonicalSourceHash: "sha256:ab3a5299416d69442f65b2116eafaca24f0d0190e1675efb1c6c07c8256dc5bf"
+canonicalRawBulletCount: 14
+canonicalItemCount: 10
+---
+小さな変更の開発待ち時間と初回依存解決を改善しながら、0.2.1互換と完全な検査を維持した版です。
+
+- 公開日：`2026-10-27`
+- 正本ID：`nagi-0-2-2`
+- 状態：`公開済み`
+
+## 変更項目
+
+{/* canonical-item: item-001 */}
+- 0.2.1互換、既定の完全 ランタイムとリリース ビルド、完全なHigh/Low・型・所有権・方針検査、Cargoのネイティブ鮮度判定、旧成功成果物を維持し、対応範囲の編集ループと初回依存解決の再現性を改善します。エディター プラグインは別バージョン・別公開です。
+
+{/* canonical-item: item-002 */}
+- 検査済み IRから選ぶopt-in ランタイム 依存関係選択を追加します。既定完全と既存Rust APIを維持し、完全検査済みの小さな同期プログラムだけshared-ソース core パッケージを使います。未知/async/アダプター/追加依存/差分は完全へフォールバックし、計測改善を任意のHTTP/SQL バックエンドへ一般化しません。
+
+{/* canonical-item: item-003 */}
+- `build`/`run`へ明示`--seed-lock`を追加します。出力にロックがない場合だけ初期Cargo ロックを使い、既存または破損ロックは置換しません。seedは整合性確認済みの解決入力であり、ネイティブ 成果物 キャッシュや署名ではありません。cold 完全比較では遅かったため既定offです。
+
+{/* canonical-item: item-004 */}
+- `rustls`、`rustls-webpki`、`webpki-roots`を修正版へ更新し、旧アプリケーション ロックの再解決時に修正済みWebPKI依存を要求します。既存生成ロックと実行ファイルは自動更新されないため、新ランタイムで再ビルドしてください。
+
+{/* canonical-item: item-005 */}
+- 既存documentation CI経路では、検出可能な直下 websiteだけの変更に最適化を限定します。未知ファイルやコンパイラ/ランタイム/セキュリティ/依存関係混在変更は完全検証を維持し、Nagi アプリケーションのビルド動作は変えません。
+
+{/* canonical-item: item-006 */}
+- 利用者プロジェクト向けCI generatorへ`--build-profile dev|release`を追加し、既定リリースと完全検査を維持します。生成ワークフローは`--nagi-version 0.2.2`なしでは0.2.1を対象にし、信頼済み 分岐だけのキャッシュ書込み、旧CLI互換、プロファイル別キャッシュを維持して未対応組合せを事前拒否します。
+
+{/* canonical-item: item-007 */}
+- 互換性を保つ`read_line(prompt)`を`read_line()`と併設します。promptは借用され、入力前に書き込み・flushし、各I/O失敗を明示`Result`で返します。コンパイラ所有のエディター メタデータへ`read_line`と組み込み語彙を追加し、対応エディター リリースが独立に利用します。
+
+{/* canonical-item: item-008 */}
+- 実行可能な日英結果/`try`教材、タスク管理JSON/SQLite API通し教材、検証バージョンと制約を示したFastAPI/Quart比較を追加します。
+
+{/* canonical-item: item-009 */}
+- BrowserLoginとSession期限失敗後の有限CI診断を、失敗リクエストの結果やテスト条件を緩めず改善します。リリース-level CIで観測した有効リクエストの断続的504は修正済みと証明されておらず、後のretry成功と保持診断は調査証拠です。
+
+{/* canonical-item: item-010 */}
+- ランタイム-プロファイルとロック-seedは明示モードのままです。Nagi検査を省略せず、ネイティブ 成果物を復元せず、全バックエンドをcore ランタイムにせず、一般的なビルド/ランタイム性能向上を証明しません。計測条件・未対応分岐・フォールバック理由を各機能に記載します。
+## 正本との対応
+
+版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`14`件を、明確な日英重複だけ統合した`10`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

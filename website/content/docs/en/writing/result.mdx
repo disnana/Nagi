@@ -1,0 +1,65 @@
+---
+title: Result and try
+description: Separate success from failure in the type system, then choose where to recover or propagate.
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+Start by handling success and failure at the call site.
+
+```nagi title="result_match.nagi"
+def number_or_zero(text: view[str]) -> i64:
+    match parse_i64(text):
+        case Ok(value):
+            return value
+        case Err(problem):
+            print(error_message(problem))
+            return 0
+
+def main():
+    print(number_or_zero(view("21")))
+    print(number_or_zero(view("not-a-number")))
+```
+
+`parse_i64` returns `Result[i64, Error]`. The `Ok(value)` branch can use the integer. The `Err(problem)` branch records the failure and recovers with the fallback `0` chosen by this function.
+
+```sh
+nagic check result_match.nagi --no-project
+nagic run result_match.nagi --no-project --profile dev
+```
+
+The program prints `21`, the conversion error message, and then the fallback `0`. The exact wording of the error message is not an API guarantee.
+
+## Return a failure with try
+
+```nagi title="result_try.nagi"
+def double_number(text: view[str]) -> Result[i64, Error]:
+    number = try parse_i64(text)
+    return ok(number * 2)
+
+def main() -> Result[unit, Error]:
+    doubled = try double_number(view("21"))
+    return ok(print(doubled))
+```
+
+1. When `parse_i64` returns `Ok(21)`, `try` places the inner `21` in `number`.
+2. When it returns `Err`, `double_number` skips the rest of its body and returns that `Err` to its caller.
+3. The `try` in `main` follows the same rule. A failure eventually reaches the Nagi entry point and the process exits as a failure.
+
+```sh
+nagic check result_try.nagi --no-project
+nagic run result_try.nagi --no-project --profile dev
+```
+
+```text
+42
+```
+
+Nagi did not invent the `Result` concept. Nagi's language contract makes fallible standard operations return `Result`, diagnoses discarded results, and propagates `try` through the current function boundary.
+
+Continue with [HTTP](../../backend/http) to register a typed handler and return its `Result` from a route. The [repository Result/try lesson](https://github.com/disnana/Nagi/tree/main/test-nagi-code/result-try-tutorial) provides a longer runnable exercise.
+
+## Support
+
+This page targets the Rust backend in Nagi 0.2.2. `Result`/`try` semantics for the Go target are under validation for 0.3.0 and are not published support.

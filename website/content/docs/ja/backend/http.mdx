@@ -1,0 +1,57 @@
+---
+title: HTTPサーバー
+description: 安全な既定値、明示したルートごとのポリシー、authority制限を持つ最小HTTPサーバーを作ります。
+status: released
+since: "0.2.0"
+backends: [rust]
+---
+
+```nagi title="server.nagi"
+import std.http.server as http
+
+class State:
+    message: str
+
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return http.text(http.response_context(view(request)), http.Status.OK, view(state.message))
+
+async def main() -> Result[unit, Error]:
+    app = http.app_default[State](State(message="ok"))
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    policy = try http.rate_policy(100, 100)
+    app = try http.rate_route(app, http.Method.GET, "/health", policy)
+    options = http.default_options()
+    options = try http.authority(options, "https://localhost", ["127.0.0.1:8094", "localhost:8094"], 2, 256)
+    return await http.serve(app, 8094, options)
+```
+
+`State`はハンドラーへ共有する値です。`http.route`はHTTPメソッド、パス、方針、ハンドラーを登録します。公開経路でも`rate_policy`を明示し、`http.authority`で受け入れる`Host`と起点を制限します。`default_options`の有限な容量・期限は保持されます。
+
+```sh
+nagic check server.nagi --no-project
+nagic run server.nagi --no-project --profile dev
+```
+
+別のターミナルから確認します。
+
+```sh
+curl -i http://127.0.0.1:8094/health
+```
+
+```text
+HTTP/1.1 200 OK
+content-type: text/plain; charset=utf-8
+...
+
+ok
+```
+
+ヘッダーの順序や日付は環境で変わるため、ステータス、Content-Type、本文の`ok`を確認します。これはループバック向けの開発例です。公開時はリバースプロキシでTLSを終端し、実際に受け入れる`Host`とオリジン、認証、容量を設計してください。
+
+次は[SQLite](../sqlite)で値を保存します。JSON・検証・CRUDを含む完全な次例は[タスク管理API](https://github.com/disnana/Nagi/tree/main/test-nagi-code/web-demo)です。
+
+このサーバーと同じ標準APIを使う[HTTP教材のソース](https://github.com/disnana/Nagi/blob/main/examples/tutorial/http.nagi)も参照できます。
+
+## 対応範囲
+
+標準HTTP APIはNagi 0.2.2のRustターゲットで公開済みです。GoターゲットのHTTPは未対応です。標準APIだけではWebSocket、HTTP/2、ストリーミング、サーバー側TLSを提供しません。

@@ -1,0 +1,269 @@
+{
+  "use-cases": {
+    "mode": "redirect",
+    "target": "writing"
+  },
+  "task-api-tutorial": {
+    "mode": "localized-import",
+    "jaSource": "docs/task-api-tutorial.md",
+    "enSource": "docs/en/task-api-tutorial.md"
+  },
+  "task-api-comparison": {
+    "mode": "localized-import",
+    "jaSource": "docs/task-api-comparison.md",
+    "enSource": "docs/en/task-api-comparison.md"
+  },
+  "developer-workflow": {
+    "mode": "localized-import",
+    "jaSource": "docs/developer-workflow.md",
+    "enSource": "docs/en/developer-workflow.md"
+  },
+  "comparison": {
+    "mode": "localized-import",
+    "jaSource": "docs/comparison.md",
+    "enSource": "docs/en/comparison.md"
+  },
+  "changelog": {
+    "mode": "redirect",
+    "target": "changelog"
+  },
+  "development-builds": {
+    "mode": "localized-import",
+    "jaSource": "docs/development-builds.md",
+    "enSource": "docs/en/development-builds.md"
+  },
+  "runtime-profiles": {
+    "mode": "localized-import",
+    "jaSource": "docs/runtime-profiles.md",
+    "enSource": "docs/en/runtime-profiles.md"
+  },
+  "lock-seeds": {
+    "mode": "localized-import",
+    "jaSource": "docs/lock-seeds.md",
+    "enSource": "docs/en/lock-seeds.md"
+  },
+  "user-ci": {
+    "mode": "localized-import",
+    "jaSource": "docs/user-ci.md",
+    "enSource": "docs/en/user-ci.md"
+  },
+  "getting-started": {
+    "mode": "redirect",
+    "target": "writing"
+  },
+  "language-guide": {
+    "mode": "redirect",
+    "target": "writing"
+  },
+  "first-app": {
+    "mode": "redirect",
+    "target": "writing"
+  },
+  "editor": {
+    "mode": "localized-import",
+    "jaSource": "docs/editor.md",
+    "enSource": "docs/en/editor.md"
+  },
+  "syntax": {
+    "mode": "redirect",
+    "target": "writing"
+  },
+  "builtins": {
+    "mode": "redirect",
+    "target": "reference"
+  },
+  "types": {
+    "mode": "redirect",
+    "target": "writing/variables"
+  },
+  "classes": {
+    "mode": "redirect",
+    "target": "writing/variables"
+  },
+  "ownership": {
+    "mode": "localized-import",
+    "jaSource": "docs/ownership.md",
+    "enSource": "docs/en/ownership.md"
+  },
+  "view-and-zero-copy": {
+    "mode": "localized-import",
+    "jaSource": "docs/view-and-zero-copy.md",
+    "enSource": "docs/en/view-and-zero-copy.md"
+  },
+  "error-handling": {
+    "mode": "redirect",
+    "target": "writing/result"
+  },
+  "http": {
+    "mode": "redirect",
+    "target": "backend/http"
+  },
+  "http-server": {
+    "mode": "redirect",
+    "target": "backend/http"
+  },
+  "http-stdlib-performance": {
+    "mode": "localized-import",
+    "jaSource": "docs/http-stdlib-performance.md",
+    "enSource": "docs/en/http-stdlib-performance.md"
+  },
+  "security": {
+    "mode": "localized-import",
+    "jaSource": "docs/security.md",
+    "enSource": "docs/en/security.md"
+  },
+  "migration-0.2.0": {
+    "mode": "localized-import",
+    "jaSource": "docs/migration-0.2.0.md",
+    "enSource": "docs/en/migration-0.2.0.md"
+  },
+  "http-legacy": {
+    "mode": "localized-import",
+    "jaSource": "docs/http-legacy.md",
+    "enSource": "docs/en/http-legacy.md"
+  },
+  "json": {
+    "mode": "redirect",
+    "target": "backend/http"
+  },
+  "database": {
+    "mode": "redirect",
+    "target": "backend/sqlite"
+  },
+  "sqlite-pool": {
+    "mode": "redirect",
+    "target": "backend/sqlite"
+  },
+  "sql-check": {
+    "mode": "localized-import",
+    "jaSource": "docs/sql-check.md",
+    "enSource": "docs/en/sql-check.md"
+  },
+  "modules-and-rust": {
+    "mode": "localized-import",
+    "jaSource": "docs/modules-and-rust.md",
+    "enSource": "docs/en/modules-and-rust.md"
+  },
+  "libraries": {
+    "mode": "localized-import",
+    "jaSource": "docs/libraries.md",
+    "enSource": "docs/en/libraries.md"
+  },
+  "projects": {
+    "mode": "localized-import",
+    "jaSource": "docs/projects.md",
+    "enSource": "docs/en/projects.md"
+  },
+  "async": {
+    "mode": "redirect",
+    "target": "concurrency/async"
+  },
+  "task-handles": {
+    "mode": "localized-import",
+    "jaSource": "docs/task-handles.md",
+    "enSource": "docs/en/task-handles.md"
+  },
+  "concurrency": {
+    "mode": "redirect",
+    "target": "concurrency/async"
+  },
+  "actor": {
+    "mode": "redirect",
+    "target": "concurrency/actor"
+  },
+  "supervisor": {
+    "mode": "redirect",
+    "target": "concurrency/actor"
+  },
+  "actor-reference": {
+    "mode": "localized-import",
+    "jaSource": "docs/actor-reference.md",
+    "enSource": "docs/en/actor-reference.md"
+  },
+  "actor-performance": {
+    "mode": "localized-import",
+    "jaSource": "docs/actor-performance.md",
+    "enSource": "docs/en/actor-performance.md"
+  },
+  "library-examples": {
+    "mode": "localized-import",
+    "jaSource": "docs/library-examples.md",
+    "enSource": "docs/en/library-examples.md"
+  },
+  "web-demo": {
+    "mode": "redirect",
+    "target": "reference/web-demo"
+  },
+  "result-api": {
+    "mode": "redirect",
+    "target": "reference/result-api"
+  },
+  "library-design": {
+    "mode": "localized-import",
+    "jaSource": "docs/library-design.md",
+    "enSource": "docs/en/library-design.md"
+  },
+  "introduction": {
+    "mode": "localized-import",
+    "jaSource": "docs/introduction.md",
+    "enSource": "docs/en/introduction.md"
+  },
+  "low-language": {
+    "mode": "localized-import",
+    "jaSource": "docs/low-language.md",
+    "enSource": "docs/en/low-language.md"
+  },
+  "memory-model": {
+    "mode": "localized-import",
+    "jaSource": "docs/memory-model.md",
+    "enSource": "docs/en/memory-model.md"
+  },
+  "compiler-internals": {
+    "mode": "localized-import",
+    "jaSource": "docs/compiler-internals.md",
+    "enSource": "docs/en/compiler-internals.md"
+  },
+  "code-map": {
+    "mode": "localized-import",
+    "jaSource": "docs/code-map.md",
+    "enSource": "docs/en/code-map.md"
+  },
+  "contributing": {
+    "mode": "localized-import",
+    "jaSource": "docs/contributing.md",
+    "enSource": "docs/en/contributing.md"
+  },
+  "queue": {
+    "mode": "localized-import",
+    "jaSource": "docs/queue.md",
+    "enSource": "docs/en/queue.md"
+  },
+  "ffi": {
+    "mode": "localized-import",
+    "jaSource": "docs/ffi.md",
+    "enSource": "docs/en/ffi.md"
+  },
+  "performance": {
+    "mode": "localized-import",
+    "jaSource": "docs/performance.md",
+    "enSource": "docs/en/performance.md"
+  },
+  "measurements": {
+    "mode": "redirect",
+    "target": "reference/measurements"
+  },
+  "http-capacity": {
+    "mode": "localized-import",
+    "jaSource": "docs/http-capacity.md",
+    "enSource": "docs/en/http-capacity.md"
+  },
+  "roadmap": {
+    "mode": "localized-import",
+    "jaSource": "docs/roadmap.md",
+    "enSource": "docs/en/roadmap.md"
+  },
+  "vscode-extension": {
+    "mode": "redirect",
+    "target": "reference/vscode-extension"
+  }
+}

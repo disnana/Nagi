@@ -1,0 +1,58 @@
+---
+title: Nagi 0.2.1
+description: 既定配布ビルドを維持したまま、開発用ビルド、差分ビルド、CI生成、キャッシュ調査、ランタイム保守を追加した版です。
+status: released
+since: "0.2.1"
+backends: [rust]
+canonicalId: "nagi-0-2-1"
+canonicalTitle: "Nagi 0.2.1"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:29706a85b67cfa1b686fa314567d8bd6e63f799dde509d58ba1b51367099f197"
+canonicalRawBulletCount: 13
+canonicalItemCount: 12
+---
+既定配布ビルドを維持したまま、開発用ビルド、差分ビルド、CI生成、キャッシュ調査、ランタイム保守を追加した版です。
+
+- 正本ID：`nagi-0-2-1`
+- 状態：`公開済み`
+
+## 変更項目
+
+{/* canonical-item: item-001 */}
+- 0.2.0互換のビルド・検査・安定性改善を公開します。高速な開発には`nagic run app.nagi --profile dev`をopt-inで使い、通常CLIはリリース既定です。初回ネイティブ ビルドはRust依存をコンパイルし、差分 モードも型・所有権・capability検査を省略しません。IDE プラグインは別バージョン・別公開です。
+
+{/* canonical-item: item-002 */}
+- ランタイムでTokio 1.54.1以上を要求し、workspace/検査用データ ロックを1.54.1へ更新してtimer-driver同期修正を取り込みます。従来ロックは影響版1.54.0ではなく1.53.1/1.53.2でした。生成アプリケーションは独立ロックを持つため、直下 ロック更新だけでなく新ランタイムで再ビルドしてください。
+
+{/* canonical-item: item-003 */}
+- 最初のstop リクエストが停止を公開するまでSupervisor イベント streamを開き、同時後始末完了による早期終了を防ぎます。子 合流、取り消し、STOPPED、停止 期限を維持し、決定的回帰とsupervised-ワーカーの正確なイベント数を追加します。
+
+{/* canonical-item: item-004 */}
+- 明示した世代のルートとCargoキャッシュのルートを有限・読み取り専用で調べる`nagic cache inspect`を追加します。論理サイズ、不完全な走査、情報を失わないOSパスを報告しますが、削除、回収可能量の断定、ネイティブ成果物再利用の承認には使いません。
+
+{/* canonical-item: item-005 */}
+- ソース 負荷でパーサーの元physical-モジュール トークンを再利用して2回目のlexを避け、完全なHigh/Low検査と診断を維持します。フロントエンド回帰検査用データ間でCargo 依存関係 ターゲットを共有し、未使用の重複CI リリース コンパイラ ビルドを削除しますが、テストと配布ビルドは維持します。
+
+{/* canonical-item: item-006 */}
+- ランタイム edit、破損ロック拒否、旧実行ファイル保護を含む、再現可能な完全-checkと8 分岐の通常対units ビルド benchmarkを追加します。遅い分岐とキャッシュ条件も別に報告し、リリース既定は変えません。
+
+{/* canonical-item: item-007 */}
+- opt-in `--profile dev --incremental=units`で、閉じたprimitive同期関数を依存順の最大8 Cargo ライブラリへまとめます。未対応関数・async・利用者 型はfacadeに残し、影響unitと逆依存だけを再ビルドします。完全検査と不変 世代を必須とし、受領記録 スキーマ 3でソース-unit クロージャを検証し既存スキーマを維持します。
+
+{/* canonical-item: item-008 */}
+- opt-in `--profile dev --incremental`で生成Rust 本文を不変 content-addressed Cargo ライブラリとして再利用し、各世代はエントリー shimだけをコンパイルします。完全検査、Cargo 検証、旧実行ファイル保護、破損キャッシュ拒否を維持し、アダプター・追加依存・管理対象 runはmonolithicのままです。受領記録 スキーマ 2を追加しスキーマ 1と公開0.2.0既定を維持します。
+
+{/* canonical-item: item-009 */}
+- opt-in `build/run --profile dev|release`を追加し、リリース既定とデバッグ/リリース overflow動作を維持します。完全なNagi検査、Cargo 依存関係 検証、世代隔離、不変成功実行ファイルを保ちます。
+
+{/* canonical-item: item-010 */}
+- opt-in `--build-stats`で型付き宣言/関数変更観測、依存関係 グラフ、Cargo 成果物数、phase時間を出します。公開成果物 hashを記録・検証しますが、semantic観測はネイティブ再利用や検査/テスト省略を承認しません。
+
+{/* canonical-item: item-011 */}
+- 標準ライブラリだけで動くPythonのCI生成・受領記録検証toolを同梱します。公開0.2.0互換ワークフロー、信頼済み 既定-分岐 pushだけのキャッシュ書込み、フォーク キャッシュ 読み取りを文書化し、破損レコード、非regular 成果物、リンク/reparse パスを拒否します。
+
+{/* canonical-item: item-012 */}
+- 既存セキュリティ API保証、未対応通信、段階ビルド roadmapを、アプリケーション ビルド実測と制約付きで文書化します。既存0.2.0 バイナリは不変です。関数-unit分割は未変更再ビルドを改善した一方、編集分岐を遅くしたためopt-inのままです。
+## 正本との対応
+
+版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`13`件を、明確な日英重複だけ統合した`12`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

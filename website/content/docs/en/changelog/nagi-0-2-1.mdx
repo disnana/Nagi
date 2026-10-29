@@ -1,0 +1,58 @@
+---
+title: Nagi 0.2.1
+description: Adds development and incremental builds, CI generation, cache inspection, and runtime maintenance while keeping release builds as the default.
+status: released
+since: "0.2.1"
+backends: [rust]
+canonicalId: "nagi-0-2-1"
+canonicalTitle: "Nagi 0.2.1"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:29706a85b67cfa1b686fa314567d8bd6e63f799dde509d58ba1b51367099f197"
+canonicalRawBulletCount: 13
+canonicalItemCount: 12
+---
+Adds development and incremental builds, CI generation, cache inspection, and runtime maintenance while keeping release builds as the default.
+
+- Canonical ID: `nagi-0-2-1`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Publish the backward-compatible build and stability improvements below. For faster application development, opt into `nagic run app.nagi --profile dev`; ordinary CLI builds retain the release default. Initial native builds still compile Rust dependencies. Incremental modes are optional and do not skip type, ownership or capability checks.
+
+{/* canonical-item: item-002 */}
+- Require Tokio 1.54.1 or newer for the runtime and update the active workspace/fixture locks to 1.54.1, incorporating the timer-driver synchronization fix in [Tokio #8692](https://github.com/tokio-rs/tokio/pull/8692). The previous tracked locks used 1.53.1/1.53.2, not the reported affected 1.54.0. Generated applications have independent locks: rebuild them with the updated runtime; updating Nagi's root lock alone does not update existing binaries.
+
+{/* canonical-item: item-003 */}
+- Keep the Supervisor event stream open until the first stop request has published SHUTDOWN. Prevent a concurrent completed cleanup from closing the stream before that notification; preserve child joins, cancellation, STOPPED events and shutdown deadlines. Add a deterministic regression and retain the supervised-worker sample's exact event counts.
+
+{/* canonical-item: item-004 */}
+- Add bounded, read-only `nagic cache inspect` for explicitly selected generation and Cargo-cache roots. Report logical sizes, incomplete scans and lossless OS paths; do not delete caches, claim reclaimable space or use observations to authorize native artifact reuse.
+
+{/* canonical-item: item-005 */}
+- Reuse the parser's original physical-module tokens during source loading, avoiding a second lex while preserving full High/Low checks and diagnostics. Share Cargo dependency targets across frontend regression fixtures and remove an unused duplicate CI release-compiler build; keep all tests and distribution builds.
+
+{/* canonical-item: item-006 */}
+- Add repeatable full-check and eight-case ordinary-versus-units build benchmarks, including runtime edits, corrupt-lock rejection and old-executable preservation. Report slow cases and cache conditions separately; do not change the default release profile.
+
+{/* canonical-item: item-007 */}
+- Add opt-in `--profile dev --incremental=units` to group closed primitive synchronous functions into at most eight dependency-ordered Cargo libraries. Keep unsupported functions, async and user types in a facade; rebuild affected units and reverse dependents while Cargo can reuse independent units. Full checks and immutable generations remain mandatory. Receipt schema 3 verifies the complete source-unit closure; existing modes and schemas remain supported.
+
+{/* canonical-item: item-008 */}
+- Add opt-in `--profile dev --incremental` to reuse the generated Rust body as an immutable content-addressed Cargo library. Identical bodies reuse Cargo artifacts while each generation compiles its own entry shim. Keep full checks, Cargo validation and old executables; reject corrupt source caches. Adapters, additional Rust dependencies and managed runs retain monolithic builds. Receipt schema 2 verifies the body reference; schema 1 remains supported. Released 0.2.0 and default release builds are unchanged.
+
+{/* canonical-item: item-009 */}
+- Add opt-in `build/run --profile dev|release`, preserving release as the default and the existing debug/release overflow behavior. Keep complete Nagi checks, Cargo dependency validation, generation isolation and immutable successful executables.
+
+{/* canonical-item: item-010 */}
+- Add opt-in `--build-stats` with typed declaration/function change observations, dependency graphs, Cargo artifact counts and phase timings. Record and verify published artifact hashes; semantic observations do not authorize native reuse or skipped checks/tests.
+
+{/* canonical-item: item-011 */}
+- Bundle standard-library-only Python CI-generation and receipt-verification tools. Generate workflows compatible with released 0.2.0, isolate cache writes to trusted default-branch pushes, and document fork cache readability. Reject corrupt records, nonregular artifacts and linked/reparse paths.
+
+{/* canonical-item: item-012 */}
+- Document the existing security API guarantees, unsupported transports and staged build roadmap, with measured application build results and their limits. Previously distributed 0.2.0 binaries remain unchanged. Function-unit partitioning improved unchanged rebuilds in the measured fixture but slowed edited cases, so it remains opt-in; see the [measurements](https://github.com/disnana/Nagi/blob/main/benchmarks/results/release-0.2.1-build-stability-2026-10-22/README.md).
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `13` raw bullets to `12` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

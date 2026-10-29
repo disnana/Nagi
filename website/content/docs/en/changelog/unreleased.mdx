@@ -1,0 +1,34 @@
+---
+title: Unreleased
+description: Work in progress. Do not treat these entries as features in a published release.
+status: unreleased
+since: "unreleased"
+backends: [rust]
+canonicalId: "unreleased"
+canonicalTitle: "未リリース / Unreleased"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:6106f9a8b6f7b06ecfa660549d7f274c9b7df44a5747528da4d69b209558eaf4"
+canonicalRawBulletCount: 8
+canonicalItemCount: 4
+---
+Work in progress. Do not treat these entries as features in a published release.
+
+- Canonical ID: `unreleased`
+- Status: `Unreleased`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Complete named class/record field labels in VS Code and select signature parameters by field name. Preserve existing equals signs, supplied fields, shadowing guards and saved-declaration warnings. This is not included in published extension 0.1.13.
+
+{/* canonical-item: item-002 */}
+- Preserve typed HTTP load shedding when both a handler response and its error mapper exhaust the ordinary response pool: return a bounded fallback 503 while keeping other mapper failures as opaque 500 responses. Add finite loopback-only overload, slow-connection, disconnect, recovery and actor/supervision evidence without claiming Internet DDoS or BEAM equivalence.
+
+{/* canonical-item: item-003 */}
+- Allow function, builtin, and registered standard-API calls to name every argument in declaration order with `name=value`. Preserve positional calls and class/enum construction; reject mixed, duplicate, unknown, missing, and out-of-order arguments at build time. Normalize through the checked frontend so source-order evaluation, ownership checks, and backend lowering stay unchanged.
+
+{/* canonical-item: item-004 */}
+- Add contextual High `elif condition:` branches, lowered through the existing checked `if` representation. Preserve Low syntax and existing `elif` identifiers, with context-aware completion, coloring and indentation in both editor plugins.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `8` raw bullets to `4` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.
