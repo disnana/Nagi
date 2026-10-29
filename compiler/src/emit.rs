@@ -30,6 +30,20 @@ fn low_quote(s: &str) -> String {
     out.push('"');
     out
 }
+
+fn cargo_external_tool_path(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let rendered = path.as_os_str().to_string_lossy();
+        if let Some(rest) = rendered.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{rest}"));
+        }
+        if let Some(rest) = rendered.strip_prefix(r"\\?\") {
+            return PathBuf::from(rest);
+        }
+    }
+    path.to_path_buf()
+}
 // Low carries resolved definition symbols. Type's user-facing Display may
 // shorten those symbols for diagnostics, so emission must render the stored
 // structural name directly.
@@ -2475,6 +2489,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         build_report["before_cargo_ms"] = serde_json::json!(started.elapsed().as_secs_f64() * 1000.0);
     }
     let cargo_started = std::time::Instant::now();
+    let cargo_target = cargo_external_tool_path(&target);
     let mut child = Command::new("cargo")
         .args([
             "build",
@@ -2484,7 +2499,7 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         ])
         .arg(generation.staging.join("Cargo.toml"))
         .arg("--bin").arg(&generation.bin)
-        .env("CARGO_TARGET_DIR", &target)
+        .env("CARGO_TARGET_DIR", &cargo_target)
         // In-place progress can overwrite mapped diagnostics on the same terminal.
         .env("CARGO_TERM_PROGRESS_WHEN", "never")
         .stdout(Stdio::piped())
@@ -2696,4 +2711,42 @@ fn relative_path(target: &Path, base: &Path) -> PathBuf {
         out.push(c.as_os_str());
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cargo_external_tool_path;
+    use std::path::Path;
+
+    #[test]
+    fn cargo_external_tool_path_strips_windows_verbatim_drive_prefix_only_on_windows() {
+        let path = Path::new(r"\\?\C:\work\native-target");
+        if cfg!(windows) {
+            assert_eq!(
+                cargo_external_tool_path(path),
+                Path::new(r"C:\work\native-target")
+            );
+        } else {
+            assert_eq!(cargo_external_tool_path(path), path);
+        }
+    }
+
+    #[test]
+    fn cargo_external_tool_path_strips_windows_verbatim_unc_prefix_only_on_windows() {
+        let path = Path::new(r"\\?\UNC\server\share\native-target");
+        if cfg!(windows) {
+            assert_eq!(
+                cargo_external_tool_path(path),
+                Path::new(r"\\server\share\native-target")
+            );
+        } else {
+            assert_eq!(cargo_external_tool_path(path), path);
+        }
+    }
+
+    #[test]
+    fn cargo_external_tool_path_keeps_non_verbatim_paths() {
+        let path = Path::new("native-target");
+        assert_eq!(cargo_external_tool_path(path), path);
+    }
 }
