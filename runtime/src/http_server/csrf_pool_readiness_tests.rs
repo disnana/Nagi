@@ -373,13 +373,15 @@ async fn guarded_busy_mapper_returns_503_retires_owner_and_recovers_capacity() {
     .await
     .unwrap();
     let (running, state) = StartupServer::new(&f.store, &csrf, options).await;
-    let cookie = f
-        .headers
-        .authentication_headers()
-        .get(names::COOKIE)
-        .unwrap()
-        .to_str()
-        .unwrap();
+    let (issued, cookie, _) = running
+        .request(
+            "POST",
+            "/issue",
+            "Authorization: Bearer owned\r\n",
+        )
+        .await;
+    assert_eq!(issued, 200);
+    assert!(!cookie.is_empty());
     let (status, _, body) = running
         .request("GET", "/csrf", &format!("Cookie: {cookie}\r\n"))
         .await;

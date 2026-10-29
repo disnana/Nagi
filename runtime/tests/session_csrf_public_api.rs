@@ -823,7 +823,11 @@ async fn body_checkpoint_rejects_generation_changed_after_actual_authorization()
 #[tokio::test]
 async fn finite_origin_and_header_refusals_preserve_existing_token_and_capacity() {
     let f = Fixture::new(2, 176).await;
-    let s = Server::new(&f).await;
+    // This case proves that finite refusal paths preserve the reusable token
+    // and capacity. Exact expiry behavior remains covered by the dedicated
+    // deadline cases; retain a finite margin below the three-second wire
+    // watchdog so runner scheduling cannot replace this oracle with a 504.
+    let s = Server::new_with_options(&f, checked_with_deadlines(1000, 2000)).await;
     let cookie = request(&s, "POST", "/issue", "Authorization: Bearer owned\r\n", b"")
         .await
         .cookie();
@@ -905,12 +909,16 @@ async fn finite_origin_and_header_refusals_preserve_existing_token_and_capacity(
             == 403
     );
     assert!(request(&s, "HEAD", "/csrf", "", b"").await.status == 401);
-    assert_eq!(
-        request(&s, "POST", "/write", &guarded(&cookie, &token), b"owned")
-            .await
-            .status,
-        200
-    );
+    let final_response =
+        request(&s, "POST", "/write", &guarded(&cookie, &token), b"owned").await;
+    if final_response.status != 200 {
+        final_response.safe_reply_diag("finite_refusals_final");
+        eprintln!(
+            "csrf_public_final_refusal calls={}",
+            s.state.calls.load(Ordering::SeqCst)
+        );
+    }
+    assert_eq!(final_response.status, 200);
     s.stop().await;
     f.stop().await;
 }
