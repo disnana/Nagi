@@ -19,25 +19,25 @@ HTTP・認証・Session/CSRF・HTTPS・SQLiteの安全な標準境界を広げ�
 ## 変更項目
 
 {/* canonical-item: item-001 */}
-- 明示HTTP authentication 方針、有限Host/authority、有限応答/流量 予算、経路 流量 ruleを要求します。応答 生成関数は実リクエストのResponseContextを借用して結果を返し、エラー マッパーもcontextを明示受領します。予算不足はlisten前に拒否します。
+- 明示的なHTTP認証方針、有限のHost/authority、有限の応答/流量予算、経路の流量規則を要求します。応答生成関数は実リクエストのResponseContextを借用して結果を返し、エラーマッパーもコンテキストを明示的に受け取ります。予算不足はlisten前に拒否します。
 
 {/* canonical-item: item-002 */}
-- durable Session発行・rotation・revocation、有限で再利用可能なauthenticated CSRF トークン、別枠の有限one-use pre-login 状態、CORS finalization、固定Ed25519 verification-only プロファイルを接続します。業務 エラーとauth/ランタイム 失敗を分け、元期限、revocation gate、実取り消し 合流を維持します。
+- 永続Session発行・ローテーション・失効、有限で再利用可能な認証済みCSRFトークン、別枠の有限一回限りのログイン前の状態、CORSの確定処理、固定Ed25519検証専用プロファイルを接続します。業務エラーと認証/ランタイム失敗を分け、元期限、失効ゲート、実際の取り消し処理への合流を維持します。
 
 {/* canonical-item: item-003 */}
-- 型付き HTML/SQLと登録HTTPS操作を接続します。outbound リクエストは検査済み DNS candidate、TCPだけの有限failover、1操作TTL=0、通常TLS検証、有限本文を使い、送信開始後の自動再送や暗黙decompressionをしません。compressionは0.2.1以降の別タスクです。
+- 型付きHTML/SQLと登録HTTPS操作を接続します。外向きリクエストは検査済みDNS候補、TCPだけの有限回のフェイルオーバー、1操作TTL=0、通常のTLS検証、有限の本文を使い、送信開始後の自動再送や暗黙の展開をしません。圧縮は0.2.1以降の別タスクです。
 
 {/* canonical-item: item-004 */}
-- HTTP 方針・Host・応答/流量 予算を明示する安全基盤を候補実装へ接続します。ResponseContextは実リクエストから借用し、生成関数/マッパーは結果で失敗を返します。Session/CSRF/CORS・Ed25519・型付き HTML/SQL・用途別HTTPSの保証と移行は日本語ガイドを参照してください。process-ローカル制限は複数台全体制限ではなく、OOMからの普遍的回復も保証しません。
+- HTTP方針・Host・応答/流量予算を明示する安全基盤を候補実装へ接続します。ResponseContextは実リクエストから借用し、生成関数/マッパーは結果で失敗を返します。Session/CSRF/CORS・Ed25519・型付きHTML/SQL・用途別HTTPSの保証と移行は日本語ガイドを参照してください。プロセスローカル制限は複数台全体制限ではなく、OOMからの普遍的回復も保証しません。
 
 {/* canonical-item: item-005 */}
-- canonical `std.db.sqlite` Poolとaffine Tx APIを、所有 Parameters、非公開 direct-リテラル Query、構造化失敗/Outcome、観測可能終了付きで公開します。acquisition 予算はSQL実行・busy handlingと別で、取り消しはコミット済みworkを元に戻しません。
+- 正規の`std.db.sqlite` PoolとアフィンなTx APIを、所有権を持つParameters、非公開の直接リテラルQuery、構造化された失敗/Outcome、観測可能な終了処理とともに公開します。取得予算はSQL実行・busy処理と別で、取り消しはコミット済み処理を元に戻しません。
 
 {/* canonical-item: item-006 */}
-- legacy Db/db_*実行をdowngrade経路なしで削除します。元ソース 移行診断、引数 束縛、トランザクション 後始末、実ネイティブ 合流を維持し、日英移行 ガイドに置換codeと保証を示します。
+- 旧Db/db_*実行をダウングレード経路なしで削除します。元ソース上の移行診断、引数の束縛、トランザクションの後始末、実ネイティブ処理への合流を維持し、日英移行ガイドに置換コードと保証を示します。
 
 {/* canonical-item: item-007 */}
-- deadpoolではなく既存Tokio semaphoreとlazy SQLite アダプターを使います。検査済み 容量と回復可能reservation refusalはOOMからの普遍的回復を保証しません。
+- deadpoolではなく既存Tokioセマフォと遅延初期化するSQLiteアダプターを使います。検査済み容量と回復可能予約拒否はOOMからの普遍的回復を保証しません。
 ## 正本との対応
 
-版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`7`件を、明確な日英重複だけ統合した`7`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。
+版、日付、順序、リンク、項目の正本はリポジトリ直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`7`件を、明確な日英重複だけ統合した`7`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

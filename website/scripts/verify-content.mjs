@@ -69,6 +69,9 @@ for (const locale of locales) {
   for (const file of (await filesUnder(directory)).filter((path) => extname(path) === '.mdx')) {
     if (file.endsWith(`${sep}index.mdx`)) continue;
     const markdown = await readFile(file, 'utf8');
+    if (locale === 'ja' && /リポジトリ 直下|Content-型|ハンドラー ラッパー|引数 Info|支援 protocol|highlight、indentation|compatibility check/.test(markdown)) {
+      failures.push(`${relative(repository, file)}: Japanese changelog contains a known untranslated fragment`);
+    }
     const data = frontmatter(markdown, relative(repository, file));
     const id = data.canonicalId;
     if (typeof id !== 'string') {

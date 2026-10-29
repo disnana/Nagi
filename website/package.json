@@ -11,7 +11,7 @@
     "prepare:content": "node scripts/prepare-content.mjs",
     "verify:content": "node scripts/verify-content.mjs",
     "verify:teaching": "node scripts/verify-teaching-evidence.mjs",
-    "build": "npm run prepare:content && npm run verify:content && npm run verify:teaching && next build --webpack",
+    "build": "npm run prepare:content && npm run verify:content && npm run verify:teaching && next build --webpack && node scripts/generate-discovery.mjs",
     "typecheck": "node scripts/clean-next-types.mjs && npm run prepare:content && next typegen && tsc --noEmit",
     "verify:static": "node scripts/verify-static.mjs",
     "verify:links": "node scripts/check-links.mjs",

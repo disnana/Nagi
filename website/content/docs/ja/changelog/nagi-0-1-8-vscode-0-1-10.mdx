@@ -1,6 +1,6 @@
 ---
 title: Nagi 0.1.8 / VS Code 0.1.10
-description: コード map、std.actor、std.http.server、型・ownership検査、editor標準module補助を追加した同時版です。
+description: コードマップ、std.actor、std.http.server、型・所有権検査、エディターの標準モジュール補助を追加した同時版です。
 status: released
 since: "0.1.8"
 backends: [rust]
@@ -11,7 +11,7 @@ canonicalSourceHash: "sha256:2da2c662ab6a1049fe8d3d339ce257893b1ab71884ae1374290
 canonicalRawBulletCount: 17
 canonicalItemCount: 17
 ---
-コード マップ、std.Actor、std.http.サーバー、型・ownership検査、エディター標準モジュール補助を追加した同時版です。
+コードマップ、`std.actor`、`std.http.server`、型・所有権検査、エディター標準モジュール補助を追加した同時版です。
 
 - 正本ID：`nagi-0-1-8-vscode-0-1-10`
 - 状態：`公開済み`
@@ -19,55 +19,55 @@ canonicalItemCount: 17
 ## 変更項目
 
 {/* canonical-item: item-001 */}
-- 共有グラフ IRによる静的`map types`・`map modules`・`map calls`を追加し、Mermaid・D2・JSON・単独 HTML、focus表示、任意のD2 SVG/PNG出力に対応します。
+- 共有グラフIRによる静的`map types`・`map modules`・`map calls`を追加し、Mermaid・D2・JSON・単独HTML、フォーカス表示、任意のD2 SVG/PNG出力に対応します。
 
 {/* canonical-item: item-002 */}
-- リリース 注記へ確定バージョンの変更要約、前component リリースとコミット比較、PR、contributor情報を含めます。
+- リリースノートへ確定バージョンの変更要約、前のコンポーネントのリリースとコミット比較、PR、コントリビューター情報を含めます。
 
 {/* canonical-item: item-003 */}
-- 呼び出し/Listの一時借用と衝突するmoveを診断し、単独 所有-値式を検査時に消費します。scalar `owned[T]` class フィールドは生成Rustのコピー動作と一致させます。
+- 呼び出し/Listの一時借用と衝突するmoveを診断し、単独の所有値式を検査時に消費します。スカラーの`owned[T]`クラスフィールドは生成Rustのコピー動作と一致させます。
 
 {/* canonical-item: item-004 */}
-- DocsのHTTP/Actor topic配下にAPI 参照と計測を置き、現在 ページ、sidebar scroll、mobile contents menuを維持します。
+- DocsのHTTP/Actorトピック配下にAPI参照と計測を置き、現在のページ、サイドバーのスクロール、モバイルの目次メニューを維持します。
 
 {/* canonical-item: item-005 */}
-- Docs 成果物/リンクを`nagi.disnana.com/`で配信しつつフォークのプロジェクト/利用者 Pages既定を保ちます。domain/Pagesだけの変更は完全 Rust checkをskipしますが、CI config変更は完全 checkします。
+- Docs成果物とリンクを`nagi.disnana.com/`で配信しつつ、フォークのプロジェクト/ユーザーPages既定を保ちます。ドメイン/Pagesだけの変更では完全なRust検査を省略しますが、CI設定変更では完全検査します。
 
 {/* canonical-item: item-006 */}
-- 型付き message/応答、所有 状態 transition、named async 生成関数/ハンドラー、restart 方針、lifecycle イベント、tracked 停止を持つ`std.actor`を追加し、業務 エラーをハンドラー/呼び出し 失敗から分離します。
+- 型付きメッセージ/応答、所有状態の遷移、名前付き非同期生成関数/ハンドラー、再起動方針、ライフサイクルイベント、追跡可能な停止を持つ`std.actor`を追加し、業務エラーをハンドラー/呼び出し失敗から分離します。
 
 {/* canonical-item: item-007 */}
-- Actor message/応答/エラー payloadの所有 容量を検査し、未対応マップ/shared/借用した/非公開 グラフをネイティブ生成前に拒否します。別負荷したLowでもActor 同一性とジェネリック 引数を維持します。
+- Actorメッセージ/応答/エラーペイロードの所有容量を検査し、未対応のマップ、共有、借用、非公開グラフをネイティブ生成前に拒否します。別途読み込んだLowでもActorの同一性とジェネリック引数を維持します。
 
 {/* canonical-item: item-008 */}
-- 複数登録標準モジュールの補完/シグネチャ/読み取り専用 定義 移動と、状態更新・業務 失敗・明示停止を持つSupervisor/HTTP sampleを追加します。
+- 複数登録標準モジュールの補完/シグネチャ/読み取り専用の定義移動と、状態更新・業務エラー・明示停止を持つSupervisor/HTTPサンプルを追加します。
 
 {/* canonical-item: item-009 */}
-- DB不要アプリ、ネイティブ Method/Status、リクエスト ヘッダー、型付き shared 状態、async ハンドラー、アプリ/経路 エラー mappingを持つ`std.http.server`を追加し、ヘッダー/本文/admission/応答送信/停止を有限にします。
+- DB不要のアプリ、ネイティブのMethod/Status、リクエストヘッダー、型付き共有状態、非同期ハンドラー、アプリ/経路エラーのマッピングを持つ`std.http.server`を追加し、ヘッダー・本文・受け入れ・応答送信・停止に上限を設けます。
 
 {/* canonical-item: item-010 */}
-- 登録標準モジュール インポート、comma区切りfrom インポート、Some/Noneによるexhaustive Option matchを追加し、保存済み Lowで資源 同一性と借用 生存期間を維持します。
+- 登録標準モジュールのインポート、カンマ区切りのfromインポート、Some/Noneによる網羅的なOptionのmatchを追加し、保存済みLowで資源の同一性と借用の生存期間を維持します。
 
 {/* canonical-item: item-011 */}
-- VS Codeの補完/hover/シグネチャ ヘルプ/読み取り専用 定義 移動を標準資源・定数・operationへ拡張します。
+- VS Codeの補完/ホバー/シグネチャヘルプ/読み取り専用の定義移動を標準資源・定数・操作へ拡張します。
 
 {/* canonical-item: item-012 */}
-- assignmentなしでprint/compareするinteger リテラルを含め、検査済み 数値 型を生成Rustで維持します。
+- 代入せずにprint/compareする整数リテラルを含め、検査済み数値型を生成Rustで維持します。
 
 {/* canonical-item: item-013 */}
-- speculative indexing後のパーサー nesting depthを復元し、try/await フィールド/索引 receiverの括弧を保持し、未対応class 型 引数を破棄せず拒否します。
+- 先読みの索引処理後のパーサーの入れ子深さを復元し、try/awaitのフィールド/索引の受け手の括弧を保持し、未対応クラス型引数を破棄せず拒否します。
 
 {/* canonical-item: item-014 */}
-- control characterを含む文字列 byteをHigh→Low→Rust生成で維持します。
+- 制御文字を含む文字列バイトをHigh→Low→Rust生成で維持します。
 
 {/* canonical-item: item-015 */}
-- 組み込み GET endpointまたは等価capture パスと衝突する経路をHTTP router構築前に診断します。
+- 組み込みGETエンドポイントまたは同等のキャプチャパスと衝突する経路をHTTPルーター構築前に診断します。
 
 {/* canonical-item: item-016 */}
-- 以前のstatement 件数ではなく、trigger変更を含む現在の`db_exec` SQL batchだけの変更数を返します。
+- 以前の文の件数ではなく、トリガーによる変更を含む現在の`db_exec` SQLバッチだけの変更数を返します。
 
 {/* canonical-item: item-017 */}
-- VS Code 型 annotationへコンストラクター引数なしのclass名を挿入し、ローカル 関数 値のhover 型を維持します。
+- VS Codeの型注釈へコンストラクター引数を伴わないクラス名を挿入し、ローカル関数値のホバーの型を維持します。
 ## 正本との対応
 
-版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`17`件を、明確な日英重複だけ統合した`17`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。
+版、日付、順序、リンク、項目の正本はリポジトリ直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`17`件を、明確な日英重複だけ統合した`17`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

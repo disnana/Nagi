@@ -1,6 +1,6 @@
 ---
 title: JetBrains 0.1.2
-description: IntelliJ IDEA/PyCharm共通ZIPと公開project-trust APIへ移行した版です。
+description: IntelliJ IDEA/PyCharm共通ZIPと公開済みプロジェクト信頼APIへ移行した版です。
 status: released
 since: "0.1.2"
 backends: []
@@ -11,7 +11,7 @@ canonicalSourceHash: "sha256:8dfd63efa562d1656b8ac7214d373d1c60a3eef5bb36a790c04
 canonicalRawBulletCount: 4
 canonicalItemCount: 4
 ---
-IntelliJ IDEA/PyCharm共通ZIPと公開プロジェクト-信頼 APIへ移行した版です。
+IntelliJ IDEA/PyCharm共通ZIPと公開プロジェクト信頼APIへ移行した版です。
 
 - 正本ID：`jetbrains-0-1-2`
 - 状態：`公開済み`
@@ -19,16 +19,16 @@ IntelliJ IDEA/PyCharm共通ZIPと公開プロジェクト-信頼 APIへ移行し
 ## 変更項目
 
 {/* canonical-item: item-001 */}
-- プラグインID `com.disnana.nagi`と既存Marketplace listingを維持し、Nagi for JetBrainsをIDEA/PyCharm共通ZIPにします。GUI検証者とMarketplaceが公開済み0.1.1と区別できるよう0.1.2とし、Marketplaceへのアップロードはリポジトリ所有者が行います。この変更自体はパッケージを公開しません。
+- プラグインID `com.disnana.nagi`と既存Marketplaceの掲載情報を維持し、Nagi for JetBrainsをIDEA/PyCharm共通ZIPにします。GUI検証者とMarketplaceが公開済み0.1.1と区別できるよう0.1.2とし、Marketplaceへのアップロードはリポジトリ所有者が行います。この変更自体はパッケージを公開しません。
 
 {/* canonical-item: item-002 */}
-- 公開 プロジェクト-信頼 APIのため、IDEA 2025.1.1 ビルド 251.25410.109またはPyCharm 2025.1.1 ビルド 251.25410.122を要求します。旧IDEは公開0.1.1を維持するかIDEを更新できます。信頼されていないプロジェクトの実行拒否を保ちつつ、非推奨なProcessAdapterとプロジェクト-信頼呼び出しを置換します。
+- 公開済みプロジェクト信頼APIのため、IDEA 2025.1.1ビルド 251.25410.109またはPyCharm 2025.1.1ビルド 251.25410.122を要求します。旧IDEは公開0.1.1を維持するかIDEを更新できます。信頼されていないプロジェクトの実行拒否を保ちつつ、非推奨なProcessAdapterとプロジェクト信頼呼び出しを置換します。
 
 {/* canonical-item: item-003 */}
-- 同じ候補ZIPを両IDEの独立した安定版/EAP テストとプラグイン Verifierで検証し、その同一バイトをCI配布成果物へ昇格します。公式Gradle プラグインでEAP テスト依存を解決し、共通プラグインのJava APIとbytecodeを21に保ちます。
+- 同じ候補ZIPを両IDEの独立した安定版/EAPテストとプラグインVerifierで検証し、その同一バイトをCIの配布成果物へ昇格します。公式GradleプラグインでEAPテスト依存を解決し、共通プラグインのJava APIとバイトコードを21に保ちます。
 
 {/* canonical-item: item-004 */}
 - `plugin.xml`の英日Marketplace説明を保ち、README、説明書、Webサイトの導入案内を統一します。コンパイラは別途インストールし、コンパイラ連携の補完、定義移動、リアルタイム診断は次の変更で扱います。
 ## 正本との対応
 
-版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`4`件を、明確な日英重複だけ統合した`4`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。
+版、日付、順序、リンク、項目の正本はリポジトリ直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`4`件を、明確な日英重複だけ統合した`4`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

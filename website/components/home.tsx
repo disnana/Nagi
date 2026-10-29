@@ -22,6 +22,17 @@ export function Home({ locale }: { locale: 'ja' | 'en' }) {
           {ja ? 'English' : '日本語'}
         </Link>
       </div>
+      <p className="text-sm text-fd-muted-foreground">
+        {ja ? 'JetBrains IDE向けプラグインは' : 'Install the JetBrains plugin from the '}
+        <a className="underline" href="https://plugins.jetbrains.com/plugin/34891-nagi">
+          {ja ? 'JetBrains Marketplace' : 'JetBrains Marketplace'}
+        </a>
+        {ja ? 'から導入できます。ZIP配布物とNagi本体は' : '. ZIP artifacts and Nagi releases remain available on '}
+        <a className="underline" href="https://github.com/disnana/Nagi/releases">
+          GitHub Releases
+        </a>
+        {ja ? 'にもあります。' : '.'}
+      </p>
     </main>
   );
 }

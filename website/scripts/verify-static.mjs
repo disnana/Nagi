@@ -10,10 +10,32 @@ const expected = [
   'en/docs/index.html',
   'api/search/ja',
   'api/search/en',
+  'robots.txt',
+  'sitemap.xml',
+  'llms.txt',
 ];
 
 for (const path of expected) {
   await access(new URL(path, root));
+}
+
+const robots = await readFile(new URL('robots.txt', root), 'utf8');
+const sitemap = await readFile(new URL('sitemap.xml', root), 'utf8');
+const llms = await readFile(new URL('llms.txt', root), 'utf8');
+if (!robots.includes('Sitemap: https://nagi.disnana.com/sitemap.xml')) {
+  throw new Error('robots.txt must advertise the canonical sitemap');
+}
+for (const route of ['https://nagi.disnana.com/', 'https://nagi.disnana.com/en/', 'https://nagi.disnana.com/docs/writing/', 'https://nagi.disnana.com/en/docs/writing/']) {
+  if (!sitemap.includes(`<loc>${route}</loc>`)) throw new Error(`sitemap is missing ${route}`);
+}
+if (!llms.includes('https://nagi.disnana.com/docs/writing/') || !llms.includes('https://nagi.disnana.com/en/docs/writing/')) {
+  throw new Error('llms.txt must index both public documentation locales');
+}
+for (const body of [robots, sitemap, llms]) {
+  if (/docs\/internal|\.agents|audit-log/i.test(body)) throw new Error('discovery files expose internal material');
+  if (process.env.PAGES_BASE_PATH && body.includes('https://disnana.github.io')) {
+    throw new Error('fallback build must retain the custom-domain canonical origin');
+  }
 }
 
 const legacyRoutes = JSON.parse(

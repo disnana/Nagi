@@ -33,8 +33,6 @@ second
 all joined
 ```
 
-These delays normally produce this order, but ordering between independent tasks is not a general API contract. `all joined` does appear only after every scoped child finishes.
-
 The [complete Task result example](https://github.com/disnana/Nagi/tree/main/test-nagi-code/library-examples/task-results) awaits a handle once and separates Task failure from the business `Result`. Continue with [Actors](../actor) when one worker should own mutable state.
 
 A shorter scope sample is available in the [async tutorial source](https://github.com/disnana/Nagi/blob/main/examples/async.nagi).

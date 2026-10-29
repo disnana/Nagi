@@ -117,7 +117,9 @@ python scripts/verify_task_handle_contract_inputs.py
 python scripts/verify_application_examples.py
 python scripts/verify_onboarding_examples.py
 python scripts/verify_sqlite_example.py
-python website/build.py
+cd website
+npm ci --ignore-scripts
+npm run build
 ```
 
 Separate infrastructure failures from contract failures and previous-main CI from new-head CI. Skipped jobs are not executions. A docs-only SF00 normally needs docs/site/change-detection gates, not a fresh Rust full suite.

@@ -16,10 +16,18 @@ ROOT_DOCS = {
     "AGENTS.md",
 }
 SITE_FILES = {
-    "website/README.md", "website/README.en.md", "website/build.py", "website/requirements.txt",
-    "website/CNAME", ".github/workflows/pages.yml",
+    "website/README.md", "website/README.en.md",
+    "website/package.json", "website/package-lock.json", "website/next-env.d.ts",
+    "website/next.config.mjs", "website/playwright.config.ts",
+    "website/postcss.config.mjs", "website/source.config.ts", "website/tsconfig.json",
+    "website/teaching-example-evidence.json", ".github/workflows/pages.yml",
 }
 ASSET_SUFFIXES = {".css", ".js", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".woff", ".woff2"}
+SITE_SOURCE_SUFFIXES = {".ts", ".tsx", ".mjs", ".md", ".mdx", ".json", ".css"}
+SITE_SOURCE_PREFIXES = (
+    "website/app/", "website/components/", "website/content/docs/", "website/lib/",
+    "website/scripts/", "website/tests/",
+)
 JETBRAINS_CHECK_INPUTS = {
     ".github/workflows/ci.yml", "scripts/ci/changes.py", "scripts/ci/gate.py",
     "scripts/ci/test_checks.py", "Cargo.toml", "Cargo.lock",
@@ -46,15 +54,13 @@ def is_docs_path(path: str) -> bool:
         return True
     if path.startswith("test-nagi-code/") and value.name in ("README.md", "README.en.md"):
         return True
-    # Pages runs root-level website tests through unittest discovery. Keep
-    # arbitrary website Python files and nested test helpers fail-closed.
-    if value.parent == PurePosixPath("website") and re.fullmatch(
-        r"test_[A-Za-z0-9_]*\.py", value.name, re.ASCII
-    ):
+    # Only the reviewed Fumadocs source/config surface is Docs-only. Unknown
+    # scripts, binaries, and arbitrary files under website remain fail-closed.
+    if path.startswith(SITE_SOURCE_PREFIXES) and value.suffix in SITE_SOURCE_SUFFIXES:
         return True
-    if path.startswith("website/templates/") and value.suffix == ".html":
+    if path.startswith(("website/assets/", "website/public/")) and value.suffix in ASSET_SUFFIXES:
         return True
-    return path.startswith("website/assets/") and value.suffix in ASSET_SUFFIXES
+    return path in ("website/public/.nojekyll", "website/public/CNAME")
 
 
 def is_jetbrains_path(path: str) -> bool:

@@ -1,6 +1,6 @@
 ---
 title: Nagi 0.1.10
-description: view 生存期間、HTTP 期限、SQLite/JSON、Rust連携、editor連携を広く改善した版です。
+description: viewの生存期間、HTTP期限、SQLite/JSON、Rust連携、エディター連携を広く改善した版です。
 status: released
 since: "0.1.10"
 backends: [rust]
@@ -11,7 +11,7 @@ canonicalSourceHash: "sha256:d75ae267630f47e6f6cdb3b50689cc4742ef375af75f317cc03
 canonicalRawBulletCount: 25
 canonicalItemCount: 25
 ---
-view 生存期間、HTTP 期限、SQLite/JSON、Rust連携、エディター連携を広く改善した版です。
+viewの生存期間、HTTP期限、SQLite/JSON、Rust連携、エディター連携を広く改善した版です。
 
 - 正本ID：`nagi-0-1-10`
 - 状態：`公開済み`
@@ -19,79 +19,79 @@ view 生存期間、HTTP 期限、SQLite/JSON、Rust連携、エディター連�
 ## 変更項目
 
 {/* canonical-item: item-001 */}
-- viewを含む関数 引数のローカル 生存期間を推論し、検査済みでescapeしない再代入とList appendをHigh・保存済みLowでコンパイル可能にする。公開 シグネチャ、戻り-起点検査、Rust アダプター ラッパー、所有 引数の破棄順を維持。
+- viewを含む関数引数のローカル生存期間を推論し、検査済みで外へ逃がさない再代入とListへの追加をHigh・保存済みLowでコンパイル可能にします。公開シグネチャ、戻り値の起点検査、Rustアダプターのラッパー、所有権を持つ引数の破棄順を維持します。
 
 {/* canonical-item: item-002 */}
-- 戻りする分岐内で再代入されるdirect viewへ別々のローカル 生存期間を付与。継続パス、ループ、match 束縛の更新と、escapeするローカル viewの拒否を維持。
+- returnで終了する分岐内で再代入される直接viewへ別々のローカル生存期間を付与します。継続パス、ループ、matchの束縛の更新と、外へ逃がすローカルviewの拒否を維持します。
 
 {/* canonical-item: item-003 */}
-- byte-viewの反復/indexingを生成Rust スライスと同じ`u8`として検査。Rust生成前に文字列-view 反復を拒否し、通常スライスと所有-要素 スライスを維持。
+- byte viewの反復/索引アクセスを生成Rustのスライスと同じ`u8`として検査します。Rust生成前に文字列viewの反復を拒否し、通常スライスと所有要素のスライスを維持します。
 
 {/* canonical-item: item-004 */}
-- リテラル zeroによる明示的な整数除算・剰余を`check`時に元ソース行で拒否。ランタイム依存の除算とfloating-箇所 arithmeticは変更しない。
+- リテラルのゼロによる明示的な整数除算・剰余を`check`時に元ソース行で拒否します。ランタイム依存の除算と浮動小数点演算は変更しません。
 
 {/* canonical-item: item-005 */}
-- yieldしない同期処理を含め、ハンドラーが期限後に成功した場合HTTP 504を返す。同期処理の中断やアプリケーション 状態のrollbackは行わない。
+- yieldしない同期処理を含め、ハンドラーが期限後に成功した場合はHTTP 504を返します。同期処理の中断やアプリケーション状態のロールバックは行いません。
 
 {/* canonical-item: item-006 */}
-- データベース不要のbyte-inspector HTTP例を追加し、バイナリ 入力、null許容 JSON 出力、経路挙動をHigh・保存済みLowで検証。
+- データベース不要のバイト検査用HTTP例を追加し、バイナリ入力、null許容JSON出力、経路挙動をHigh・保存済みLowで検証。
 
 {/* canonical-item: item-007 */}
-- Rust HTTP 通信とNagi async 業務 logicを使うAxum quote APIを追加。型付き JSON 入力、独自 結果 エラー、invalid 設定、停止をHigh・保存済みLowで検証。
+- RustのHTTP通信とNagiの非同期業務ロジックを使うAxumの見積もりAPIを追加。型付きJSON入力、独自Resultエラー、不正な設定、停止をHigh・保存済みLowで検証。
 
 {/* canonical-item: item-008 */}
-- DESIGN、README、日英DocsでRust ライブラリ integrationを中心的設計目標にし、現行アダプター境界と残る制約を文書化。
+- DESIGN、README、日英DocsでRustライブラリ連携を中心的設計目標にし、現行アダプター境界と残る制約を文書化。
 
 {/* canonical-item: item-009 */}
-- `ai/`下へcoding-agent ガイドと再利用可能なdevelopment skillを分離して追加し、コンパイラ検査済み例とRust アダプター検証手順を収録。
+- `ai/`下へコーディングエージェントガイドと再利用可能な開発用Skillを分離して追加し、コンパイラ検査済み例とRustアダプター検証手順を収録。
 
 {/* canonical-item: item-010 */}
-- preview モード付きBash/PowerShell uninstallerを追加。検証済みで未変更のdistributionと管理対象 コマンド/パス エントリーだけを削除し、変更済み・検証不能ファイルは保持。
+- プレビューモード付きのBash/PowerShellアンインストーラーを追加します。検証済みで未変更の配布物と管理対象コマンド/PATHエントリーだけを削除し、変更済み・検証不能ファイルは保持します。
 
 {/* canonical-item: item-011 */}
-- 日英siteへsystem/light/dark appearance設定を追加。desktop/mobileでヘッダー、Docs 移動、footerを整合。
+- 日英サイトへsystem/light/darkの外観設定を追加します。デスクトップ/モバイルでヘッダー、Docsナビゲーション、フッターを整合させます。
 
 {/* canonical-item: item-012 */}
-- 現在 コンパイラを使うJetBrains integration テストをCIで実行し、IntelliJ IDEA/PyCharm プラグイン 互換性 checkも併走。
+- 現在のコンパイラを使うJetBrains統合テストをCIで実行し、IntelliJ IDEA/PyCharmプラグイン互換性検査も併走。
 
 {/* canonical-item: item-013 */}
-- 借用 入力を持たないview-returning 関数 値へstatic 出力 生存期間を付与。入力-bound callback、入れ子 関数 生存期間 scope、High/Low 呼び出しのstatic 起点を維持。
+- 借用入力を持たないviewを返す関数値へstaticな出力生存期間を付与。入力に束縛されたコールバック、入れ子関数の生存期間scope、High/Low呼び出しのstatic起点を維持。
 
 {/* canonical-item: item-014 */}
-- shared 値と借用した 資源からのnon-コピー フィールド moveをRust生成前に診断し、outer `owned` ラッパーとtemporary 呼び出し 結果も対象化。コピー 読み取り、明示コピー、通常所有 レコードからのmoveを維持。
+- 共有値と借用した資源からのコピー不能フィールドのmoveをRust生成前に診断し、外側の`owned`ラッパーと一時的な呼び出し結果も対象にします。コピーによる読み取り、明示コピー、通常の所有レコードからのmoveを維持します。
 
 {/* canonical-item: item-015 */}
-- 入れ子ownership ラッパーを含め、`owned`で包んだ結果を捨てるbare expressionを拒否。明示束縛と既存`try`/`match`制限を維持。
+- 入れ子所有権ラッパーを含め、`owned`で包んだ結果を捨てる裸の式を拒否。明示束縛と既存`try`/`match`制限を維持。
 
 {/* canonical-item: item-016 */}
-- opt-in offline SQLite検査`check --sql-schema FILE --sql-dialect sqlite`を追加。有限 ワーカーでリテラル query名、required 行 column、bind 件数を検証し、dynamic SQLと値/NULL検査はランタイムに残す。
+- 明示指定のオフラインSQLite検査`check --sql-schema FILE --sql-dialect sqlite`を追加します。有限数のワーカーでリテラルのクエリ名、必須行カラム、bind数を検証し、動的SQLと値/NULL検査はランタイムに残します。
 
 {/* canonical-item: item-017 */}
-- null許容 フィールドを含む、`owned`で包んだ対応scalar フィールドのSQLite 行 デコードを生成。重複実装を避けるため手書き`FromRow` workaroundを削除。
+- null許容フィールドを含む、`owned`で包んだ対応するスカラーフィールドのSQLite行のデコードを生成。重複実装を避けるため手書き`FromRow`による回避策を削除。
 
 {/* canonical-item: item-018 */}
-- viewを含む戻り 型で、`None`、empty List、所有 エラー 結果など借用-freeな直接戻り 値を受理。ローカル view、別名、非公開 関数 結果の検査を維持。
+- viewを含む戻り型で、`None`、空のList、所有権を持つエラーResultなど借用のない直接の戻り値を受理。ローカルview、別名、非公開関数結果の検査を維持。
 
 {/* canonical-item: item-019 */}
-- High/Low highlight、indentation、folding、明示check/run コマンドを持つ初期IntelliJ IDEA/PyCharm プラグインを追加。IDEA/PyCharm 2025.1.1を検証し、対応2024.3 ビルドも互換性 check。
+- High/Lowの色付け、字下げ、折りたたみ、明示的なcheck/runコマンドを持つ初期IntelliJ IDEA/PyCharmプラグインを追加します。IDEA/PyCharm 2025.1.1を検証し、対応する2024.3ビルドも互換性検査します。
 
 {/* canonical-item: item-020 */}
-- JetBrains プラグインのtop-level High/Low エントリー 箇所へgutter Run buttonを追加し、プロジェクト選択、保存、信頼 checkを維持。
+- JetBrainsプラグインのトップレベルのHigh/Lowエントリーポイントへガターの実行ボタンを追加し、プロジェクト選択、保存、信頼性検査を維持。
 
 {/* canonical-item: item-021 */}
-- 所有 結果 エントリー 箇所の失敗 exit codeを維持し、ownershipを取らない`error_kind`読取時の文字列 allocationを回避。
+- 所有権を持つResultエントリーポイントの失敗時の終了コードを維持し、所有権を取らない`error_kind`読取時の文字列割り当てを回避します。
 
 {/* canonical-item: item-022 */}
-- 明示的にネイティブ ビルド キャッシュを共有するアプリケーションへ別々のexecutable名を付与。既定名と共有依存関係 キャッシュは変更しない。
+- 明示的にネイティブビルドキャッシュを共有するアプリケーションへ別々のexecutable名を付与。既定名と共有依存関係キャッシュは変更しない。
 
 {/* canonical-item: item-023 */}
-- 読み取り専用 shell プロファイルがパス登録を拒否した後もインストーラー 更新を回復し、installation変更前にcolon入りパス エントリーを拒否。
+- 読み取り専用のシェルプロファイルがパス登録を拒否した後もインストーラー更新を回復し、インストール変更前にコロンを含むPATHエントリーを拒否。
 
 {/* canonical-item: item-024 */}
-- oversized HTTP 本文、incomplete アップロード、connection 容量 回復のcross-platform TCP regressionを追加。両Docs言語でSupervisor 応答 エラー、ワーカー 失敗、scope cancellationを明確化。
+- 上限超過のHTTP本文、未完了のアップロード、接続容量の回復のクロスプラットフォームTCP回帰テストを追加。両Docs言語でSupervisor応答エラー、ワーカー障害、scopeのキャンセルを明確化。
 
 {/* canonical-item: item-025 */}
-- 標準HTTP エラー マッパーと互換性 routerを含め、HTTP ハンドラーがパニック unwindした場合ジェネリック 500を返してconnectionを閉じる。通常結果処理とリクエスト 期限を維持し、アプリケーション 状態はrollbackしない。
+- 標準HTTPエラーマッパーと互換ルーターを含め、HTTPハンドラーがパニックをunwindした場合は一般化された500応答を返して接続を閉じます。通常の結果処理とリクエスト期限を維持し、アプリケーション状態はロールバックしません。
 ## 正本との対応
 
-版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`25`件を、明確な日英重複だけ統合した`25`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。
+版、日付、順序、リンク、項目の正本はリポジトリ直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`25`件を、明確な日英重複だけ統合した`25`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

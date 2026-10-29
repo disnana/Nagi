@@ -117,7 +117,9 @@ python scripts/verify_task_handle_contract_inputs.py
 python scripts/verify_application_examples.py
 python scripts/verify_onboarding_examples.py
 python scripts/verify_sqlite_example.py
-python website/build.py
+cd website
+npm ci --ignore-scripts
+npm run build
 ```
 
 socket/Cargo依存を用意し、infra失敗と契約失敗を別記録。文書だけのSF00でRust全suiteを新規実行する必要はない。4 OSの過去main成功と新head成功を混ぜず、skipしたjobを実行成功に数えない。

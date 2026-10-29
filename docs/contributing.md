@@ -127,13 +127,16 @@ cargo test --locked -p nagic --test conformance corpus_and_bounded_generated_con
 
 check成功時は`checked tests/conformance/nullable_default.nagi`と表示します。test成功時は指定testが`ok`となり、summaryが`1 passed`です。このtestは新caseだけでなく、登録済みcorpusと既定のbounded generated casesも実行します。失敗時は報告されたcase名・stage・元行と、fixture・`corpus.json`のsource/oracleを確認します。期待値を変えて結果を合わせる前に、契約と独立した正しい挙動を確認してください。
 
-サイトDocsを更新したときはPython 3.12以降と`website/requirements.txt`の依存を用意し、rootから次を実行します。
+サイトDocsを更新したときはNode.js 24以降を用意し、rootから次を実行します。
 
 ```sh
-python website/build.py --base-path / --out build/website-preview
+cd website
+npm ci --ignore-scripts
+npx playwright install chromium
+npm test
 ```
 
-成功すると`build/website-preview/`に日本語・英語のHTMLが生成され、リンクと見出しanchorも検査されます。`ModuleNotFoundError`なら[websiteの手元での確認](../website/README.md#手元で確認する)の仮想環境を使います。リンクが失敗したら、表示されたMarkdownのsource linkとanchorを修正して再実行します。
+成功すると`website/out/`に日本語・英語の静的HTMLが生成され、content、型、route、link、検索indexとbrowser操作も検査されます。依存やbrowserの準備に失敗した場合は[websiteの手元での確認](../website/README.md#手元で確認する)を確認します。linkが失敗したら、表示されたMDX/Markdownのsource linkとanchorを修正して再実行します。
 
 ## 5. 差分を見直す
 
@@ -169,5 +172,5 @@ PRは必ず最新`main`向けです。forkでbranchが見つからない場合�
 | `nagic`では新しい変更が見えない | PATH上の公開版でなく`./target/debug/nagic`を実行し、必要なら再build |
 | `check`は通るが`build`が失敗 | 生成Rust・Cargo/rustc診断とbuild環境を分ける。[compiler internals](compiler-internals.md)も参照 |
 | testが失敗する | 最初の失敗stage、expected/actual、元source lineを確認。仕様契約を緩めて通さない |
-| site buildでimport error | websiteのPython venvを有効にし、`pip install -r website/requirements.txt`を実行 |
+| site buildでmoduleが見つからない | Node.js 24を確認し、`website/`で`npm ci --ignore-scripts`を実行 |
 | 手を付けるべき場所が決まらない | Issueの再現から`rg`で使用箇所を探し、既存testと契約から変更範囲を決める。契約変更なら先に相談 |

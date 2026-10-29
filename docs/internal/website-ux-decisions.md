@@ -16,9 +16,11 @@ The correction follows these rules:
 
 [Shadcn Admin](https://github.com/satnaing/shadcn-admin) is a responsive, accessible Vite/React dashboard using Shadcn UI, TanStack Router, a collapsible sidebar, command search, theme controls, and many application dependencies. Its navigation hierarchy, compact cards, search, focus states, responsive sidebar, and theme behavior are useful references. It is explicitly an admin dashboard rather than a documentation engine or starter template.
 
-Nagi's current site is a static Python build: Markdown is rendered at build time, all local links and anchors are checked, pages need no client framework, and GitHub Pages deploys plain files with a restrictive same-origin CSP. Replacing it with Shadcn Admin would add Node, React, Vite, Tailwind, TanStack, Radix and component update work; rewrite the bilingual route/source-link generator and link validator; and increase dependency, cache, security-audit, browser-test, and hydration responsibilities without improving the compiler or documentation content by itself.
+Nagi's previous site used a custom static Python builder. Replacing it with Shadcn Admin would have introduced a dashboard-oriented dependency and navigation model without supplying a documentation source model, versioned pages, or search pipeline.
 
-The adopted decision is to apply the useful interaction patterns to the current static site first. A framework migration should be reconsidered only if Nagi needs substantial client-side state, authenticated dashboard workflows, or a component system whose measured maintenance benefit exceeds the new dependency and migration cost. If a docs-specific framework is evaluated later, compare a dedicated option such as Fumadocs with the static builder rather than treating an admin dashboard as a drop-in docs engine.
+The adopted decision is to use Fumadocs with Next.js static export. It provides a documentation-specific sidebar, table of contents, code blocks, search integration, and responsive navigation while keeping GitHub Pages as plain static hosting. The migration retains explicit Japanese/English routes, physical legacy aliases, versioned changelog pages, local link validation, and browser QA. No runtime server, middleware, authenticated dashboard, or server action is required.
+
+Fumadocs does not remove the need for product-specific content and validation. Nagi keeps its own locale-parity checks, canonical changelog import, legacy-route manifest, static search payload limits, tutorial evidence, and base-path tests. The framework choice is therefore an implementation detail behind a stable public URL and content contract, rather than permission to weaken those contracts.
 
 ## Review checklist for future public pages
 

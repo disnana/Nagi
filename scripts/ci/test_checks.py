@@ -80,11 +80,14 @@ class ChangeTests(unittest.TestCase):
                      "DESIGN.md", "DESIGN.en.md", "AGENTS.md", "ai/README.md", "ai/language.md",
                      "ai/skills/nagi-development/SKILL.md",
                      "docs/http.md", "docs/en/http.md", "docs/guide/setup.md",
-                     "website/README.md", "website/build.py", "website/requirements.txt",
-                     "website/test_discovery.py", "website/test_future_case2.py",
-                     "website/CNAME", ".github/workflows/pages.yml",
+                     "website/README.md", "website/package.json", "website/package-lock.json",
+                     "website/next.config.mjs", "website/source.config.ts",
+                     "website/app/docs/[[...slug]]/page.tsx", "website/components/docs-page.tsx",
+                     "website/content/docs/ja/index.mdx", "website/lib/source.ts",
+                     "website/scripts/verify-static.mjs", "website/tests/site.spec.ts",
+                     "website/public/CNAME", ".github/workflows/pages.yml",
                      "website/assets/site.js", "website/assets/site.css", "website/assets/plot.svg",
-                     "website/assets/img/photo.png", "website/templates/page.html",
+                     "website/assets/img/photo.png", "website/public/favicon.svg",
                      "editors/vscode-nagi/README.md", "test-nagi-code/web-demo/README.md",
                      "test-nagi-code/application-examples/stock-report/README.en.md"):
             with self.subTest(path=path):
@@ -110,7 +113,8 @@ class ChangeTests(unittest.TestCase):
                      "website/examples/double.nagi", "website/assets/helper.rs",
                      "website/helper.py", "website/tests/test_nested.py", "website/test_data.txt",
                      "website/test_future-case.py", "website/test_future.case.py",
-                     "website/templates/helper.py", "website/new-config.toml", "new-feature/README.md"):
+                     "website/templates/helper.py", "website/new-config.toml", "website/app/helper.py",
+                     "website/scripts/native.rs", "new-feature/README.md"):
             with self.subTest(path=path):
                 base = self.run_git("rev-parse", "HEAD")
                 self.write(path, "changed\n")
@@ -231,7 +235,7 @@ class ChangeTests(unittest.TestCase):
     def test_pages_and_domain_only_complete_ranges_skip_full_checks(self):
         self.write(".github/workflows/pages.yml", "# Pages presentation update\n")
         self.commit()
-        self.write("website/CNAME", "docs.example.invalid\n")
+        self.write("website/public/CNAME", "docs.example.invalid\n")
         head = self.commit()
         for event in ("push", "pull_request"):
             with self.subTest(event=event):
@@ -242,7 +246,7 @@ class ChangeTests(unittest.TestCase):
             with self.subTest(path=path):
                 base = self.run_git("rev-parse", "HEAD")
                 self.write(".github/workflows/pages.yml", f"# Pages update alongside {path}\n")
-                self.write("website/CNAME", f"# Domain update alongside {path}\n")
+                self.write("website/public/CNAME", f"# Domain update alongside {path}\n")
                 self.write(path, "# Changed code-check input\n")
                 self.assertEqual(self.full(self.commit(), base), "true")
 
@@ -510,8 +514,8 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         release_url = "https://github.com/disnana/Nagi/releases"
         install_guides = (
             "README.md", "README.en.md", "docs/getting-started.md", "docs/en/getting-started.md",
-            "docs/editor.md", "docs/en/editor.md", "website/templates/home.html",
-            "website/templates/home.en.html", "editors/jetbrains-nagi/README.md",
+            "docs/editor.md", "docs/en/editor.md", "website/components/home.tsx",
+            "editors/jetbrains-nagi/README.md",
             "editors/jetbrains-nagi/README.en.md",
         )
         for relative_path in install_guides:

@@ -1,6 +1,6 @@
 ---
 title: JetBrains 0.1.3
-description: 公開Nagi 0.2.0向けのコンパイラ連携補助、標準Run/Stop、編集補助、IDE管理run世代回収をまとめた版です。
+description: 公開Nagi 0.2.0向けのコンパイラ連携補助、標準実行/停止、編集補助、IDE管理下の実行世代回収をまとめた版です。
 status: released
 since: "0.1.3"
 backends: []
@@ -11,7 +11,7 @@ canonicalSourceHash: "sha256:5c4d6ce7b9374485c0608f1e2c74ab2ed51d4eb057a80725c28
 canonicalRawBulletCount: 5
 canonicalItemCount: 5
 ---
-公開Nagi 0.2.0向けのコンパイラ連携補助、標準Run/Stop、編集補助、IDE管理run世代回収をまとめた版です。
+公開Nagi 0.2.0向けのコンパイラ連携補助、標準実行/停止、編集補助、IDE管理下の実行世代回収をまとめた版です。
 
 - 正本ID：`jetbrains-0-1-3`
 - 状態：`公開済み`
@@ -19,19 +19,19 @@ canonicalItemCount: 5
 ## 変更項目
 
 {/* canonical-item: item-001 */}
-- 公開Nagi 0.2.0コンパイラ向けのIDEA/PyCharm共通プラグインを、ID `com.disnana.nagi`、表示名**Nagi**、版0.1.3のまま準備します。0.2.0でHigh/Low補完、構造化診断、正確なソースへの定義移動、意味色、引数 Infoを提供します。0.1.11は通常のCheck/Runだけで支援 protocolはありません。
+- 公開Nagi 0.2.0コンパイラ向けのIDEA/PyCharm共通プラグインを、ID `com.disnana.nagi`、表示名**Nagi**、版0.1.3のまま準備します。0.2.0でHigh/Low補完、構造化診断、正確なソースへの定義移動、意味色、引数情報を提供します。0.1.11は通常のCheck/Runだけで支援プロトコルはありません。
 
 {/* canonical-item: item-002 */}
-- Run/Stop、実行前保存、信頼されていないプロジェクトの拒否を行う標準Nagi Run 設定を追加します。IDE設定に従う括弧・quoteの対入力、有限な字下げとsmart Backspace、関数リアルタイム template、トップレベル`def`/`fn`の有限な字句補完を含みます。保存済みローカルファイルは未保存解析バッファを渡せますが、新規未保存ファイルと未解決の定義先は未対応です。エディター補助は完全なビルド成功を証明しません。
+- 実行/停止、実行前保存、信頼されていないプロジェクトの拒否を行う標準Nagi実行設定を追加します。IDE設定に従う括弧・引用符の対入力、有限な字下げとスマートBackspace、関数のライブテンプレート、トップレベル`def`/`fn`の有限な字句補完を含みます。保存済みローカルファイルは未保存解析バッファを渡せますが、新規未保存ファイルと未解決の定義先は未対応です。エディター補助は完全なビルド成功を証明しません。
 
 {/* canonical-item: item-003 */}
-- コンパイラ0.2.0のIDE管理runだけで`NAGI_RUN_RETENTION=latest`を有効にします。記録済み最新成功、実行中、入力参照中、last-good、不明なメタデータを保護しながら対象世代を回収します。通常CLI世代と共有Cargo キャッシュは変更しません。厳密な容量上限、任意Rust依存の発見、停電耐久性は追加しません。
+- コンパイラ0.2.0のIDE管理下の実行だけで`NAGI_RUN_RETENTION=latest`を有効にします。記録済み最新成功、実行中、入力参照中、最後に成功した世代、不明なメタデータを保護しながら対象世代を回収します。通常CLI世代と共有Cargoキャッシュは変更しません。厳密な容量上限、任意Rust依存の発見、停電耐久性は追加しません。
 
 {/* canonical-item: item-004 */}
-- 公開Nagi 0.2.0向けにHigh/Low補完・診断・正確な定義移動、意味色・引数情報、標準Run/Stop、基本編集補助、IDE管理runの世代回収をまとめます。0.1.11は通常Check/Runだけで支援未対応です。制約と対応表は[日英の導入案内](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.md)にあります。
+- 公開Nagi 0.2.0向けにHigh/Low補完・診断・正確な定義移動、意味色・引数情報、標準実行/停止、基本編集補助、IDE管理下の実行の世代回収をまとめます。0.1.11は通常のCheck/Runだけで支援未対応です。制約と対応表は[日英の導入案内](https://github.com/disnana/Nagi/blob/main/editors/jetbrains-nagi/README.md)にあります。
 
 {/* canonical-item: item-005 */}
-- この項目は公開準備であり、0.1.3成果物の存在を主張しません。mainへ統合後、必須IDE テストとプラグイン Verifierが成功すれば既存ワークフローがGitHub リリースを作れます。Marketplaceの送信・承認は所有者の別操作です。実装は[main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923)のIDEA/PyCharm 安定版/EAP 4経路を通過しましたが、EAP Verifierには既存の非推奨/experimental API警告があり、リリース HEADの最終GUI受入は未確認です。
+- この項目は公開準備であり、0.1.3成果物の存在を主張しません。mainへ統合後、必須IDEテストとプラグインVerifierが成功すれば既存ワークフローがGitHubリリースを作れます。Marketplaceの送信・承認は所有者の別操作です。実装は[main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923)のIDEA/PyCharmの安定版/EAPの4経路を通過しましたが、EAPのVerifierには既存の非推奨/実験的API警告があり、リリースHEADの最終GUI受け入れは未確認です。
 ## 正本との対応
 
-版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`5`件を、明確な日英重複だけ統合した`5`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。
+版、日付、順序、リンク、項目の正本はリポジトリ直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`5`件を、明確な日英重複だけ統合した`5`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

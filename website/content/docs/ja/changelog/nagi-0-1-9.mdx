@@ -1,6 +1,6 @@
 ---
 title: Nagi 0.1.9
-description: non-Copy List iteration、Result エラー変換、Supervisor readiness、nullable SQLite、実行例を追加した版です。
+description: コピー不能なListの反復、Resultのエラー変換、Supervisorの準備完了、null許容SQLite、実行例を追加した版です。
 status: released
 since: "0.1.9"
 backends: [rust]
@@ -11,7 +11,7 @@ canonicalSourceHash: "sha256:fb5592dca1996dc550060d398fdfa23ff57868ad6f4e41b20cc
 canonicalRawBulletCount: 15
 canonicalItemCount: 15
 ---
-non-コピー List 反復、結果 エラー変換、Supervisor 準備完了、null許容 SQLite、実行例を追加した版です。
+コピー不能なListの反復、Resultのエラー変換、Supervisorの準備完了、null許容SQLite、実行例を追加した版です。
 
 - 正本ID：`nagi-0-1-9`
 - 状態：`公開済み`
@@ -19,49 +19,49 @@ non-コピー List 反復、結果 エラー変換、Supervisor 準備完了、n
 ## 変更項目
 
 {/* canonical-item: item-001 */}
-- non-コピー List要素を読み取り専用 `for`で反復できるようにし、所有権・生存期間検査を行います。コピー反復は維持します。
+- コピー不能なList要素を読み取り専用の`for`で反復できるようにし、所有権・生存期間検査を行います。コピーによる反復は維持します。
 
 {/* canonical-item: item-002 */}
-- 同期関数による明示的な型付きエラー変換`std.result.map_error`を追加し、`try`のエラー 同一性と借用した success値を維持します。
+- 同期関数による明示的な型付きエラー変換`std.result.map_error`を追加し、`try`のエラー同一性と借用した成功値を維持します。
 
 {/* canonical-item: item-003 */}
-- 明示タスク 準備完了と型付き有限Supervisor イベント waitを追加し、重複・stale・inactive 準備完了 signalを拒否します。
+- 明示的なタスク準備完了と型付き有限Supervisorイベントの待機を追加し、重複・古い・非アクティブな準備完了通知を拒否します。
 
 {/* canonical-item: item-004 */}
-- 借用した JSON Content-型 検証を追加し、quote API sampleは中間コピーなしでハンドラー ラッパーのリクエスト IDを保持します。
+- 借用したJSONの`Content-Type`検証を追加し、見積もりAPIのサンプルは中間コピーなしでハンドラーラッパーのリクエストIDを保持します。
 
 {/* canonical-item: item-005 */}
-- handwritten Lowでmultiline 呼び出し、コンストラクター、List、索引、関数 型を受理し、statement境界とソース診断を維持します。
+- 手書きLowで複数行呼び出し、コンストラクター、List、索引、関数型を受理し、文の境界とソース診断を維持します。
 
 {/* canonical-item: item-006 */}
-- ソース ファイル 別名、embedded 成果物、Rust アダプター、manifestを含む生成出力の重複を書き込み前に拒否します。
+- ソースファイルの別名、埋め込み成果物、Rustアダプター、マニフェストを含む生成出力の重複を書き込み前に拒否します。
 
 {/* canonical-item: item-007 */}
-- 索引、comparison、保存した viewで借用と衝突する追加moveを検出し、対応済みimmediate 読み取り、独立フィールド、コピー、ループ reassignmentを維持します。
+- 索引、比較、保存したviewで借用と衝突する追加moveを検出し、対応済み即時読み取り、独立フィールド、コピー、ループでの再代入を維持します。
 
 {/* canonical-item: item-008 */}
-- bool、float、バイトを含む対応scalar 行 型のnull許容 SQLite columnをデコードし、保存済み Lowで入れ子 Optionを維持します。
+- bool、float、バイトを含む対応するスカラー行型のnull許容SQLiteカラムをデコードし、保存済みLowで入れ子のOptionを維持します。
 
 {/* canonical-item: item-009 */}
-- graceful 停止中もhealthy in-flight リクエスト完了までHTTP 応答 send 期限を有効に保ちます。
+- 正常停止中も、正常な処理中のリクエストが完了するまでHTTP応答の送信期限を有効に保ちます。
 
 {/* canonical-item: item-010 */}
-- Rust バックエンド cause 注記をNagi ソース位置へ対応付け、読みやすいインポート名を表示し、ネイティブ Rust診断とsuggestionを維持します。
+- Rustバックエンドの原因注記をNagiソース位置へ対応付け、読みやすいインポート名を表示し、ネイティブRust診断と修正候補を維持します。
 
 {/* canonical-item: item-011 */}
-- 定数 integer arithmeticのリリース wrappingとデバッグ overflow checkを維持します。`include_text`というローカル callbackを通常呼び出しとして扱い、copied List viewに必要な実際のClone要件を報告します。
+- 定数整数演算のリリース時のラップとデバッグ時のオーバーフロー検査を維持します。`include_text`というローカルコールバックを通常呼び出しとして扱い、コピー済みListのviewに必要な実際のClone要件を報告します。
 
 {/* canonical-item: item-012 */}
-- cross-モジュール edgeをHTML マップ viewport内に保ち、group 件数を正確にlabelします。
+- モジュール間のedgeをHTMLマップの表示領域内に保ち、グループ件数を正確に表示します。
 
 {/* canonical-item: item-013 */}
-- stock-report、device-settings、seat-reservations、ファイル-json、quote-api、supervised-ワーカー、handwritten Low order-quoteの実行プロジェクトを追加し、High・保存済み Low・direct Lowでネイティブ動作を検証します。
+- stock-report、device-settings、seat-reservations、file-json、quote-api、supervised-worker、手書きLowのorder-quote実行プロジェクトを追加し、High・保存済みLow・直接記述したLowでネイティブ動作を検証します。
 
 {/* canonical-item: item-014 */}
-- コンパイラ進捗をstderrへ送り、cost report有効時も`nagic run` stdoutをアプリケーション出力専用に保ちます。
+- コンパイラ進捗を標準エラー出力へ送り、コストレポート有効時も`nagic run`の標準出力をアプリケーション出力専用に保ちます。
 
 {/* canonical-item: item-015 */}
-- 同一入力の配布archiveを再現可能にし、再開したdraft リリースが検証済み成果物を再利用できるようにします。
+- 同一入力の配布アーカイブを再現可能にし、再開したドラフトリリースが検証済み成果物を再利用できるようにします。
 ## 正本との対応
 
-版、日付、順序、リンク、項目の正本はリポジトリ 直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`15`件を、明確な日英重複だけ統合した`15`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。
+版、日付、順序、リンク、項目の正本はリポジトリ直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`15`件を、明確な日英重複だけ統合した`15`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

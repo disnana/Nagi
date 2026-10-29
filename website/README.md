@@ -1,72 +1,65 @@
-# Nagiの紹介・Docsサイト
+# Nagi Docsサイト
 
-紹介ページと日本語・英語Docsを、GitHub Pagesで配信する静的HTMLにします。紹介ページはNagiの目的、動くコード例、名前の由来、現在の制限を説明します。本文はリポジトリのMarkdownから生成します。
-
-日本語のDocs本文は`docs/`などの既存Markdown、英語版は`docs/en/`を読みます。公開サイトは`https://nagi.disnana.com/`、英語版は`/en/`です。各ページの言語指定とmetadataを設定し、右上の言語リンクで対応するページへ切り替えます。生成時にサイト内のリンクへ変換し、リンク先・見出し・CSS・JavaScriptの存在を確認します。ソースコードやサンプルのフォルダーへのリンクはGitHubへ移動します。
+Nagiの日本語・英語Docsは、Next.js 16とFumadocsで静的HTMLへ出力します。日本語は`/docs/`、英語は`/en/docs/`です。公開先は`https://nagi.disnana.com/`で、GitHub Pagesのproject path用に`/Nagi`を指定したbuildも検査します。
 
 ## 手元で確認する
 
-Python 3.12以降を使います。コマンドはリポジトリのルートで実行してください。
+Node.js 24以降を使います。repository rootから次を実行してください。
 
 ```bash
-python -m venv build/website-venv
-build/website-venv/bin/python -m pip install -r website/requirements.txt
-build/website-venv/bin/python website/build.py --base-path / --out build/website-preview
-python -m http.server 4173 --directory build/website-preview
+cd website
+npm ci --ignore-scripts
+npx playwright install chromium
+npm run prepare:content
+npm run dev
 ```
 
-Windowsでは、venv内のPythonを`build\website-venv\Scripts\python.exe`に置き換えます。
-
-ブラウザーで`http://localhost:4173`を開きます。紹介、Docsの目次、記事、モバイルの目次、コードのコピーを確認できます。サーバーはCtrl+Cで停止します。
-
-公開用の生成は、次のコマンドです。出力先は`build/website/`です。
+`http://localhost:3000/`を開きます。開発用表示と静的配信との差は完全検査で確認します。
 
 ```bash
-build/website-venv/bin/python website/build.py
+cd website
+npm test
 ```
 
-公式リポジトリでは`website/CNAME`のドメインを使い、サイトの起点を`/`にします。生成物にも`CNAME`を含めます。Pagesワークフローと手元のビルドは同じ設定を使います。
+`npm test`は型検査、content生成・整合性、静的build、route・link・検索index、実browserでのmobile・keyboard・検索・copy・accessibilityを検査します。静的生成物は`website/out/`です。個別には`npm run typecheck`、`npm run build`、`npm run verify:static`、`npm run verify:links`、`npm run test:browser`を使えます。
 
-forkでは公式の`CNAME`を使わず、`--repository https://github.com/所有者/リポジトリ名`から通常のGitHub Pages URLと`/リポジトリ名/`を選びます。`所有者.github.io`リポジトリなら起点は`/`です。`--base-path`と`--site-url`を明示すると設定を上書きできます。公式リポジトリをproject Pages用に生成する場合は、`--base-path /Nagi/ --site-url https://disnana.github.io`を指定します。
+project Pagesと同じpathで確認する場合は、buildから検査まで同じ値を渡します。
 
-## GitHub Pagesを公開する
-
-`.github/workflows/pages.yml`を公開するリポジトリの既定ブランチへ入れ、次の設定と実行を行います。
-
-1. GitHubの **Settings → Pages → Build and deployment** でSourceを **GitHub Actions** にする。
-2. **Actions → Nagi website → Run workflow** を開く。
-3. 既定ブランチを選んで実行する。
-4. `deploy`の成功後、表示されたPagesのURLを開く。
-
-PRではサイトをビルド・検査し、HTMLをActionsの成果物へ保存します。**サイト関連の変更がmainへ入ると、検査成功後に自動デプロイします。** 初回公開や再デプロイには、mainを選んでRun workflowを使えます。公開設定、リポジトリのvisibility、custom domainはこのワークフローでは変更しません。
-
-生成HTMLを別の方法で配信する場合も、`build/website/`の内容を使えます。GitHub Pagesへの配信でJekyllが処理しないように`.nojekyll`を含めています。
+```bash
+cd website
+PAGES_BASE_PATH=/Nagi npm run build
+PAGES_BASE_PATH=/Nagi npm run verify:static
+PAGES_BASE_PATH=/Nagi npm run verify:links
+PAGES_BASE_PATH=/Nagi npm run test:browser
+```
 
 ## 内容を更新する
 
-| 内容 | 更新するファイル |
+| 内容 | 更新する場所 |
 |---|---|
-| 紹介文、名前の由来、開発状況 | 日本語は`website/templates/home.html`、英語は`home.en.html` |
-| 紹介のコード例 | `website/examples/double.nagi`。実行して出力を確認する |
-| Docs本文 | 日本語は元の`docs/*.md`や各サンプルのREADME、英語は`docs/en/*.md` |
-| Docsの分類・掲載ページ | `website/build.py`の`GROUPS`・`ENGLISH_GROUPS`と`EXTRA` |
-| 変更履歴 | 正本はrootの`CHANGELOG.md`。build時に軽量一覧と版別詳細ページを生成し、本文を複製しない |
-| 文字、余白、配色、画面幅への対応 | `website/assets/site.css` |
-| 共通メニュー、metadata | `website/templates/page.html` |
+| 日本語の教材・reference | `website/content/docs/ja/` |
+| 英語の教材・reference | `website/content/docs/en/` |
+| sidebarの順序 | 各localeの`meta.json` |
+| homeと共通navigation | `website/components/`、`website/app/` |
+| 変更履歴 | rootの`CHANGELOG.md`が正本。生成処理が軽量indexと版別pageを作る |
+| 旧URLとの対応 | `website/legacy-routes.json`とcontent生成処理 |
+| content・route・linkの検査 | `website/scripts/` |
+| browser QA | `website/tests/` |
 
-新しいDocsページを追加した場合は、日英両方の本文と目次に追加してください。片方の本文がない場合や掲載ページが一致しない場合はビルドを止めます。本文の更新時も翻訳を合わせて更新します。公開サイトに載せるページは明示的に選び、未登録のMarkdownを自動で掲載しない構成です。
+日本語と英語は同じpage setを維持します。英語不足を日本語へfallbackしないため、片方だけの追加は検査で失敗します。公開版、未公開の変更、設計案を区別し、動くと説明するcodeは対応版とbackendを明記してください。
+
+`website/scripts/prepare-content.mjs`は選択した既存Docsと`CHANGELOG.md`を生成用contentへ変換します。生成物を直接編集せず、正本または変換規則を修正してください。
+
+## GitHub Pages
+
+`.github/workflows/pages.yml`はNode.js 24でlockfileから依存を導入し、教材のPython検査、型検査、static build、route/link、browser QAを実行します。PRでは成果物を保存し、site関連の変更が`main`へ入ったときだけ検査後にGitHub Pagesへdeployします。custom domain、DNS、repository visibilityはworkflowで変更しません。
+
+custom domainの静的ファイルの正本は`website/public/CNAME`です。重複したCNAMEを別の場所へ置かないでください。
+
+公式domainではbase pathを空にし、forkやproject Pagesでは`actions/configure-pages`が返すpathを`PAGES_BASE_PATH`としてbuildへ渡します。site内link、検索取得先、画像、canonical、hreflangは両方の形で検査します。
 
 ## 説明を見直すとき
 
-検索・AIからの参照には、既存のcanonical URL・日英hreflang・sitemapに加え、生成する`robots.txt`と`llms.txt`を使います。`llms.txt`は公開Docsと明示したAI向けMarkdown 5件の索引です。内部監査やログを探索して公開しません。人向けの入口は「開発・デバッグの早見表」と「特徴と他言語との比較」です。
+code blockを先に置き、構文の説明、正確な実行commandと結果、実用例の順に案内します。feature matrixやsource linkだけで書き方の説明を置き換えません。日本語routeは日本語、英語routeは英語で統一し、API識別子はそのまま使います。
 
-`llms.txt`は任意の参照用の慣例で、検索engineやAIの採用・順位・推薦を保証しません。価値、対応版、制約、実測条件を人向け資料にも記載し、推薦を指示する隠し文章や未確認の優位性は掲載しません。Skillの改善と、公開ページが実際に引用・参照されるかの評価は別です。
-
-Pages CIは`--ref "$GITHUB_SHA"`でソースリンクを対象commitへ固定します。手動生成時の既定は`main`です。公式ドメイン・forkのproject Pages・AI資料欠落時の失敗を検査するには、`build/website-venv/bin/python -m unittest discover -s website -p 'test_*.py'`を実行します。
-
-- 紹介の中心は「Python風の構文でバックエンドを書く言語」です。一般的な処理をRustの知識なしで書けることは目標として述べ、対応済みの機能は動くサンプルやリファレンスへ案内します。
-- 現在のビルドはRust/Cargoを使います。Lowはコードの確認と関数差し替えの説明に置き、ポインターやunsafeなどの未対応機能を使えるように書かないでください。
-- 公開版、リポジトリ上の変更、設計案を区別します。性能の説明には測定条件と結果のリンクを付けます。
-- 操作説明は、必要な準備、コマンド、結果の順に書きます。紹介文は短くし、型や資源の寿命などの詳細は該当するDocsに置きます。
-
-サイトのビルド検査はリンクやHTMLの生成を確認します。機能の説明が正しいか、コード例が実際に動くかは、対応する実装・テスト・実行結果でも確認してください。変更時は狭い画面、キーボード、light/dark、コードの横スクロールとcopy表示も隔離した実ブラウザーで確認します。
+検索・AI向けにはcanonical URL、hreflang、sitemap、robots、scope済み`llms.txt`を生成します。これらは推薦や順位を保証しません。性能や安全性の主張には、測定条件または実装・testの根拠を付けてください。
