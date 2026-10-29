@@ -1,72 +1,68 @@
-# Nagi introduction and Docs site
+# Nagi documentation site
 
-Build the introduction and Japanese/English Docs as a static site for GitHub Pages. The home page describes Nagi's purpose, a runnable code example, the name, and the current limits. Docs content comes from repository Markdown.
-
-Japanese Docs use existing Markdown such as `docs/*.md`; English pages use `docs/en/`. The public site is `https://nagi.disnana.com/`, with English pages under `/en/`. The builder sets language metadata, rewrites local links, and checks destinations, heading anchors, CSS, and JavaScript. Links to source code and example folders go to GitHub.
+Nagi's Japanese and English documentation is statically exported with Next.js 16 and Fumadocs. Japanese pages live under `/docs/`; English pages live under `/en/docs/`. Production uses `https://nagi.disnana.com/`, and the checks also cover a `/Nagi` GitHub Pages project path.
 
 ## Local preview
 
-Use Python 3.12 or later. Run these commands from the repository root:
+Use Node.js 24 or later. Run these commands from the repository root:
 
 ```bash
-python -m venv build/website-venv
-build/website-venv/bin/python -m pip install -r website/requirements.txt
-build/website-venv/bin/python website/build.py --base-path / --out build/website-preview
-python -m http.server 4173 --directory build/website-preview
+cd website
+npm ci --ignore-scripts
+npx playwright install chromium
+npm run prepare:content
+npm run dev
 ```
 
-On Windows, use `build\website-venv\Scripts\python.exe` for the virtual environment's Python.
-
-Open `http://localhost:4173` in a browser. Review the home page, Docs index and articles, mobile contents navigation, and code-copy controls. Stop the server with Ctrl+C.
-
-To build for publishing, run this from the repository root. Output goes to `build/website/`:
+Open `http://localhost:3000/`. Development mode is convenient for editing; use the complete check below to verify the static deployment form.
 
 ```bash
-build/website-venv/bin/python website/build.py
+cd website
+npm test
 ```
 
-The official repository uses `website/CNAME` and the `/` site root. The output includes `CNAME`. The Pages workflow and local build use the same settings.
+`npm test` runs type checking, content generation and consistency checks, the static build, route/link/search-index checks, and real-browser checks for mobile layout, keyboard use, search, copy controls, and accessibility. The static output is `website/out/`. Individual commands are `npm run typecheck`, `npm run build`, `npm run verify:static`, `npm run verify:links`, and `npm run test:browser`.
 
-For a fork, do not use the official `CNAME`. The builder derives the normal GitHub Pages URL and `/repository-name/` path from `--repository https://github.com/OWNER/REPOSITORY`. An `OWNER.github.io` repository uses `/`. Explicit `--base-path` and `--site-url` options override these defaults. To build the official repository for project Pages, use `--base-path /Nagi/ --site-url https://disnana.github.io`.
+To exercise the same path shape as project Pages, use the same build-time base path throughout:
 
-## Publish with GitHub Pages
-
-Add `.github/workflows/pages.yml` to the default branch of the repository to publish, then:
-
-1. In GitHub **Settings → Pages → Build and deployment**, set the source to **GitHub Actions**.
-2. Open **Actions → Nagi website → Run workflow**.
-3. Select the default branch and run the workflow.
-4. After `deploy` succeeds, open the Pages URL shown by GitHub.
-
-For a pull request, the workflow builds and checks the site, then saves the HTML as an Actions artifact. **When a site change reaches `main`, it deploys automatically after checks pass.** To publish the first time or redeploy, run the workflow from `main`. The workflow does not change the repository's visibility, custom domain, or other Pages settings.
-
-You can serve the contents of `build/website/` elsewhere. It includes `.nojekyll` so GitHub Pages does not process the output with Jekyll.
+```bash
+cd website
+PAGES_BASE_PATH=/Nagi npm run build
+PAGES_BASE_PATH=/Nagi npm run verify:static
+PAGES_BASE_PATH=/Nagi npm run verify:links
+PAGES_BASE_PATH=/Nagi npm run test:browser
+```
 
 ## Update content
 
-| Content | Files to edit |
+| Content | Location |
 |---|---|
-| Home copy, name, and development status | Japanese: `website/templates/home.html`; English: `home.en.html` |
-| Home code example | `website/examples/double.nagi`; run it and confirm the output |
-| Docs body | Japanese: `docs/*.md` and sample READMEs; English: `docs/en/*.md` |
-| Docs groups and page list | `GROUPS`, `ENGLISH_GROUPS`, and `EXTRA` in `website/build.py` |
-| Changelog | The root `CHANGELOG.md` is canonical; the build generates a small index and per-version detail pages without copying the body |
-| Typography, spacing, colors, responsive layout | `website/assets/site.css` |
-| Shared navigation and metadata | `website/templates/page.html` |
+| Japanese tutorials and reference | `website/content/docs/ja/` |
+| English tutorials and reference | `website/content/docs/en/` |
+| Sidebar ordering | `meta.json` in each locale |
+| Home page and shared navigation | `website/components/` and `website/app/` |
+| Changelog | Root `CHANGELOG.md` is canonical; generation creates a small index and per-version pages |
+| Legacy URL mapping | `website/content/docs/{ja,en}/reference/legacy-routes.json` and content preparation |
+| Content, route, and link checks | `website/scripts/` |
+| Browser QA | `website/tests/` |
 
-When adding a Docs page, add the Japanese and English content and include both in the site navigation. If either body is missing or the page lists differ, the build stops. Keep translations in sync when editing a page. Pages must be added explicitly; the site does not publish every Markdown file automatically.
+Keep the Japanese and English page sets aligned. There is no Japanese fallback for missing English content, so one-sided additions fail validation. Separate released behavior from repository-only changes and design plans, and label runnable code with its supported version and backend.
 
-## Review explanations
+`website/scripts/prepare-content.mjs` imports selected legacy documents and `CHANGELOG.md` into generated content. Do not edit generated files directly; change the canonical source or the import rule.
 
-Discovery uses the existing canonical URLs, Japanese/English hreflang links and sitemap, plus generated `robots.txt` and `llms.txt`. The latter indexes public Docs and five explicitly selected agent Markdown files; it does not crawl internal audits or logs. Human entry points are the development/debugging quick reference and strengths/language comparison page.
+## GitHub Pages
 
-`llms.txt` is an optional discovery convention, with no guarantee of search-engine or AI adoption, ranking, or recommendation. Keep value, supported versions, limits, and measurement conditions visible to human readers too. Do not add hidden instructions asking for recommendations or unsupported superiority claims. Improving a coding skill and measuring whether public pages are actually cited are separate activities.
+`.github/workflows/pages.yml` installs the lockfile with Node.js 24, checks tutorial sources with Python, then runs type checking, static build, route/link validation, and browser QA. Pull requests retain the built artifact. Deployment happens only after a site change reaches `main` and all checks pass. The workflow does not change the custom domain, DNS, or repository visibility.
 
-Pages CI pins source links to the build commit with `--ref "$GITHUB_SHA"`; manual builds default to `main`. Run `build/website-venv/bin/python -m unittest discover -s website -p 'test_*.py'` to verify the official domain, fork project Pages, and failure on missing agent documents.
+`website/public/CNAME` is the single source for the static custom-domain file. Do not keep a duplicate CNAME elsewhere.
+Project Pages builds with `PAGES_BASE_PATH=/Nagi` remove CNAME from the output so a fork cannot claim the official domain. `.nojekyll` remains in both outputs.
 
-- Describe Nagi as a backend language with Python-style syntax. Treat writing common operations without Rust knowledge as a goal, and link to runnable samples and references for implemented features.
-- Current application builds use Rust/Cargo. Explain Low as a way to inspect code or replace a function; do not imply that unsupported pointers or `unsafe` are available.
-- Distinguish a published feature from a repository change or a design proposal. Link performance statements to their conditions and results.
-- For procedures, give the prerequisites, commands, and expected results in that order. Keep the home page brief; explain types, resource lifetimes, and detailed behavior in the relevant Docs.
+`llms.txt` explicitly indexes the public Docs and five public AI resources: `ai/README.md`, the Nagi development Skill, debugging, language, and Rust interop. Internal plans and audit logs are excluded, and the build fails if an allowlisted source is missing.
 
-The site build verifies generated HTML and local links. It does not establish that feature descriptions are correct or code samples run; check those against the implementation, tests, and execution results as well. For changes, also exercise a narrow viewport, keyboard navigation, light/dark themes, code overflow, and copy feedback in an isolated real browser.
+The official domain has an empty base path. Forks and project Pages pass the path returned by `actions/configure-pages` as `PAGES_BASE_PATH`. Internal links, search requests, images, canonical URLs, and hreflang alternates are checked in both forms.
+
+## Review documentation
+
+Lead with a code block, then explain the syntax, exact invocation and result, followed by a practical example. A feature matrix or source link does not replace teaching how to write the code. Keep Japanese routes fully Japanese and English routes fully English, while preserving API identifiers.
+
+The build emits canonical URLs, hreflang, sitemap, robots, and a scoped `llms.txt` for discovery. They do not guarantee recommendation or ranking. Support performance and security claims with measured conditions or implementation/test evidence.

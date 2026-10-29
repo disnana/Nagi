@@ -45,10 +45,32 @@ class LevelsTests(unittest.TestCase):
     def test_root_website_tests_keep_pages_coverage_and_escalate_mixed_core_changes(self):
         pages = (ROOT / '.github/workflows/pages.yml').read_text()
         self.assertIn('on:\n  pull_request:\n  push:', pages)
-        self.assertIn('python -m pip install -r website/requirements.txt', pages)
-        self.assertIn("python -m unittest discover -s website -p 'test_*.py'", pages)
+        self.assertIn('permissions:\n  contents: read\n', pages)
+        deploy = pages.split('\n  deploy:\n', 1)[1]
+        self.assertIn("if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'", deploy)
+        self.assertIn('permissions:\n      pages: write\n      id-token: write\n', deploy)
+        self.assertNotIn('pull_request', deploy.split('steps:', 1)[0])
+        for command in (
+            "node-version: '24'", 'npm ci --ignore-scripts',
+            'python scripts/verify_onboarding_examples.py --docs-only',
+            'python scripts/verify_sqlite_example.py --docs-only',
+            'npm run typecheck', 'npm run build',
+            'npm run verify:static && npm run verify:links',
+            'npm run test:browser',
+        ):
+            self.assertIn(command, pages)
+        for readme in ('README.md', 'README.en.md'):
+            guide = (ROOT / 'website' / readme).read_text()
+            for command in ('npm ci --ignore-scripts', 'npm run typecheck', 'npm run build',
+                            'npm run verify:static', 'npm run verify:links', 'npm run test:browser'):
+                self.assertIn(command, guide)
+            self.assertNotIn('website/build.py', guide)
+            self.assertNotIn('website/requirements.txt', guide)
+            self.assertIn('website/content/docs/{ja,en}/reference/legacy-routes.json', guide)
+        for locale in ('ja', 'en'):
+            self.assertTrue((ROOT / 'website' / 'content' / 'docs' / locale / 'reference' / 'legacy-routes.json').is_file())
 
-        website = levels.select('pull_request', ['website/test_discovery.py'], 'false', 'false', release())
+        website = levels.select('pull_request', ['website/package.json'], 'false', 'false', release())
         self.assertEqual(website['level'], '1')
         self.assertEqual(website['critical_checks'], 'false')
         self.assertEqual(website['comprehensive_checks'], 'false')
@@ -67,7 +89,7 @@ class LevelsTests(unittest.TestCase):
         for path in protected_paths:
             with self.subTest(path=path):
                 mixed = levels.select(
-                    'pull_request', ['website/test_discovery.py', path], 'true',
+                    'pull_request', ['website/package.json', path], 'true',
                     'false' if path.startswith('runtime/') else 'true', release())
                 self.assertEqual(mixed['level'], '2')
                 self.assertEqual(mixed['comprehensive_checks'], 'true')

@@ -125,13 +125,16 @@ cargo test --locked -p nagic --test conformance corpus_and_bounded_generated_con
 
 On success, the check prints `checked tests/conformance/nullable_default.nagi`. The named test reports `ok` and a `1 passed` summary. It runs the full registered corpus plus the default bounded generated cases, not only the new fixture. If it fails, inspect the reported case, stage, source line, fixture, and `source`/`oracle` entries. Confirm expected behavior against the contract and an independent result before changing an oracle to match output.
 
-For site Docs, use Python 3.12+ with the dependencies from `website/requirements.txt`, then run this from the repository root:
+For site Docs, use Node.js 24 or later, then run this from the repository root:
 
 ```sh
-python website/build.py --base-path / --out build/website-preview
+cd website
+npm ci --ignore-scripts
+npx playwright install chromium
+npm test
 ```
 
-On success, Japanese and English HTML is generated under `build/website-preview/`, and internal links and heading anchors are checked. For `ModuleNotFoundError`, use the virtual environment in [website setup](../../website/README.en.md#local-preview). If a link check fails, correct the Markdown source link or anchor shown in the error and run the build again.
+On success, Japanese and English static HTML is generated under `website/out/`; content, types, routes, links, search indexes, and browser behavior are checked. If dependency or browser setup fails, follow the [website setup](../../website/README.en.md#local-preview). If a link check fails, correct the MDX/Markdown source link or anchor shown in the error and run the checks again.
 
 ## 5. Review the diff
 
@@ -167,5 +170,5 @@ Always target the latest `main`. If the branch is missing on GitHub, check the s
 | `nagic` does not show your latest change | Run `./target/debug/nagic` instead of the released compiler on PATH; rebuild if needed |
 | `check` passes but `build` fails | Separate generated Rust/Cargo diagnostics from toolchain setup; see [compiler internals](compiler-internals.md) |
 | A test fails | Check the first failing stage, expected/actual result, and source line. Do not weaken the contract to make it pass |
-| Site build reports an import error | Activate the website Python venv and run `pip install -r website/requirements.txt` |
+| Site build cannot find a module | Confirm Node.js 24 and run `npm ci --ignore-scripts` in `website/` |
 | You cannot find a likely source file | Start from the issue reproduction, search call sites with `rg` or `git grep`, and read existing tests and contracts. Discuss contract changes first |

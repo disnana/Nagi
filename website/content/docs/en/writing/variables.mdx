@@ -1,0 +1,38 @@
+---
+title: Values and types
+description: Observe inferred and explicit types in a small working program.
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+```nagi title="variables.nagi"
+def main():
+    count: i64 = 3
+    label = "tasks"
+    ready = True
+    print(count)
+    print(label)
+    print(ready)
+```
+
+`count: i64` has an explicit type. Nagi infers `str` and `bool` for `label` and `ready` from their values. Type checking happens before Rust generation, so an incompatible assignment is rejected before native compilation.
+
+```sh
+nagic check variables.nagi --no-project
+nagic run variables.nagi --no-project --profile dev
+```
+
+```text
+3
+tasks
+true
+```
+
+Next, pass values to [functions](../functions) and make parameter and result types explicit.
+
+The [complete fundamentals example](https://github.com/disnana/Nagi/blob/main/examples/tutorial/basics.nagi) adds Lists, classes, and branches and can be checked with the published compiler.
+
+## Support
+
+This syntax is available at least as far back as Nagi 0.1.7, and the lesson code was rechecked with published Nagi 0.2.2.

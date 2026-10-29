@@ -1,0 +1,43 @@
+---
+title: asyncとスコープ
+description: 2つの子タスクを並行に進め、スコープを出る前に終了を待ちます。
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+```nagi title="async_scope.nagi"
+async def work(label: str, milliseconds: i64):
+    await sleep(milliseconds)
+    print(label)
+
+async def main() -> Result[unit, Error]:
+    async with scope:
+        spawn work("first", 10)
+        spawn work("second", 15)
+    return ok(print("all joined"))
+```
+
+`async def`は待機できる関数です。`await sleep(...)`の間は他のタスクが進めます。`spawn`した子はスコープに所有され、正常終了では全子を合流してから次の行へ進みます。スコープ本体が失敗した場合は、残る子へ取り消しを要求して合流します。
+
+```sh
+nagic check async_scope.nagi --no-project
+nagic run async_scope.nagi --no-project --profile dev
+```
+
+この時間設定では通常この順ですが、独立タスク間の一般的な実行順はAPI契約ではありません。`all joined`だけはスコープの全子終了後です。
+
+```text
+first
+second
+all joined
+```
+
+
+次は[タスク結果の完全な例](https://github.com/disnana/Nagi/tree/main/test-nagi-code/library-examples/task-results)でハンドルを一度`await`し、タスク失敗と業務`Result`を分けます。その後、状態を1つのワーカーだけが更新する[Actor](../actor)へ進みます。
+
+短いスコープ例は[`async`教材のソース](https://github.com/disnana/Nagi/blob/main/examples/async.nagi)にもあります。
+
+## 対応範囲
+
+Rustターゲットのasync/スコープ/タスクはNagi 0.2.2で公開済みです。Goターゲットのasyncの低水準化は開発中で、公開版の対応とは扱いません。

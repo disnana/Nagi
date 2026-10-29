@@ -1,0 +1,66 @@
+---
+title: Nagi 0.1.11
+description: Adds typed Task results, explicit move, stable build generations, and a sealed checked program.
+status: released
+since: "0.1.11"
+backends: [rust]
+canonicalId: "nagi-0-1-11"
+canonicalTitle: "Nagi 0.1.11"
+canonicalSource: "CHANGELOG.md"
+canonicalDate: "2026-10-07"
+canonicalSourceHash: "sha256:07ecf577fa9da357aafd28357446fb316a9899a0d56f4a2a966905124c09f48d"
+canonicalRawBulletCount: 14
+canonicalItemCount: 14
+---
+Adds typed Task results, explicit move, stable build generations, and a sealed checked program.
+
+- Release date: `2026-10-07`
+- Canonical ID: `nagi-0-1-11`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Add scope-local Task result handles through High, saved Low, and handwritten Low. Require one await or explicit discard for every result type; move transfers both the handle and obligation. Separate inner business Results from sticky TaskFailure, request sibling cancellation on faults, and join direct children before normal/error scope exit. Preserve legacy spawn behavior, original body/legacy Errors, and synchronous Drop limits. Provide typed Supervisor monitor migration using parent try, runnable Task examples, and isolated-distribution Task validation without changing HTTP failure propagation or adding a fault escalation API.
+
+{/* canonical-item: item-002 */}
+- Add canonical `std.ownership.move` with one inferred input, preserving nested view origins, async function alias provenance, constant validation, and cleanup responsibility. Generate Rust's by-value `std::convert::identity` without a new runtime helper, clone, or allocation. Reject bare owned non-Copy local assignment; fresh values and existing argument, return, field/index, try, and match consumption remain unchanged. Keep current Copy rules and the existing Future restrictions.
+
+{/* canonical-item: item-003 */}
+- Separate stable application identity, shared dependency caches, and successful native build generations. Serialize writers to the same generated directory with an OS lock, preserve earlier successful executables, and update latest only after a successful build. Use the emitted `native:` path; `NAGI_NATIVE_TARGET_DIR` selects the dependency cache rather than the executable location.
+
+{/* canonical-item: item-004 */}
+- Seal Rust generation behind `check::finalize` and immutable `check::checked::CheckedProgram`. Rust embedding callers pass the finalized value to `emit::rust` and `emit::rust_with_lines`; mutable Program inputs are no longer accepted. Parser construction replaces external `ast::Stmt` struct literals, and public AST/standard metadata enums gain ownership, Task, and auth variants. See the Japanese and English 0.1.11 migration guides.
+
+{/* canonical-item: item-005 */}
+- Add a common typed constant validator for compound/alias zero divisors and signed MIN division/remainder across eight integer widths. Preserve debug/release overflow behavior; unreachable constant failures are rejected as documented. Print signed MIN leaves without generating out-of-range Rust literals.
+
+{/* canonical-item: item-006 */}
+- Add experimental `std.auth.Principal` and nominal `Grant[P]` proof boundaries with no Nagi construction, JSON decoding, copying, or sharing. Demonstrate custom Nagi authorization through a trusted Rust/Axum adapter; the example uses fixed credentials and does not implement JWS verification or general authorization analysis.
+
+{/* canonical-item: item-007 */}
+- Keep mapped Rust errors concise by default; `build/run --rust-diagnostics` retains generated Rust details. Native, dependency, and unmapped errors stay visible. Extend the conformance corpus to 42 sources and bounded generation to 18 grammars, including explicit moves, function values, multiple borrow sources, and pure async Result/Option.
+
+{/* canonical-item: item-008 */}
+- Lower view-containing List, Result, and Option restorations through one private checked-flow plan, including aliases, nested values, branches, loops, and async. Preserve source cleanup positions, RHS-before-replacement evaluation, and cancellation without cloning payloads. Use the checker's move/borrow facts and final loop facts rather than reconstructing them from builtin names.
+
+{/* canonical-item: item-009 */}
+- Keep scope bodies in the same coroutine so local views do not cross an extra async boundary, including functions that use but do not return views. Verify nested body/join errors, completed sibling cancellation on normal errors, parent Future destruction, and body panic with the real runtime through High, saved Low, and handwritten Low.
+
+{/* canonical-item: item-010 */}
+- Generate lazy `env` fallbacks without a closure so source-level `try` and `await` keep their error and async context. Preserve Task receipt obligations on skipped short-circuit operands and env fallbacks; retain always-evaluated left/key receipts without forcing evaluation. Verify present/missing values, fallback failures, and conditional consumption in all three source forms.
+
+{/* canonical-item: item-011 */}
+- Add repository-development AGENTS.md, model-specific custom agents, explicit language contracts, compiler pipeline/research notes, bounded program generation with failure artifacts and shrinking, and staged fuzz smoke. Run the bounded corpus in PR CI and larger fixed-seed explorations weekly.
+
+{/* canonical-item: item-012 */}
+- Give sequential direct-view assignments in return-terminated blocks separate inferred lifetimes. Compile and execute restored input views and earlier nested returns through High, saved Low, and handwritten Low; preserve continuing branch and loop updates.
+
+{/* canonical-item: item-013 */}
+- Verify Rust extern argument and sync/async mismatches with source-mapped build diagnostics through High, saved Low, and handwritten Low.
+
+{/* canonical-item: item-014 */}
+- Exercise generated scope code against the real runtime for child errors, child panics, body error propagation, and completed sibling cancellation through all three source forms.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `14` raw bullets to `14` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

@@ -1,0 +1,57 @@
+---
+title: HTTP server
+description: Build a minimal HTTP server with safe defaults, an explicit route policy, and authority limits.
+status: released
+since: "0.2.0"
+backends: [rust]
+---
+
+```nagi title="server.nagi"
+import std.http.server as http
+
+class State:
+    message: str
+
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    return http.text(http.response_context(view(request)), http.Status.OK, view(state.message))
+
+async def main() -> Result[unit, Error]:
+    app = http.app_default[State](State(message="ok"))
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    policy = try http.rate_policy(100, 100)
+    app = try http.rate_route(app, http.Method.GET, "/health", policy)
+    options = http.default_options()
+    options = try http.authority(options, "https://localhost", ["127.0.0.1:8094", "localhost:8094"], 2, 256)
+    return await http.serve(app, 8094, options)
+```
+
+`State` is shared with the handler. `http.route` registers the method, path, policy, and handler. Even this public route receives an explicit `rate_policy`; `http.authority` limits accepted Host and origin values. The finite capacities and deadlines from `default_options` remain in effect.
+
+```sh
+nagic check server.nagi --no-project
+nagic run server.nagi --no-project --profile dev
+```
+
+Check it from another terminal.
+
+```sh
+curl -i http://127.0.0.1:8094/health
+```
+
+```text
+HTTP/1.1 200 OK
+content-type: text/plain; charset=utf-8
+...
+
+ok
+```
+
+Header order and dates vary by environment; check the status, Content-Type, and `ok` body. This is a loopback development example. For deployment, terminate TLS at a reverse proxy and design the real authority, authentication, and capacity limits.
+
+Continue with [SQLite](../sqlite) for persistence. The [task API](https://github.com/disnana/Nagi/tree/main/test-nagi-code/web-demo) is the next complete example with JSON, validation, and CRUD.
+
+The [HTTP tutorial source](https://github.com/disnana/Nagi/blob/main/examples/tutorial/http.nagi) uses the same standard server API.
+
+## Support
+
+The standard HTTP API is released for the Rust target in Nagi 0.2.2. Go HTTP is unsupported. The standard API does not provide WebSocket, HTTP/2, streaming, or server-side TLS.

@@ -1,0 +1,4 @@
+{
+  "title": "Nagi documentation",
+  "pages": ["writing", "backend", "concurrency", "reference", "changelog"]
+}

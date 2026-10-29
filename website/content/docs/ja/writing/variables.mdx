@@ -1,0 +1,38 @@
+---
+title: 値と型
+description: 推論される型と明示する型を、動く短いプログラムで確認します。
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+```nagi title="variables.nagi"
+def main():
+    count: i64 = 3
+    label = "tasks"
+    ready = True
+    print(count)
+    print(label)
+    print(ready)
+```
+
+`count: i64`は型を明示します。`label`と`ready`は右辺から`str`と`bool`を推論します。Nagiは実行前に型を検査し、型が合わない代入をRust生成前に拒否します。
+
+```sh
+nagic check variables.nagi --no-project
+nagic run variables.nagi --no-project --profile dev
+```
+
+```text
+3
+tasks
+true
+```
+
+次は値を[関数](../functions)へ渡して、引数と戻り値の型を確認します。
+
+List、class、分岐まで含む[完全な基礎例](https://github.com/disnana/Nagi/blob/main/examples/tutorial/basics.nagi)も公開版で検査できます。
+
+## 対応範囲
+
+この書き方は少なくともNagi 0.1.7から使え、この教材のコードは公開Nagi 0.2.2で再検査しています。

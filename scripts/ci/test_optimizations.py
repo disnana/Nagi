@@ -54,6 +54,17 @@ class OptimizationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             opt.validate_infrastructure(source.replace('uses: actions/checkout@', 'uses: malicious/checkout@', 1))
 
+    def test_pages_configuration_action_uses_reviewed_v5_pin(self):
+        self.assertEqual(
+            opt.PINS['actions/configure-pages', 'v5'],
+            '983d7736d9b0ae728b81ab479565c72886d7745b',
+        )
+        pages = (ROOT / '.github/workflows/pages.yml').read_text()
+        self.assertIn(
+            'actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # ci-pin:v5',
+            pages,
+        )
+
     def test_job_cancellation_guards_roundtrip_without_changing_cleanup_steps(self):
         source = self.source()
         seen = set()

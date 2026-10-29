@@ -1,0 +1,37 @@
+---
+title: JetBrains 0.1.3
+description: Packages compiler-backed assistance for Nagi 0.2.0, standard Run/Stop, editing help, and IDE-managed run retention.
+status: released
+since: "0.1.3"
+backends: []
+canonicalId: "jetbrains-0-1-3"
+canonicalTitle: "JetBrains 0.1.3"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:5c4d6ce7b9374485c0608f1e2c74ab2ed51d4eb057a80725c28edbe81419b4bb"
+canonicalRawBulletCount: 5
+canonicalItemCount: 5
+---
+Packages compiler-backed assistance for Nagi 0.2.0, standard Run/Stop, editing help, and IDE-managed run retention.
+
+- Canonical ID: `jetbrains-0-1-3`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Prepare the common IntelliJ IDEA/PyCharm plugin for the public Nagi 0.2.0 compiler, preserving plugin ID `com.disnana.nagi`, display name **Nagi**, and version 0.1.3. Compiler-backed High/Low completion, structured diagnostics, exact-source definition navigation, semantic coloring and Parameter Info use 0.2.0. Compiler 0.1.11 supports ordinary Check/Run but has no assist protocol.
+
+{/* canonical-item: item-002 */}
+- Add the standard Nagi Run Configuration with Run/Stop, save-before-run and untrusted-project rejection. Include IDE-setting-aware bracket/quote pairing, bounded indentation and smart Backspace, explicit function live templates, and bounded top-level lexical `def`/`fn` completion. Previously saved local files may supply unsaved analysis buffers; new unsaved files and unresolved definition targets remain unsupported. Editor assistance does not prove full build success.
+
+{/* canonical-item: item-003 */}
+- Enable `NAGI_RUN_RETENTION=latest` only for IDE-managed runs with compiler 0.2.0. Reclaim eligible generations while protecting recorded successful latest, active and input-referenced generations, last-good runs, and unknown metadata. Leave ordinary CLI generations and the shared Cargo cache alone. No strict disk-capacity limit, arbitrary Rust dependency discovery, or power-loss durability guarantee is added.
+
+{/* canonical-item: item-004 */}
+- Prepare JetBrains 0.1.3 for public Nagi 0.2.0 with High/Low completion, diagnostics, exact definition navigation, semantic colors, parameter information, standard Run/Stop, editing help, and IDE-managed run retention. Compiler 0.1.11 supports ordinary Check/Run but not assist; see the bilingual guide for limits and compatibility.
+
+{/* canonical-item: item-005 */}
+- This entry prepares publication; it does not claim that 0.1.3 assets already exist. After merge to main and successful required IDE tests/Plugin Verifier checks, the existing workflow can create the GitHub Release. Marketplace submission and approval remain separate owner actions. The implementation passed all four IDEA/PyCharm stable/EAP paths in [main CI 39422234923](https://github.com/disnana/Nagi/actions/runs/39422234923); EAP Verifier reports existing deprecated/experimental API warnings. Final GUI acceptance for the release HEAD remains unconfirmed.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `5` raw bullets to `5` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

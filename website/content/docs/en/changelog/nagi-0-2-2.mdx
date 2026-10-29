@@ -1,0 +1,54 @@
+---
+title: Nagi 0.2.2
+description: Improves supported edit loops and first dependency resolution while preserving 0.2.1 compatibility and complete checks.
+status: released
+since: "0.2.2"
+backends: [rust]
+canonicalId: "nagi-0-2-2"
+canonicalTitle: "Nagi 0.2.2"
+canonicalSource: "CHANGELOG.md"
+canonicalDate: "2026-10-27"
+canonicalSourceHash: "sha256:ab3a5299416d69442f65b2116eafaca24f0d0190e1675efb1c6c07c8256dc5bf"
+canonicalRawBulletCount: 14
+canonicalItemCount: 10
+---
+Improves supported edit loops and first dependency resolution while preserving 0.2.1 compatibility and complete checks.
+
+- Release date: `2026-10-27`
+- Canonical ID: `nagi-0-2-2`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Preserve 0.2.1 compatibility, the default full runtime and release build, complete High/Low/type/ownership/Policy checks, Cargo's native freshness decisions, and previous successful artifacts while improving supported edit loops and reproducible first dependency resolution. Editor plugins remain separately versioned and released.
+
+{/* canonical-item: item-002 */}
+- Add opt-in runtime dependency selection from checked IR, preserving complete High/Low/type/ownership/Policy checks and the existing full runtime API. Include the shared-source core package and its dependency notices in distributions. Keep release settings and receipt/CAS compatibility; the measured gains apply to supported small synchronous programs, not arbitrary HTTP/SQL backends.
+
+{/* canonical-item: item-003 */}
+- Add explicit `--seed-lock` for `build` and `run`. A supporting distribution can provide the initial Cargo lock when the output has none; existing or invalid output locks are never replaced. The seed is an integrity-checked resolution input, not a native artifact cache or signature. Cold full builds were slower in the recorded comparison, so the option remains off by default.
+
+{/* canonical-item: item-004 */}
+- Update `rustls`, `rustls-webpki`, and `webpki-roots` to fixed releases and require the corrected WebPKI dependency when old application locks are re-resolved. Existing generated locks and executables are not changed automatically; rebuild deployed applications with the new runtime.
+
+{/* canonical-item: item-005 */}
+- Keep changes limited to discoverable root-level website tests on the existing documentation CI path. Preserve full validation for unknown files and mixed compiler, runtime, security or dependency changes. This optimizes Nagi's repository CI; application build behavior is unchanged.
+
+{/* canonical-item: item-006 */}
+- Ship explicit development/release profile selection in the 0.2.2 user-project CI generator, defaulting to release. Its generated workflow target remains 0.2.1 unless `--nagi-version 0.2.2` is supplied. Keep full checks, trusted-branch cache writes, older CLI release compatibility, and separate profile caches under a new key namespace. Published 0.2.1 archives are unchanged.
+
+{/* canonical-item: item-007 */}
+- Add backward-compatible `read_line(prompt)` alongside `read_line()`. The prompt is borrowed, written and flushed before input, and write/flush/read failures remain explicit `Result` errors. Compiler-owned editor metadata now includes `read_line` and the supported builtin vocabulary; compatible editor releases consume that metadata independently.
+
+{/* canonical-item: item-008 */}
+- Add runnable Japanese/English Result/`try` lessons and an end-to-end task-management JSON/SQLite API tutorial, including a concrete FastAPI/Quart comparison with tested versions and stated limits.
+
+{/* canonical-item: item-009 */}
+- Improve bounded CI diagnostics after BrowserLogin and Session deadline failures without changing the failing request's result or relaxing the test. An intermittent valid-request 504 observed in release-level CI is not proven fixed; a later retry succeeded, and the retained diagnostics remain investigation evidence rather than a runtime remedy.
+
+{/* canonical-item: item-010 */}
+- Keep runtime-profile and lock-seed modes explicit. They do not skip Nagi checks, restore native artifacts, make every backend use the core runtime, or establish general build/runtime performance gains. Measurements, unsupported cases and fallback reasons are documented with the respective features.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `14` raw bullets to `10` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

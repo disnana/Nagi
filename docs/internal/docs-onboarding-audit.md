@@ -77,8 +77,8 @@ PR handoff and evidence for this audit are in the [internal onboarding handoff](
 | [vscode-extension](../../editors/vscode-nagi/README.md) / [vscode-extension](../en/vscode-extension.md) | VS Code extension install/development guide。英語の公開sourceは`docs/en/vscode-extension.md`、compiler versionとは別component。 | P, W。IDE install/test未実施。 |
 | [root README](../../README.md) / [root README.en](../../README.en.md) | download/quickstartからCLI・本体貢献tutorialを辿れる入口を追加。READMEとDocs indexの内容を重複させず、詳細はDocsへ送る。 | D。linksはWで確認。 |
 | [root CONTRIBUTING](../../CONTRIBUTING.md) / [root CONTRIBUTING.en](../../CONTRIBUTING.en.md) | 方針、報告、PR基準、検証policyを保持し、新実践guideへ送る。 | D。internal policy/PRを投稿していない。 |
-| [website home](../../website/templates/home.html) / [home EN](../../website/templates/home.en.html) | heroの入門経路とstatus sectionの本体貢献入口を追加。homeは短い案内、Docs tutorialが具体操作を担当。 | D, W。HTML生成のみ。browser/visual accessibility testなし。 |
-| [website nav](../../website/build.py) | 日英同一page setを登録。first-app/contributingのnav導線とTask release labelを修正。 | D, W。出力routeと内部link/anchorをbuild検査。外部link・browser操作なし。 |
+| [旧website home（履歴）](https://github.com/disnana/Nagi/blob/0d1884cb1f4fbb20af5a2cd8c08f3e796f15a3f8/website/templates/home.html) | 旧Python生成サイトでheroと導線を検証した履歴。現在のFumadocs実装は`website/components/home.tsx`を使う。 | D, W。記録時点ではHTML生成のみで、browser/visual accessibility testは未実施。 |
+| [旧website nav（履歴）](https://github.com/disnana/Nagi/blob/0d1884cb1f4fbb20af5a2cd8c08f3e796f15a3f8/website/build.py) | 旧Python生成サイトの日英page setを検証した履歴。現在のnavigationは`website/content/docs/{ja,en}/meta.json`で管理する。 | D, W。記録時点の出力routeと内部link/anchor検査。 |
 | [website README](../../website/README.md) / [website README EN](../../website/README.en.md) | build/preview、GitHub Pages、編集対象と説明方針を日英で説明。以前英語contributionから日本語手順へ送っていたためEN counterpartを追加。 | P, W。site source linkが解決。website site自身のnavigationには載せない。 |
 
 `docs/internal/docs-onboarding-audit.md`自体はwebsite navigationに公開していない。上記の`database`と他のSQLite internal資料は親branchの担当範囲であり、source linkの生成確認以上の監査結果を含まない。古い作業記録内の「未リリース」は記録時点の履歴として残る場合がある。現在の公開案内に使うrelease statusは、公開Docsとsite navigationで確認する。

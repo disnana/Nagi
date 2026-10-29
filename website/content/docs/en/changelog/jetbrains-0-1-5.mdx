@@ -1,0 +1,33 @@
+---
+title: JetBrains 0.1.5
+description: Recovers colors, documentation, and navigation from the same unsaved snapshot when compiler 0.2.1 omits symbols after a final newline.
+status: released
+since: "0.1.5"
+backends: []
+canonicalId: "jetbrains-0-1-5"
+canonicalTitle: "JetBrains 0.1.5"
+canonicalSource: "CHANGELOG.md"
+canonicalDate: "2026-10-24"
+canonicalSourceHash: "sha256:a85c549f1d17bde9ca24b1b108062bdc1d555b6a403d66da03777b49a5b2e0e1"
+canonicalRawBulletCount: 5
+canonicalItemCount: 3
+---
+Recovers colors, documentation, and navigation from the same unsaved snapshot when compiler 0.2.1 omits symbols after a final newline.
+
+- Release date: `2026-10-24`
+- Canonical ID: `jetbrains-0-1-5`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Recover current symbol facts when published Nagi 0.2.1 omits its index after cursor recovery at a final unindented blank line. Preserve semantic colors, documentation and navigation for the same unsaved buffer, including the typed Point record case. This fix was merged after the 0.1.4 distribution was published.
+
+{/* canonical-item: item-002 */}
+- Keep the original frontend verdict, diagnostics and completion candidates. Retry at most once within the existing shared deadline, cancellation, snapshot-identity and trusted-project checks; fixed compilers do not require the compatibility retry.
+
+{/* canonical-item: item-003 */}
+- Publish a fresh 0.1.5 common plugin ZIP with the existing plugin ID and supported IDE builds. The compiler remains a separate installation; this plugin patch does not release Nagi 0.2.2 or submit to JetBrains Marketplace.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `5` raw bullets to `3` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

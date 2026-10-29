@@ -1,0 +1,73 @@
+---
+title: Nagi 0.1.8 / VS Code 0.1.10
+description: A combined release adding code maps, std.actor, std.http.server, type/ownership checks, and standard-module editor assistance.
+status: released
+since: "0.1.8"
+backends: [rust]
+canonicalId: "nagi-0-1-8-vscode-0-1-10"
+canonicalTitle: "Nagi 0.1.8 / VS Code 0.1.10"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:2da2c662ab6a1049fe8d3d339ce257893b1ab71884ae1374290b1c28dc52f024"
+canonicalRawBulletCount: 17
+canonicalItemCount: 17
+---
+A combined release adding code maps, std.actor, std.http.server, type/ownership checks, and standard-module editor assistance.
+
+- Canonical ID: `nagi-0-1-8-vscode-0-1-10`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Add static `map types`, `map modules`, and `map calls` through a shared Graph IR, with Mermaid, D2, JSON, and standalone HTML renderers, focused views, and optional D2 SVG/PNG export.
+
+{/* canonical-item: item-002 */}
+- Include the committed version's change summary, previous component release and commit comparison, pull requests, and contributor information in release notes.
+
+{/* canonical-item: item-003 */}
+- Diagnose moves conflicting with earlier temporary borrows in calls and lists, and consume standalone owned-value expressions during checking. Keep scalar `owned[T]` class fields consistent with generated Rust Copy behavior.
+
+{/* canonical-item: item-004 */}
+- Keep Docs API references and measurements under HTTP and actor topics, show the current page, preserve sidebar scrolling, and remember the mobile contents menu.
+
+{/* canonical-item: item-005 */}
+- Serve Docs assets and links from `nagi.disnana.com/`, while preserving project/user Pages defaults for forks. Skip full Rust checks for changes limited to the site's domain and Pages workflow; keep full checks for CI configuration changes.
+
+{/* canonical-item: item-006 */}
+- Add `std.actor` with typed messages and replies, owned state transitions, named async factories and handlers, restart policies, lifecycle events, and tracked shutdown. Keep business errors separate from handler and call failures.
+
+{/* canonical-item: item-007 */}
+- Check actor message, reply, and error payloads for owned-capacity accounting; reject unsupported Map, shared, borrowed, and opaque payload graphs before native generation. Preserve actor identities and generic arguments in independently loaded Low.
+
+{/* canonical-item: item-008 */}
+- Support multiple registered standard modules in completion, signatures, and read-only definition navigation. Add a Supervisor/HTTP sample with state updates, business failures, and explicit shutdown.
+
+{/* canonical-item: item-009 */}
+- Add `std.http.server`: DB-free apps, native Method/Status, request headers, typed shared state, async handlers, and app/route error mapping. Bound headers, bodies, admission, response sending, and shutdown.
+
+{/* canonical-item: item-010 */}
+- Support registered standard-module imports, comma-separated from imports, and exhaustive Option matching with Some/None. Preserve resource identity and borrowed lifetimes through saved Low.
+
+{/* canonical-item: item-011 */}
+- Extend VS Code completion, hover, signature help, and read-only definition navigation to standard resources, constants, and operations.
+
+{/* canonical-item: item-012 */}
+- Preserve checked numeric types in generated Rust, including integer literals printed or compared without an assignment.
+
+{/* canonical-item: item-013 */}
+- Restore parser nesting depth after speculative indexing, retain parentheses around try/await field and index receivers, and reject unsupported class type arguments instead of discarding them.
+
+{/* canonical-item: item-014 */}
+- Preserve string bytes, including control characters, through High-to-Low and Rust generation.
+
+{/* canonical-item: item-015 */}
+- Diagnose routes colliding with builtin GET endpoints or equivalent capture paths before the HTTP router is constructed.
+
+{/* canonical-item: item-016 */}
+- Count only changes made by the current db_exec SQL batch, including trigger changes, rather than returning a previous statement's count.
+
+{/* canonical-item: item-017 */}
+- Insert class names in VS Code type annotations without constructor arguments, and retain hover types for local function values.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `17` raw bullets to `17` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

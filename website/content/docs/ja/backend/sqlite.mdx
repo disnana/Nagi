@@ -1,0 +1,70 @@
+---
+title: SQLite
+description: 型付き引数と明示したトランザクションで値を書き、読み戻してからPoolを閉じます。
+status: released
+since: "0.2.0"
+backends: [rust]
+---
+
+```nagi title="sqlite_example.nagi"
+import std.db.sqlite as sqlite
+import std.result as result
+
+class Total:
+    amount: i64
+
+enum AppFailure:
+    Configuration(cause: Error)
+    Database(cause: sqlite.Failure)
+
+def configuration_error(cause: Error) -> AppFailure:
+    return AppFailure.Configuration(cause)
+
+def database_error(cause: sqlite.Failure) -> AppFailure:
+    return AppFailure.Database(cause)
+
+async def write_and_read(pool: view[sqlite.Pool]) -> Result[i64, sqlite.Failure]:
+    tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
+    try await sqlite.exec(tx, sqlite.literal("CREATE TABLE IF NOT EXISTS amounts(amount INTEGER NOT NULL)"), sqlite.parameters())
+    values = sqlite.bind_i64(sqlite.parameters(), 7)
+    try await sqlite.exec(tx, sqlite.literal("INSERT INTO amounts VALUES (?)"), values)
+    try await sqlite.commit(tx)
+    tx = try await sqlite.begin(pool, sqlite.BeginMode.DEFERRED)
+    row = try await sqlite.query[Total](tx, sqlite.literal("SELECT amount FROM amounts"), sqlite.parameters())
+    try await sqlite.rollback(tx)
+    match row:
+        case Some(total):
+            return ok(total.amount)
+        case None:
+            return ok(0)
+
+async def main() -> Result[unit, AppFailure]:
+    config = try result.map_error(sqlite.options(1, 2, 1000, 0), configuration_error)
+    pool = try result.map_error(await sqlite.open(":memory:", config), database_error)
+    work = await write_and_read(view(pool))
+    ending = await sqlite.close(pool, 1000)
+    amount = try result.map_error(work, database_error)
+    try result.map_error(ending, database_error)
+    print(amount)
+    return ok(print("closed"))
+```
+
+`sqlite.literal`は固定SQLを明示し、値は`bind_i64`で別に束縛します。書き込みトランザクションは`commit`し、読み取りトランザクションは`rollback`で終了します。`close`の結果も観測し、作業失敗を先に保持します。
+
+```sh
+nagic check sqlite_example.nagi --no-project
+nagic run sqlite_example.nagi --no-project --profile dev
+```
+
+```text
+7
+closed
+```
+
+次は[タスク管理APIの完全なソース](https://github.com/disnana/Nagi/tree/main/test-nagi-code/web-demo)で、HTTPリクエスト、JSON検証、SQLite CRUD、再起動後の保存を組み合わせます。
+
+このページのコードは[公開SQLite Pool例](https://github.com/disnana/Nagi/blob/main/examples/sqlite_pool.nagi)と同じです。
+
+## 対応範囲
+
+SQLite Pool/TxはNagi 0.2.2のRustターゲットで公開済みです。Goターゲットでは未対応です。この例は`:memory:`なのでプロセス終了後に消えます。保存を確認する例ではファイルパスを使ってください。

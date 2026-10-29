@@ -1,0 +1,97 @@
+---
+title: Nagi 0.1.10
+description: viewの生存期間、HTTP期限、SQLite/JSON、Rust連携、エディター連携を広く改善した版です。
+status: released
+since: "0.1.10"
+backends: [rust]
+canonicalId: "nagi-0-1-10"
+canonicalTitle: "Nagi 0.1.10"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:d75ae267630f47e6f6cdb3b50689cc4742ef375af75f317cc03f2639d0859dde"
+canonicalRawBulletCount: 25
+canonicalItemCount: 25
+---
+viewの生存期間、HTTP期限、SQLite/JSON、Rust連携、エディター連携を広く改善した版です。
+
+- 正本ID：`nagi-0-1-10`
+- 状態：`公開済み`
+
+## 変更項目
+
+{/* canonical-item: item-001 */}
+- viewを含む関数引数のローカル生存期間を推論し、検査済みで外へ逃がさない再代入とListへの追加をHigh・保存済みLowでコンパイル可能にします。公開シグネチャ、戻り値の起点検査、Rustアダプターのラッパー、所有権を持つ引数の破棄順を維持します。
+
+{/* canonical-item: item-002 */}
+- returnで終了する分岐内で再代入される直接viewへ別々のローカル生存期間を付与します。継続パス、ループ、matchの束縛の更新と、外へ逃がすローカルviewの拒否を維持します。
+
+{/* canonical-item: item-003 */}
+- byte viewの反復/索引アクセスを生成Rustのスライスと同じ`u8`として検査します。Rust生成前に文字列viewの反復を拒否し、通常スライスと所有要素のスライスを維持します。
+
+{/* canonical-item: item-004 */}
+- リテラルのゼロによる明示的な整数除算・剰余を`check`時に元ソース行で拒否します。ランタイム依存の除算と浮動小数点演算は変更しません。
+
+{/* canonical-item: item-005 */}
+- yieldしない同期処理を含め、ハンドラーが期限後に成功した場合はHTTP 504を返します。同期処理の中断やアプリケーション状態のロールバックは行いません。
+
+{/* canonical-item: item-006 */}
+- データベース不要のバイト検査用HTTP例を追加し、バイナリ入力、null許容JSON出力、経路挙動をHigh・保存済みLowで検証。
+
+{/* canonical-item: item-007 */}
+- RustのHTTP通信とNagiの非同期業務ロジックを使うAxumの見積もりAPIを追加。型付きJSON入力、独自Resultエラー、不正な設定、停止をHigh・保存済みLowで検証。
+
+{/* canonical-item: item-008 */}
+- DESIGN、README、日英DocsでRustライブラリ連携を中心的設計目標にし、現行アダプター境界と残る制約を文書化。
+
+{/* canonical-item: item-009 */}
+- `ai/`下へコーディングエージェントガイドと再利用可能な開発用Skillを分離して追加し、コンパイラ検査済み例とRustアダプター検証手順を収録。
+
+{/* canonical-item: item-010 */}
+- プレビューモード付きのBash/PowerShellアンインストーラーを追加します。検証済みで未変更の配布物と管理対象コマンド/PATHエントリーだけを削除し、変更済み・検証不能ファイルは保持します。
+
+{/* canonical-item: item-011 */}
+- 日英サイトへsystem/light/darkの外観設定を追加します。デスクトップ/モバイルでヘッダー、Docsナビゲーション、フッターを整合させます。
+
+{/* canonical-item: item-012 */}
+- 現在のコンパイラを使うJetBrains統合テストをCIで実行し、IntelliJ IDEA/PyCharmプラグイン互換性検査も併走。
+
+{/* canonical-item: item-013 */}
+- 借用入力を持たないviewを返す関数値へstaticな出力生存期間を付与。入力に束縛されたコールバック、入れ子関数の生存期間scope、High/Low呼び出しのstatic起点を維持。
+
+{/* canonical-item: item-014 */}
+- 共有値と借用した資源からのコピー不能フィールドのmoveをRust生成前に診断し、外側の`owned`ラッパーと一時的な呼び出し結果も対象にします。コピーによる読み取り、明示コピー、通常の所有レコードからのmoveを維持します。
+
+{/* canonical-item: item-015 */}
+- 入れ子所有権ラッパーを含め、`owned`で包んだ結果を捨てる裸の式を拒否。明示束縛と既存`try`/`match`制限を維持。
+
+{/* canonical-item: item-016 */}
+- 明示指定のオフラインSQLite検査`check --sql-schema FILE --sql-dialect sqlite`を追加します。有限数のワーカーでリテラルのクエリ名、必須行カラム、bind数を検証し、動的SQLと値/NULL検査はランタイムに残します。
+
+{/* canonical-item: item-017 */}
+- null許容フィールドを含む、`owned`で包んだ対応するスカラーフィールドのSQLite行のデコードを生成。重複実装を避けるため手書き`FromRow`による回避策を削除。
+
+{/* canonical-item: item-018 */}
+- viewを含む戻り型で、`None`、空のList、所有権を持つエラーResultなど借用のない直接の戻り値を受理。ローカルview、別名、非公開関数結果の検査を維持。
+
+{/* canonical-item: item-019 */}
+- High/Lowの色付け、字下げ、折りたたみ、明示的なcheck/runコマンドを持つ初期IntelliJ IDEA/PyCharmプラグインを追加します。IDEA/PyCharm 2025.1.1を検証し、対応する2024.3ビルドも互換性検査します。
+
+{/* canonical-item: item-020 */}
+- JetBrainsプラグインのトップレベルのHigh/Lowエントリーポイントへガターの実行ボタンを追加し、プロジェクト選択、保存、信頼性検査を維持。
+
+{/* canonical-item: item-021 */}
+- 所有権を持つResultエントリーポイントの失敗時の終了コードを維持し、所有権を取らない`error_kind`読取時の文字列割り当てを回避します。
+
+{/* canonical-item: item-022 */}
+- 明示的にネイティブビルドキャッシュを共有するアプリケーションへ別々のexecutable名を付与。既定名と共有依存関係キャッシュは変更しない。
+
+{/* canonical-item: item-023 */}
+- 読み取り専用のシェルプロファイルがパス登録を拒否した後もインストーラー更新を回復し、インストール変更前にコロンを含むPATHエントリーを拒否。
+
+{/* canonical-item: item-024 */}
+- 上限超過のHTTP本文、未完了のアップロード、接続容量の回復のクロスプラットフォームTCP回帰テストを追加。両Docs言語でSupervisor応答エラー、ワーカー障害、scopeのキャンセルを明確化。
+
+{/* canonical-item: item-025 */}
+- 標準HTTPエラーマッパーと互換ルーターを含め、HTTPハンドラーがパニックをunwindした場合は一般化された500応答を返して接続を閉じます。通常の結果処理とリクエスト期限を維持し、アプリケーション状態はロールバックしません。
+## 正本との対応
+
+版、日付、順序、リンク、項目の正本はリポジトリ直下の[変更履歴.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md)です。このページは正本の箇条書き`25`件を、明確な日英重複だけ統合した`25`件の論理項目として日本語化しています。`canonicalSourceHash`が変わった場合は翻訳を更新しない限り検証を通しません。

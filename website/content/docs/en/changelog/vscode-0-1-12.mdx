@@ -1,0 +1,49 @@
+---
+title: VS Code 0.1.12
+description: Improves saving, build/run diagnostics, completion, standard-module operations, Low editing, and snippets.
+status: released
+since: "0.1.12"
+backends: []
+canonicalId: "vscode-0-1-12"
+canonicalTitle: "VS Code 0.1.12"
+canonicalSource: "CHANGELOG.md"
+canonicalSourceHash: "sha256:159255bdd8ea9bd6a88801dc0a93195126379d7359c180eb8e3f3668fe4e2903"
+canonicalRawBulletCount: 9
+canonicalItemCount: 9
+---
+Improves saving, build/run diagnostics, completion, standard-module operations, Low editing, and snippets.
+
+- Canonical ID: `vscode-0-1-12`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Save reachable dirty imports before Lower, Build, and Run, including imports outside the project. Stop when saving fails, aliases conflict, or the entry changes while inputs are being saved.
+
+{/* canonical-item: item-002 */}
+- Show mapped build and run failures in Problems without duplicating unchanged-source checks. Refresh imported-file diagnostics across closed buffers, symlinks, and Windows path casing.
+
+{/* canonical-item: item-003 */}
+- Keep diagnostics and pending checks for unrelated projects when their dependency snapshots remain valid.
+
+{/* canonical-item: item-004 */}
+- Complete shadowed local names without inserting constructor or call arguments. Show read-only borrow hints for borrowed loop variables.
+
+{/* canonical-item: item-005 */}
+- Insert bare declaration names in quoted from-import completion, add Result Ok/Err pattern assistance, and resolve file aliases consistently for completion and definition lookup.
+
+{/* canonical-item: item-006 */}
+- Add completion, hover, signatures, and definition coverage for the new Result, HTTP, and Supervisor operations.
+
+{/* canonical-item: item-007 */}
+- Improve Low editing with brace-based folding, language-specific declaration help, import completion, and entry-point/import snippets.
+
+{/* canonical-item: item-008 */}
+- Scaffold async entry points without requiring a database, and add a database-free HTTP App snippet. Check the High snippets with the Nagi compiler.
+
+{/* canonical-item: item-009 */}
+- Make VSIX packaging reproducible and keep installation commands independent of a fixed version filename.
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, links, and items. This page maps its `9` raw bullets to `9` logical items after combining only explicit Japanese/English duplicates. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

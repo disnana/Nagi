@@ -1,0 +1,47 @@
+---
+title: 分岐と繰り返し
+description: 公開済みのif・else・for・whileで処理の流れを表します。
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+```nagi title="control_flow.nagi"
+def main():
+    total = 10
+    if total >= 10:
+        print("enough")
+    else:
+        print("short")
+
+    for index in range(3):
+        print(index)
+
+    remaining = 2
+    while remaining > 0:
+        remaining -= 1
+    print(remaining)
+```
+
+`if`は条件が`True`の枝だけを実行します。`for`は`range(3)`の`0`から`2`を順に受け取り、`while`は条件が`True`の間だけ繰り返します。字下げが各ブロックの範囲です。
+
+```sh
+nagic check control_flow.nagi --no-project
+nagic run control_flow.nagi --no-project --profile dev
+```
+
+```text
+enough
+0
+1
+2
+0
+```
+
+次は、分岐だけでなく呼び出し元へ失敗を返す[Resultとtry](../result)へ進みます。
+
+Listとclassも組み合わせた[完全な基礎例](https://github.com/disnana/Nagi/blob/main/examples/tutorial/basics.nagi)があります。
+
+## 対応範囲
+
+Nagi 0.2.2のHigh構文では`if`と`else`を使います。`elif`は開発中の未リリース機能なので、公開版向けコードには掲載しません。

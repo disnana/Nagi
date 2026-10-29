@@ -1,0 +1,36 @@
+---
+title: Nagiを書き始める
+description: 公開版Nagi 0.2.2で最初のネイティブCLIを検査して実行します。
+status: released
+since: "0.2.2"
+backends: [rust]
+---
+
+```nagi title="hello.nagi"
+def main() -> Result[unit, Error]:
+    name = try read_line("名前 > ")
+    print("こんにちは")
+    return ok(print(name))
+```
+
+`read_line`は入力前に文字列を表示し、出力・フラッシュ・入力の失敗を`Result[str, Error]`で返します。`try`は成功時に`str`を取り出し、失敗時には`main`の呼び出し元へ同じ失敗を返します。最後の`ok(...)`は正常終了を表します。
+
+```sh
+nagic check hello.nagi --no-project
+printf 'Nagi\n' | nagic run hello.nagi --no-project --profile dev
+```
+
+期待するアプリの出力です。コンパイラの進捗は別に表示されることがあります。
+
+```text
+名前 > こんにちは
+Nagi
+```
+
+次は[値と型](./variables)で、入力した値を型付きの変数として扱います。
+
+同じAPIを使う[公開版の完全な入力例](https://github.com/disnana/Nagi/blob/main/examples/tutorial/prompt-input.nagi)も確認できます。
+
+## 対応範囲
+
+この例はRustターゲットのNagi 0.2.2向けです。Goターゲットは0.3.0に向けて開発中で、公開版には含まれません。

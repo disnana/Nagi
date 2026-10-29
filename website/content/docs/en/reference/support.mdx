@@ -1,0 +1,28 @@
+---
+title: Target support matrix
+description: Separate the published Rust target in Nagi 0.2.2 from the Go target under development.
+status: released
+since: "0.2.2"
+backends: [rust, go]
+---
+
+Start with [write Nagi code](../../writing) if you have not run the lessons. Use this matrix after the working examples to decide the adoption boundary.
+
+| Capability | Rust target 0.2.2 | Go target | Continue with |
+|---|---|---|---|
+| Basic types, functions, classes, `Option`, `Result`, `try` | Released | Partially implemented for 0.3.0; unpublished | [Result and try](../../writing/result) |
+| Ownership, `view`, and move checking | Released | Common-frontend equivalence under validation | [Functions](../../writing/functions) |
+| Native build/run | Released and default | Minimal subset under development; unpublished | [Changelog](../../changelog/unreleased) |
+| Async, scopes, and Tasks | Released | Under development; unpublished | [Async](../../concurrency/async) |
+| HTTP and JSON | Released | Unsupported | [HTTP](../../backend/http) |
+| SQLite Pool/Tx | Released | Unsupported | [SQLite](../../backend/sqlite) |
+| Actors and Supervisors | Released | Unsupported | [Actors](../../concurrency/actor) |
+| Rust crate adapter | Released | Rust assets are rejected on the Go target | [Complete Rust example](https://github.com/disnana/Nagi/tree/main/test-nagi-code/rust-library) |
+| Go native adapter | Not applicable | Design and implementation in progress; unpublished | [Unreleased](../../changelog/unreleased) |
+
+## Main current limits
+
+- The standard HTTP API does not provide PostgreSQL, WebSocket, HTTP/2, streaming, or server-side TLS.
+- Actors are Tokio tasks in one process. They do not promise the same isolation as BEAM processes.
+- Rust-target results do not establish Go-target feature or performance support.
+- `elif` and named function arguments are Unreleased. Do not use them in source for published 0.2.2.

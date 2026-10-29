@@ -1,0 +1,35 @@
+---
+title: 関数
+description: 型付きの引数と戻り値を持つ関数を定義して呼び出します。
+status: released
+since: "0.1.7"
+backends: [rust]
+---
+
+```nagi title="functions.nagi"
+def double(value: i64) -> i64:
+    return value * 2
+
+def main():
+    answer = double(21)
+    print(answer)
+```
+
+`value: i64`は引数の型、`-> i64`は戻り値の型です。`return`の値と宣言が一致するかをコンパイラが検査します。呼び出し側の`answer`も`i64`として推論されます。
+
+```sh
+nagic check functions.nagi --no-project
+nagic run functions.nagi --no-project --profile dev
+```
+
+```text
+42
+```
+
+次は[分岐と繰り返し](../control-flow)を関数の中で使います。失敗する可能性がある関数は[Resultとtry](../result)で扱います。
+
+複数の値を受け取る関数は[完全な基礎例](https://github.com/disnana/Nagi/blob/main/examples/tutorial/basics.nagi)で確認できます。
+
+## 対応範囲
+
+位置引数はNagi 0.2.2で公開済みです。関数呼び出しの名前付き引数は未リリースであり、この教材では使いません。

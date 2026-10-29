@@ -1,0 +1,68 @@
+---
+title: ActorとSupervisor
+description: 公開std.actor APIで状態を順番に更新し、Supervisorから開始と停止を管理します。
+status: released
+since: "0.1.9"
+backends: [rust]
+---
+
+```nagi title="counter_actor.nagi"
+import std.actor as actor
+
+class Context:
+    initial: i64
+
+async def create(context: shared[Context]) -> Result[i64, Error]:
+    return ok(context.initial)
+
+async def handle(state: i64, amount: i64) -> Result[actor.Turn[i64, i64, Error], Error]:
+    next = state + amount
+    return ok(actor.turn[i64, i64, Error](next, ok(next)))
+
+async def monitor(group: actor.Supervisor[Context]) -> Result[unit, Error]:
+    return await actor.run(group)
+
+async def use_counter(counter: actor.Actor[i64, i64, Error], control: actor.Control) -> Result[unit, Error]:
+    match await actor.ready(view(counter), 1000):
+        case Ok(_):
+            assert_true(True)
+        case Err(_):
+            return error("counter did not start")
+    match await actor.call(view(counter), 5, 1000, 1000):
+        case Ok(reply):
+            match reply:
+                case Ok(value):
+                    print(value)
+                case Err(_):
+                    return error("counter rejected the message")
+        case Err(_):
+            return error("counter was unavailable")
+    try await actor.shutdown(view(control))
+    return ok(assert_true(True))
+
+async def main() -> Result[unit, Error]:
+    group = actor.supervisor[Context](Context(initial=0), actor.default_options())
+    counter = try actor.register[i64, i64, i64, Error](view(group), "counter", create, handle, actor.default_actor_options())
+    control = actor.control(view(group))
+    async with scope:
+        spawn monitor(group)
+        spawn use_counter(counter, control)
+    return ok(assert_true(True))
+```
+
+`create`だけが初期状態を作り、`handle`は現在状態とメッセージから次状態と応答を返します。`actor.call`の2つの`1000`はキュー投入の期限と応答期限です。業務上の`Err`、ワーカー/呼び出しの失敗、ハンドラー自体の失敗を別の層で扱います。`shutdown`後、スコープは監視タスクの終了を待って合流します。
+
+```sh
+nagic check counter_actor.nagi --no-project
+nagic run counter_actor.nagi --no-project --profile dev
+```
+
+```text
+5
+```
+
+次は[監視付きサービスの完全な例](https://github.com/disnana/Nagi/tree/main/test-nagi-code/library-examples/supervised-service)で、HTTP、有限メールボックス、子ごとの再起動、`ready`、`shutdown`を組み合わせます。
+
+## 対応範囲と隔離
+
+Actor/SupervisorはNagi 0.2.2のRustターゲットで公開済みです。同一プロセスのTokioタスクを使い、BEAMプロセスと同じヒープ分離、OOM隔離、プリエンプティブスケジューリングを保証しません。GoターゲットのActor/Supervisorは未対応です。
