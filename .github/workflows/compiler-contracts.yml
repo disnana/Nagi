@@ -100,10 +100,26 @@ jobs:
       - name: Select the reporter's GNU/UCRT64 toolchain boundary
         shell: pwsh
         run: |
-          rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
+          $evidence = 'build/ci-evidence/windows-gnu-target-path'
+          New-Item -ItemType Directory -Force -Path $evidence | Out-Null
+          $setupLog = Join-Path $evidence 'setup.log'
+          rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal 2>&1 |
+            Tee-Object -FilePath $setupLog -Append
+          if ($LASTEXITCODE -ne 0) { throw 'Could not install the Windows GNU Rust toolchain' }
           $ucrt = 'C:\msys64\ucrt64\bin'
-          if (-not (Test-Path -LiteralPath (Join-Path $ucrt 'x86_64-w64-mingw32-gcc.exe'))) {
-            throw "The hosted runner does not provide the required UCRT64 GNU linker at $ucrt"
+          $linker = Join-Path $ucrt 'x86_64-w64-mingw32-gcc.exe'
+          if (-not (Test-Path -LiteralPath $linker)) {
+            & 'C:\msys64\usr\bin\pacman.exe' -S --noconfirm --needed --noprogressbar mingw-w64-ucrt-x86_64-gcc 2>&1 |
+              Tee-Object -FilePath $setupLog -Append
+            if ($LASTEXITCODE -ne 0) { throw 'Could not install the signed MSYS2 UCRT64 GCC package' }
+          }
+          if (-not (Test-Path -LiteralPath $linker)) {
+            throw "The UCRT64 GNU linker is unavailable after package installation: $linker"
+          }
+          $gccVersion = (& $linker -dumpfullversion | Out-String).Trim()
+          "UCRT64 GCC version: $gccVersion" | Tee-Object -FilePath $setupLog -Append
+          if ($gccVersion -ne '15.2.0') {
+            throw "Expected the reporter's GCC 15.2.0, got $gccVersion"
           }
           $ucrt | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Compare released and corrected project-mode builds

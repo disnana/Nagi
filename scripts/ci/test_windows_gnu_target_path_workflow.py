@@ -22,6 +22,9 @@ class WindowsGnuTargetPathWorkflowTests(unittest.TestCase):
             "if: github.event_name != 'workflow_dispatch' || inputs.profile == 'compiler-contracts'",
             self.workflow,
         )
+        self.assertIn("mingw-w64-ucrt-x86_64-gcc", self.workflow)
+        self.assertIn("Expected the reporter's GCC 15.2.0", self.workflow)
+        self.assertIn("build/ci-evidence/windows-gnu-target-path", self.workflow)
 
     def test_probe_compares_a_pinned_release_without_overriding_the_target(self):
         self.assertIn(
