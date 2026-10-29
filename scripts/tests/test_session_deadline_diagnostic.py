@@ -1339,7 +1339,7 @@ class ReusableCsrfFailureSupplementTests(unittest.TestCase):
                'polls=2 begins=1 commands=0 commits=0 budget_ms=1000 entry_remaining_ms=999 '
                'phase_remaining_ms=980 exit_remaining_ms=0 selected_deadline_passed=1 terminal=5')
     LOCATION = ("thread 'one_reusable_token_admits_two_distinct_actual_requests' panicked at "
-                'runtime/tests/session_csrf_public_api.rs:936:5:')
+                'runtime/tests/session_csrf_public_api.rs:944:5:')
 
     def sample(self, markers=None, exact=False, failed=True):
         raw = cargo_log({self.CASE} if exact else diag.SESSION_CASES,
@@ -1352,7 +1352,7 @@ class ReusableCsrfFailureSupplementTests(unittest.TestCase):
     def test_current_unknown_failure_has_closed_source_location_and_unassigned_deadline_fact(self):
         raw, record = self.sample()
         observed = diag.csrf_reusable_observation(raw, 101, record=record)
-        self.assertEqual(observed['location'], {'file': 'session_csrf_public_api.rs', 'line': 936, 'column': 5})
+        self.assertEqual(observed['location'], {'file': 'session_csrf_public_api.rs', 'line': 944, 'column': 5})
         self.assertEqual(observed['assertion']['status_two'], 504)
         self.assertIsNone(observed['assertion']['checked_calls'])
         self.assertEqual(len(observed['guarded']), 1)
@@ -1366,10 +1366,10 @@ class ReusableCsrfFailureSupplementTests(unittest.TestCase):
         source = pathlib.Path(diag.__file__).resolve().parents[2] / 'runtime/tests/session_csrf_public_api.rs'
         canonical = source.read_bytes().replace(b'\r\n', b'\n')
         self.assertEqual(hashlib.sha256(canonical).hexdigest(), diag.CSRF_REUSABLE_SOURCE)
-        self.assertEqual(len(canonical.splitlines()), 1249)
+        self.assertEqual(len(canonical.splitlines()), 1257)
         raw, record = self.sample()
         observed = diag.csrf_reusable_observation(raw, 101, record=record)
-        for line, valid in [(1249, True), (1250, False)]:
+        for line, valid in [(1257, True), (1258, False)]:
             candidate = dict(observed, location={'file': 'session_csrf_public_api.rs', 'line': line, 'column': 1})
             self.assertEqual(diag.csrf_reusable_line(candidate) != 'csrf_reusable_failure unavailable', valid)
 
@@ -1389,7 +1389,7 @@ class ReusableCsrfFailureSupplementTests(unittest.TestCase):
             location = self.LOCATION.replace("' panicked", f"' ({identifier}) panicked")
             raw, record = self.sample([location, self.PARALLEL, self.GUARDED])
             observed = diag.csrf_reusable_observation(raw, 101, record=record)
-            self.assertEqual(observed['location']['line'], 936)
+            self.assertEqual(observed['location']['line'], 944)
             self.assertEqual(diag.csrf_reusable_line(observed), baseline)
         for identifier in ['0', '07', '1' * 21, 'PRIVATE_SENTINEL']:
             raw, record = self.sample([self.LOCATION.replace("' panicked", f"' ({identifier}) panicked")])
@@ -1398,7 +1398,7 @@ class ReusableCsrfFailureSupplementTests(unittest.TestCase):
     def test_setup_and_shutdown_panics_do_not_fabricate_response_statuses(self):
         for line in [224, 543, 1200]:
             with self.subTest(line=line):
-                raw, record = self.sample([self.LOCATION.replace(':936:', f':{line}:')])
+                raw, record = self.sample([self.LOCATION.replace(':944:', f':{line}:')])
                 observed = diag.csrf_reusable_observation(raw, 101, record=record)
                 self.assertEqual(observed['location']['line'], line)
                 self.assertIsNone(observed['assertion'])
@@ -1408,7 +1408,7 @@ class ReusableCsrfFailureSupplementTests(unittest.TestCase):
         bad_lists = [
             [self.LOCATION, self.LOCATION, self.PARALLEL],
             [self.LOCATION, self.PARALLEL, self.PARALLEL],
-            [self.LOCATION.replace(':936:', ':1250:'), self.PARALLEL],
+            [self.LOCATION.replace(':944:', ':1258:'), self.PARALLEL],
             [self.LOCATION.replace('session_csrf_public_api.rs', 'foreign.rs'), self.PARALLEL],
             [self.LOCATION, self.PARALLEL + ' token=PRIVATE_SENTINEL'],
             [self.LOCATION, self.PARALLEL.replace('checked_calls=None', 'checked_calls=Some(2)')],
@@ -1487,12 +1487,12 @@ class ReusableCsrfFailureSupplementTests(unittest.TestCase):
 
     def test_token_failure_and_closed_shape_corruptions(self):
         token = 'csrf_public_assertion_diag phase=TokenReply status=503 body_bytes=12 set_cookie_count=0'
-        raw, record = self.sample([self.LOCATION.replace(':936:', ':519:'), token])
+        raw, record = self.sample([self.LOCATION.replace(':944:', ':519:'), token])
         observed = diag.csrf_reusable_observation(raw, 101, record=record)
         self.assertEqual(observed['assertion']['phase'], 'TokenReply')
         self.assertEqual(observed['assertion']['status'], 503)
         raw_with_guarded, record_with_guarded = self.sample([
-            self.LOCATION.replace(':936:', ':519:'), token, self.GUARDED])
+            self.LOCATION.replace(':944:', ':519:'), token, self.GUARDED])
         self.assertIsNone(diag.csrf_reusable_observation(raw_with_guarded, 101, record=record_with_guarded))
         changed = dict(observed, guarded=[dict(zip(diag._CSRF_GUARDED_KEYS,
             map(int, diag._CSRF_GUARDED.fullmatch(self.GUARDED).groups())))])
