@@ -4,6 +4,24 @@
 
 These functions need no imports. `T` stands for a supported type. User-defined generic functions are not supported.
 
+Start with one runnable example covering conversion, borrowing, length, and output.
+
+```nagi
+def main() -> Result[unit, Error]:
+    text = "42"
+    number = try parse_i64(view(text))
+    print(number)
+    print(len(text))
+    return ok(assert_true(number == 42))
+```
+
+```sh
+nagic check builtins.nagi
+nagic run builtins.nagi --profile dev
+```
+
+It prints `42` followed by the UTF-8 byte length `2`. `check` avoids Rust compilation; `run` builds a native executable. This example has been checked with the published Nagi 0.2.2 compiler.
+
 ## Output, input, and environment
 
 | Call | Argument types, in order | Return type | Usage and notes |
