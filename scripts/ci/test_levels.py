@@ -45,6 +45,11 @@ class LevelsTests(unittest.TestCase):
     def test_root_website_tests_keep_pages_coverage_and_escalate_mixed_core_changes(self):
         pages = (ROOT / '.github/workflows/pages.yml').read_text()
         self.assertIn('on:\n  pull_request:\n  push:', pages)
+        self.assertIn('permissions:\n  contents: read\n', pages)
+        deploy = pages.split('\n  deploy:\n', 1)[1]
+        self.assertIn("if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'", deploy)
+        self.assertIn('permissions:\n      pages: write\n      id-token: write\n', deploy)
+        self.assertNotIn('pull_request', deploy.split('steps:', 1)[0])
         for command in (
             "node-version: '24'", 'npm ci --ignore-scripts',
             'python scripts/verify_onboarding_examples.py --docs-only',

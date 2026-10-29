@@ -11,6 +11,11 @@ const publicAgentSources = [
   ['Rust interop guide for agents', 'ai/rust-interop.md'],
 ];
 for (const [, path] of publicAgentSources) await access(new URL(path, repository));
+const decodeTitle = (value) => value
+  .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+  .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 10)))
+  .replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&apos;', "'")
+  .replaceAll('&lt;', '<').replaceAll('&gt;', '>');
 const pages = [];
 const files = new Set(['index.html', 'en/index.html']);
 
@@ -18,7 +23,8 @@ for await (const file of glob('**/index.html', { cwd: output.pathname })) files.
 for (const file of files) {
   const html = await readFile(new URL(file, output), 'utf8');
   const canonical = html.match(/<link rel="canonical" href="([^"]+)"/i)?.[1];
-  const title = html.match(/<title>([^<]+)<\/title>/i)?.[1]?.replace(/\s*[|｜]\s*Nagi.*$/u, '')?.trim();
+  const rawTitle = html.match(/<title>([^<]+)<\/title>/i)?.[1];
+  const title = rawTitle ? decodeTitle(rawTitle).replace(/\s*[|｜]\s*Nagi.*$/u, '').trim() : undefined;
   if (!canonical || !canonical.startsWith(`${canonicalOrigin}/`) || !title) continue;
   pages.push({ canonical, title });
 }

@@ -53,6 +53,9 @@ if (!llms.includes('Nagi 0.2.2 is the current released Rust target')
 if (/このページは移動しました|This page has moved/.test(llms)) {
   throw new Error('llms.txt must prefer canonical page titles over alias titles');
 }
+if (/&(?:#\d+|#x[0-9a-f]+|[a-z]+);/i.test(llms)) {
+  throw new Error('llms.txt titles must not contain encoded HTML entities');
+}
 for (const body of [robots, sitemap, llms]) {
   if (/docs\/internal|\.agents|audit-log/i.test(body)) throw new Error('discovery files expose internal material');
   const externalUrls = [...body.matchAll(/https:\/\/[^\s<>)]+/g)].map((match) => new URL(match[0].replace(/[),.;]+$/, '')));
