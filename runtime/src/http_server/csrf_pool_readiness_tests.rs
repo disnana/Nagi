@@ -374,11 +374,7 @@ async fn guarded_busy_mapper_returns_503_retires_owner_and_recovers_capacity() {
     .unwrap();
     let (running, state) = StartupServer::new(&f.store, &csrf, options).await;
     let (issued, cookie, _) = running
-        .request(
-            "POST",
-            "/issue",
-            "Authorization: Bearer owned\r\n",
-        )
+        .request("POST", "/issue", "Authorization: Bearer owned\r\n")
         .await;
     assert_eq!(issued, 200);
     assert!(!cookie.is_empty());
