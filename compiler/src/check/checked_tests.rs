@@ -552,9 +552,16 @@ fn user_async_capture_snapshots_direct_callback_alias_field_parameter_and_transf
                     argument: 0
                 }
             );
+            assert_eq!(
+                facts.storage,
+                CaptureStorageId {
+                    call: *call,
+                    argument: 0
+                }
+            );
             assert_eq!(facts.transfer, ExprUseMode::Copy);
             assert!(!facts.views_absent);
-            assert_eq!(facts.release, ArgumentRelease::Deferred);
+            assert_eq!(facts.release, ArgumentRelease::FutureInvocationExit);
             assert_eq!(facts.depths.len(), 1);
             assert_eq!(
                 facts.depths[0].origins,
@@ -593,7 +600,7 @@ fn user_async_capture_snapshots_direct_callback_alias_field_parameter_and_transf
         assert!(temporary.depths[0].origins.is_empty());
         assert!(temporary.depths[0].borrows_temporary);
         assert!(!temporary.views_absent);
-        assert_eq!(temporary.release, ArgumentRelease::Deferred);
+        assert_eq!(temporary.release, ArgumentRelease::FutureInvocationExit);
         let copy = user_capture(&entries[5].1.arguments[0]);
         assert_eq!(copy.transfer, ExprUseMode::Copy);
         assert!(copy.depths.is_empty());
@@ -603,7 +610,7 @@ fn user_async_capture_snapshots_direct_callback_alias_field_parameter_and_transf
         assert_eq!(moved.transfer, ExprUseMode::Move);
         assert!(moved.depths.is_empty());
         assert!(moved.views_absent);
-        assert_eq!(moved.release, ArgumentRelease::Deferred);
+        assert_eq!(moved.release, ArgumentRelease::FutureInvocationExit);
     });
 }
 
@@ -752,7 +759,7 @@ fn user_async_capture_preserves_explicit_static_origin_and_standard_is_unplanned
     );
     assert!(!facts.depths[0].borrows_temporary);
     assert!(!facts.views_absent);
-    assert_eq!(facts.release, ArgumentRelease::Deferred);
+    assert_eq!(facts.release, ArgumentRelease::FutureInvocationExit);
     assert_eq!(entries[1].resolution, NameResolution::Builtin);
     assert_eq!(
         entries[1].arguments[0].capture,
@@ -763,10 +770,96 @@ fn user_async_capture_preserves_explicit_static_origin_and_standard_is_unplanned
 }
 
 #[test]
+fn user_async_capture_plain_graph_release_and_storage_are_rebuilt() {
+    let high = "class Payload:\n    text: str\n    numbers: List[i64]\nasync def take(payload: Payload, nested: List[Option[str]], result: Result[str, Error]):\n    print(payload.text)\nasync def main():\n    await take(Payload(text=\"owned\", numbers=[1]), [some(\"nested\")], ok(\"result\"))\n";
+    let manual = "record Payload { text: str; numbers: List[i64]; }\nasync fn take(payload: Payload, nested: List[Option[str]], result: Result[str, Error]) -> unit { print(payload.text); }\nasync fn main() -> unit { await take(Payload(text=\"owned\", numbers=[1]), [some(\"nested\")], ok(\"result\")); }";
+    capture_entries(high, manual, |checked| {
+        let (call, capture) = checked.final_check_facts().functions["main"]
+            .iter()
+            .next()
+            .unwrap();
+        let mut storage = BTreeSet::new();
+        for (index, argument) in capture.arguments.iter().enumerate() {
+            let facts = user_capture(argument);
+            assert_eq!(facts.release, ArgumentRelease::FutureInvocationExit);
+            assert_eq!(
+                facts.storage,
+                CaptureStorageId {
+                    call: *call,
+                    argument: index
+                }
+            );
+            assert!(storage.insert(facts.storage));
+        }
+        crate::go_backend::source(checked, &[], crate::project::BuildProfile::Dev).unwrap();
+    });
+}
+
+#[test]
+fn user_async_capture_resource_and_shared_graphs_remain_deferred_even_when_copy() {
+    let files = Files::new();
+    let path = files.write("main.nagi", "import std.http.server as http\nclass Wrapped:\n    status: http.Status\nasync def take(value: http.Status, nested: List[http.Status], wrapped: Wrapped, handle: shared[str]):\n    print(0)\nasync def main():\n    await take(http.Status.OK, [http.Status.OK], Wrapped(status=http.Status.OK), share(\"owner\"))\n");
+    let loaded = crate::source::load(&path, true).unwrap();
+    let provenance = loaded.provenance();
+    let checked = crate::check::finalize(loaded.program, Program::default(), provenance).unwrap();
+    let capture = checked
+        .final_check_facts()
+        .functions
+        .values()
+        .flat_map(|calls| calls.values())
+        .find(|capture| capture.arguments.len() == 4)
+        .unwrap();
+    for argument in &capture.arguments {
+        assert_eq!(user_capture(argument).release, ArgumentRelease::Deferred);
+    }
+    assert_eq!(
+        user_capture(&capture.arguments[0]).transfer,
+        ExprUseMode::Copy
+    );
+    assert_eq!(
+        user_capture(&capture.arguments[2]).transfer,
+        ExprUseMode::Copy
+    );
+    crate::emit::rust(&checked).unwrap();
+}
+
+#[test]
+fn go_user_capture_rejects_missing_storage_and_deferred_without_type_inference() {
+    for mutation in 0..4 {
+        let mut checked = checked_high("async def take(value: str):\n    print(value)\nasync def main():\n    await take(\"owned\")\n");
+        let captures = checked.final_check_facts.functions.get_mut("main").unwrap();
+        if mutation == 0 {
+            captures.clear();
+        } else {
+            let argument = &mut captures.values_mut().next().unwrap().arguments[0];
+            let ArgumentCaptureFacts::UserAsync(facts) = &mut argument.capture else {
+                panic!()
+            };
+            match mutation {
+                1 => facts.storage.argument += 1,
+                2 => facts.release = ArgumentRelease::Deferred,
+                3 => argument.capture = ArgumentCaptureFacts::UnplannedStandard,
+                _ => unreachable!(),
+            }
+        }
+        let error = crate::go_backend::source(&checked, &[], crate::project::BuildProfile::Dev)
+            .unwrap_err();
+        assert!(
+            error.contains(if mutation == 2 {
+                "deferred user Future capture release"
+            } else {
+                "internal compiler error:"
+            }),
+            "{error}"
+        );
+    }
+}
+
+#[test]
 fn user_async_capture_seal_rejects_each_new_fact_mutation() {
     let mut program = crate::parser::parse("async def read(part: view[str]) -> i64:\n    return len(part)\nasync def work(part: view[str]) -> i64:\n    return await read(part)\n", true).unwrap();
     let original = super::super::check_mode(&mut program, false).unwrap();
-    for mutation in 0..13 {
+    for mutation in 0..16 {
         let mut facts = original.clone();
         let argument = &mut facts
             .functions
@@ -793,6 +886,9 @@ fn user_async_capture_seal_rejects_each_new_fact_mutation() {
             10 => capture.release = ArgumentRelease::NotRequired,
             11 => capture.transfer = ExprUseMode::Borrow,
             12 => argument.capture = ArgumentCaptureFacts::UnplannedStandard,
+            13 => capture.storage.call.start += 1,
+            14 => capture.storage.argument += 1,
+            15 => capture.release = ArgumentRelease::Deferred,
             _ => unreachable!(),
         }
         let error = CheckedProgram::seal(

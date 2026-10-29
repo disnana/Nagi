@@ -60,6 +60,12 @@ payloadなしenumは、共有checkerが封印したconstructorとmatch armのide
 - Go native adapter、Rust/Go間FFI、混成backend
 - IDE管理runの`NAGI_RUN_RETENTION=latest`
 
+cold user asyncのG3aでは、checkerがcall/argument slotから封印したCaptureStorageIdと
+NotRequired/FutureInvocationExitだけをGoへ接続する。直接のread-only `view[str]`とplain
+value graphのcaptureを対象に、await開始時にFuture.bodyをdetachし、正常/Err/panicの出口で
+active invocationの参照を終了する。Deferred、resource/shared/task/auth/一般viewのcleanup、
+physical memory即時回収、取消・並行Futureは保証しない。詳細は[string borrow契約](go-async-string-borrow.md)。
+
 この段階をHTTP等の本番対応やRust backendとの完全同等とは呼ばない。
 対応する整数境界ではpanicするかwrapするかを揃えるが、panic本文、stack trace、process exit codeはbackend固有であり、現段階ではbyte単位の一致を保証しない。
 
@@ -94,7 +100,7 @@ generationには次を保存する。
 
 ## 実行検証
 
-専用integration testは実Go toolchainを使い、read-only string borrow段階ではLinux/macOSで32件、WindowsでUnix symlink固有の1件を除く31件を検査する。
+専用integration testは実Go toolchainを使い、G3a段階ではLinux/macOSで34件、WindowsでUnix symlink固有の1件を除く33件を検査する。
 
 - Highと独立保存Lowが同じ出力になる
 - private std-only lifecycle kernelの13 native testを名前集合まで検査し、public std.actorのHigh/手書きLow事前拒否を維持する
@@ -146,7 +152,7 @@ native検査する。生成applicationへの組込みとpublic std.actor受理�
 mailbox/READY/events/charge、cold async/borrow/callback/owner cleanupは後続gateである。
 private lifecycle段階の必須件数はLinux/macOS 27、Windows 26だった。後続のcold user
 async 2件、callback identity 1件、string borrow 2件に加え、共有checkerで正規化する名前付き
-関数呼出し1件を含む現在の必須件数はLinux/macOS 33、Windows 32。
+関数呼出し1件、sleep 1件を含む現在の必須件数はLinux/macOS 34、Windows 33。G3aは既存cold async/string borrowケース内で検査を追加し、CIの件数契約を維持する。
 
 1. 3 OSで最小backendの実build/runとlast-good保護を必須CI化する。
 2. shared conformance oracleとbackend別driverを分離し、同じ対応Nagi programの結果・診断を比較する。

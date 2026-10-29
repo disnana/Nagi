@@ -4215,8 +4215,11 @@ impl Checker {
         } else {
             Vec::new()
         };
-        let release = if transfer == ExprUseMode::Copy && !ty.contains_view() {
+        let plain = self.invocation_value_graph(&ty, 0);
+        let release = if plain && transfer == ExprUseMode::Copy && !ty.contains_view() {
             checked::ArgumentRelease::NotRequired
+        } else if plain || ty == Type::generic("view", vec![Type::named("str")]) {
+            checked::ArgumentRelease::FutureInvocationExit
         } else {
             checked::ArgumentRelease::Deferred
         };
@@ -4231,12 +4234,52 @@ impl Checker {
                     call,
                     argument: index,
                 },
+                storage: checked::CaptureStorageId {
+                    call,
+                    argument: index,
+                },
                 transfer,
                 depths,
                 views_absent: self.views_absent(arg),
                 release,
             }),
         })
+    }
+    // Only plain value graphs have an invocation-only release plan. In
+    // particular Copy resource metadata and empty origin sets prove neither
+    // resource cleanup nor the absence of a hidden shared/task/auth payload.
+    fn invocation_value_graph(&self, ty: &Type, depth: usize) -> bool {
+        if depth > 64 || self.resource(&ty.0).is_some() {
+            return false;
+        }
+        match (ty.0.as_str(), ty.1.as_slice()) {
+            (
+                "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64"
+                | "bool" | "str" | "bytes" | "unit" | "Error" | "Range",
+                [],
+            ) => true,
+            ("List" | "Option", [item]) => self.invocation_value_graph(item, depth + 1),
+            ("Result", [value, problem]) => {
+                self.invocation_value_graph(value, depth + 1)
+                    && self.invocation_value_graph(problem, depth + 1)
+            }
+            (_, []) => {
+                if let Some(class) = self.classes.get(&ty.0) {
+                    class
+                        .fields
+                        .iter()
+                        .all(|(_, field)| self.invocation_value_graph(field, depth + 1))
+                } else if let Some(enumeration) = self.enums.get(&ty.0) {
+                    enumeration
+                        .variants
+                        .iter()
+                        .all(|variant| variant.fields.is_empty())
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        }
     }
     fn expr_mode(
         &mut self,

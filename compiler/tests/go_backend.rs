@@ -252,6 +252,43 @@ async fn main() -> Result[unit, Error] {
 }
 "#;
 
+const ASYNC_GRAPH_PROGRAM: &str = r#"class Payload:
+    text: str
+    values: List[i64]
+
+def mark(text: str) -> str:
+    print(text)
+    return text
+
+async def read(part: view[str]) -> i64:
+    return len(part)
+
+async def graph(payload: Payload, values: List[str]) -> Result[i64, Error]:
+    size = await read(view(payload.text))
+    print(payload.text)
+    return ok(size + len(values))
+
+async def main() -> Result[unit, Error]:
+    callback = graph
+    answer = try await callback(Payload(text=mark("left"), values=[1]), [mark("right")])
+    return ok(print(answer))
+"#;
+
+const ASYNC_GRAPH_LOW: &str = r#"record Payload { text: str; values: List[i64]; }
+fn mark(text: str) -> str { print(text); return text; }
+async fn read(part: view[str]) -> i64 { return len(part); }
+async fn graph(payload: Payload, values: List[str]) -> Result[i64, Error] {
+    let size: i64 = await read(view(payload.text));
+    print(payload.text);
+    return ok(size + len(values));
+}
+async fn main() -> Result[unit, Error] {
+    let callback = graph;
+    let answer: i64 = try await callback(Payload(text=mark("left"), values=[1]), [mark("right")]);
+    return ok(print(answer));
+}
+"#;
+
 #[test]
 fn go_backend_runs_cold_user_async_from_high_saved_low_and_main() {
     let fixture = Fixture::new();
@@ -269,6 +306,8 @@ fn go_backend_runs_cold_user_async_from_high_saved_low_and_main() {
     assert!(go.contains("return nagiCold(func() nagiResult[int64, nagiError] {"));
     assert!(go.contains("result := nagiMain().await()"));
     assert!(go.contains("future.body = nil"));
+    assert!(go.contains("defer func() { body = nil }()"));
+    assert!(go.contains("__nagi_capture_"));
 
     fixture.write(
         "out-high-async/go/future_test.go",
@@ -278,7 +317,12 @@ import "testing"
 
 func TestColdFutureStartsAtAwaitAndRunsOnce(t *testing.T) {
     starts := 0
-    future := nagiCold(func() int64 { starts++; return 7 })
+    var future *nagiFuture[int64]
+    future = nagiCold(func() int64 {
+        if future.body != nil { t.Fatal("active invocation remained attached to Future") }
+        starts++
+        return 7
+    })
     if starts != 0 { t.Fatalf("body started before await: %d", starts) }
     if value := future.await(); value != 7 { t.Fatalf("value = %d", value) }
     if starts != 1 { t.Fatalf("body starts = %d", starts) }
@@ -292,7 +336,12 @@ func TestColdFutureStartsAtAwaitAndRunsOnce(t *testing.T) {
 
 func TestPanickingFutureCannotBeRetried(t *testing.T) {
     starts := 0
-    future := nagiCold(func() int64 { starts++; panic("sentinel") })
+    var future *nagiFuture[int64]
+    future = nagiCold(func() int64 {
+        if future.body != nil { t.Fatal("panicking invocation remained attached") }
+        starts++
+        panic("sentinel")
+    })
     func() {
         defer func() {
             if recover() == nil { t.Fatal("body panic was lost") }
@@ -300,9 +349,25 @@ func TestPanickingFutureCannotBeRetried(t *testing.T) {
         _ = future.await()
     }()
     if starts != 1 { t.Fatalf("body starts after panic = %d", starts) }
+    if future.body != nil { t.Fatal("panicking future retained its body") }
     defer func() {
         if recover() == nil { t.Fatal("panicking future was retried") }
         if starts != 1 { t.Fatalf("panic retry reran body: %d", starts) }
+    }()
+    _ = future.await()
+}
+
+func TestResultErrReleasesInvocationWithoutRetry(t *testing.T) {
+    var future *nagiFuture[nagiResult[int64, nagiError]]
+    future = nagiCold(func() nagiResult[int64, nagiError] {
+        if future.body != nil { t.Fatal("Err invocation remained attached") }
+        return nagiErr[int64, nagiError](nagiError{message: "business Err"})
+    })
+    result := future.await()
+    if result.ok || result.problem.message != "business Err" { t.Fatal("Err changed") }
+    if future.body != nil { t.Fatal("Err future retained its body") }
+    defer func() {
+        if recover() == nil { t.Fatal("Err future was retried") }
     }()
     _ = future.await()
 }
@@ -503,6 +568,30 @@ fn go_backend_keeps_read_only_string_borrows_in_cold_async_values() {
         String::from_utf8_lossy(&imported.stderr)
     );
     assert_eq!(String::from_utf8_lossy(&imported.stdout), "5\n");
+
+    fixture.write("graph.nagi", ASYNC_GRAPH_PROGRAM);
+    let graph_high = fixture.go("run", "graph.nagi", "out-graph-high");
+    assert!(
+        graph_high.status.success(),
+        "{}",
+        String::from_utf8_lossy(&graph_high.stderr)
+    );
+    assert_eq!(graph_high.stdout, b"left\nright\nleft\n5\n");
+    let saved = fs::read_to_string(fixture.0.join("out-graph-high/generated.low")).unwrap();
+    fixture.write("graph-saved.low", &saved);
+    fixture.write("graph-manual.low", ASYNC_GRAPH_LOW);
+    for (source, out) in [
+        ("graph-saved.low", "out-graph-saved"),
+        ("graph-manual.low", "out-graph-manual"),
+    ] {
+        let result = fixture.go("run", source, out);
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(result.stdout, graph_high.stdout);
+    }
 }
 
 #[test]
