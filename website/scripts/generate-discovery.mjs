@@ -11,11 +11,24 @@ const publicAgentSources = [
   ['Rust interop guide for agents', 'ai/rust-interop.md'],
 ];
 for (const [, path] of publicAgentSources) await access(new URL(path, repository));
-const decodeTitle = (value) => value
-  .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
-  .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 10)))
-  .replaceAll('&amp;', '&').replaceAll('&quot;', '"').replaceAll('&apos;', "'")
-  .replaceAll('&lt;', '<').replaceAll('&gt;', '>');
+const namedEntities = new Map([
+  ['amp', '&'], ['quot', '"'], ['apos', "'"], ['lt', '<'], ['gt', '>'],
+]);
+const decodeTitle = (value) => value.replace(
+  /&(?:#x[0-9a-f]+|#\d+|amp|quot|apos|lt|gt);/gi,
+  (entity) => {
+    const body = entity.slice(1, -1);
+    if (body.startsWith('#x') || body.startsWith('#X')) return String.fromCodePoint(Number.parseInt(body.slice(2), 16));
+    if (body.startsWith('#')) return String.fromCodePoint(Number.parseInt(body.slice(1), 10));
+    return namedEntities.get(body.toLowerCase()) ?? entity;
+  },
+);
+for (const [encoded, expected] of [
+  ['&amp;lt;', '&lt;'], ['&amp;amp;', '&amp;'], ['Nagi&#x27;s', "Nagi's"],
+  ['Nagi&#39;s', "Nagi's"], ['&unknown;', '&unknown;'],
+]) {
+  if (decodeTitle(encoded) !== expected) throw new Error(`unsafe title entity decoding for ${encoded}`);
+}
 const pages = [];
 const files = new Set(['index.html', 'en/index.html']);
 
