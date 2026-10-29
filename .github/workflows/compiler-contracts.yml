@@ -6,6 +6,12 @@ on:
   schedule:
     - cron: '17 3 * * 1'
   workflow_dispatch:
+    inputs:
+      profile:
+        description: Optional bounded compiler environment to exercise
+        type: choice
+        options: [compiler-contracts, windows-gnu-target-path]
+        default: compiler-contracts
 permissions:
   contents: read
 concurrency:
@@ -13,6 +19,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   expanded:
+    if: github.event_name != 'workflow_dispatch' || inputs.profile == 'compiler-contracts'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -65,6 +72,7 @@ jobs:
           name: compiler-failures-${{ matrix.seed }}
           path: build/compiler-failures/
           if-no-files-found: ignore
+
       - name: Save validated Rust cache (main only) # ci-cache-save
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
@@ -74,3 +82,43 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
+  windows-gnu-target-path:
+    name: Windows GNU/UCRT64 target path (optional)
+    if: github.event_name == 'workflow_dispatch' && inputs.profile == 'windows-gnu-target-path'
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+      - name: Build the corrected compiler with the hosted MSVC toolchain
+        shell: pwsh
+        run: cargo +stable-x86_64-pc-windows-msvc build --locked --release -p nagic
+      - name: Select the reporter's GNU/UCRT64 toolchain boundary
+        shell: pwsh
+        run: |
+          rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
+          $ucrt = 'C:\msys64\ucrt64\bin'
+          if (-not (Test-Path -LiteralPath (Join-Path $ucrt 'x86_64-w64-mingw32-gcc.exe'))) {
+            throw "The hosted runner does not provide the required UCRT64 GNU linker at $ucrt"
+          }
+          $ucrt | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Compare released and corrected project-mode builds
+        shell: pwsh
+        run: |
+          x86_64-w64-mingw32-gcc --version
+          rustc +stable-x86_64-pc-windows-gnu -vV
+          ./scripts/ci/windows_gnu_target_path.ps1 `
+            -CurrentCompiler target/release/nagic.exe `
+            -EvidenceDirectory build/ci-evidence/windows-gnu-target-path
+      - name: Preserve the bounded comparison evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: windows-gnu-target-path-${{ github.run_attempt }}
+          path: build/ci-evidence/windows-gnu-target-path/
+          if-no-files-found: error
