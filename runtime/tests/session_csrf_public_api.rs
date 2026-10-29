@@ -909,8 +909,7 @@ async fn finite_origin_and_header_refusals_preserve_existing_token_and_capacity(
             == 403
     );
     assert!(request(&s, "HEAD", "/csrf", "", b"").await.status == 401);
-    let final_response =
-        request(&s, "POST", "/write", &guarded(&cookie, &token), b"owned").await;
+    let final_response = request(&s, "POST", "/write", &guarded(&cookie, &token), b"owned").await;
     if final_response.status != 200 {
         final_response.safe_reply_diag("finite_refusals_final");
         eprintln!(
