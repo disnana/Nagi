@@ -109,16 +109,22 @@ jobs:
           $ucrt = 'C:\msys64\ucrt64\bin'
           $linker = Join-Path $ucrt 'x86_64-w64-mingw32-gcc.exe'
           if (-not (Test-Path -LiteralPath $linker)) {
+            $env:PATH = "C:\msys64\usr\bin;$env:PATH"
             & 'C:\msys64\usr\bin\pacman.exe' -S --noconfirm --needed --noprogressbar mingw-w64-ucrt-x86_64-gcc 2>&1 |
               Tee-Object -FilePath $setupLog -Append
-            if ($LASTEXITCODE -ne 0) { throw 'Could not install the signed MSYS2 UCRT64 GCC package' }
+            if ($LASTEXITCODE -ne 0) {
+              Write-Output "::error title=Windows GNU setup::MSYS2 UCRT64 GCC installation failed with exit code $LASTEXITCODE; see setup.log artifact"
+              throw 'Could not install the signed MSYS2 UCRT64 GCC package'
+            }
           }
           if (-not (Test-Path -LiteralPath $linker)) {
+            Write-Output "::error title=Windows GNU setup::UCRT64 linker is missing after package installation; see setup.log artifact"
             throw "The UCRT64 GNU linker is unavailable after package installation: $linker"
           }
           $gccVersion = (& $linker -dumpfullversion | Out-String).Trim()
           "UCRT64 GCC version: $gccVersion" | Tee-Object -FilePath $setupLog -Append
           if ($gccVersion -ne '15.2.0') {
+            Write-Output "::error title=Windows GNU setup::Expected GCC 15.2.0 but found $gccVersion; see setup.log artifact"
             throw "Expected the reporter's GCC 15.2.0, got $gccVersion"
           }
           $ucrt | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
@@ -130,6 +136,17 @@ jobs:
           ./scripts/ci/windows_gnu_target_path.ps1 `
             -CurrentCompiler target/release/nagic.exe `
             -EvidenceDirectory build/ci-evidence/windows-gnu-target-path
+      - name: Summarize the bounded comparison setup
+        if: always()
+        shell: pwsh
+        run: |
+          $setup = 'build/ci-evidence/windows-gnu-target-path/setup.log'
+          if (Test-Path -LiteralPath $setup) {
+            '### Windows GNU/UCRT64 setup' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            '```text' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            Get-Content -LiteralPath $setup -Tail 80 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          }
       - name: Preserve the bounded comparison evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
