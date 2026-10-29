@@ -2792,6 +2792,23 @@ fn external_tool_path(path: &Path) -> PathBuf {
     path.to_path_buf()
 }
 
+fn relative_path(target: &Path, base: &Path) -> PathBuf {
+    let a: Vec<_> = target.components().collect();
+    let b: Vec<_> = base.components().collect();
+    let same = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    if same == 0 {
+        return target.to_path_buf();
+    }
+    let mut out = PathBuf::new();
+    for _ in same..b.len() {
+        out.push("..");
+    }
+    for c in &a[same..] {
+        out.push(c.as_os_str());
+    }
+    out
+}
+
 #[cfg(test)]
 mod native_target_tests {
     use super::native_target_directory;
@@ -2896,21 +2913,4 @@ mod native_target_tests {
             assert_eq!(actual, expected, "conventional UTF-16 length {length}");
         }
     }
-}
-
-fn relative_path(target: &Path, base: &Path) -> PathBuf {
-    let a: Vec<_> = target.components().collect();
-    let b: Vec<_> = base.components().collect();
-    let same = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
-    if same == 0 {
-        return target.to_path_buf();
-    }
-    let mut out = PathBuf::new();
-    for _ in same..b.len() {
-        out.push("..");
-    }
-    for c in &a[same..] {
-        out.push(c.as_os_str());
-    }
-    out
 }
