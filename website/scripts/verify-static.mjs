@@ -18,22 +18,45 @@ const expected = [
 for (const path of expected) {
   await access(new URL(path, root));
 }
+try {
+  const cname = (await readFile(new URL('CNAME', root), 'utf8')).trim();
+  if (process.env.PAGES_BASE_PATH) throw new Error('project Pages export must not contain the official CNAME');
+  if (cname !== 'nagi.disnana.com') throw new Error('root export has an unexpected CNAME');
+} catch (error) {
+  if (!process.env.PAGES_BASE_PATH || error.code !== 'ENOENT') throw error;
+}
 
 const robots = await readFile(new URL('robots.txt', root), 'utf8');
 const sitemap = await readFile(new URL('sitemap.xml', root), 'utf8');
 const llms = await readFile(new URL('llms.txt', root), 'utf8');
-if (!robots.includes('Sitemap: https://nagi.disnana.com/sitemap.xml')) {
+const robotsSitemap = robots.match(/^Sitemap:\s+(\S+)$/m)?.[1];
+if (robotsSitemap !== 'https://nagi.disnana.com/sitemap.xml') {
   throw new Error('robots.txt must advertise the canonical sitemap');
 }
+const sitemapUrls = new Set([...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => new URL(match[1]).href));
+const llmsUrls = new Set([...llms.matchAll(/\]\((https:\/\/[^)]+)\)/g)].map((match) => new URL(match[1]).href));
 for (const route of ['https://nagi.disnana.com/', 'https://nagi.disnana.com/en/', 'https://nagi.disnana.com/docs/writing/', 'https://nagi.disnana.com/en/docs/writing/']) {
-  if (!sitemap.includes(`<loc>${route}</loc>`)) throw new Error(`sitemap is missing ${route}`);
+  if (!sitemapUrls.has(new URL(route).href)) throw new Error(`sitemap is missing ${route}`);
 }
-if (!llms.includes('https://nagi.disnana.com/docs/writing/') || !llms.includes('https://nagi.disnana.com/en/docs/writing/')) {
+if (!llmsUrls.has(new URL('https://nagi.disnana.com/docs/writing/').href)
+    || !llmsUrls.has(new URL('https://nagi.disnana.com/en/docs/writing/').href)) {
   throw new Error('llms.txt must index both public documentation locales');
+}
+for (const source of ['ai/README.md', 'ai/skills/nagi-development/SKILL.md', 'ai/debugging.md', 'ai/language.md', 'ai/rust-interop.md']) {
+  const url = new URL(`https://github.com/disnana/Nagi/blob/main/${source}`).href;
+  if (!llmsUrls.has(url)) throw new Error(`llms.txt is missing public agent source ${source}`);
+}
+if (!llms.includes('Nagi 0.2.2 is the current released Rust target')
+    || !llms.includes('Go backend work is planned')) {
+  throw new Error('llms.txt must distinguish released Rust support from planned Go work');
+}
+if (/このページは移動しました|This page has moved/.test(llms)) {
+  throw new Error('llms.txt must prefer canonical page titles over alias titles');
 }
 for (const body of [robots, sitemap, llms]) {
   if (/docs\/internal|\.agents|audit-log/i.test(body)) throw new Error('discovery files expose internal material');
-  if (process.env.PAGES_BASE_PATH && body.includes('https://disnana.github.io')) {
+  const externalUrls = [...body.matchAll(/https:\/\/[^\s<>)]+/g)].map((match) => new URL(match[0].replace(/[),.;]+$/, '')));
+  if (process.env.PAGES_BASE_PATH && externalUrls.some((url) => url.origin === 'https://disnana.github.io')) {
     throw new Error('fallback build must retain the custom-domain canonical origin');
   }
 }

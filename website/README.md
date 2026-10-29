@@ -42,7 +42,7 @@ PAGES_BASE_PATH=/Nagi npm run test:browser
 | sidebarの順序 | 各localeの`meta.json` |
 | homeと共通navigation | `website/components/`、`website/app/` |
 | 変更履歴 | rootの`CHANGELOG.md`が正本。生成処理が軽量indexと版別pageを作る |
-| 旧URLとの対応 | `website/legacy-routes.json`とcontent生成処理 |
+| 旧URLとの対応 | `website/content/docs/{ja,en}/reference/legacy-routes.json`とcontent生成処理 |
 | content・route・linkの検査 | `website/scripts/` |
 | browser QA | `website/tests/` |
 
@@ -55,6 +55,9 @@ PAGES_BASE_PATH=/Nagi npm run test:browser
 `.github/workflows/pages.yml`はNode.js 24でlockfileから依存を導入し、教材のPython検査、型検査、static build、route/link、browser QAを実行します。PRでは成果物を保存し、site関連の変更が`main`へ入ったときだけ検査後にGitHub Pagesへdeployします。custom domain、DNS、repository visibilityはworkflowで変更しません。
 
 custom domainの静的ファイルの正本は`website/public/CNAME`です。重複したCNAMEを別の場所へ置かないでください。
+`PAGES_BASE_PATH=/Nagi`のproject Pages buildでは、公式domainをforkへ設定しないよう出力からCNAMEを除きます。`.nojekyll`はどちらにも残します。
+
+`llms.txt`は公開Docsに加え、`ai/README.md`、Nagi開発Skill、デバッグ、言語、Rust連携の5つの公開AI資料だけを明示的に索引します。内部計画や監査ログは載せず、sourceが欠けたbuildは失敗します。
 
 公式domainではbase pathを空にし、forkやproject Pagesでは`actions/configure-pages`が返すpathを`PAGES_BASE_PATH`としてbuildへ渡します。site内link、検索取得先、画像、canonical、hreflangは両方の形で検査します。
 

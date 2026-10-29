@@ -86,8 +86,8 @@ class ChangeTests(unittest.TestCase):
                      "website/content/docs/ja/index.mdx", "website/lib/source.ts",
                      "website/scripts/verify-static.mjs", "website/tests/site.spec.ts",
                      "website/public/CNAME", ".github/workflows/pages.yml",
-                     "website/assets/site.js", "website/assets/site.css", "website/assets/plot.svg",
-                     "website/assets/img/photo.png", "website/public/favicon.svg",
+                     "website/public/site.js", "website/public/site.css", "website/public/plot.svg",
+                     "website/public/img/photo.png", "website/public/favicon.svg",
                      "editors/vscode-nagi/README.md", "test-nagi-code/web-demo/README.md",
                      "test-nagi-code/application-examples/stock-report/README.en.md"):
             with self.subTest(path=path):
@@ -110,7 +110,7 @@ class ChangeTests(unittest.TestCase):
                      "test-nagi-code/application-examples/stock-report/main.nagi",
                      "test-nagi-code/application-examples/stock-report/smoke.py",
                      "test-nagi-code/application-examples/stock-report/nagi.toml",
-                     "website/examples/double.nagi", "website/assets/helper.rs",
+                     "website/examples/double.nagi", "website/assets/helper.rs", "website/assets/site.css",
                      "website/helper.py", "website/tests/test_nested.py", "website/test_data.txt",
                      "website/test_future-case.py", "website/test_future.case.py",
                      "website/templates/helper.py", "website/new-config.toml", "website/app/helper.py",
@@ -135,7 +135,7 @@ class ChangeTests(unittest.TestCase):
         for path in protected_paths:
             with self.subTest(path=path):
                 self.run_git("reset", "--hard", self.first)
-                self.write("website/test_discovery.py", "# website test update\n")
+                self.write("website/package.json", "{\"name\":\"docs-test\"}\n")
                 self.write(path, "protected source update\n")
                 self.assertEqual(self.full(self.commit(), self.first), "true")
 
@@ -181,7 +181,7 @@ class ChangeTests(unittest.TestCase):
                     self.assertEqual(self.jetbrains(head, base, event), "true")
 
     def test_docs_and_other_editors_skip_jetbrains(self):
-        for path in ("README.md", "docs/start.md", "website/assets/site.js",
+        for path in ("README.md", "docs/start.md", "website/public/site.js",
                      "editors/vscode-nagi/src/features.js", "editors/jetbrains-nagi-old/build.gradle.kts"):
             with self.subTest(path=path):
                 base = self.run_git("rev-parse", "HEAD")
@@ -259,7 +259,7 @@ class ChangeTests(unittest.TestCase):
     def test_complete_docs_push_can_contain_multiple_commits(self):
         self.write("docs/start.md", "# Earlier docs\n")
         self.commit()
-        self.write("website/assets/site.js", "// Later site change\n")
+        self.write("website/public/site.js", "// Later site change\n")
         self.assertEqual(self.full(self.commit(), event="push"), "false")
 
     def test_docs_deletion_skips_full_checks(self):
@@ -378,7 +378,7 @@ class ChangeTests(unittest.TestCase):
             "docs/internal/go-backend-0.3-minimum.md",
         )
         skipped = (
-            "runtime/src/lib.rs", "runtime-core/src/lib.rs", "website/assets/site.css",
+            "runtime/src/lib.rs", "runtime-core/src/lib.rs", "website/public/site.css",
             "README.md", "docs/http.md", "editors/jetbrains-nagi/build.gradle.kts",
             "editors/vscode-nagi/src/features.js",
         )

@@ -1,7 +1,16 @@
-import { glob, readFile, writeFile } from 'node:fs/promises';
+import { access, glob, readFile, unlink, writeFile } from 'node:fs/promises';
 
 const output = new URL('../out/', import.meta.url);
 const canonicalOrigin = 'https://nagi.disnana.com';
+const repository = new URL('../../', import.meta.url);
+const publicAgentSources = [
+  ['AI and agent entry point', 'ai/README.md'],
+  ['Nagi development Skill', 'ai/skills/nagi-development/SKILL.md'],
+  ['Debugging guide for agents', 'ai/debugging.md'],
+  ['Language guide for agents', 'ai/language.md'],
+  ['Rust interop guide for agents', 'ai/rust-interop.md'],
+];
+for (const [, path] of publicAgentSources) await access(new URL(path, repository));
 const pages = [];
 const files = new Set(['index.html', 'en/index.html']);
 
@@ -15,7 +24,15 @@ for (const file of files) {
 }
 
 pages.sort((a, b) => a.canonical.localeCompare(b.canonical));
-const unique = [...new Map(pages.map((page) => [page.canonical, page])).values()];
+const byCanonical = new Map();
+const aliasTitle = /^(?:このページは移動しました|This page has moved)$/;
+for (const page of pages) {
+  const current = byCanonical.get(page.canonical);
+  if (!current || (aliasTitle.test(current.title) && !aliasTitle.test(page.title))) {
+    byCanonical.set(page.canonical, page);
+  }
+}
+const unique = [...byCanonical.values()];
 const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${unique.map(({ canonical }) => `  <url><loc>${canonical.replaceAll('&', '&amp;')}</loc></url>`).join('\n')}\n</urlset>\n`;
 const robots = `User-agent: *\nAllow: /\nSitemap: ${canonicalOrigin}/sitemap.xml\n`;
 const publicDocs = unique.filter(({ canonical }) => canonical.includes('/docs/'));
@@ -23,12 +40,24 @@ const llms = [
   '# Nagi documentation',
   '',
   '> Public, versioned documentation for the Nagi backend language. Internal plans and audit logs are intentionally excluded.',
+  '> Nagi 0.2.2 is the current released Rust target. Go backend work is planned and must not be treated as published support.',
   '',
   ...publicDocs.map(({ title, canonical }) => `- [${title}](${canonical})`),
+  '',
+  '## Public AI and agent resources',
+  '',
+  ...publicAgentSources.map(([title, path]) => `- [${title}](https://github.com/disnana/Nagi/blob/main/${path})`),
   '',
 ].join('\n');
 
 await writeFile(new URL('sitemap.xml', output), xml);
 await writeFile(new URL('robots.txt', output), robots);
 await writeFile(new URL('llms.txt', output), llms);
+if (process.env.PAGES_BASE_PATH) {
+  await unlink(new URL('CNAME', output)).catch((error) => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+} else {
+  await access(new URL('CNAME', output));
+}
 console.log(`generated discovery files for ${unique.length} public routes (${publicDocs.length} Docs routes)`);

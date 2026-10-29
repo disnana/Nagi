@@ -42,7 +42,7 @@ PAGES_BASE_PATH=/Nagi npm run test:browser
 | Sidebar ordering | `meta.json` in each locale |
 | Home page and shared navigation | `website/components/` and `website/app/` |
 | Changelog | Root `CHANGELOG.md` is canonical; generation creates a small index and per-version pages |
-| Legacy URL mapping | `website/legacy-routes.json` and content preparation |
+| Legacy URL mapping | `website/content/docs/{ja,en}/reference/legacy-routes.json` and content preparation |
 | Content, route, and link checks | `website/scripts/` |
 | Browser QA | `website/tests/` |
 
@@ -55,6 +55,9 @@ Keep the Japanese and English page sets aligned. There is no Japanese fallback f
 `.github/workflows/pages.yml` installs the lockfile with Node.js 24, checks tutorial sources with Python, then runs type checking, static build, route/link validation, and browser QA. Pull requests retain the built artifact. Deployment happens only after a site change reaches `main` and all checks pass. The workflow does not change the custom domain, DNS, or repository visibility.
 
 `website/public/CNAME` is the single source for the static custom-domain file. Do not keep a duplicate CNAME elsewhere.
+Project Pages builds with `PAGES_BASE_PATH=/Nagi` remove CNAME from the output so a fork cannot claim the official domain. `.nojekyll` remains in both outputs.
+
+`llms.txt` explicitly indexes the public Docs and five public AI resources: `ai/README.md`, the Nagi development Skill, debugging, language, and Rust interop. Internal plans and audit logs are excluded, and the build fails if an allowlisted source is missing.
 
 The official domain has an empty base path. Forks and project Pages pass the path returned by `actions/configure-pages` as `PAGES_BASE_PATH`. Internal links, search requests, images, canonical URLs, and hreflang alternates are checked in both forms.
 

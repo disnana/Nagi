@@ -58,7 +58,7 @@ def is_docs_path(path: str) -> bool:
     # scripts, binaries, and arbitrary files under website remain fail-closed.
     if path.startswith(SITE_SOURCE_PREFIXES) and value.suffix in SITE_SOURCE_SUFFIXES:
         return True
-    if path.startswith(("website/assets/", "website/public/")) and value.suffix in ASSET_SUFFIXES:
+    if path.startswith("website/public/") and value.suffix in ASSET_SUFFIXES:
         return True
     return path in ("website/public/.nojekyll", "website/public/CNAME")
 

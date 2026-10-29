@@ -61,6 +61,9 @@ class LevelsTests(unittest.TestCase):
                 self.assertIn(command, guide)
             self.assertNotIn('website/build.py', guide)
             self.assertNotIn('website/requirements.txt', guide)
+            self.assertIn('website/content/docs/{ja,en}/reference/legacy-routes.json', guide)
+        for locale in ('ja', 'en'):
+            self.assertTrue((ROOT / 'website' / 'content' / 'docs' / locale / 'reference' / 'legacy-routes.json').is_file())
 
         website = levels.select('pull_request', ['website/package.json'], 'false', 'false', release())
         self.assertEqual(website['level'], '1')
