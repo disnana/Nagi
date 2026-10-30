@@ -2,7 +2,7 @@
 
 [目次](README.md) · [準備と最初の実行](getting-started.md) · [拡張のインストールと設定](../editors/vscode-nagi/README.md)
 
-**現在の公開版（2026-10-28）:** Nagi 0.2.2は[10月27日に公開](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.2)、JetBrains plugin 0.1.6は[GitHub Releasesで公開](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6)済みです。VS Code・JetBrains拡張はcompilerとは別に版管理します。導入可能な版とIDE対応は[GitHub Releases](https://github.com/disnana/Nagi/releases)またはMarketplaceで確認してください。下の0.1.2・0.1.3の記述は当時の版別記録で、現在の配布ZIP一覧ではありません。
+**現在の公開版（2026-10-30）:** Nagi 0.2.3は[10月30日に公開](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.3)、JetBrains plugin 0.1.6は[GitHub Releasesで公開](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6)済みです。VS Code・JetBrains拡張はcompilerとは別に版管理します。導入可能な版とIDE対応は[GitHub Releases](https://github.com/disnana/Nagi/releases)またはMarketplaceで確認してください。下の0.1.2・0.1.3の記述は当時の版別記録で、現在の配布ZIP一覧ではありません。
 
 ## JetBrains 0.1.2・0.1.3の版別記録
 

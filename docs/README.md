@@ -2,7 +2,7 @@
 
 初めて使うなら[インストール](getting-started.md)から[最初のCLIアプリ](first-app.md)まで順に進めます。言語全体の道筋は[言語機能索引](#言語機能索引)、書式や関数を引くには[文法](syntax.md)・[組み込み関数](builtins.md)へ。
 
-このDocsの公開compiler基準版は[2026-10-27に公開したNagi 0.2.2](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.2)です。エディター拡張は別の版で管理します。[エディターの案内](editor.md)を参照してください。公式サイトは通常mainから生成するため、未リリースの変更を含むことがあります。公開済みと未リリースを分けた一覧は[Changelog](../CHANGELOG.md)、互換性の要点は[0.2.0移行ガイド](migration-0.2.0.md)にあります。
+このDocsの公開compiler基準版は[2026-10-30に公開したNagi 0.2.3](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.3)です。エディター拡張は別の版で管理します。[エディターの案内](editor.md)を参照してください。公式サイトは通常mainから生成するため、未リリースの変更を含むことがあります。公開済みと未リリースを分けた一覧は[Changelog](../CHANGELOG.md)、互換性の要点は[0.2.0移行ガイド](migration-0.2.0.md)にあります。
 
 目的と現在の範囲は[Nagiについて](introduction.md)へ。以下のリファレンスは実装済みAPIの使い方と制限を示します。未実装の案は[設計](library-design.md)・[開発予定](roadmap.md)に分けています。
 
@@ -10,7 +10,7 @@
 
 [何を作れるか](use-cases.md) · [タスク管理APIの通し教材](task-api-tutorial.md) · [FastAPI・Quartとの具体比較](task-api-comparison.md) · [開発・デバッグの早見表](developer-workflow.md) · [特徴と他言語との比較](comparison.md) · [変更履歴](../CHANGELOG.md) · [AI向けDocs・Skill](../ai/README.md)
 
-日々のコマンド、症状別の修正先、APIの入口を早見表にまとめています。Changelogでは0.2.2までの公開済み機能と`Unreleased`を分けています。計画中の0.3.0 Go targetはRust既定の公開機能ではなく、対応範囲を実装・検証中です。
+日々のコマンド、症状別の修正先、APIの入口を早見表にまとめています。Changelogでは0.2.3までの公開済み機能と`Unreleased`を分けています。計画中の0.3.0 Go targetはRust既定の公開機能ではなく、対応範囲を実装・検証中です。
 
 ## 初めて使う
 
@@ -91,6 +91,6 @@
 
 `std.actor`はNagi 0.1.8から使える標準ライブラリです。[サンプル](../test-nagi-code/library-examples/supervised-service/README.md)で登録・呼び出し・停止を試せます。旧actor／Supervisorの組み込み関数と[キュー](queue.md)は検証用APIです。性能を調べる場合は、[測定方法](performance.md)、[測定結果](../PERFORMANCE.md)、[通信の負荷試験](http-capacity.md)を確認してください。
 
-公開版の基準はNagi 0.2.2です。現在のソースだけにある機能は明示して区別します。版ごとの変更は[変更履歴](../CHANGELOG.md)、未対応の機能は各ページに記載しています。
+公開版の基準はNagi 0.2.3です。現在のソースだけにある機能は明示して区別します。版ごとの変更は[変更履歴](../CHANGELOG.md)、未対応の機能は各ページに記載しています。
 
 - [認証・認可](security.md)と[0.2.0移行](migration-0.2.0.md)

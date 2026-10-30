@@ -2,7 +2,7 @@
 
 [Contents](README.md) · [Setup](getting-started.md) · [Extension installation and settings](vscode-extension.md)
 
-**Current published versions (2026-10-28):** Nagi 0.2.2 was [released on October 27](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.2), and JetBrains plugin 0.1.6 is [published on GitHub Releases](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6). VS Code and JetBrains extensions are versioned separately from the compiler. Check [GitHub Releases](https://github.com/disnana/Nagi/releases) or the Marketplace for available versions and compatible IDEs. The 0.1.2 and 0.1.3 details below are version-specific history, not a current inventory of downloadable ZIPs.
+**Current published versions (2026-10-30):** Nagi 0.2.3 was [released on October 30](https://github.com/disnana/Nagi/releases/tag/nagi-v0.2.3), and JetBrains plugin 0.1.6 is [published on GitHub Releases](https://github.com/disnana/Nagi/releases/tag/jetbrains-v0.1.6). VS Code and JetBrains extensions are versioned separately from the compiler. Check [GitHub Releases](https://github.com/disnana/Nagi/releases) or the Marketplace for available versions and compatible IDEs. The 0.1.2 and 0.1.3 details below are version-specific history, not a current inventory of downloadable ZIPs.
 
 ## JetBrains 0.1.2 and 0.1.3 version history
 

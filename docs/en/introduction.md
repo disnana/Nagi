@@ -32,7 +32,7 @@ Rust code generation remains the backend for now. An independent backend, VM, an
 
 ## Development status
 
-The current public release is 0.2.2. See [what you can build](use-cases.md) for capabilities and working examples, and [strengths and language comparisons](comparison.md) for development approaches and measurement references. The goal of writing common backends entirely in Nagi has not yet been met. SQLite has typed Parameters, and outbound HTTP uses the fixed-operation [HTTP client](http-client.md). There is no standard PostgreSQL API or user-defined opaque resource registration. The planned Go target does not yet match the published Rust backend's feature coverage.
+The current public release is 0.2.3. See [what you can build](use-cases.md) for capabilities and working examples, and [strengths and language comparisons](comparison.md) for development approaches and measurement references. The goal of writing common backends entirely in Nagi has not yet been met. SQLite has typed Parameters, and outbound HTTP uses the fixed-operation [HTTP client](http-client.md). There is no standard PostgreSQL API or user-defined opaque resource registration. The planned Go target does not yet match the published Rust backend's feature coverage.
 
 `check` checks Nagi types, moves, views, and related rules. rustc performs the final borrow and Rust trait checks, so a successful `check` can still be followed by a failed build. See [ownership](ownership.md) for the boundaries and [syntax](syntax.md) for supported notation.
 

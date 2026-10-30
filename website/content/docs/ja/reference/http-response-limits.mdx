@@ -1,0 +1,128 @@
+---
+title: std.http.server の応答上限
+description: ResponseLimitsの12個の値、単位、失敗条件をソースに対応させて確認します。
+status: released
+since: "0.2.0"
+backends: [rust]
+---
+`ResponseLimits`は、HTTP応答の本文、ヘッダー、同時保持数とフォールバック応答に有限の上限を設定する値です。内部の値は直接操作できません。公開Nagi 0.2.3のRustターゲットで使えます。GoターゲットのHTTPは未対応です。
+
+## 公開0.2.3で検査できる最小例
+
+公開版は位置引数を使います。数字の意味が消えないよう、名前の付いたローカル変数を宣言順に渡します。
+
+```nagi title="response-limits.nagi"
+import std.http.server as http
+
+def main() -> Result[unit, Error]:
+    body_bytes = 4096
+    user_header_bytes = 4096
+    user_header_count = 16
+    managed_header_bytes = 4096
+    managed_header_count = 32
+    serialization_writes = 4096
+    live_responses = 8
+    retained_bytes = 2097152
+    fallback_responses = 8
+    fallback_retained_bytes = 2097152
+    fallback_managed_header_bytes = 4096
+    fallback_managed_header_count = 32
+
+    response_limits = try http.response_limits(
+        body_bytes,
+        user_header_bytes,
+        user_header_count,
+        managed_header_bytes,
+        managed_header_count,
+        serialization_writes,
+        live_responses,
+        retained_bytes,
+        fallback_responses,
+        fallback_retained_bytes,
+        fallback_managed_header_bytes,
+        fallback_managed_header_count
+    )
+    options = try http.with_response_limits(http.default_options(), response_limits)
+    return ok(print("response limits configured"))
+```
+
+```console
+nagic check response-limits.nagi --no-project
+checked /absolute/path/to/response-limits.nagi
+```
+
+`checked`の後には、実際のファイルの絶対パスが表示されます。この例は公開0.2.3の配布コンパイラで検査済みです。
+
+この値は説明用です。実運用の推奨値や性能保証ではありません。`options`は、`authority`、`capacity`、`rate_limits`など必要な設定を加えた後、`serve`へ渡します。
+
+## `response_limits`
+
+```text
+http.response_limits(
+    body_bytes: i64,
+    user_header_bytes: i64,
+    user_header_count: i64,
+    managed_header_bytes: i64,
+    managed_header_count: i64,
+    serialization_writes: i64,
+    live_responses: i64,
+    retained_bytes: i64,
+    fallback_responses: i64,
+    fallback_retained_bytes: i64,
+    fallback_managed_header_bytes: i64,
+    fallback_managed_header_count: i64
+) -> Result[http.ResponseLimits, Error]
+```
+
+| 引数 | 単位 | 制限するもの |
+|---|---:|---|
+| `body_bytes` | バイト | 1応答の本文 |
+| `user_header_bytes` | バイト | 利用者が追加するヘッダーの合計 |
+| `user_header_count` | 個 | 利用者が追加するヘッダー数 |
+| `managed_header_bytes` | バイト | ランタイムが管理するヘッダーの合計 |
+| `managed_header_count` | 個 | ランタイムが管理するヘッダー数 |
+| `serialization_writes` | 処理単位 | 応答を直列化するときの書込み回数。バイト数ではありません |
+| `live_responses` | 個 | 同時に生存できる通常応答 |
+| `retained_bytes` | バイト | 通常応答が保持できる論理的な合計予算 |
+| `fallback_responses` | 個 | 通常枠が足りない場合のフォールバック応答 |
+| `fallback_retained_bytes` | バイト | フォールバック応答の論理的な合計予算 |
+| `fallback_managed_header_bytes` | バイト | フォールバックでランタイムが管理するヘッダーの合計 |
+| `fallback_managed_header_count` | 個 | フォールバックでランタイムが管理するヘッダー数 |
+
+すべての値は`1`以上で、実行環境の`isize::MAX`以下である必要があります。`0`は「無制限」ではなくエラーです。各値が単独では正しくても、`with_response_limits`で他のHTTP設定と組み合わせた結果が成立しなければエラーになります。
+
+通常応答とフォールバック応答は別の有限枠です。これらは論理的な予算であり、プロセスのRSS上限、OOMからの回復、応答時間の保証ではありません。
+
+## `with_response_limits`
+
+```text
+http.with_response_limits(
+    options: http.Options,
+    limits: http.ResponseLimits
+) -> Result[http.Options, Error]
+```
+
+`options`と`limits`を移動して、検証済みの新しい`Options`を返します。成功でも失敗でも、渡した2つの値を再利用できません。HTTPサーバーを開始するには明示的な応答上限が必要です。
+
+## 未リリースmainの名前付き引数
+
+現在のmainでは、12個すべてを宣言順に`name=value`で書けます。この構文は公開0.2.3には含まれません。
+
+```text title="未リリースmainのみ"
+response_limits = try http.response_limits(
+    body_bytes=4096,
+    user_header_bytes=4096,
+    user_header_count=16,
+    managed_header_bytes=4096,
+    managed_header_count=32,
+    serialization_writes=4096,
+    live_responses=8,
+    retained_bytes=2097152,
+    fallback_responses=8,
+    fallback_retained_bytes=2097152,
+    fallback_managed_header_bytes=4096,
+    fallback_managed_header_count=32
+)
+```
+
+サーバー全体の組み立て方は[HTTPサーバー](../../backend/http)、ターゲットごとの対応は[対応表](../support)で確認できます。

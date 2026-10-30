@@ -1,6 +1,6 @@
 # Nagi's strengths and language comparisons
 
-Nagi is for developers who want to **write typed backend logic with readable, indentation-based syntax and use Rust's execution foundation and libraries**. Published 0.2.2 includes HTTP, JSON, SQLite, Results, ownership/borrowing, async, and actors, plus explicit opt-in runtime selection and an initial lock seed. The planned 0.3.0 Go target is not a published backend and does not yet provide Go HTTP or Actor support.
+Nagi is for developers who want to **write typed backend logic with readable, indentation-based syntax and use Rust's execution foundation and libraries**. Published 0.2.3 includes HTTP, JSON, SQLite, Results, ownership/borrowing, async, and actors, plus explicit opt-in runtime selection and an initial lock seed. The planned 0.3.0 Go target is not a published backend and does not yet provide Go HTTP or Actor support.
 
 ## What Nagi offers
 
@@ -29,7 +29,7 @@ This is not Python-compatible code: Nagi has its own types, move/view, and Resul
 
 This table compares development approaches, including language/framework combinations. It is not a speed ranking.
 
-| Decision | Nagi 0.2.2 | Python + FastAPI | Rust + Axum | Go + `net/http` |
+| Decision | Nagi 0.2.3 | Python + FastAPI | Rust + Axum | Go + `net/http` |
 |---|---|---|---|---|
 | Writing code | Indented syntax, typed functions, Results, move/view | Indented syntax, type annotations, Pydantic input models | Rust types, ownership, traits, Results, async | Explicit types, structs/interfaces, errors, goroutines |
 | Feedback after editing | Complete Nagi `check`, then Cargo builds when needed | Python execution, type-checking tools, tests; normally no native application build | `cargo check`, `cargo test`, execution | `go test`, `go run`, `go build` |

@@ -4,6 +4,7 @@
     "index",
     "support",
     "measurements",
+    "http-response-limits",
     "result-api",
     "web-demo",
     "vscode-extension"

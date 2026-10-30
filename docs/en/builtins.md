@@ -20,7 +20,7 @@ nagic check builtins.nagi
 nagic run builtins.nagi --profile dev
 ```
 
-It prints `42` followed by the UTF-8 byte length `2`. `check` avoids Rust compilation; `run` builds a native executable. This example has been checked with the published Nagi 0.2.2 compiler.
+It prints `42` followed by the UTF-8 byte length `2`. `check` avoids Rust compilation; `run` builds a native executable. This syntax is included in published Nagi 0.2.3.
 
 ## Output, input, and environment
 
@@ -35,7 +35,7 @@ It prints `42` followed by the UTF-8 byte length `2`. `check` avoids Rust compil
 
 `read_line` displays pending output, then reads a line and removes its trailing newline. It retains other whitespace and returns an empty string at the end of input. It blocks while waiting for input, so use it in console applications.
 
-Published 0.2.2 supports `name = try read_line("Name: ")`. The prompt is borrowed for reading and remains usable after the call. The operation writes the prompt, flushes output, then reads input. Write, flush, and read failures return an `Error` through `Result`; handle it with `try` or `match`. Existing calls without arguments keep their behavior. The [complete example](../../examples/tutorial/prompt-input.nagi) runs on 0.2.2. On 0.2.1, use `write("Name: ")` followed by `try read_line()`.
+Published 0.2.3 supports `name = try read_line("Name: ")`. The prompt is borrowed for reading and remains usable after the call. The operation writes the prompt, flushes output, then reads input. Write, flush, and read failures return an `Error` through `Result`; handle it with `try` or `match`. Existing calls without arguments keep their behavior. The [complete example](../../examples/tutorial/prompt-input.nagi) runs on 0.2.3. On 0.2.1, use `write("Name: ")` followed by `try read_line()`.
 
 `env` evaluates its second argument only when the variable is unavailable. When a value exists, a function constructing the default is not called. The generation fix for defaults containing `try` or `await` targets Nagi 0.1.11; check [GitHub Releases](https://github.com/disnana/Nagi/releases) to confirm published availability.
 

@@ -1,6 +1,6 @@
 # Nagiの良さと、他の言語との比較
 
-Nagiは、**読みやすい字下げ構文で型付きのバックエンド処理を書き、Rustの実行基盤とライブラリを使いたい**開発者に向けた言語です。公開版0.2.2では、HTTP・JSON・SQLite、Result、所有権・借用、async・actorに加え、明示opt-inのruntime選択と初回lock seedを使えます。Go targetは計画中の0.3.0向けで、HTTPやActorを含む公開機能ではありません。
+Nagiは、**読みやすい字下げ構文で型付きのバックエンド処理を書き、Rustの実行基盤とライブラリを使いたい**開発者に向けた言語です。公開版0.2.3では、HTTP・JSON・SQLite、Result、所有権・借用、async・actorに加え、明示opt-inのruntime選択と初回lock seedを使えます。Go targetは計画中の0.3.0向けで、HTTPやActorを含む公開機能ではありません。
 
 ## Nagiで得られるもの
 
@@ -29,7 +29,7 @@ def main():
 
 以下は開発方式の比較です。言語とフレームワークを組み合わせる場合も含み、速度ランキングではありません。
 
-| 判断軸 | Nagi 0.2.2 | Python + FastAPI | Rust + Axum | Go + `net/http` |
+| 判断軸 | Nagi 0.2.3 | Python + FastAPI | Rust + Axum | Go + `net/http` |
 |---|---|---|---|---|
 | コードの書き方 | 字下げ構文、関数の型、Result、move/view | 字下げ構文、型注釈とPydanticによる入力モデル | Rustの型・所有権・trait、Result、async | 明示的な型、構造体・interface、error、goroutine |
 | 編集後の確認 | Nagiの完全`check`、必要時にCargoビルド | Python実行、型検査ツール、テスト。通常はアプリのネイティブビルド不要 | `cargo check`と`cargo test`/実行 | `go test`と`go run`/`go build` |
