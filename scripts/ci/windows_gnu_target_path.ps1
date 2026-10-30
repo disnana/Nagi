@@ -153,6 +153,14 @@ $summary = [ordered]@{
 $summaryPath = Join-Path $EvidenceDirectory 'summary.json'
 $summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $summaryPath -Encoding utf8
 $summary | ConvertTo-Json -Depth 6 | Write-Host
+$comparisonNotice = @(
+    "baseline_explicit_exit=$($baselineExplicit.exit_code)"
+    "baseline_project_exit=$($baselineProject.exit_code)"
+    "baseline_project_reproduced=$($summary.baseline_project_reproduced)"
+    "current_project_exit=$($currentProject.exit_code)"
+    "current_printed_hello=$($currentProject.printed_hello)"
+) -join '; '
+Write-Output "::notice title=Windows GNU comparison::$comparisonNotice"
 
 if ($currentProject.exit_code -ne 0 -or -not $currentProject.printed_hello) {
     throw 'The corrected project-mode compiler failed under Windows GNU/UCRT64'
