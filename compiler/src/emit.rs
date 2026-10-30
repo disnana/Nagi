@@ -1,7 +1,8 @@
 use crate::ast::*;
 use crate::checked::{
-    BlockPlan, CheckedProgram, CompareRead, CopyRead, EmissionPlan, ExpressionKey, ExpressionPlan,
-    FunctionPlan, IteratorRead, MainError, StaticRead, ViewRead,
+    BlockPlan, CheckedProgram, CompareRead, CopyRead, EmissionPlan, ErrorDestination,
+    ExpressionKey, ExpressionPlan, FunctionPlan, IteratorRead, MainError, ScopeBodyErrorExit,
+    ScopeBridge, ScopeNormalExit, ScopeOwnerTeardown, StaticRead, ViewRead,
 };
 use crate::diagnostics::Generated;
 use std::{
@@ -365,28 +366,23 @@ struct RustTypes<'a> {
     function: Option<&'a FunctionPlan>,
     storage_slots: &'a BTreeSet<String>,
     expression_uses: &'a BTreeMap<ExprUseId, ExprUseMode>,
-    function_error: Option<&'a Type>,
-    error_exit: ErrorExit,
-}
-
-#[derive(Clone, Copy)]
-enum ErrorExit {
-    Function,
-    Scope(usize),
+    error_exit: ErrorDestination,
 }
 
 fn error_exit(error: &str, types: &RustTypes<'_>) -> String {
     let error = format!("::std::result::Result::Err(::std::convert::From::from({error}))");
     match types.error_exit {
-        ErrorExit::Function => format!("return {error}"),
-        ErrorExit::Scope(depth) => format!("break '__nagi_scope_body_{depth} {error}"),
+        ErrorDestination::Function => format!("return {error}"),
+        ErrorDestination::Scope { nesting, .. } => {
+            format!("break '__nagi_scope_body_{nesting} {error}")
+        }
     }
 }
 
 fn try_result(value: String, types: &RustTypes<'_>) -> String {
     match types.error_exit {
-        ErrorExit::Function => format!("({value})?"),
-        ErrorExit::Scope(_) => format!(
+        ErrorDestination::Function => format!("({value})?"),
+        ErrorDestination::Scope { .. } => format!(
             "match ({value}) {{ ::std::result::Result::Ok(__nagi_try_value) => __nagi_try_value, ::std::result::Result::Err(__nagi_try_error) => {} }}",
             error_exit("__nagi_try_error", types)
         ),
@@ -1137,28 +1133,47 @@ fn rb(
                 // source uses and prevent them from carrying body-local views.
                 // The label routes errors through cancel/join after body locals
                 // drop, while every outer value keeps its source cleanup anchor.
-                let depth = match types.error_exit {
-                    ErrorExit::Function => 1,
-                    ErrorExit::Scope(depth) => depth + 1,
+                let exit = decision
+                    .scope_exit
+                    .as_ref()
+                    .expect("sealed scope exit plan");
+                let ErrorDestination::Scope { nesting: depth, .. } = exit.body_error_destination
+                else {
+                    unreachable!("sealed lexical scope body destination")
                 };
                 let body_types = RustTypes {
-                    error_exit: ErrorExit::Scope(depth),
+                    error_exit: exit.body_error_destination,
+                    ..*types
+                };
+                let outer_types = RustTypes {
+                    error_exit: exit.enclosing_error_destination,
                     ..*types
                 };
                 let failure = local_type(
-                    types.function_error.expect("checked scope Result function"),
+                    types
+                        .function
+                        .expect("sealed function plan")
+                        .error_type
+                        .as_ref()
+                        .expect("checked scope Result function"),
                     types,
                 );
-                let (scope, scope_type, cancel) = if decision.task_bridge {
-                    let scope = format!(
-                        "__nagi_task_scope_{}",
-                        decision.scope.expect("sealed scope identity").0
-                    );
-                    let cancel = format!("let _ = {scope}.cancel().await;");
-                    (scope, "TaskScope", cancel)
-                } else {
-                    ("__scope".into(), "Scope", "__scope.cancel().await;".into())
+                let (scope, scope_type, cancel) = match exit.bridge {
+                    ScopeBridge::TaskScope => {
+                        let scope = format!("__nagi_task_scope_{}", exit.scope.0);
+                        let cancel = format!("let _ = {scope}.cancel().await;");
+                        (scope, "TaskScope", cancel)
+                    }
+                    ScopeBridge::Legacy => {
+                        ("__scope".into(), "Scope", "__scope.cancel().await;".into())
+                    }
                 };
+                // Runtime owner Drop supplies only the sealed abort request
+                // boundary. Both explicit exit paths below still await cleanup.
+                let ScopeOwnerTeardown::AbortRequestOnly = exit.owner_teardown;
+                let ScopeBodyErrorExit::LeaveBodyThenCancelDrainAndPropagateOriginal =
+                    exit.body_error_exit;
+                let ScopeNormalExit::JoinAndPropagate = exit.normal_exit;
                 out.push_str(&format!("{pad}    let mut {scope} = ::nagi_runtime::{scope_type}::new();\n{pad}    let __scope_result: ::std::result::Result<(), {failure}> = '__nagi_scope_body_{depth}: {{\n"));
                 rb(
                     b,
@@ -1169,7 +1184,7 @@ fn rb(
                     node.map(|node| &node.children[0]),
                 );
                 out.origin(::std::option::Option::Some(s.line));
-                out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }};\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ {cancel} {}; }}\n{pad}    {};\n{pad}}}\n", error_exit("e", types), try_result(format!("{scope}.join().await"), types)));
+                out.push_str(&format!("{pad}        ::std::result::Result::Ok(())\n{pad}    }};\n{pad}    if let ::std::result::Result::Err(e) = __scope_result {{ {cancel} {}; }}\n{pad}    {};\n{pad}}}\n", error_exit("e", &outer_types), try_result(format!("{scope}.join().await"), &outer_types)));
             }
         }
         if let Some(node) = node {
@@ -1260,8 +1275,7 @@ fn rust_validated_selection(
         function: None,
         storage_slots: &BTreeSet::new(),
         expression_uses: &BTreeMap::new(),
-        function_error: None,
-        error_exit: ErrorExit::Function,
+        error_exit: ErrorDestination::Function,
     };
     let mut out =
         Generated::new("#![allow(unused_mut, unused_parens, unused_variables, dead_code)]\n");
@@ -1511,7 +1525,6 @@ fn rust_validated_selection(
             let flow = &function.flow;
             let types = RustTypes {
                 function: Some(function),
-                function_error: function.error_type.as_ref(),
                 storage_slots: flow
                     .as_ref()
                     .map_or(types.storage_slots, |flow| &flow.storage_slots),

@@ -454,10 +454,106 @@ pub(crate) struct BlockPlan {
     pub shadow: Vec<(String, Type)>,
     pub statements: Vec<StatementPlan>,
 }
+
+/// Private, target-neutral scope control flow. Scope identity is structural;
+/// nesting only names the existing lexical body boundary in Rust lowering.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ErrorDestination {
+    Function,
+    Scope { id: ScopeId, nesting: usize },
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ScopeBridge {
+    Legacy,
+    TaskScope,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ScopeNormalExit {
+    JoinAndPropagate,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ScopeBodyErrorExit {
+    LeaveBodyThenCancelDrainAndPropagateOriginal,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ScopeOwnerTeardown {
+    AbortRequestOnly,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ScopeExitPlan {
+    pub scope: ScopeId,
+    pub bridge: ScopeBridge,
+    pub body_error_destination: ErrorDestination,
+    pub enclosing_error_destination: ErrorDestination,
+    pub normal_exit: ScopeNormalExit,
+    pub body_error_exit: ScopeBodyErrorExit,
+    pub owner_teardown: ScopeOwnerTeardown,
+}
+
+fn scope_exit_plans(function: &Function) -> Result<BTreeMap<ScopeId, ScopeExitPlan>, String> {
+    fn block(
+        statements: &[Stmt],
+        enclosing: ErrorDestination,
+        plans: &mut BTreeMap<ScopeId, ScopeExitPlan>,
+    ) -> Result<(), String> {
+        for statement in statements {
+            match &statement.kind {
+                S::Scope(body) => {
+                    let scope = statement
+                        .task
+                        .scope
+                        .ok_or("missing checked scope identity")?;
+                    let nesting = match enclosing {
+                        ErrorDestination::Function => 1,
+                        ErrorDestination::Scope { nesting, .. } => nesting + 1,
+                    };
+                    let destination = ErrorDestination::Scope { id: scope, nesting };
+                    let plan = ScopeExitPlan {
+                        scope,
+                        bridge: if statement.task.bridge {
+                            ScopeBridge::TaskScope
+                        } else {
+                            ScopeBridge::Legacy
+                        },
+                        body_error_destination: destination,
+                        enclosing_error_destination: enclosing,
+                        normal_exit: ScopeNormalExit::JoinAndPropagate,
+                        body_error_exit:
+                            ScopeBodyErrorExit::LeaveBodyThenCancelDrainAndPropagateOriginal,
+                        owner_teardown: ScopeOwnerTeardown::AbortRequestOnly,
+                    };
+                    if plans.insert(scope, plan).is_some() {
+                        return Err("duplicate checked scope identity".into());
+                    }
+                    block(body, destination, plans)?;
+                }
+                S::If(_, yes, no) => {
+                    block(yes, enclosing, plans)?;
+                    block(no, enclosing, plans)?;
+                }
+                S::While(_, body) | S::For(_, _, body) => {
+                    block(body, enclosing, plans)?;
+                }
+                S::Match(_, arms) => {
+                    for arm in arms {
+                        block(&arm.body, enclosing, plans)?;
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    let mut plans = BTreeMap::new();
+    block(&function.body, ErrorDestination::Function, &mut plans)?;
+    Ok(plans)
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct StatementPlan {
     pub scope: Option<ScopeId>,
     pub task_bridge: bool,
+    pub scope_exit: Option<ScopeExitPlan>,
     pub rebind: bool,
     pub annotate: bool,
     pub iterator: Option<IteratorRead>,
@@ -470,6 +566,8 @@ pub(crate) struct FunctionPlan {
     expected_flow_slots: Option<BTreeSet<String>>,
     pub rebind_parameters: BTreeSet<String>,
     pub lifetime: bool,
+    /// Rust-renamed function error type. This is backend lowering data, not a
+    /// target-neutral scope lifecycle fact.
     pub error_type: Option<Type>,
     pub body: BlockPlan,
     pub expressions: BTreeMap<ExpressionKey, ExpressionPlan>,
@@ -1123,6 +1221,7 @@ fn block_plan(
     outer: &BTreeMap<String, Type>,
     flow: Option<&crate::view_flow::Block>,
     child: bool,
+    scopes: &BTreeMap<ScopeId, ScopeExitPlan>,
 ) -> BlockPlan {
     let terminal = flow.map_or_else(
         || crate::ast::block_returns(statements),
@@ -1147,6 +1246,9 @@ fn block_plan(
         let mut plan = StatementPlan {
             scope: statement.task.scope,
             task_bridge: statement.task.bridge,
+            scope_exit: matches!(statement.kind, S::Scope(_))
+                .then(|| statement.task.scope.and_then(|id| scopes.get(&id)).cloned())
+                .flatten(),
             ..Default::default()
         };
         match &statement.kind {
@@ -1170,15 +1272,28 @@ fn block_plan(
                 }
             }
             S::If(_, a, b) => {
-                plan.children
-                    .push(block_plan(a, &bindings, node.map(|n| &n.children[0]), true));
-                plan.children
-                    .push(block_plan(b, &bindings, node.map(|n| &n.children[1]), true));
+                plan.children.push(block_plan(
+                    a,
+                    &bindings,
+                    node.map(|n| &n.children[0]),
+                    true,
+                    scopes,
+                ));
+                plan.children.push(block_plan(
+                    b,
+                    &bindings,
+                    node.map(|n| &n.children[1]),
+                    true,
+                    scopes,
+                ));
             }
-            S::While(_, b) => {
-                plan.children
-                    .push(block_plan(b, &bindings, node.map(|n| &n.children[0]), true))
-            }
+            S::While(_, b) => plan.children.push(block_plan(
+                b,
+                &bindings,
+                node.map(|n| &n.children[0]),
+                true,
+                scopes,
+            )),
             S::For(name, expr, b) => {
                 plan.iterator = Some(if expr.ty.as_ref().is_some_and(|t| t.0 == "Range") {
                     IteratorRead::Range
@@ -1192,8 +1307,13 @@ fn block_plan(
                 if let Some(t) = statement.binding_type.as_ref().filter(|t| t.is_view()) {
                     inner.insert(name.clone(), t.clone());
                 }
-                plan.children
-                    .push(block_plan(b, &inner, node.map(|n| &n.children[0]), true));
+                plan.children.push(block_plan(
+                    b,
+                    &inner,
+                    node.map(|n| &n.children[0]),
+                    true,
+                    scopes,
+                ));
             }
             S::Match(_, arms) => {
                 for (i, arm) in arms.iter().enumerate() {
@@ -1211,6 +1331,7 @@ fn block_plan(
                         &inner,
                         node.map(|n| &n.children[i]),
                         true,
+                        scopes,
                     ));
                 }
             }
@@ -1222,6 +1343,7 @@ fn block_plan(
                 &bindings,
                 node.map(|n| &n.children[0]),
                 false,
+                scopes,
             )),
             _ => {}
         }
@@ -1290,6 +1412,7 @@ impl EmissionPlan {
             statements: &[Stmt],
             plan: &BlockPlan,
             flow: Option<&crate::view_flow::Block>,
+            scopes: &BTreeMap<ScopeId, ScopeExitPlan>,
         ) -> Result<(), String> {
             if statements.len() != plan.statements.len()
                 || flow.is_some_and(|f| f.statements.len() != statements.len())
@@ -1300,6 +1423,24 @@ impl EmissionPlan {
                 let node = flow.map(|f| &f.statements[i]);
                 let s = node.map_or(original, |n| &n.stmt);
                 validate_statement_facts(s)?;
+                let decision = &plan.statements[i];
+                let expected = if matches!(s.kind, S::Scope(_)) {
+                    Some(
+                        scopes
+                            .get(&s.task.scope.ok_or("missing checked scope identity")?)
+                            .ok_or("missing checked scope exit identity")?,
+                    )
+                } else {
+                    None
+                };
+                if decision.scope_exit.as_ref() != expected
+                    || decision.scope != s.task.scope
+                    || decision.task_bridge != s.task.bridge
+                    || s.task.scope != original.task.scope
+                    || s.task.bridge != original.task.bridge
+                {
+                    return Err("missing or inconsistent checked scope exit plan".into());
+                }
                 let children: Vec<&[Stmt]> = match &s.kind {
                     S::If(_, a, b) => vec![a, b],
                     S::While(_, b) | S::For(_, _, b) | S::Scope(b) => vec![b],
@@ -1316,6 +1457,7 @@ impl EmissionPlan {
                         child,
                         &plan.statements[i].children[j],
                         node.map(|n| &n.children[j]),
+                        scopes,
                     )?;
                 }
             }
@@ -1332,7 +1474,13 @@ impl EmissionPlan {
                 (Some(_), None) | (None, Some(_)) => return Err("missing checked flow plan".into()),
                 _ => {}
             }
-            block(&f.body, &plan.body, plan.flow.as_ref().map(|f| &f.body))?;
+            let scopes = scope_exit_plans(f)?;
+            block(
+                &f.body,
+                &plan.body,
+                plan.flow.as_ref().map(|f| &f.body),
+                &scopes,
+            )?;
             let mut validate = |e: &Expr| {
                 if !plan.expressions.contains_key(&ExpressionKey::of(e)) {
                     return Err("missing checked expression plan".into());
@@ -1474,7 +1622,14 @@ impl EmissionPlan {
                 .filter(|(_, t)| t.is_view())
                 .cloned()
                 .collect();
-            let body = block_plan(&f.body, &bindings, flow.as_ref().map(|p| &p.body), false);
+            let scopes = scope_exit_plans(f)?;
+            let body = block_plan(
+                &f.body,
+                &bindings,
+                flow.as_ref().map(|p| &p.body),
+                false,
+                &scopes,
+            );
             fn task_uses(
                 statements: &[Stmt],
                 current: Option<(ScopeId, bool)>,

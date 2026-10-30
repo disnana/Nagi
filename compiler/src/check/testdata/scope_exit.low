@@ -1,0 +1,24 @@
+async fn work() -> Result[unit, Error] { return ok(print(1)); }
+async fn value() -> i64 { return 7; }
+async fn exercise(flag: bool) -> Result[unit, Error] {
+    scope {
+        spawn work();
+        if flag {
+            scope {
+                let task = spawn value();
+                let received = await task;
+                try await work();
+            }
+        }
+        scope { spawn work(); }
+    }
+    for index in range(2) {
+        scope {
+            let task = spawn value();
+            let received = await task;
+            spawn work();
+        }
+    }
+    scope { spawn work(); try await work(); }
+    return ok(print(0));
+}

@@ -1,0 +1,23 @@
+async def work() -> Result[unit, Error]:
+    return ok(print(1))
+async def value() -> i64:
+    return 7
+async def exercise(flag: bool) -> Result[unit, Error]:
+    async with scope:
+        spawn work()
+        if flag:
+            async with scope:
+                task = spawn value()
+                received = await task
+                try await work()
+        async with scope:
+            spawn work()
+    for index in range(2):
+        async with scope:
+            task = spawn value()
+            received = await task
+            spawn work()
+    async with scope:
+        spawn work()
+        try await work()
+    return ok(print(0))

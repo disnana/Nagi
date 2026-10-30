@@ -994,3 +994,230 @@ fn sqlite_literal_plan_rejects_missing_index_and_payload_tampering() {
             .contains("SQL argument plan"));
     }
 }
+
+const SCOPE_EXIT_HIGH: &str = include_str!("testdata/scope_exit.nagi");
+const SCOPE_EXIT_LOW: &str = include_str!("testdata/scope_exit.low");
+
+fn scope_exit_function(checked: &CheckedProgram) -> &FunctionPlan {
+    let index = checked
+        .program()
+        .functions
+        .iter()
+        .position(|f| matches!(f.body.first().map(|s| &s.kind), Some(S::Scope(_))))
+        .unwrap();
+    &checked.emission.functions[index]
+}
+fn scope_exit_function_mut(checked: &mut CheckedProgram) -> &mut FunctionPlan {
+    let index = checked
+        .program()
+        .functions
+        .iter()
+        .position(|f| matches!(f.body.first().map(|s| &s.kind), Some(S::Scope(_))))
+        .unwrap();
+    &mut checked.emission.functions[index]
+}
+fn collect_scope_exits(block: &BlockPlan) -> Vec<ScopeExitPlan> {
+    let mut result = Vec::new();
+    for statement in &block.statements {
+        result.extend(statement.scope_exit.clone());
+        for child in &statement.children {
+            result.extend(collect_scope_exits(child));
+        }
+    }
+    result
+}
+
+#[test]
+fn scope_exit_plan_preserves_rust_bytes_and_stable_nested_sibling_loop_identities() {
+    // Captured with the unmodified d4c2b08 emitter, before extracting the plan.
+    let baseline = include_str!("testdata/scope_exit.rust");
+    let high = checked_high(SCOPE_EXIT_HIGH);
+    let saved = crate::emit::low(high.program());
+    let expected = vec![
+        (
+            ScopeId(0),
+            ScopeBridge::Legacy,
+            ErrorDestination::Function,
+            1,
+        ),
+        (
+            ScopeId(1),
+            ScopeBridge::TaskScope,
+            ErrorDestination::Scope {
+                id: ScopeId(0),
+                nesting: 1,
+            },
+            2,
+        ),
+        (
+            ScopeId(2),
+            ScopeBridge::Legacy,
+            ErrorDestination::Scope {
+                id: ScopeId(0),
+                nesting: 1,
+            },
+            2,
+        ),
+        (
+            ScopeId(3),
+            ScopeBridge::TaskScope,
+            ErrorDestination::Function,
+            1,
+        ),
+        (
+            ScopeId(4),
+            ScopeBridge::Legacy,
+            ErrorDestination::Function,
+            1,
+        ),
+    ];
+    for (source, is_high) in [
+        (SCOPE_EXIT_HIGH, true),
+        (saved.as_str(), false),
+        (SCOPE_EXIT_LOW, false),
+    ] {
+        let mut checked = crate::check::finalize(
+            crate::parser::parse(source, is_high).unwrap(),
+            Program::default(),
+            SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::emit::rust(&checked).unwrap().as_bytes(),
+            baseline.as_bytes()
+        );
+        let exits = collect_scope_exits(&scope_exit_function(&checked).body);
+        assert_eq!(
+            exits
+                .iter()
+                .map(|exit| {
+                    let ErrorDestination::Scope { id, nesting } = exit.body_error_destination
+                    else {
+                        panic!()
+                    };
+                    assert_eq!(id, exit.scope);
+                    assert_eq!(exit.normal_exit, ScopeNormalExit::JoinAndPropagate);
+                    assert_eq!(
+                        exit.body_error_exit,
+                        ScopeBodyErrorExit::LeaveBodyThenCancelDrainAndPropagateOriginal
+                    );
+                    assert_eq!(exit.owner_teardown, ScopeOwnerTeardown::AbortRequestOnly);
+                    (
+                        exit.scope,
+                        exit.bridge,
+                        exit.enclosing_error_destination,
+                        nesting,
+                    )
+                })
+                .collect::<Vec<_>>(),
+            expected
+        );
+        for _ in 0..2 {
+            // Loop fixed-point passes must not allocate fresh lexical identities.
+            super::super::check_mode(&mut checked.program, false).unwrap();
+            let resealed = CheckedProgram::seal_rechecked(
+                checked.program.clone(),
+                SourceProvenance::user_low_unmapped(),
+            )
+            .unwrap();
+            assert_eq!(
+                collect_scope_exits(&scope_exit_function(&resealed).body),
+                exits
+            );
+        }
+    }
+}
+
+#[test]
+fn scope_exit_plan_missing_mismatched_and_spurious_facts_fail_closed() {
+    for mutation in 0..8 {
+        let mut checked = checked_high(SCOPE_EXIT_HIGH);
+        let function = scope_exit_function_mut(&mut checked);
+        let first = &mut function.body.statements[0];
+        if mutation == 0 {
+            first.scope_exit = None;
+        } else if mutation == 6 {
+            first.scope = Some(ScopeId(77));
+        } else if mutation == 7 {
+            let exit = first.scope_exit.clone();
+            function.body.statements.last_mut().unwrap().scope_exit = exit;
+        } else {
+            let exit = first.scope_exit.as_mut().unwrap();
+            match mutation {
+                1 => exit.scope = ScopeId(77),
+                2 => exit.bridge = ScopeBridge::TaskScope,
+                3 => exit.body_error_destination = ErrorDestination::Function,
+                4 => exit.enclosing_error_destination = exit.body_error_destination,
+                5 => {
+                    exit.body_error_destination = ErrorDestination::Scope {
+                        id: exit.scope,
+                        nesting: 77,
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        let error = crate::emit::rust(&checked).unwrap_err();
+        assert!(
+            error.contains("checked scope exit plan"),
+            "mutation {mutation}: {error}"
+        );
+        let go_error = crate::go_backend::source(&checked, &[], crate::project::BuildProfile::Dev)
+            .unwrap_err();
+        assert!(
+            go_error.contains("checked scope exit plan"),
+            "mutation {mutation}: {go_error}"
+        );
+    }
+}
+
+#[test]
+fn scope_exit_plan_keeps_rust_keyword_error_names_in_rust_lowering_only() {
+    let high = "class type:\n    code: i64\nasync def fail_work() -> Result[unit, type]:\n    return fail(type(code=1))\nasync def keyword_error() -> Result[unit, type]:\n    async with scope:\n        spawn sleep(1)\n        try await fail_work()\n    return ok(print(0))\n";
+    let low = "record type { code: i64; }\nasync fn fail_work() -> Result[unit, type] { return fail(type(code=1)); }\nasync fn keyword_error() -> Result[unit, type] {\n    scope { spawn sleep(1); try await fail_work(); }\n    return ok(print(0));\n}\n";
+    let mut outputs = Vec::new();
+    for (source, is_high) in [(high, true), (low, false)] {
+        let checked = crate::check::finalize(
+            crate::parser::parse(source, is_high).unwrap(),
+            Program::default(),
+            SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        let function = scope_exit_function(&checked);
+        assert_eq!(collect_scope_exits(&function.body).len(), 1);
+        assert_eq!(function.error_type, Some(Type::named("r#type")));
+        let rust = crate::emit::rust(&checked).unwrap();
+        assert!(rust.contains("::std::result::Result<(), r#type>"), "{rust}");
+        outputs.push(rust);
+    }
+    assert_eq!(outputs[0], outputs[1]);
+}
+
+#[test]
+fn scope_exit_plan_rejects_duplicate_scope_identities_and_flow_mismatch() {
+    let mut checked = checked_high(SCOPE_EXIT_HIGH);
+    let index = checked
+        .program()
+        .functions
+        .iter()
+        .position(|f| matches!(f.body.first().map(|s| &s.kind), Some(S::Scope(_))))
+        .unwrap();
+    let function = &mut checked.emission.program.functions[index];
+    function.body[2].task.scope = function.body[0].task.scope;
+    assert!(crate::emit::rust(&checked)
+        .unwrap_err()
+        .contains("duplicate checked scope identity"));
+
+    // Reuse the existing owning-view flow fixture. Adding a scope identity to
+    // a lowered non-scope statement must also fail closed.
+    let mut checked = checked_high("def restore(part: view[str]) -> List[view[str]]:\n    local = \"inner\"\n    parts = [view(local)]\n    parts = [part]\n    return parts\n");
+    let function = &mut checked.emission.functions[0];
+    let flow = function
+        .flow
+        .as_mut()
+        .expect("view lowering needs sealed flow");
+    flow.body.statements[1].stmt.task.scope = Some(ScopeId(77));
+    assert!(crate::emit::rust(&checked)
+        .unwrap_err()
+        .contains("checked scope exit"));
+}
