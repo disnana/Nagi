@@ -815,23 +815,21 @@ fn user_async_capture_plain_graph_memoizes_repeated_types_and_defers_recursive_t
     source.push_str(
         "async def take(value: Node0):\n    print(0)\nasync def main():\n    await take(Node0(left=[], right=[]))\n",
     );
-    let checked = checked_high(&source);
-    let capture = checked.final_check_facts().functions["main"]
-        .values()
-        .next()
-        .unwrap();
+    let mut program = crate::parser::parse(&source, true).unwrap();
+    let facts = super::super::check_mode(&mut program, false).unwrap();
+    let capture = facts.functions["main"].values().next().unwrap();
     assert_eq!(
         user_capture(&capture.arguments[0]).release,
         ArgumentRelease::FutureInvocationExit
     );
 
-    let recursive = checked_high(
+    let mut recursive = crate::parser::parse(
         "class Node:\n    children: List[Node]\nasync def take(value: Node):\n    print(0)\nasync def main():\n    await take(Node(children=[]))\n",
-    );
-    let capture = recursive.final_check_facts().functions["main"]
-        .values()
-        .next()
-        .unwrap();
+        true,
+    )
+    .unwrap();
+    let facts = super::super::check_mode(&mut recursive, false).unwrap();
+    let capture = facts.functions["main"].values().next().unwrap();
     assert_eq!(
         user_capture(&capture.arguments[0]).release,
         ArgumentRelease::Deferred
