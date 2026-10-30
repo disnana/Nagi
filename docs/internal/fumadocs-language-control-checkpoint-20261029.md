@@ -1,6 +1,6 @@
 # Fumadocs 言語切替 UI 作業チェックポイント
 
-対象は公開 `main` の `950a84effe85c6eb4c5e6bd8b0a9bd577a90368e`、専用worktree `/workspace/Nagi-fumadocs-language-control`、branch `fix/fumadocs-language-control-20261029`。
+実装基点は `main` の `950a84effe85c6eb4c5e6bd8b0a9bd577a90368e`。最終確認時はWindows GNU恒久修正後の `main` `bde4e4d447a3268b9d81f9e355df864ec1a5c472` を統合した。
 
 ## before の確認
 
@@ -12,21 +12,24 @@
 
 基準sourceは `website/components/locale-switch.tsx` の単一locale linkと、`website/lib/layout.tsx` の`baseOptions()`から渡すsecondary custom nav item。現在のtoggleは `usePathname()` から反対localeへ移動する。
 
-## 採用予定の範囲
+## 採用した範囲
 
-Fumadocs既存sidebar utility slot/APIを確認したうえで、theme・utility controlsに揃ったcompactなaccessible language menuへ置く。current localeを常時読める表示にし、選択肢は日本語/Englishにする。同ページへのlocale切替でpathnameとanchor hashを保持し、keyboard操作、focus、mobileの表示、light/darkの両方を維持する。周辺レイアウトの全面変更はしない。
+Fumadocs 16.17.9の既存language utility slotを使い、theme・utility controlsに揃ったcompactなmenuへ置いた。current localeを常時表示し、日本語/Englishを選べる。同ページへの切替ではpathnameとanchor hashを保持する。既存のcustom secondary linkは削除し、周辺レイアウトの全面変更はしていない。
 
-## 状態と再開項目
+Fumadocs標準buttonの既定`aria-label`は表示中locale名を含まず、axeの`label-content-name-mismatch`になった。slotのrootだけを公開APIで包み、表示中localeをaccessible nameへ含めた。検査を無効化せず、日英・light/darkで同じ規則を適用した。
 
-source変更・npm依存導入・検査・GUI確認・after screenshotはまだない。容量確認時点の空きは11 GiBで、8 GiBの下限は満たしていた。`/workspace`内に再利用できる`node_modules`は見つからず、npm cacheは568 KiBだった。依存を導入するときは新worktreeに一度だけ配置し、空き容量を再確認する。
+## 検証結果
 
-再開時はFumadocs utility slot/APIと既存component patternsを先に確認し、locale menuと同ページ・hashの対応を小さく実装する。その後、unit/build/browser検査、keyboard/focus、mobile、light/darkのGUI確認を行い、before/after screenshotを保存してからdiffを見直してcommitする。
+- Fumadocs 16.17.9の公開typeと実装を照合し、`slots.languageSelect`と`onLocaleChange`の契約を確認した。
+- `npm run typecheck`、191 static pagesの`npm run build`、content 41 files/locale・18 versions・58 legacy routes、teaching evidence 11件が成功した。
+- Chromium browser test 11件が成功した。日英の同一path/hash、focusとEnterによる選択、390px mobileでlanguage/themeが同じutility rowにあること、theme、検索、copy、legacy alias、changelog permalink、重大なaxe違反なしを確認した。
+- desktop 1280pxとmobile 390pxのafter screenshotを独立reviewし、表示中localeとutility配置を確認した。
+- 独立reviewでblocking findingなし。basePathは`usePathname`とrouterの既定処理を維持し、二重prefixを加えない。
 
-後続作業TODO:
+検証用`node_modules`、Next build出力、Playwright browserは結果確認後に再生成可能物として整理した。空き8 GiB下限を維持した。
 
-- 言語controlの自然な配置とcurrent language表示を仕上げる。
+## 後続作業
+
 - home pageでdark modeをOFFにできない問題を別scopeで調査する。
 - Nagiらしさが弱い見た目を別scopeで検討する。
 - discord.py type referenceの要求は次段階として扱う。この修正へ混ぜない。
-
-このチェックポイント時点では、実装完了や検査済みとは扱わない。push・PR・merge・releaseは行わない。
