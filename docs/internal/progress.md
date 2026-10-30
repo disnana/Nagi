@@ -1,9 +1,17 @@
 # コンパイラ・Rust境界の進捗
 
 
+## 2026-10-30: private scope-exit planの抽出（未リリース）
+
+#206がマージされたmain `d4c2b08`を基点に、branch `feat/scope-exit-plan-20261030`で既存Rust loweringのscope退出判断を抽出した。checkerのprivate `ScopeExitPlan`へstable ScopeId、Legacy/TaskScope bridge、lexical bodyと外側のerror destination、正常join、body locals退役後のcancel/drainと元error伝播、同期owner teardownのabort要求までを保持する。Rust固有のerror型は`FunctionPlan`に分離し、中立planへRustのkeyword escapeを持ち込まない。Rust emitterは封印planを消費し、受取/放棄の既存TaskUse identityを維持する。新しいlifecycle・公開意味論・依存は追加せず、GoのScope/Spawn/SpawnBind拒否を維持する。共有emission境界のplan欠落・改竄拒否はGo入口でも検査した。
+
+Linux x86_64、Rust 1.99.1、Go 1.27.3で、scope planの4 unit、compiler library全211件、scoped_tasks 5件、taskのHigh/Low元行診断1件が成功した。実runtimeのscope_runtime_contract 1件と、taskのbody error/fault/owner Drop 1件・bounded生成path 1件はHigh・独立保存Low・手書きLowをbuild/runした。Goは既存cold async/sleep 2件、string borrow 1件の実build/runと、toolchain起動前scope拒否1件が成功した。nested/sibling/loopのScopeIdを繰返しcheckで照合し、代表的なRust出力を基点の全文golden（SHA-256 `0c111cb588e26c60d82ac07510ea354fb070c0a82b1ebe64c9576d5f02ef8411`）と三構文でbyte比較した。Rust keywordと衝突するerror型はHigh/手書きLowで同一出力を検査した。compiler all-target Clippy `-D warnings`、fmt、diffの空白検査も成功した。既存test期待は変更していない。追加unitのfixture作成時の失敗と、修正後の全library成功は分けて扱う。
+
+CARGO_INCREMENTAL=0、jobs2、debug情報0と既存compiler/native cacheを再利用し、workspace空き8GiBのguardを各build前に検査し、開始時9.7GiB、最低観測/終了時約8.7GiBを維持した。独立最終reviewではRust固有error型が中立planへ入る点を検出し、分離後の再reviewで解消を確認した。全workspace suite、macOS/Windows、exact-head CIは未実施である。Go scope/task、一般resource release、取消cleanup/実joinの実装完了や公開supportを意味しない。証拠は`/tmp/nagi-scope-exit-*.log`に保持し、merge/tag/releaseは行っていない。
+
 ## 2026-10-29: Go G3aの限定capture storage/release（未リリース）
 
-base main `950a84e`、branch `feat/go-future-release-anchor-20261029`。final ASTのcall ExprUseIdとargument slotからCaptureStorageIdを再構築し、checker sealへ含めた。保存Lowへ証明をserializeしない。plain value graphと直接のread-only view[str]だけをFutureInvocationExitへ分類し、Goはsealed storage/release factsを検査して引数を左から一度だけ評価する。await開始時のbody detachを維持し、正常return・Result Err・panic unwindの全出口でactive invocationのlocal参照をdeferで終了する。physical memory即時回収、resource close、取消cleanup、一般owner retirementは保証しない。HTTP/JSON/DB/auth/WebSocket、公開Actor/Supervisor、task/scope/spawn/cancellation/timeout/実join/並行Future、一般resource/shared/view cleanup、Go native adapterは未対応のまま。
+base main `950a84e`、branch `feat/go-future-release-anchor-20261029`。#206はmain `d4c2b08ba9e5eb9199b5859c5b8359edc3dd3aea`へマージ済み。0.3.0として未リリースであり、以下は当該sliceのローカル観測記録である。final ASTのcall ExprUseIdとargument slotからCaptureStorageIdを再構築し、checker sealへ含めた。保存Lowへ証明をserializeしない。plain value graphと直接のread-only view[str]だけをFutureInvocationExitへ分類し、Goはsealed storage/release factsを検査して引数を左から一度だけ評価する。await開始時のbody detachを維持し、正常return・Result Err・panic unwindの全出口でactive invocationのlocal参照をdeferで終了する。physical memory即時回収、resource close、取消cleanup、一般owner retirementは保証しない。HTTP/JSON/DB/auth/WebSocket、公開Actor/Supervisor、task/scope/spawn/cancellation/timeout/実join/並行Future、一般resource/shared/view cleanup、Go native adapterは未対応のまま。
 
 保守的な変更: 従来のviewなしCopyだけのNotRequired分類はCopy resourceも含むため、plain graphの条件を加えた。resourceを含むclass/List、shared、一般view、証明不能なgraphはDeferred。empty originやviews_absentだけでrelease可能と判定しない。sleep等の標準/builtin FutureはUnplannedStandardを維持する。
 

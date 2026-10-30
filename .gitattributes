@@ -1,2 +1,3 @@
 /Cargo.lock text eol=lf
 **/Cargo.toml text eol=lf
+compiler/src/check/testdata/scope_exit.rust text eol=lf
