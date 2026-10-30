@@ -5,7 +5,7 @@ export function Home({ locale }: { locale: 'ja' | 'en' }) {
   const docs = ja ? '/docs' : '/en/docs';
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-8 px-6 py-20">
-      <p className="text-sm font-medium text-fd-muted-foreground">Nagi 0.2.2</p>
+      <p className="text-sm font-medium text-fd-muted-foreground">Nagi 0.2.3</p>
       <h1 className="max-w-3xl text-5xl font-bold tracking-tight">
         {ja ? 'Nagiの書き方を、動くコードから学ぶ' : 'Learn Nagi from working code'}
       </h1>

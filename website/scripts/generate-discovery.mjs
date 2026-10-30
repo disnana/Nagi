@@ -59,7 +59,7 @@ const llms = [
   '# Nagi documentation',
   '',
   '> Public, versioned documentation for the Nagi backend language. Internal plans and audit logs are intentionally excluded.',
-  '> Nagi 0.2.2 is the current released Rust target. Go backend work is planned and must not be treated as published support.',
+  '> Nagi 0.2.3 is the current released Rust target. Go backend work is planned and must not be treated as published support.',
   '',
   ...publicDocs.map(({ title, canonical }) => `- [${title}](${canonical})`),
   '',

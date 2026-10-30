@@ -46,7 +46,7 @@ for (const source of ['ai/README.md', 'ai/skills/nagi-development/SKILL.md', 'ai
   const url = new URL(`https://github.com/disnana/Nagi/blob/main/${source}`).href;
   if (!llmsUrls.has(url)) throw new Error(`llms.txt is missing public agent source ${source}`);
 }
-if (!llms.includes('Nagi 0.2.2 is the current released Rust target')
+if (!llms.includes('Nagi 0.2.3 is the current released Rust target')
     || !llms.includes('Go backend work is planned')) {
   throw new Error('llms.txt must distinguish released Rust support from planned Go work');
 }
