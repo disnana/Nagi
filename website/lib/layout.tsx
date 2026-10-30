@@ -1,7 +1,7 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 import { i18n } from '@/lib/i18n';
 import { uiTranslations } from 'fumadocs-ui/i18n';
-import { LocaleSwitch } from '@/components/locale-switch';
+import { AccessibleLanguageSelect, LanguageSelectText } from '@/components/language-select';
 
 export const translations = i18n
   .translations()
@@ -76,7 +76,13 @@ export function baseOptions(locale: 'ja' | 'en'): BaseLayoutProps {
   const docsUrl = locale === 'ja' ? '/docs' : '/en/docs';
 
   return {
-    i18n: false,
+    i18n: true,
+    slots: {
+      languageSelect: {
+        root: AccessibleLanguageSelect,
+        text: LanguageSelectText,
+      },
+    },
     nav: {
       title: 'Nagi',
       url: locale === 'ja' ? '/' : '/en',
@@ -92,11 +98,6 @@ export function baseOptions(locale: 'ja' | 'en'): BaseLayoutProps {
         type: 'main',
         text: locale === 'ja' ? '変更履歴' : 'Changelog',
         url: `${docsUrl}/changelog`,
-      },
-      {
-        type: 'custom',
-        secondary: true,
-        children: <LocaleSwitch locale={locale} />,
       },
     ],
   };
