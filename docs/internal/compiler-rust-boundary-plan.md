@@ -67,10 +67,13 @@ Phase 1で最終境界だけを変える。
 ownerをNagi compilerとしたbuild/SQL項目はcheckerの能力とは区別する。Nagi checkerはRustのtraitソルバーや一般的なSend/Sync判定を追加しない。登録済みresourceの禁止task transferはNagi自身の契約なので、RustのSendに丸投げしない。
 
 0.3.0開発のuser async argument factsはG-SEALEDの内部証拠として、各引数の評価境界で
-slot/Copy・Move/depth別origin/temporary marker/views absenceを封印する。詳細は
-[Go string borrowのfacts段階](go-async-string-borrow.md)を参照する。backendは新factsを
-生成・releaseへまだ使用しない。標準asyncは未計画のまま、releaseはviewなしCopy型だけ
-`NotRequired`、他は`Deferred`であり、G-VIEWの対応範囲やG-LIFECYCLEの保証を拡張しない。
+slot/storage identity、Copy・Move、depth別origin、temporary marker、views absenceを封印する。
+詳細は[Go string borrowのfacts段階](go-async-string-borrow.md)を参照する。Go backendは
+対応済みuser async subsetだけでこのstorage/release planを消費する。標準asyncは未計画の
+ままとする。viewなしのplain Copy value graphは`NotRequired`、plain value graphと現在対応する
+`view[str]`は呼出しのnormal return・Result Err・panicで`FutureInvocationExit`、resource・
+shared・未証明graphは`Deferred`である。これはcapture参照の終了であって、物理解放やresource
+closeを保証せず、G-VIEWの対応範囲やtask/scopeを含むG-LIFECYCLEの保証を拡張しない。
 
 ## CheckedProgramとemitterの入力
 

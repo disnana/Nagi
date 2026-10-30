@@ -796,6 +796,49 @@ fn user_async_capture_plain_graph_release_and_storage_are_rebuilt() {
 }
 
 #[test]
+fn user_async_capture_plain_graph_memoizes_repeated_types_and_defers_recursive_types() {
+    let mut source = String::new();
+    for depth in 0..30 {
+        use std::fmt::Write as _;
+        if depth == 29 {
+            writeln!(source, "class Node{depth}:\n    text: str").unwrap();
+        } else {
+            writeln!(
+                source,
+                "class Node{depth}:\n    left: List[Node{}]\n    right: List[Node{}]",
+                depth + 1,
+                depth + 1
+            )
+            .unwrap();
+        }
+    }
+    source.push_str(
+        "async def take(value: Node0):\n    print(0)\nasync def main():\n    await take(Node0(left=[], right=[]))\n",
+    );
+    let checked = checked_high(&source);
+    let capture = checked.final_check_facts().functions["main"]
+        .values()
+        .next()
+        .unwrap();
+    assert_eq!(
+        user_capture(&capture.arguments[0]).release,
+        ArgumentRelease::FutureInvocationExit
+    );
+
+    let recursive = checked_high(
+        "class Node:\n    children: List[Node]\nasync def take(value: Node):\n    print(0)\nasync def main():\n    await take(Node(children=[]))\n",
+    );
+    let capture = recursive.final_check_facts().functions["main"]
+        .values()
+        .next()
+        .unwrap();
+    assert_eq!(
+        user_capture(&capture.arguments[0]).release,
+        ArgumentRelease::Deferred
+    );
+}
+
+#[test]
 fn user_async_capture_resource_and_shared_graphs_remain_deferred_even_when_copy() {
     let files = Files::new();
     let path = files.write("main.nagi", "import std.http.server as http\nclass Wrapped:\n    status: http.Status\nasync def take(value: http.Status, nested: List[http.Status], wrapped: Wrapped, handle: shared[str]):\n    print(0)\nasync def main():\n    await take(http.Status.OK, [http.Status.OK], Wrapped(status=http.Status.OK), share(\"owner\"))\n");
