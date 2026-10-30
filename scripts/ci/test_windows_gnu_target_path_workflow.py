@@ -49,6 +49,9 @@ class WindowsGnuTargetPathWorkflowTests(unittest.TestCase):
         self.assertIn("Issue #201 did not reproduce on this hosted runner", self.probe)
         self.assertIn("The corrected project-mode compiler failed under Windows GNU/UCRT64", self.probe)
         self.assertIn("The explicit-source baseline control failed", self.probe)
+        self.assertIn("::notice title=Windows GNU comparison::", self.probe)
+        self.assertIn("baseline_project_reproduced=", self.probe)
+        self.assertIn("current_printed_hello=", self.probe)
 
 
 if __name__ == "__main__":
