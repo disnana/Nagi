@@ -920,7 +920,7 @@ dependencies = [
 
 [[package]]
 name = "nagi-runtime"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "aws-lc-rs",
  "axum",
