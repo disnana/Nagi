@@ -11,6 +11,11 @@
 - High構文にPythonと同じ`elif condition:`を追加し、既存の入れ子`else:` + `if`と同じ検査済み`if`へloweringします。Low構文と従来の`elif`識別子は維持し、VS Code / JetBrainsの補完・色・字下げも文脈に限定します。
 - Add contextual High `elif condition:` branches, lowered through the existing checked `if` representation. Preserve Low syntax and existing `elif` identifiers, with context-aware completion, coloring and indentation in both editor plugins.
 
+## Nagi 0.2.3 — 2026-10-30
+
+- WindowsのGNU Rust toolchainでproject modeを使うと、正規化済みの`\\?\`形式のCargo target pathがGNU linkerへ渡り、明示的なsource file指定では成功する同じprojectがlinkに失敗する場合がある問題を修正します。既定project targetだけを、意味が変わらない短いdrive/UNC pathの場合に限って外部tool向け表記へ変換します。明示`NAGI_NATIVE_TARGET_DIR`、長いpath、末尾のdot/space、予約device名は変更しません。
+- Fix project-mode linking with the Windows GNU Rust toolchain when a canonical `\\?\` Cargo target path reaches the GNU linker while the same project succeeds with an explicit source file. Only the default project target is converted at the external-tool boundary, and only when a short drive or UNC spelling preserves the path's meaning. Explicit `NAGI_NATIVE_TARGET_DIR`, long paths, trailing dots/spaces, and reserved device names remain unchanged.
+
 ## Nagi 0.2.2 — 2026-10-27
 
 - 0.2.1との互換性、既定のfull runtime・release build、完全なHigh/Low・型・所有権・Policy検査、Cargoのnative再判定、旧成功成果物の保護を維持しながら、小さな変更の開発待ち時間と初回依存解決の再現性を改善します。IDEプラグインは別の版・公開工程です。

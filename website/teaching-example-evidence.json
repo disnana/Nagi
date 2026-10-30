@@ -1,13 +1,13 @@
 {
   "schema": 1,
   "publicRelease": {
-    "tag": "nagi-v0.2.2",
-    "commit": "7c92045a04519609ae287803a31ac0816c728086",
-    "linuxAssetSha256": "0dc1b8d42d5283c7ba41663a1420f041ed2461e6ced8b3eadfcc0383be1ee0b0",
-    "compilerSha256": "2c917055b4ec1aba5d6695f750101bb4a8956a8535c58cb42eb261446c83fa19"
+    "tag": "nagi-v0.2.3",
+    "commit": "f6ec2130dc64d2c8c77aa357d0b89437dc9cad2f",
+    "linuxAssetSha256": "3c5e12e31e1c25d5b8facbc0f4371b7772b0d6cc6c31a46247c57d1609100d8e",
+    "compilerSha256": "96862e06537394d5a98e85b53f6e5e1e0c95908ea8c7efac7fa061536b1b0539"
   },
   "compilerCheck": {
-    "checkedAt": "2026-10-29",
+    "checkedAt": "2026-10-30",
     "result": "passed",
     "blocks": [
       {
@@ -18,7 +18,7 @@
           "en"
         ],
         "sha256": "4ab82cc76512ee5e9a788ebebd629ae19c564b8cbaffa70978a4b5e103247595",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "backend/sqlite.mdx",
@@ -28,7 +28,7 @@
           "en"
         ],
         "sha256": "f50363c53b9e64e146e45661060f3fc51bf85b90012c8bde032234cb900dbf77",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "concurrency/actor.mdx",
@@ -38,7 +38,7 @@
           "en"
         ],
         "sha256": "331f9ed0635056a4df773e87745f9e77af74b6b9aa49059cb74fc38c0e848856",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "concurrency/async.mdx",
@@ -48,7 +48,7 @@
           "en"
         ],
         "sha256": "deb27629570d051e945f5437c8aee2648ec965855c9dffb7c8254248f02863b0",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "writing/control-flow.mdx",
@@ -58,7 +58,7 @@
           "en"
         ],
         "sha256": "77b8d3fedb4be4c5baee41dc1f73b231187fd494c903ab2d667916882eea2e74",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "writing/functions.mdx",
@@ -68,7 +68,7 @@
           "en"
         ],
         "sha256": "106b9cd3da0dd31c1b3fceaca0e2db5596c7a3923b455c9c7b5d6c15a5cc6b2d",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "writing/index.mdx",
@@ -77,7 +77,7 @@
           "ja"
         ],
         "sha256": "4c90659083dc740bb0460d97e8683ee9f2ed9dc5eef33e3292d82a53cc3c25c2",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "writing/result.mdx",
@@ -87,7 +87,7 @@
           "en"
         ],
         "sha256": "71955e37392e62d86c45ffa08f37574e424a548011e5356f0b55118da66cc101",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "writing/result.mdx",
@@ -97,7 +97,7 @@
           "en"
         ],
         "sha256": "6d6dcd1fd39921e3f28c36b1623c588e8ffe2d4073650ea1ec9b64e79f09df66",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "writing/variables.mdx",
@@ -107,7 +107,7 @@
           "en"
         ],
         "sha256": "26d40795e8d93ca93397660427ba53f69d1ff8e6dd408d0cc5d81c8f01aaa1e6",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
       },
       {
         "page": "writing/index.mdx",
@@ -116,7 +116,17 @@
           "en"
         ],
         "sha256": "74b898f2d4b402616c17a0776a6ad0ce4c227ab7c8ff17be66ecd83942966bf9",
-        "validation": "nagic-check-public-0.2.2"
+        "validation": "nagic-check-public-0.2.3"
+      },
+      {
+        "page": "reference/http-response-limits.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "bfb757c5db46399de285d10669767cd622a4007b12aab28f64187774eface0ef",
+        "validation": "nagic-check-public-0.2.3"
       }
     ]
   },
