@@ -24,7 +24,10 @@ class WindowsGnuTargetPathWorkflowTests(unittest.TestCase):
         )
         self.assertIn("mingw-w64-ucrt-x86_64-gcc", self.workflow)
         self.assertIn('C:\\msys64\\usr\\bin;$env:PATH', self.workflow)
-        self.assertIn("Expected the reporter's GCC 15.2.0", self.workflow)
+        self.assertIn("Reporter used GCC 15.2.0; hosted UCRT64 provides", self.workflow)
+        self.assertIn("GCC 15.2.0 remains unverified", self.workflow)
+        self.assertIn("Tee-Object -FilePath $setupLog -Append", self.workflow)
+        self.assertNotIn("throw \"Expected the reporter's GCC 15.2.0", self.workflow)
         self.assertIn("build/ci-evidence/windows-gnu-target-path", self.workflow)
         self.assertIn("GITHUB_STEP_SUMMARY", self.workflow)
 

@@ -124,8 +124,9 @@ jobs:
           $gccVersion = (& $linker -dumpfullversion | Out-String).Trim()
           "UCRT64 GCC version: $gccVersion" | Tee-Object -FilePath $setupLog -Append
           if ($gccVersion -ne '15.2.0') {
-            Write-Output "::error title=Windows GNU setup::Expected GCC 15.2.0 but found $gccVersion; see setup.log artifact"
-            throw "Expected the reporter's GCC 15.2.0, got $gccVersion"
+            $coverageNote = "Reporter used GCC 15.2.0; hosted UCRT64 provides $gccVersion. Both baseline and corrected cases use the hosted version; GCC 15.2.0 remains unverified."
+            $coverageNote | Tee-Object -FilePath $setupLog -Append
+            Write-Output "::warning title=Windows GNU setup::$coverageNote"
           }
           $ucrt | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Compare released and corrected project-mode builds
