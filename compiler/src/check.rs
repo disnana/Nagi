@@ -4271,18 +4271,17 @@ impl Checker {
                 | "bool" | "str" | "bytes" | "unit" | "Error" | "Range",
                 [],
             ) => true,
-            ("List" | "Option", [item]) => {
-                self.invocation_value_graph_inner(item, depth + 1, memo)
-            }
+            ("List" | "Option", [item]) => self.invocation_value_graph_inner(item, depth + 1, memo),
             ("Result", [value, problem]) => {
                 self.invocation_value_graph_inner(value, depth + 1, memo)
                     && self.invocation_value_graph_inner(problem, depth + 1, memo)
             }
             (_, []) => {
                 if let Some(class) = self.classes.get(&ty.0) {
-                    class.fields.iter().all(|(_, field)| {
-                        self.invocation_value_graph_inner(field, depth + 1, memo)
-                    })
+                    class
+                        .fields
+                        .iter()
+                        .all(|(_, field)| self.invocation_value_graph_inner(field, depth + 1, memo))
                 } else if let Some(enumeration) = self.enums.get(&ty.0) {
                     enumeration
                         .variants
