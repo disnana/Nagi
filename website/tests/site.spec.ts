@@ -17,13 +17,34 @@ test('Japanese and English pages remain separate and navigable', async ({ page }
 });
 
 test('language switch preserves the equivalent docs route', async ({ page }) => {
-  await page.goto(sitePath('/docs/writing/'));
-  await page.getByRole('link', { name: 'English', exact: true }).click();
-  await expect(page).toHaveURL(/\/en\/docs\/writing\/$/);
+  await page.goto(sitePath('/docs/writing/#keep-me'));
+  const japaneseSwitch = page.getByRole('button', { name: '表示言語を選択: 日本語' }).first();
+  await japaneseSwitch.focus();
+  await expect(japaneseSwitch).toBeFocused();
+  await page.keyboard.press('Enter');
+  const englishOption = page.getByRole('button', { name: 'English', exact: true });
+  await englishOption.focus();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/en\/docs\/writing\/#keep-me$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await page.getByRole('link', { name: '日本語', exact: true }).click();
-  await expect(page).toHaveURL(/\/docs\/writing\/$/);
+  await page.getByRole('button', { name: 'Choose a language: English' }).first().click();
+  await page.getByRole('button', { name: '日本語', exact: true }).click();
+  await expect(page).toHaveURL(/\/docs\/writing\/#keep-me$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
+});
+
+test('mobile language and theme controls share the utility row', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(sitePath('/docs/writing/'));
+  await page.getByRole('button', { name: 'サイドバーを開く' }).click();
+  const language = page.getByRole('button', { name: '表示言語を選択: 日本語' });
+  const theme = page.getByRole('button', { name: '外観を切り替える' });
+  await expect(language).toBeVisible();
+  await expect(theme).toBeVisible();
+  const [languageBox, themeBox] = await Promise.all([language.boundingBox(), theme.boundingBox()]);
+  expect(languageBox).not.toBeNull();
+  expect(themeBox).not.toBeNull();
+  expect(Math.abs(languageBox!.y - themeBox!.y)).toBeLessThanOrEqual(8);
 });
 
 test('static search is lazy, keyboard accessible, and locale scoped', async ({ page }) => {
