@@ -1,0 +1,99 @@
+name: Publish Nagi 0.2.3 hotfix
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type publish-nagi-0.2.3 to publish the reviewed hotfix
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish-hotfix:
+    name: Publish the exact reviewed Nagi 0.2.3 hotfix
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Check out the reviewed publication gate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - name: Require the exact successful source run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HOTFIX_CONFIRMATION: ${{ inputs.confirmation }}
+        run: python -B scripts/releases/hotfix_023_gate.py source
+      - name: Download the immutable Linux release artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ci-pin:v4
+        with:
+          repository: disnana/Nagi
+          run-id: 40990014206
+          github-token: ${{ github.token }}
+          name: release-linux-x86_64
+          path: build/release-assets
+      - name: Download the immutable Windows release artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ci-pin:v4
+        with:
+          repository: disnana/Nagi
+          run-id: 40990014206
+          github-token: ${{ github.token }}
+          name: release-windows-x86_64
+          path: build/release-assets
+      - name: Download the immutable Apple Silicon release artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ci-pin:v4
+        with:
+          repository: disnana/Nagi
+          run-id: 40990014206
+          github-token: ${{ github.token }}
+          name: release-macos-arm64
+          path: build/release-assets
+      - name: Download the immutable Intel macOS release artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ci-pin:v4
+        with:
+          repository: disnana/Nagi
+          run-id: 40990014206
+          github-token: ${{ github.token }}
+          name: release-macos-x86_64
+          path: build/release-assets
+      - name: Verify all eight release files against reviewed SHA-256 values
+        run: python -B scripts/releases/hotfix_023_gate.py assets build/release-assets
+      - name: Check out only the immutable hotfix source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+          ref: f6ec2130dc64d2c8c77aa357d0b89437dc9cad2f
+          fetch-depth: 0
+          path: release-source
+      - name: Reject any source outside the reviewed 0.2.2 hotfix diff
+        run: python -B scripts/releases/hotfix_023_gate.py candidate release-source
+      - name: Refuse conflicting tags, releases, and existing assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/releases/hotfix_023_gate.py release-pre build/release-assets
+      - name: Publish and read back Nagi 0.2.3
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python release-source/scripts/releases/publish.py
+          --repository disnana/Nagi
+          --component nagi
+          --version 0.2.3
+          --sha f6ec2130dc64d2c8c77aa357d0b89437dc9cad2f
+          --assets build/release-assets
+      - name: Require the exact public release and reviewed assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -B scripts/releases/hotfix_023_gate.py release-post build/release-assets
