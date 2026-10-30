@@ -1,5 +1,16 @@
 # コンパイラ・Rust境界の進捗
 
+
+## 2026-10-29: Go G3aの限定capture storage/release（未リリース）
+
+base main `950a84e`、branch `feat/go-future-release-anchor-20261029`。final ASTのcall ExprUseIdとargument slotからCaptureStorageIdを再構築し、checker sealへ含めた。保存Lowへ証明をserializeしない。plain value graphと直接のread-only view[str]だけをFutureInvocationExitへ分類し、Goはsealed storage/release factsを検査して引数を左から一度だけ評価する。await開始時のbody detachを維持し、正常return・Result Err・panic unwindの全出口でactive invocationのlocal参照をdeferで終了する。physical memory即時回収、resource close、取消cleanup、一般owner retirementは保証しない。HTTP/JSON/DB/auth/WebSocket、公開Actor/Supervisor、task/scope/spawn/cancellation/timeout/実join/並行Future、一般resource/shared/view cleanup、Go native adapterは未対応のまま。
+
+保守的な変更: 従来のviewなしCopyだけのNotRequired分類はCopy resourceも含むため、plain graphの条件を加えた。resourceを含むclass/List、shared、一般view、証明不能なgraphはDeferred。empty originやviews_absentだけでrelease可能と判定しない。sleep等の標準/builtin FutureはUnplannedStandardを維持する。
+
+Linux/Rust 1.99.1/Go 1.27.3で、capture対象unit 8件、追加resource/shared分類1件、Go integration 34件、summary validator、async_value_types 6件、view_container_drop 1件、view_flow_completion 3件（生成Rust/nativeを含む）、compiler all-target Clippy、fmt、3 OS Go CI契約Python 5件が成功。Go追加検査は既存case内に置き、CI必須件数Linux/macOS34・Windows33を変えていない。lib全204件は203成功と追加fixtureのshared/share誤記1失敗を観測し、share修正後の対象1件成功で補完した。原失敗logを保持し、全libの再実行とは報告しない。最終emitterのshape検査追加後は欠落/改竄/Deferred unit1件とcold async/borrow/sleep Go3件も成功した。
+
+証拠は`/tmp/nagi-go-g3a-{capture-tests,lib-tests,resource-tests,backend-tests,rust-regression,clippy-fixed-env,ci-contract-fixed-env,emitter-final,cold-final}.log`。CARGO_INCREMENTAL=0、jobs2、debug情報0、専用targetを使い、開始時と各重い検査前後の空きは約10GiB以上（最低観測9.9GiB）を維持した。全workspace suite、macOS/Windows実行、exact-head CI、独立最終reviewは未実施で親agentへ渡す。push/PR/merge/tag/releaseは実行していない。
+
 ## 2026-10-27: 有限ローカル過負荷・接続回復・Supervisor検証
 
 [実測条件とraw evidence](../../benchmarks/results/local-resilience-2026-10-27/README.md)。外部へ送信しないloopback限定・有限時間/要求数/worker/connection/RSS/cgroup上限で、通常通信、10,000 request/sの模擬過負荷、別routeの継続、回復、低速/途中送信/keep-alive/RST、actor lifecycleと合成restart規則を検証した。Go backendはHTTP/actor未対応のためRust結果をGoへ一般化しない。Internet DDoS、回線、TLS、複数host、BEAM/Elixir相当の保証ではない。

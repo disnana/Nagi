@@ -1,6 +1,6 @@
 # Nagi 0.3.0: Goバックエンド段階実装計画
 
-状態: **段階実装中の採用計画**。初版の基点はmain `0d1884cb5a24235a440811a9f5d16be1bf5a664a`（2026-10-26）で、Nagi 0.2.2はその後 `7c92045a04519609ae287803a31ac0816c728086` として公開済みである。0.3.0開発は0.2.2の版更新・保守と分離し、Rust既定を保ったままRust以外の生成先を追加する。最小Go backend、3 OS必須gate、List/Range、明示move、payloadなしenum、共有conformance、private lifecycle kernel、cold user async、callback identity、read-only `view[str]`、user async引数のsealed capture factsまでを開発branchで実装・検証した。これらはmain未反映の統合候補であり、HTTP/DB/auth/actor/task/scope、一般borrow、完全なcleanup、性能優位、本番利用可能、0.3.0の公開日を約束しない。
+状態: **段階実装中の採用計画**。初版の基点はmain `0d1884cb5a24235a440811a9f5d16be1bf5a664a`（2026-10-26）で、Nagi 0.2.2はその後 `7c92045a04519609ae287803a31ac0816c728086` として公開済みである。0.3.0開発は0.2.2の版更新・保守と分離し、Rust既定を保ったままRust以外の生成先を追加する。最小Go backend、3 OS必須gate、List/Range、明示move、payloadなしenum、共有conformance、private lifecycle kernel、cold user async、callback identity、read-only `view[str]`、user async引数のsealed capture factsとG3aの限定capture releaseまでを開発branchで実装・検証した。G3aはmain基点950a84eからの未リリース開発sliceであり、HTTP/DB/auth/actor/task/scope、一般borrow、完全なcleanup、性能優位、本番利用可能、0.3.0の公開日を約束しない。
 
 ## 決定済みの方向
 
@@ -203,4 +203,4 @@ Go backendでこの教材を実行できるとはまだ扱わない。残る作�
 
 0.2.2へbackend選択、Go runtime、Go CI jobはbackportしていない。0.2.2はRust既定の高速化・安定化・Docs/IDE改善として、4 OS release検証とartifact再確認後に公開済みである。
 
-0.3.0開発はG0/G1の最小実行系からG2の一部と、G3に必要なprivate lifecycle/cold Futureのfacts段階まで進んだ。各段階は個別commitと回帰testとして残す一方、reviewとmergeは統合branchのexact-head CIで行う。次の判断は、sealed origin/storage factsから実行可能なcleanup planへ進むためのtemporary owner identityとrelease anchor、Go extern binding構文、Go module local dependencyの許容範囲、owned-only adapter ABI、support matrixの初版である。現factsだけからreleaseを推測せず、HTTP/DB/auth/actor/task/scopeを登録だけで対応済みにしない。
+0.3.0開発はG0/G1の最小実行系からG2の一部と、G3に必要なprivate lifecycle/cold Futureのfacts段階まで進んだ。各段階は個別commitと回帰testとして残す一方、reviewとmergeは統合branchのexact-head CIで行う。G3aではfinal ASTのcall/argument slotから再構築するCaptureStorageIdと、plain value graph/read-only view[str]だけのFutureInvocationExitを採用した。Goはsealed factsを消費し、await開始時のdetachと正常/Err/panic出口のactive invocation参照終了を実装する。physical memory即時回収・resource close・取消cleanupは保証しない。次の判断は、一般cleanupへ進むためのowner retirementとresource release anchor、Go extern binding構文、Go module local dependencyの許容範囲、owned-only adapter ABI、support matrixの初版である。現factsだけからreleaseを推測せず、HTTP/DB/auth/actor/task/scopeを登録だけで対応済みにしない。

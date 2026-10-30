@@ -226,7 +226,7 @@ pub(crate) struct FutureArgument {
     pub capture: ArgumentCaptureFacts,
 }
 
-/// Target-neutral argument facts, sealed but not yet a runtime release plan.
+/// Target-neutral argument facts, including the limited invocation release plan.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ArgumentCaptureFacts {
     UserAsync(UserAsyncArgumentFacts),
@@ -237,6 +237,7 @@ pub(crate) enum ArgumentCaptureFacts {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct UserAsyncArgumentFacts {
     pub slot: ArgumentCaptureSlot,
+    pub storage: CaptureStorageId,
     /// User calls transfer arguments by value: only Copy or Move is possible.
     pub transfer: ExprUseMode,
     /// Index is the content depth, including depth zero. Empty origins do not
@@ -250,6 +251,13 @@ pub(crate) struct ArgumentCaptureSlot {
     pub call: ExprUseId,
     pub argument: usize,
 }
+/// Synthetic argument storage, independent of source-owner identity. Rebuilt
+/// from the final AST on every finalize; never serialized into saved Low.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct CaptureStorageId {
+    pub call: ExprUseId,
+    pub argument: usize,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct OriginDepthFacts {
     pub origins: Vec<FlowOrigin>,
@@ -257,8 +265,11 @@ pub(crate) struct OriginDepthFacts {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ArgumentRelease {
-    /// A Copy argument whose type contains no views needs no owner release.
+    /// A plain Copy value graph containing no views needs no owner release.
     NotRequired,
+    /// End the active invocation's capture reference on return, Result Err or
+    /// panic unwind. This does not promise physical reclamation or resource close.
+    FutureInvocationExit,
     /// Release has not been planned; no backend may infer cleanup from this.
     Deferred,
 }

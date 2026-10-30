@@ -4,7 +4,7 @@ mod security;
 mod sqlite;
 
 use crate::ast::{block_returns as returns, *};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct BorrowedPlace {
     binding: BindingId,
@@ -4215,8 +4215,11 @@ impl Checker {
         } else {
             Vec::new()
         };
-        let release = if transfer == ExprUseMode::Copy && !ty.contains_view() {
+        let plain = self.invocation_value_graph(&ty);
+        let release = if plain && transfer == ExprUseMode::Copy && !ty.contains_view() {
             checked::ArgumentRelease::NotRequired
+        } else if plain || ty == Type::generic("view", vec![Type::named("str")]) {
+            checked::ArgumentRelease::FutureInvocationExit
         } else {
             checked::ArgumentRelease::Deferred
         };
@@ -4231,12 +4234,67 @@ impl Checker {
                     call,
                     argument: index,
                 },
+                storage: checked::CaptureStorageId {
+                    call,
+                    argument: index,
+                },
                 transfer,
                 depths,
                 views_absent: self.views_absent(arg),
                 release,
             }),
         })
+    }
+    // Only plain value graphs have an invocation-only release plan. In
+    // particular Copy resource metadata and empty origin sets prove neither
+    // resource cleanup nor the absence of a hidden shared/task/auth payload.
+    fn invocation_value_graph(&self, ty: &Type) -> bool {
+        self.invocation_value_graph_inner(ty, 0, &mut BTreeMap::new())
+    }
+
+    fn invocation_value_graph_inner(
+        &self,
+        ty: &Type,
+        depth: usize,
+        memo: &mut BTreeMap<(Type, usize), bool>,
+    ) -> bool {
+        if depth > 64 || self.resource(&ty.0).is_some() {
+            return false;
+        }
+        let key = (ty.clone(), depth);
+        if let Some(result) = memo.get(&key) {
+            return *result;
+        }
+        let plain = match (ty.0.as_str(), ty.1.as_slice()) {
+            (
+                "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64"
+                | "bool" | "str" | "bytes" | "unit" | "Error" | "Range",
+                [],
+            ) => true,
+            ("List" | "Option", [item]) => self.invocation_value_graph_inner(item, depth + 1, memo),
+            ("Result", [value, problem]) => {
+                self.invocation_value_graph_inner(value, depth + 1, memo)
+                    && self.invocation_value_graph_inner(problem, depth + 1, memo)
+            }
+            (_, []) => {
+                if let Some(class) = self.classes.get(&ty.0) {
+                    class
+                        .fields
+                        .iter()
+                        .all(|(_, field)| self.invocation_value_graph_inner(field, depth + 1, memo))
+                } else if let Some(enumeration) = self.enums.get(&ty.0) {
+                    enumeration
+                        .variants
+                        .iter()
+                        .all(|variant| variant.fields.is_empty())
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+        memo.insert(key, plain);
+        plain
     }
     fn expr_mode(
         &mut self,

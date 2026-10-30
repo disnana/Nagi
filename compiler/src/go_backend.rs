@@ -7,8 +7,8 @@
 use crate::{
     ast::{Expr, Function, MatchPattern, NameResolution, Program, Stmt, Type, E, S},
     checked::{
-        CheckedProgram, EnumFacts, EnumVariantFact, ExpressionKey, FinalCheckFacts, FutureCapture,
-        OperationPlan,
+        ArgumentCaptureFacts, ArgumentRelease, CaptureStorageId, CheckedProgram, EnumFacts,
+        EnumVariantFact, ExpressionKey, FinalCheckFacts, FutureCapture, OperationPlan,
     },
     project::BuildProfile,
     source::Sources,
@@ -622,6 +622,69 @@ impl<'a> Emitter<'a> {
             })
     }
 
+    fn user_capture_storage(
+        &self,
+        expression: &Expr,
+        arguments: &[Expr],
+    ) -> Result<Option<Vec<CaptureStorageId>>, String> {
+        let user_async = matches!(
+            expression.resolution,
+            Some(NameResolution::Function | NameResolution::Local)
+        ) && expression.ty.as_ref().is_some_and(Type::is_future);
+        if !user_async {
+            return Ok(None);
+        }
+        let capture = self.future_capture(expression)?;
+        let invalid = || {
+            error(
+                expression.line,
+                "internal compiler error: invalid sealed user Future capture storage/release plan",
+            )
+        };
+        if capture.resolution != expression.resolution.ok_or_else(invalid)?
+            || capture.arguments.len() != arguments.len()
+            || matches!(&expression.kind, E::Call(name, _, _)
+                if expression.resolution == Some(NameResolution::Function) && *name != capture.callee)
+        {
+            return Err(invalid());
+        }
+        let mut storage = Vec::new();
+        for (index, (argument, plan)) in arguments.iter().zip(&capture.arguments).enumerate() {
+            let ArgumentCaptureFacts::UserAsync(facts) = &plan.capture else {
+                return Err(invalid());
+            };
+            let expected = CaptureStorageId {
+                call: crate::ast::ExprUseId::of(expression),
+                argument: index,
+            };
+            if plan.index != index
+                || plan.passing != crate::stdlib::Passing::Move
+                || plan.expression != crate::ast::ExprUseId::of(argument)
+                || argument.ty.as_ref() != Some(&plan.ty)
+                || facts.slot.call != expected.call
+                || facts.slot.argument != index
+                || facts.storage != expected
+                || !matches!(
+                    facts.transfer,
+                    crate::ast::ExprUseMode::Copy | crate::ast::ExprUseMode::Move
+                )
+            {
+                return Err(invalid());
+            }
+            match facts.release {
+                ArgumentRelease::NotRequired | ArgumentRelease::FutureInvocationExit => {}
+                ArgumentRelease::Deferred => {
+                    return Err(error(
+                        argument.line,
+                        "deferred user Future capture release is not supported by the Go backend",
+                    ))
+                }
+            }
+            storage.push(facts.storage);
+        }
+        Ok(Some(storage))
+    }
+
     fn constructor_fact(&self, expression: &Expr) -> Result<&EnumVariantFact, String> {
         let function = self.current_function.as_ref().ok_or_else(|| {
             error(
@@ -887,6 +950,7 @@ impl<'a> Emitter<'a> {
                 for argument in arguments {
                     self.validate_expr(argument, ret)?;
                 }
+                self.user_capture_storage(expression, arguments)?;
                 match expression.resolution {
                     Some(NameResolution::Function) => Ok(()),
                     Some(NameResolution::Local) => {
@@ -1207,8 +1271,13 @@ impl<'a> Emitter<'a> {
                     return Ok((before, "nagiUnit{}".into()));
                 }
                 let mut values = Vec::new();
-                for argument in arguments {
-                    let (argument_before, argument) = self.evaluated(argument, ret)?;
+                let storage = self.user_capture_storage(expression, arguments)?;
+                for (index, argument) in arguments.iter().enumerate() {
+                    let (argument_before, argument) = if let Some(storage) = &storage {
+                        self.evaluated_storage(argument, ret, Some(storage[index]))?
+                    } else {
+                        self.evaluated(argument, ret)?
+                    };
                     before.extend(argument_before);
                     values.push(argument);
                 }
@@ -1329,8 +1398,24 @@ impl<'a> Emitter<'a> {
         expression: &Expr,
         ret: &Type,
     ) -> Result<(Vec<String>, String), String> {
+        self.evaluated_storage(expression, ret, None)
+    }
+
+    fn evaluated_storage(
+        &mut self,
+        expression: &Expr,
+        ret: &Type,
+        storage: Option<CaptureStorageId>,
+    ) -> Result<(Vec<String>, String), String> {
         let (mut before, value) = self.expression(expression, ret)?;
-        let name = self.temp("value");
+        let name = if let Some(storage) = storage {
+            format!(
+                "__nagi_capture_{}_{}_{}_{}",
+                storage.call.line, storage.call.start, storage.call.end, storage.argument
+            )
+        } else {
+            self.temp("value")
+        };
         let ty = go_local_type(
             expression.ty.as_ref().expect("validated expression type"),
             &self.classes,
@@ -1710,6 +1795,7 @@ func (future *nagiFuture[T]) await() T {{\n\
     future.consumed = true\n\
     body := future.body\n\
     future.body = nil\n\
+    defer func() {{ body = nil }}()\n\
     return body()\n\
 }}\n\
 {sleep_runtime}\
