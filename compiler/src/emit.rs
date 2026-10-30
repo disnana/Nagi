@@ -2357,14 +2357,11 @@ pub fn cli(args: Vec<String>) -> Result<(), String> {
         .map(|u| fs::canonicalize(u.directory.join("src/lib.rs")).map_err(|e| e.to_string()))
         .collect::<Result<_, _>>()?;
     let generated_file = fs::canonicalize(body.as_ref().map(|body| body.directory.join("src/lib.rs")).unwrap_or_else(|| generation.staging.join("src/main.rs"))).map_err(|e| e.to_string())?;
-    let native_target = std::env::var_os("NAGI_NATIVE_TARGET_DIR");
-    let target = native_target.map(|p| cwd.join(p)).unwrap_or_else(|| {
-        options
-            .project_root
-            .as_ref()
-            .map(|p| p.join("build/native-target"))
-            .unwrap_or_else(|| cwd.join("native-target"))
-    });
+    let target = native_target_directory(
+        &cwd,
+        options.project_root.as_deref(),
+        std::env::var_os("NAGI_NATIVE_TARGET_DIR"),
+    );
     if build_stats.is_some() {
         build_report["before_cargo_ms"] = serde_json::json!(started.elapsed().as_secs_f64() * 1000.0);
     }
@@ -2575,6 +2572,120 @@ pub fn cost_report(p: &Program) -> serde_json::Value {
     serde_json::json!({"format":"nagi-cost-sites-v1","functions":fs})
 }
 
+fn native_target_directory(
+    cwd: &Path,
+    project_root: Option<&Path>,
+    configured: Option<std::ffi::OsString>,
+) -> PathBuf {
+    configured.map(|path| cwd.join(path)).unwrap_or_else(|| {
+        project_root
+            .map(|path| external_tool_path(&path.join("build/native-target")))
+            .unwrap_or_else(|| cwd.join("native-target"))
+    })
+}
+
+// Windows canonicalization returns verbatim paths. Cargo accepts those paths,
+// but they can reach GNU linker arguments where the `\\?\` spelling is not
+// handled consistently. Keep canonical paths for Nagi's identity checks and
+// convert only the default path crossing this external-tool boundary. This is
+// component based so drive and UNC roots remain distinct. Paths that need
+// verbatim semantics stay verbatim instead of silently selecting a different
+// directory. An explicit override is left untouched by `native_target_directory`.
+#[cfg(windows)]
+fn external_tool_path(path: &Path) -> PathBuf {
+    use std::{ffi::OsString, os::windows::ffi::OsStrExt, path::Prefix};
+
+    let mut components = path.components();
+    let Some(std::path::Component::Prefix(prefix)) = components.next() else {
+        return path.to_path_buf();
+    };
+    let conventional = match prefix.kind() {
+        Prefix::VerbatimDisk(disk) => {
+            let mut conventional = OsString::from(format!("{}:", disk as char));
+            conventional.push(components.as_path());
+            PathBuf::from(conventional)
+        }
+        Prefix::VerbatimUNC(server, share) => {
+            let mut conventional = OsString::from(r"\\");
+            conventional.push(server);
+            conventional.push(r"\");
+            conventional.push(share);
+            conventional.push(components.as_path());
+            PathBuf::from(conventional)
+        }
+        _ => return path.to_path_buf(),
+    };
+    // Conventional Win32 spelling can normalize trailing dots/spaces and DOS
+    // device names to another object. It also loses the classic long-path
+    // escape. Preserve the original path in those cases; this compatibility
+    // fix intentionally covers only paths with unambiguous conventional form.
+    let needs_verbatim_component = components_of(path).any(|component| {
+        let units: Vec<_> = component.encode_wide().collect();
+        units
+            .last()
+            .is_some_and(|unit| *unit == b'.' as u16 || *unit == b' ' as u16)
+            || reserved_windows_component(&units)
+    });
+    let conventional_units = conventional.as_os_str().encode_wide().count();
+    if needs_verbatim_component || conventional_units >= 260 {
+        path.to_path_buf()
+    } else {
+        conventional
+    }
+}
+
+#[cfg(windows)]
+fn components_of(path: &Path) -> impl Iterator<Item = &std::ffi::OsStr> {
+    path.components().filter_map(|component| match component {
+        std::path::Component::Normal(component) => Some(component),
+        _ => None,
+    })
+}
+
+#[cfg(windows)]
+fn reserved_windows_component(units: &[u16]) -> bool {
+    let mut stem_units: Vec<_> = units
+        .iter()
+        .copied()
+        .take_while(|unit| *unit != b'.' as u16)
+        .map(|unit| {
+            if (b'a' as u16..=b'z' as u16).contains(&unit) {
+                unit - (b'a' - b'A') as u16
+            } else {
+                unit
+            }
+        })
+        .collect();
+    while stem_units.last() == Some(&(b' ' as u16)) {
+        stem_units.pop();
+    }
+    let numbered_device = stem_units.len() == 4
+        && (&stem_units[..3] == [b'C' as u16, b'O' as u16, b'M' as u16]
+            || &stem_units[..3] == [b'L' as u16, b'P' as u16, b'T' as u16])
+        && matches!(stem_units[3],
+            unit if (b'1' as u16..=b'9' as u16).contains(&unit)
+                || matches!(unit, 0x00B9 | 0x00B2 | 0x00B3));
+    if numbered_device {
+        return true;
+    }
+    let Some(stem): Option<Vec<u8>> = stem_units
+        .into_iter()
+        .map(|unit| u8::try_from(unit).ok())
+        .collect()
+    else {
+        return false;
+    };
+    matches!(
+        stem.as_slice(),
+        b"CON" | b"PRN" | b"AUX" | b"NUL" | b"CONIN$" | b"CONOUT$"
+    )
+}
+
+#[cfg(not(windows))]
+fn external_tool_path(path: &Path) -> PathBuf {
+    path.to_path_buf()
+}
+
 fn relative_path(target: &Path, base: &Path) -> PathBuf {
     let a: Vec<_> = target.components().collect();
     let b: Vec<_> = base.components().collect();
@@ -2590,4 +2701,110 @@ fn relative_path(target: &Path, base: &Path) -> PathBuf {
         out.push(c.as_os_str());
     }
     out
+}
+
+#[cfg(test)]
+mod native_target_tests {
+    use super::native_target_directory;
+    use std::{ffi::OsString, path::Path};
+
+    #[test]
+    fn explicit_target_override_remains_authoritative() {
+        let configured = OsString::from("selected-cache");
+        assert_eq!(
+            native_target_directory(
+                Path::new("working-directory"),
+                Some(Path::new("project-root")),
+                Some(configured),
+            ),
+            Path::new("working-directory/selected-cache")
+        );
+    }
+
+    #[test]
+    fn default_target_stays_project_relative() {
+        assert_eq!(
+            native_target_directory(
+                Path::new("working-directory"),
+                Some(Path::new("project-root")),
+                None,
+            ),
+            Path::new("project-root/build/native-target")
+        );
+        assert_eq!(
+            native_target_directory(Path::new("working-directory"), None, None),
+            Path::new("working-directory/native-target")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn canonical_drive_and_unc_roots_use_conventional_external_tool_paths() {
+        let cwd = Path::new(r"C:\invocation");
+        assert_eq!(
+            native_target_directory(cwd, Some(Path::new(r"\\?\C:\nagi project\凪")), None,),
+            Path::new(r"C:\nagi project\凪\build\native-target")
+        );
+        assert_eq!(
+            native_target_directory(
+                cwd,
+                Some(Path::new(r"\\?\UNC\server\share\nagi project")),
+                None,
+            ),
+            Path::new(r"\\server\share\nagi project\build\native-target")
+        );
+        assert_eq!(
+            native_target_directory(cwd, Some(Path::new(r"C:\already-conventional")), None,),
+            Path::new(r"C:\already-conventional\build\native-target")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn explicit_verbatim_override_is_not_rewritten() {
+        assert_eq!(
+            native_target_directory(
+                Path::new(r"C:\invocation"),
+                Some(Path::new(r"\\?\C:\project")),
+                Some(OsString::from(r"\\?\D:\selected-cache")),
+            ),
+            Path::new(r"\\?\D:\selected-cache")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn verbatim_only_or_long_default_targets_are_not_rewritten() {
+        for root in [
+            Path::new(r"\\?\C:\project.\source").to_path_buf(),
+            Path::new(r"\\?\C:\project \source").to_path_buf(),
+            Path::new(r"\\?\C:\CON\source").to_path_buf(),
+            Path::new(r"\\?\C:\COM¹.txt\source").to_path_buf(),
+            Path::new(r"\\?\C:\NUL .txt\source").to_path_buf(),
+            Path::new(r"\\?\UNC\server\share\project.\source").to_path_buf(),
+            Path::new(&format!(r"\\?\C:\{}", "a".repeat(250))).to_path_buf(),
+        ] {
+            let expected = root.join("build/native-target");
+            assert_eq!(
+                native_target_directory(Path::new(r"C:\invocation"), Some(&root), None),
+                expected
+            );
+        }
+
+        let suffix = r"\build\native-target";
+        let conventional_prefix = r"C:\";
+        for (length, rewritten) in [(259, true), (260, false)] {
+            let component = "a".repeat(
+                length - conventional_prefix.encode_utf16().count() - suffix.encode_utf16().count(),
+            );
+            let root = Path::new(&format!(r"\\?\C:\{component}")).to_path_buf();
+            let actual = native_target_directory(Path::new(r"C:\invocation"), Some(&root), None);
+            let expected = if rewritten {
+                Path::new(&format!(r"C:\{component}{suffix}")).to_path_buf()
+            } else {
+                root.join("build/native-target")
+            };
+            assert_eq!(actual, expected, "conventional UTF-16 length {length}");
+        }
+    }
 }
