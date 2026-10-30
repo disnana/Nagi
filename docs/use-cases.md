@@ -1,12 +1,12 @@
 # Nagiで何を作るか
 
-Nagi 0.2.2は、入力・出力・失敗を型で表し、HTTP・JSON・SQLiteやRustの資産を使う小さなバックエンドを作るための開発中の言語です。まず用途を選び、完成した例を動かしてからAPIリファレンスを読むと、断片的なコードだけで迷わずに済みます。
+Nagi 0.2.3は、入力・出力・失敗を型で表し、HTTP・JSON・SQLiteやRustの資産を使う小さなバックエンドを作るための開発中の言語です。まず用途を選び、完成した例を動かしてからAPIリファレンスを読むと、断片的なコードだけで迷わずに済みます。
 
 公開版の既定targetはRustです。0.3.0向けGo targetは実装・検証中で、公開版には含まれません。特にGoのHTTP・Actorは未対応です。[変更履歴](../CHANGELOG.md)の`Unreleased`は導入済み機能ではありません。
 
 ## 最初の小さなプログラムを動かす
 
-0.2.2では、Pythonの`input(prompt)`に近い形で表示してから入力を読み、I/O失敗を`Result`として扱えます。
+0.2.3では、Pythonの`input(prompt)`に近い形で表示してから入力を読み、I/O失敗を`Result`として扱えます。
 
 ```nagi
 def main() -> Result[unit, Error]:
@@ -18,7 +18,7 @@ def main() -> Result[unit, Error]:
 
 ## 機能から探す
 
-| 機能 | 作れるもの・用途 | Rust target 0.2.2 | Go target | 動く例 | 詳細 |
+| 機能 | 作れるもの・用途 | Rust target 0.2.3 | Go target | 動く例 | 詳細 |
 |---|---|---|---|---|---|
 | 型・class・`Result`・`try`・ownership/view | 入力検証、集計、失敗を呼出元へ返すCLI | 公開済み | 未公開の部分実装 | [在庫集計CLI](../test-nagi-code/application-examples/stock-report/README.md) | [言語ガイド](language-guide.md)・[エラー処理](error-handling.md) |
 | HTTP server・JSON・入力上限 | JSON API、明示したstatus/error、有限のrequest | 公開済み | 未対応 | [タスク管理API](task-api-tutorial.md)・[完全なsource](../test-nagi-code/web-demo/tasks.nagi) | [HTTP](http.md)・[JSON](json.md) |
@@ -30,7 +30,7 @@ def main() -> Result[unit, Error]:
 
 ## コードと実行結果で選ぶ
 
-以下はNagi 0.2.2で検査している完全なサンプルから、中心になる処理を抜き出したものです。コード右上のボタンでコピーできます。省略していないsourceと実行条件は各リンク先にあり、Go targetではまだ動きません。
+以下は公開Nagi 0.2.3を対象にした完全なサンプルから、中心になる処理を抜き出したものです。コード右上のボタンでコピーできます。省略していないsourceと実行条件は各リンク先にあり、Go targetではまだ動きません。
 
 ### HTTP・JSON・SQLite
 
@@ -157,7 +157,7 @@ nagic build examples/tutorial/prompt-input.nagi --no-project --profile release
 ## 別の選択肢を先に検討する条件
 
 - Pythonの既存packageやデータ処理資産を直接使いたい場合は、FastAPIやQuartの方が自然です。
-- PostgreSQL、WebSocket、HTTP/2、streaming、サーバー側TLSを標準APIだけで必要とする場合、Nagi 0.2.2では不足します。
+- PostgreSQL、WebSocket、HTTP/2、streaming、サーバー側TLSを標準APIだけで必要とする場合、Nagi 0.2.3では不足します。
 - Rustのtrait、generic、async ecosystemを制限なく使いたい場合は、RustとAxumを直接使う方が適しています。
 - 成熟した大規模運用実績、豊富なmiddleware、長期互換性が採用条件なら、Nagiの現在の開発段階を考慮してください。
 

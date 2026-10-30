@@ -1,12 +1,12 @@
 # What to build with Nagi
 
-Nagi 0.2.2 is a language in development for small backends whose inputs, outputs, and failures are explicit in types, using HTTP, JSON, SQLite, and Rust assets. Choose a use case and run a complete example before reading individual API references.
+Nagi 0.2.3 is a language in development for small backends whose inputs, outputs, and failures are explicit in types, using HTTP, JSON, SQLite, and Rust assets. Choose a use case and run a complete example before reading individual API references.
 
 The published default target is Rust. The planned 0.3.0 Go target is under implementation and is not included in the public release. Go HTTP and Actor support are specifically unavailable. Entries under `Unreleased` in the [changelog](../../CHANGELOG.md) are not installed features.
 
 ## Run a small first program
 
-Version 0.2.2 can display a prompt before reading input, while keeping I/O failure explicit as a `Result`.
+Version 0.2.3 can display a prompt before reading input, while keeping I/O failure explicit as a `Result`.
 
 ```nagi
 def main() -> Result[unit, Error]:
@@ -18,7 +18,7 @@ Run it as a native program with `nagic run hello.nagi --profile dev`. The [Resul
 
 ## Find a capability
 
-| Capability | What it builds or does | Rust target 0.2.2 | Go target | Runnable example | Detailed guide |
+| Capability | What it builds or does | Rust target 0.2.3 | Go target | Runnable example | Detailed guide |
 |---|---|---|---|---|---|
 | Types, classes, `Result`, `try`, ownership/views | Validated CLI input, aggregation, typed failure propagation | Released | Unpublished partial implementation | [Stock report CLI](../../test-nagi-code/application-examples/stock-report/README.en.md) | [Language guide](language-guide.md), [error handling](error-handling.md) |
 | HTTP server, JSON, and input limits | JSON APIs with explicit status/errors and bounded requests | Released | Unsupported | [Task API](task-api-tutorial.md), [complete source](../../test-nagi-code/web-demo/tasks.nagi) | [HTTP](http.md), [JSON](json.md) |
@@ -30,7 +30,7 @@ Run it as a native program with `nagic run hello.nagi --profile dev`. The [Resul
 
 ## Choose by code and observed output
 
-These excerpts come from complete samples checked with Nagi 0.2.2. Use the button at the top right of each code block to copy it. Each link provides the complete source and execution conditions. The examples are not yet available on the Go target.
+These excerpts come from complete samples that target published Nagi 0.2.3. Use the button at the top right of each code block to copy it. Each link provides the complete source and execution conditions. The examples are not yet available on the Go target.
 
 ### HTTP, JSON, and SQLite
 
@@ -157,7 +157,7 @@ nagic build examples/tutorial/prompt-input.nagi --no-project --profile release
 ## Conditions that favor another choice today
 
 - FastAPI or Quart is a more direct choice when the application depends on Python packages or data tooling.
-- Nagi 0.2.2 lacks standard APIs for PostgreSQL, WebSocket, HTTP/2, streaming, and server-side TLS.
+- Nagi 0.2.3 lacks standard APIs for PostgreSQL, WebSocket, HTTP/2, streaming, and server-side TLS.
 - Use Rust and Axum directly when unrestricted Rust traits, generics, and async ecosystem access are requirements.
 - Account for Nagi's current development stage when established large-scale operations, broad middleware, or long-term compatibility are adoption requirements.
 

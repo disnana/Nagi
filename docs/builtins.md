@@ -20,7 +20,7 @@ nagic check builtins.nagi
 nagic run builtins.nagi --profile dev
 ```
 
-順に`42`と、UTF-8のbyte数`2`を表示します。`check`はRustをcompileせず、`run`はネイティブ実行ファイルを作ります。この例は公開Nagi 0.2.2でcheck済みです。
+順に`42`と、UTF-8のbyte数`2`を表示します。`check`はRustをcompileせず、`run`はネイティブ実行ファイルを作ります。この構文は公開Nagi 0.2.3に含まれます。
 
 ## 出力、入力、環境
 
@@ -35,7 +35,7 @@ nagic run builtins.nagi --profile dev
 
 `read_line`は出力を画面へ反映してから1行読みます。末尾の改行を除き、ほかの空白は残します。入力が終わると空文字列を返します。入力中は処理が止まるため、コンソールアプリで使います。
 
-公開済み0.2.2では `name = try read_line("名前: ")` と書けます。promptは読み取り用の借用で、呼び出し後も使えます。出力→flush→入力の順に実行し、出力・flush・入力のI/O失敗は `Result` の `Error` として返します。`try` または `match` で処理してください。引数なしの呼び出しは従来どおり使えます。[完全な例](../examples/tutorial/prompt-input.nagi)も0.2.2で動きます。0.2.1では `write("名前: ")` の後に `try read_line()` を使ってください。
+公開済み0.2.3では `name = try read_line("名前: ")` と書けます。promptは読み取り用の借用で、呼び出し後も使えます。出力→flush→入力の順に実行し、出力・flush・入力のI/O失敗は `Result` の `Error` として返します。`try` または `match` で処理してください。引数なしの呼び出しは従来どおり使えます。[完全な例](../examples/tutorial/prompt-input.nagi)も0.2.3で動きます。0.2.1では `write("名前: ")` の後に `try read_line()` を使ってください。
 
 `env`の第2引数は、環境変数を取得できなかったときだけ評価します。値が存在すれば、既定値を作る関数も呼びません。既定値の式で`try`や`await`を使う場合の生成修正はNagi 0.1.11への導入対象です。公開配布での利用可否は[GitHub Releases](https://github.com/disnana/Nagi/releases)で確認してください。
 

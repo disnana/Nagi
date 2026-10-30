@@ -1,0 +1,28 @@
+---
+title: Nagi 0.2.3
+description: Fixes a project-mode link failure with the Windows GNU Rust toolchain.
+status: released
+since: "0.2.3"
+backends: [rust]
+canonicalId: "nagi-0-2-3"
+canonicalTitle: "Nagi 0.2.3"
+canonicalSource: "CHANGELOG.md"
+canonicalDate: "2026-10-30"
+canonicalSourceHash: "sha256:beafd71de98de65a77e00411d24cfca49ffa169caa4c03704f5f82bec7a24fef"
+canonicalRawBulletCount: 2
+canonicalItemCount: 1
+---
+Fixes a project-mode link failure with the Windows GNU Rust toolchain.
+
+- Release date: `2026-10-30`
+- Canonical ID: `nagi-0-2-3`
+- Status: `Released`
+
+## Complete changes
+
+{/* canonical-item: item-001 */}
+- Fix project-mode linking with the Windows GNU Rust toolchain when a canonical `\\?\` Cargo target path reaches the GNU linker while the same project succeeds with an explicit source file. Only the default project target is converted at the external-tool boundary, and only when a short drive or UNC spelling preserves the path's meaning. Explicit `NAGI_NATIVE_TARGET_DIR`, long paths, trailing dots/spaces, and reserved device names remain unchanged.
+
+## Canonical mapping
+
+The repository-root [CHANGELOG.md](https://github.com/disnana/Nagi/blob/main/CHANGELOG.md) is canonical for version, date, order, and items. This page maps its `2` raw bullets to `1` logical item after combining only the explicit Japanese/English duplicate. Validation must reject a changed `canonicalSourceHash` until both locales are updated.

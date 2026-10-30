@@ -109,11 +109,11 @@ test('legacy aliases are physical pages with canonical locale routes', async ({ 
   await expect(page).toHaveURL(/\/docs\/writing\/$/);
 });
 
-test('versioned changelog permalink keeps locale alternates', async ({ page }) => {
-  await page.goto(sitePath('/docs/changelog/nagi-0-2-2/'));
-  await expect(page.getByRole('heading', { name: 'Nagi 0.2.2', exact: true })).toBeVisible();
+test('latest versioned changelog permalink keeps locale alternates', async ({ page }) => {
+  await page.goto(sitePath('/docs/changelog/nagi-0-2-3/'));
+  await expect(page.getByRole('heading', { name: 'Nagi 0.2.3', exact: true })).toBeVisible();
   await expect(page.locator('link[hreflang="en"]')).toHaveAttribute(
     'href',
-    'https://nagi.disnana.com/en/docs/changelog/nagi-0-2-2/',
+    'https://nagi.disnana.com/en/docs/changelog/nagi-0-2-3/',
   );
 });

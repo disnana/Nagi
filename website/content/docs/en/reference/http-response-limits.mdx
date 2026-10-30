@@ -1,0 +1,128 @@
+---
+title: std.http.server response limits
+description: Maps every ResponseLimits value to its unit, meaning, and failure conditions.
+status: released
+since: "0.2.0"
+backends: [rust]
+---
+`ResponseLimits` is an opaque value that sets finite limits for HTTP response bodies, headers, retained responses, and fallback responses. It is available on the Rust target in published Nagi 0.2.3. HTTP is not yet supported by the Go target.
+
+## Minimal example checked with published 0.2.3
+
+The published API uses positional arguments. Give each value a local name, then pass the values in declaration order so the numbers remain readable.
+
+```nagi title="response-limits.nagi"
+import std.http.server as http
+
+def main() -> Result[unit, Error]:
+    body_bytes = 4096
+    user_header_bytes = 4096
+    user_header_count = 16
+    managed_header_bytes = 4096
+    managed_header_count = 32
+    serialization_writes = 4096
+    live_responses = 8
+    retained_bytes = 2097152
+    fallback_responses = 8
+    fallback_retained_bytes = 2097152
+    fallback_managed_header_bytes = 4096
+    fallback_managed_header_count = 32
+
+    response_limits = try http.response_limits(
+        body_bytes,
+        user_header_bytes,
+        user_header_count,
+        managed_header_bytes,
+        managed_header_count,
+        serialization_writes,
+        live_responses,
+        retained_bytes,
+        fallback_responses,
+        fallback_retained_bytes,
+        fallback_managed_header_bytes,
+        fallback_managed_header_count
+    )
+    options = try http.with_response_limits(http.default_options(), response_limits)
+    return ok(print("response limits configured"))
+```
+
+```console
+nagic check response-limits.nagi --no-project
+checked /absolute/path/to/response-limits.nagi
+```
+
+The compiler prints the file's actual absolute path after `checked`. This example was checked with the published 0.2.3 distribution compiler.
+
+These values are illustrative. They are not production sizing recommendations or performance guarantees. Add the required `authority`, `capacity`, `rate_limits`, and other settings to `options`, then pass it to `serve`.
+
+## `response_limits`
+
+```text
+http.response_limits(
+    body_bytes: i64,
+    user_header_bytes: i64,
+    user_header_count: i64,
+    managed_header_bytes: i64,
+    managed_header_count: i64,
+    serialization_writes: i64,
+    live_responses: i64,
+    retained_bytes: i64,
+    fallback_responses: i64,
+    fallback_retained_bytes: i64,
+    fallback_managed_header_bytes: i64,
+    fallback_managed_header_count: i64
+) -> Result[http.ResponseLimits, Error]
+```
+
+| Parameter | Unit | Limit |
+|---|---:|---|
+| `body_bytes` | bytes | Body of one response |
+| `user_header_bytes` | bytes | Total headers added by application code |
+| `user_header_count` | count | Headers added by application code |
+| `managed_header_bytes` | bytes | Total headers managed by the runtime |
+| `managed_header_count` | count | Headers managed by the runtime |
+| `serialization_writes` | work units | Writes performed while serializing a response; this is not a byte count |
+| `live_responses` | count | Ordinary responses that may be live concurrently |
+| `retained_bytes` | bytes | Logical total budget retained by ordinary responses |
+| `fallback_responses` | count | Fallback responses available when ordinary capacity is exhausted |
+| `fallback_retained_bytes` | bytes | Logical total budget retained by fallback responses |
+| `fallback_managed_header_bytes` | bytes | Runtime-managed fallback header budget |
+| `fallback_managed_header_count` | count | Runtime-managed fallback header count |
+
+Every value must be at least `1` and no larger than the platform's `isize::MAX`. `0` is an error; it does not mean unlimited. Values that are individually valid can still produce an error from `with_response_limits` when their combined budget is incompatible with the other HTTP options.
+
+Ordinary and fallback responses use separate finite budgets. These are logical budgets, not a process RSS cap, universal OOM recovery, or a latency guarantee.
+
+## `with_response_limits`
+
+```text
+http.with_response_limits(
+    options: http.Options,
+    limits: http.ResponseLimits
+) -> Result[http.Options, Error]
+```
+
+Moves `options` and `limits`, validates their combination, and returns a new `Options`. Neither input can be reused after success or failure. Starting an HTTP server requires explicit response limits.
+
+## Named arguments on Unreleased main
+
+Current main accepts all twelve arguments as ordered `name=value` pairs. This syntax is not included in published Nagi 0.2.3.
+
+```text title="Unreleased main only"
+response_limits = try http.response_limits(
+    body_bytes=4096,
+    user_header_bytes=4096,
+    user_header_count=16,
+    managed_header_bytes=4096,
+    managed_header_count=32,
+    serialization_writes=4096,
+    live_responses=8,
+    retained_bytes=2097152,
+    fallback_responses=8,
+    fallback_retained_bytes=2097152,
+    fallback_managed_header_bytes=4096,
+    fallback_managed_header_count=32
+)
+```
+
+See [HTTP server](../../backend/http) for the complete server path and the [target support matrix](../support) for backend availability.
