@@ -1,4 +1,4 @@
 {
   "title": "Nagiドキュメント",
-  "pages": ["install", "writing", "backend", "concurrency", "reference", "changelog"]
+  "pages": ["install", "commands", "writing", "backend", "concurrency", "reference", "changelog"]
 }
