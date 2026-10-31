@@ -1,6 +1,6 @@
 # Nagi 0.3.0: Goバックエンド段階実装計画
 
-状態: **段階実装中の採用計画**。初版の基点はmain `0d1884cb5a24235a440811a9f5d16be1bf5a664a`（2026-10-26）で、Nagi 0.2.2はその後 `7c92045a04519609ae287803a31ac0816c728086` として公開済みである。0.3.0開発は0.2.2の版更新・保守と分離し、Rust既定を保ったままRust以外の生成先を追加する。最小Go backend、3 OS必須gate、List/Range、明示move、payloadなしenum、共有conformance、private lifecycle kernel、cold user async、callback identity、read-only `view[str]`、user async引数のsealed capture factsとG3aの限定capture releaseまでを実装・検証した。G3aの#206はmain `d4c2b08`へマージ済みの未リリース開発sliceであり、HTTP/DB/auth/actor/task/scope、一般borrow、完全なcleanup、性能優位、本番利用可能、0.3.0の公開日を約束しない。
+状態: **段階実装中の採用計画**。初版の基点はmain `0d1884cb5a24235a440811a9f5d16be1bf5a664a`（2026-10-26）で、0.2系の保守公開と0.3.0開発を分離し、Rust既定を保ったままRust以外の生成先を追加する。最小Go backend、3 OS必須gate、List/Range、明示move、payloadなしenum、共有conformance、private lifecycle kernel、cold user async、callback identity、read-only `view[str]`、user async引数のsealed capture facts、G3aの限定capture release、private `ScopeExitPlan`までを実装・検証した。`ScopeExitPlan`の#208はmain `fc7bc42`へマージ済みの未リリース開発sliceであり、HTTP/DB/auth/actor/task/scope、一般borrow、完全なcleanup、性能優位、本番利用可能、0.3.0の公開日を約束しない。
 
 ## 決定済みの方向
 
@@ -22,7 +22,9 @@
 
 最初のrefactorでは既存Rust出力のbyte-for-byte golden、High→生成Low→独立parser/check→finalize、手書きLowを維持する。`CheckedProgram::seal`からRust固有planを一括削除せず、意味factsを一項目ずつ抽出してRust planが同じ結果を作ることを検査する。Rust側の境界整理に合格する前にGo emitterを広げない。
 
-今回の限定sliceでは、既存Rustのscope退出判断だけをprivateなtarget-neutral `ScopeExitPlan`へ抽出する。stable ScopeId、Legacy/TaskScope bridge、外側のerror destination、lexical bodyの退出先、正常join、body locals退役後のcancel/drainと元error伝播、同期owner teardownのabort要求までをchecker sealで保持・検証する。Rust emitterはこのplanを消費し、既存のTaskUseによる受取/放棄identityを維持する。Goは欠落・不整合factsを共有境界で拒否し、Scope/Spawn/SpawnBindのunsupported拒否を維持する。この抽出はGo scope/task、一般owner retirement、resource close、cancel/実joinの実装ではない。
+最初の限定sliceでは、既存Rustのscope退出判断だけをprivateなtarget-neutral `ScopeExitPlan`へ抽出した。stable ScopeId、Legacy/TaskScope bridge、外側のerror destination、lexical bodyの退出先、正常join、body locals退役後のcancel/drainと元error伝播、同期owner teardownのabort要求までをchecker sealで保持・検証する。Rust emitterはこのplanを消費し、既存のTaskUseによる受取/放棄identityを維持する。Goは欠落・不整合factsを共有境界で拒否し、Scope/Spawn/SpawnBindのunsupported拒否を維持する。
+
+次の限定sliceでは、legacy `spawn`と値を返すTask生成をprivateなtarget-neutral `TaskSpawnPlan`へ分離する。stable ScopeId、Legacy/TaskScope bridge、Future呼出しidentity、Task binding identity、legacy child Resultをscope faultへ昇格する経路とTaskのResult値を区別してsealする。Rust emitterは同じplanを消費して既存出力を維持し、Goは改竄されたplanを共有境界で拒否する。これもGo task/scope、goroutine、cancel token、一般owner retirement、resource close、cancel後の実joinを有効化する実装ではない。
 
 ## CLIとproject設定
 

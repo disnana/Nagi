@@ -277,9 +277,8 @@ fn eligible(checked: &CheckedProgram) -> bool {
                         .all(|(_, t)| allowed(t, &classes))
                     && f.body.len() == decisions.body.statements.len()
                     && f.body.iter().zip(&decisions.body.statements).all(|(s, d)| {
-                        if d.scope.is_some()
-                            || d.task_bridge
-                            || d.spawn_result
+                        if d.scope_exit.is_some()
+                            || d.task_spawn.is_some()
                             || d.iterator.is_some()
                             || !d.children.is_empty()
                             || s.binding_type

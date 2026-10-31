@@ -1,5 +1,13 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-30: private Task spawn planの抽出（未リリース）
+
+#208がmain `fc7bc42`へ反映された後、branch `feat/task-spawn-plan-20261030`で既存Rust loweringのspawn判断をprivate `TaskSpawnPlan`へ抽出した。stable ScopeId、Legacy/TaskScope bridge、Future呼出しidentity、Task binding identity、legacy unit child、legacy Result childのscope fault昇格、値Taskの出力型をchecker sealで保持する。Rust emitterは分散したscope/bridge/result boolを再推測せずplanを消費する。Goはplan欠落・scope/bridge/invocation/binding/output/outcome改竄をtoolchain起動前の共有emission境界で拒否し、公開Scope/Spawn/SpawnBindのunsupported拒否を維持する。
+
+High・生成Low・手書きLowで既存Rust全文goldenをbyte比較し、legacy Result 4件と値Task 2件、別fixtureのlegacy unitを照合した。Rust keywordと衝突するTask出力型はchecked内部identityを維持し、Rust planだけが`r#type`へ変換する。追加plan unit 3件、compiler library全214件、Go integration 34件、scoped tasks 5件、scope runtime 1件、task handles 8件、compiler all-target Clippy `-D warnings`、fmt、diff空白検査が成功した。最初のGo integrationは実行環境の偽`/usr/bin/go`、次はread-only既定Go cacheで失敗し、公式Go 1.27.3とworkspace内cacheを明示した最終34件で成功した。task service 2件の初回はnetwork sandboxがlocalhost bindを拒否し、network許可を明示した限定再実行で成功した。これら環境失敗を製品回帰とは扱わない。
+
+新しい公開API、runtime、依存、Go goroutine/task/scope/cancel/joinは追加していない。全workspace suite、macOS/Windows、exact-head CIは未実施である。独立reviewのP1（Task出力型へRust escapeが混入）をsemantic identity復元とkeyword型の三構文testで修正し、再reviewは未解決0件。作業中の最低空きは8.5GiBで、8GiB guardを維持した。merge/tag/releaseなし。
+
 
 ## 2026-10-30: private scope-exit planの抽出（未リリース）
 

@@ -1026,6 +1026,46 @@ fn collect_scope_exits(block: &BlockPlan) -> Vec<ScopeExitPlan> {
     }
     result
 }
+fn collect_task_spawns(block: &BlockPlan) -> Vec<TaskSpawnPlan> {
+    let mut result = Vec::new();
+    for statement in &block.statements {
+        result.extend(statement.task_spawn.clone());
+        for child in &statement.children {
+            result.extend(collect_task_spawns(child));
+        }
+    }
+    result
+}
+fn first_task_spawn_statement_mut(block: &mut BlockPlan) -> Option<&mut StatementPlan> {
+    for statement in &mut block.statements {
+        if statement.task_spawn.is_some() {
+            return Some(statement);
+        }
+        for child in &mut statement.children {
+            if let Some(found) = first_task_spawn_statement_mut(child) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
+fn first_value_task_spawn_mut(block: &mut BlockPlan) -> Option<&mut TaskSpawnPlan> {
+    for statement in &mut block.statements {
+        if statement
+            .task_spawn
+            .as_ref()
+            .is_some_and(|spawn| matches!(spawn.mode, TaskSpawnMode::ValueHandle { .. }))
+        {
+            return statement.task_spawn.as_mut();
+        }
+        for child in &mut statement.children {
+            if let Some(found) = first_value_task_spawn_mut(child) {
+                return Some(found);
+            }
+        }
+    }
+    None
+}
 
 #[test]
 fn scope_exit_plan_preserves_rust_bytes_and_stable_nested_sibling_loop_identities() {
@@ -1129,16 +1169,151 @@ fn scope_exit_plan_preserves_rust_bytes_and_stable_nested_sibling_loop_identitie
 }
 
 #[test]
+fn task_spawn_plan_preserves_rust_bytes_and_distinguishes_legacy_faults_from_values() {
+    let baseline = include_str!("testdata/scope_exit.rust");
+    let saved = crate::emit::low(checked_high(SCOPE_EXIT_HIGH).program());
+    for (source, is_high) in [
+        (SCOPE_EXIT_HIGH, true),
+        (saved.as_str(), false),
+        (SCOPE_EXIT_LOW, false),
+    ] {
+        let checked = crate::check::finalize(
+            crate::parser::parse(source, is_high).unwrap(),
+            Program::default(),
+            SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        assert_eq!(
+            crate::emit::rust(&checked).unwrap().as_bytes(),
+            baseline.as_bytes()
+        );
+        let spawns = collect_task_spawns(&scope_exit_function(&checked).body);
+        assert_eq!(spawns.len(), 6);
+        assert_eq!(
+            spawns
+                .iter()
+                .filter(|spawn| matches!(spawn.mode, TaskSpawnMode::LegacyResultToScopeFault))
+                .count(),
+            4
+        );
+        assert_eq!(
+            spawns
+                .iter()
+                .filter(|spawn| matches!(spawn.mode, TaskSpawnMode::ValueHandle { .. }))
+                .count(),
+            2
+        );
+        assert_eq!(
+            spawns
+                .iter()
+                .map(|spawn| spawn.invocation)
+                .collect::<BTreeSet<_>>()
+                .len(),
+            spawns.len()
+        );
+        for spawn in spawns {
+            match spawn.mode {
+                TaskSpawnMode::LegacyResultToScopeFault => {}
+                TaskSpawnMode::ValueHandle { output, .. } => {
+                    assert_eq!(output, Type::named("i64"));
+                    assert_eq!(spawn.bridge, ScopeBridge::TaskScope);
+                }
+                TaskSpawnMode::LegacyUnit => panic!("fixture has no legacy unit child"),
+            }
+        }
+    }
+
+    let checked = checked_high(
+        "async def unit_work():\n    await sleep(1)\nasync def unit_spawn() -> Result[unit, Error]:\n    async with scope:\n        spawn unit_work()\n    return ok(print(0))\n",
+    );
+    let spawns = collect_task_spawns(&scope_exit_function(&checked).body);
+    assert_eq!(spawns.len(), 1);
+    assert_eq!(spawns[0].mode, TaskSpawnMode::LegacyUnit);
+}
+
+#[test]
+fn task_spawn_plan_missing_mismatched_and_spurious_facts_fail_closed() {
+    for mutation in 0..7 {
+        let mut checked = checked_high(SCOPE_EXIT_HIGH);
+        let function = scope_exit_function_mut(&mut checked);
+        if mutation == 6 {
+            let spawn = first_value_task_spawn_mut(&mut function.body).unwrap();
+            let TaskSpawnMode::ValueHandle { binding, .. } = &mut spawn.mode else {
+                unreachable!()
+            };
+            binding.token += 1;
+        } else {
+            let statement = first_task_spawn_statement_mut(&mut function.body).unwrap();
+            if mutation == 0 {
+                statement.task_spawn = None;
+            } else {
+                let spawn = statement.task_spawn.as_mut().unwrap();
+                match mutation {
+                    1 => spawn.scope = ScopeId(77),
+                    2 => spawn.bridge = ScopeBridge::TaskScope,
+                    3 => spawn.invocation.start += 1,
+                    4 => spawn.mode = TaskSpawnMode::LegacyUnit,
+                    5 => {
+                        spawn.mode = TaskSpawnMode::ValueHandle {
+                            binding: BindingId { line: 0, token: 0 },
+                            output: Type::named("unit"),
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+        let error = crate::emit::rust(&checked).unwrap_err();
+        assert!(
+            error.contains("checked Task spawn plan"),
+            "mutation {mutation}: {error}"
+        );
+        let go_error = crate::go_backend::source(&checked, &[], crate::project::BuildProfile::Dev)
+            .unwrap_err();
+        assert!(
+            go_error.contains("checked Task spawn plan"),
+            "mutation {mutation}: {go_error}"
+        );
+    }
+}
+
+#[test]
+fn task_spawn_plan_keeps_rust_keyword_output_types_target_neutral() {
+    let high = "class type:\n    code: i64\nasync def make() -> type:\n    return type(code=1)\nasync def keyword_task() -> Result[unit, Error]:\n    async with scope:\n        task = spawn make()\n        match await task:\n            case Ok(value):\n                print(value.code)\n            case Err(_):\n                print(0)\n    return ok(print(0))\n";
+    let manual_low = "record type { code: i64; }\nasync fn make() -> type { return type(code=1); }\nasync fn keyword_task() -> Result[unit, Error] {\n    scope {\n        let task = spawn make();\n        match await task {\n            case Ok(value) { print(value.code); }\n            case Err(_) { print(0); }\n        }\n    }\n    return ok(print(0));\n}\n";
+    let saved = crate::emit::low(checked_high(high).program());
+    let mut outputs = Vec::new();
+    for (source, is_high) in [(high, true), (saved.as_str(), false), (manual_low, false)] {
+        let checked = crate::check::finalize(
+            crate::parser::parse(source, is_high).unwrap(),
+            Program::default(),
+            SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        let spawns = collect_task_spawns(&scope_exit_function(&checked).body);
+        assert_eq!(spawns.len(), 1);
+        let TaskSpawnMode::ValueHandle { output, .. } = &spawns[0].mode else {
+            panic!("expected a value Task")
+        };
+        assert_eq!(output, &Type::named(&checked.program().classes[0].name));
+        assert_ne!(output.0, "r#type");
+        let rust = crate::emit::rust(&checked).unwrap();
+        assert!(rust.contains("r#type"), "{rust}");
+        outputs.push(rust);
+    }
+    assert_eq!(outputs[0], outputs[1]);
+    assert_eq!(outputs[0], outputs[2]);
+}
+
+#[test]
 fn scope_exit_plan_missing_mismatched_and_spurious_facts_fail_closed() {
-    for mutation in 0..8 {
+    for mutation in 0..7 {
         let mut checked = checked_high(SCOPE_EXIT_HIGH);
         let function = scope_exit_function_mut(&mut checked);
         let first = &mut function.body.statements[0];
         if mutation == 0 {
             first.scope_exit = None;
         } else if mutation == 6 {
-            first.scope = Some(ScopeId(77));
-        } else if mutation == 7 {
             let exit = first.scope_exit.clone();
             function.body.statements.last_mut().unwrap().scope_exit = exit;
         } else {
