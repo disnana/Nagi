@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::checked::{
     BlockPlan, CheckedProgram, CompareRead, CopyRead, EmissionPlan, ErrorDestination,
     ExpressionKey, ExpressionPlan, FunctionPlan, IteratorRead, MainError, ScopeBodyErrorExit,
-    ScopeBridge, ScopeNormalExit, ScopeOwnerTeardown, StaticRead, ViewRead,
+    ScopeBridge, ScopeNormalExit, ScopeOwnerTeardown, StaticRead, TaskSpawnMode, ViewRead,
 };
 use crate::diagnostics::Generated;
 use std::{
@@ -937,8 +937,12 @@ fn rb(
                     let rebind = decision.rebind;
                     let storage = types.storage_slots.contains(name);
                     let value = if matches!(s.kind, S::SpawnBind { .. }) {
-                        let id = decision.scope.expect("sealed SpawnBind scope");
-                        format!("{{ let __nagi_spawn_future = {}; __nagi_task_scope_{}.spawn_value(async move {{ __nagi_spawn_future.await }}) }}",re(value,types),id.0)
+                        let spawn = decision
+                            .task_spawn
+                            .as_ref()
+                            .expect("sealed Task spawn plan");
+                        debug_assert!(matches!(spawn.mode, TaskSpawnMode::ValueHandle { .. }));
+                        format!("{{ let __nagi_spawn_future = {}; __nagi_task_scope_{}.spawn_value(async move {{ __nagi_spawn_future.await }}) }}",re(value,types),spawn.scope.0)
                     } else {
                         re(value, types)
                     };
@@ -1107,12 +1111,19 @@ fn rb(
                 out.push_str(&format!("{pad}}}\n"));
             }
             S::Spawn(e) => {
-                let returns_result = decision.spawn_result;
-                let scope = if decision.task_bridge {
-                    format!(
-                        "__nagi_task_scope_{}",
-                        decision.scope.expect("sealed spawn scope").0
-                    )
+                let spawn = decision
+                    .task_spawn
+                    .as_ref()
+                    .expect("sealed legacy spawn plan");
+                let returns_result = match spawn.mode {
+                    TaskSpawnMode::LegacyUnit => false,
+                    TaskSpawnMode::LegacyResultToScopeFault => true,
+                    TaskSpawnMode::ValueHandle { .. } => {
+                        unreachable!("sealed legacy spawn mode")
+                    }
+                };
+                let scope = if spawn.bridge == ScopeBridge::TaskScope {
+                    format!("__nagi_task_scope_{}", spawn.scope.0)
                 } else {
                     "__scope".into()
                 };

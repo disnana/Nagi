@@ -3629,6 +3629,9 @@ impl Checker {
                     line: s.line,
                     token: s.binding_span.unwrap_or_default().start,
                 });
+                if spawn_binding {
+                    s.task.spawn_binding = Some(target_binding);
+                }
                 let rhs_consumed_target = old.as_ref().is_some_and(|previous| {
                     !previous.moved
                         && self.vars.get(name).is_some_and(|current| {

@@ -146,6 +146,17 @@ impl RustNames {
             .find_map(|(original, value)| (value == escaped).then_some(original.as_str()))
             .unwrap_or(escaped)
     }
+
+    /// Restore checked semantic type identity after Rust-only escaping. This
+    /// is used by target-neutral facts built beside the Rust emission plan.
+    pub(crate) fn original_type(&self, ty: &Type) -> Type {
+        Type(
+            self.original(&ty.0).to_owned(),
+            ty.1.iter()
+                .map(|argument| self.original_type(argument))
+                .collect(),
+        )
+    }
 }
 
 fn visit(program: &mut Program, name: &mut impl FnMut(&mut String)) {

@@ -1911,6 +1911,13 @@ fn main() -> unit {
 
 #[test]
 fn shared_oracle_rejects_wrong_results_and_keeps_infra_distinct() {
+    #[cfg(windows)]
+    if backend_conformance::dispatch_windows_job_fixture()
+        .unwrap_or_else(|error| panic!("Windows Job fixture role failed: {error}"))
+    {
+        return;
+    }
+
     use backend_conformance::{Backend, EntryKind, Expectation, FaultKind, SharedCase, Stage};
 
     let success = Expectation::RunSuccess {

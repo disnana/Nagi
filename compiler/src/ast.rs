@@ -230,6 +230,7 @@ pub(crate) struct TaskUse {
 pub(crate) struct TaskStatementFacts {
     pub scope: Option<ScopeId>,
     pub bridge: bool,
+    pub spawn_binding: Option<BindingId>,
     pub uses: Vec<TaskUse>,
 }
 
