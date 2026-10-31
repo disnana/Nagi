@@ -49,7 +49,7 @@
   },
   "getting-started": {
     "mode": "redirect",
-    "target": "writing"
+    "target": "install"
   },
   "language-guide": {
     "mode": "redirect",

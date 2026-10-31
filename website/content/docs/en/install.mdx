@@ -1,0 +1,78 @@
+---
+title: Install Nagi
+description: Install the published Nagi 0.2.3 compiler and check the native application build tools.
+status: released
+since: "0.1.6"
+backends: [rust]
+---
+
+## Install the compiler
+
+Run the command for your operating system. The installer downloads the latest published Release, verifies its SHA-256 checksum, and installs `nagic` without administrator access.
+
+### Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1')))
+```
+
+### Linux / macOS
+
+```sh
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
+```
+
+Check the installation in the same terminal. The current published release reports `nagic 0.2.3`.
+
+```sh
+nagic --version
+nagic --help
+```
+
+Restart VS Code or your JetBrains IDE if it was already open, so it can discover `nagic` on the updated PATH.
+
+## Tools required to build applications
+
+Version output and ordinary source checking do not require Rust. Building a native executable with `nagic build` or `nagic run` also requires:
+
+- [stable Rust / Cargo](https://www.rust-lang.org/tools/install)
+- Windows: Visual Studio Build Tools with the C++ build tools, or a supported MSYS2/MinGW environment
+- macOS: Command Line Tools installed with `xcode-select --install`
+- Linux: a C compiler, linker, and `pkg-config`
+
+When these are ready, continue with the [first Nagi program](./writing).
+
+## Update or select a version
+
+Run the same installer again to verify and switch to the latest published release. A failed update preserves the previous command and PATH. Specify a version when you need a fixed release.
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.2.3
+```
+
+```sh
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.2.3) && export PATH="$HOME/.local/bin:$PATH"
+```
+
+These commands install the Nagi compiler itself. Nagi 0.2.3 does not provide a `nagic install <package>` command for fetching Nagi libraries.
+
+## Editor extensions
+
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)
+- [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)
+- VSIX and ZIP files for manual installation, with checksums, are available from [GitHub Releases](https://github.com/disnana/Nagi/releases)
+
+The editor extensions do not bundle the compiler. Install `nagic` with the commands on this page as well.
+
+## Uninstall
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.ps1')))
+```
+
+```sh
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.sh | bash)
+```
+
+If you changed the installation or PATH locations, pass the same options to the uninstaller.
+

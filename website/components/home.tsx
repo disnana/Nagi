@@ -3,6 +3,7 @@ import Link from 'next/link';
 export function Home({ locale }: { locale: 'ja' | 'en' }) {
   const ja = locale === 'ja';
   const docs = ja ? '/docs' : '/en/docs';
+  const install = `${docs}/install`;
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-8 px-6 py-20">
       <p className="text-sm font-medium text-fd-muted-foreground">Nagi 0.2.3</p>
@@ -15,7 +16,10 @@ export function Home({ locale }: { locale: 'ja' | 'en' }) {
           : 'Start with the smallest program, then build HTTP, SQLite, async, and Actor applications with exact commands and results.'}
       </p>
       <div className="flex flex-wrap gap-3">
-        <Link className="rounded-lg bg-fd-primary px-5 py-3 font-medium text-fd-primary-foreground" href={docs}>
+        <Link className="rounded-lg bg-fd-primary px-5 py-3 font-medium text-fd-primary-foreground" href={install}>
+          {ja ? 'Nagiをインストール' : 'Install Nagi'}
+        </Link>
+        <Link className="rounded-lg border px-5 py-3 font-medium" href={docs}>
           {ja ? '書き始める' : 'Start writing'}
         </Link>
         <Link className="rounded-lg border px-5 py-3 font-medium" href={ja ? '/en' : '/'} hrefLang={ja ? 'en' : 'ja'}>
