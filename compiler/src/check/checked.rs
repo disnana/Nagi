@@ -381,7 +381,7 @@ pub(crate) enum FieldRead {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ExpressionPlan {
-    pub task: Option<TaskUse>,
+    pub task: Option<TaskUsePlan>,
     pub numeric_suffix: Option<String>,
     pub static_read: StaticRead,
     pub reference_is_view: bool,
@@ -395,6 +395,28 @@ pub(crate) struct ExpressionPlan {
     pub json_string: bool,
     pub slice_string: bool,
     pub argument_resolution: Option<NameResolution>,
+}
+
+/// Target-neutral consumption of a scope-owned Task handle.  Runtime tickets
+/// remain private to the target runtime; the checked expression identities
+/// bind the source operation to the handle it consumes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TaskUsePlan {
+    pub expression: ExprUseId,
+    pub operand: ExprUseId,
+    pub scope: ScopeId,
+    pub mode: TaskUseMode,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum TaskUseMode {
+    /// Receive only after the scope runtime has actually joined the child.
+    /// The runtime wraps this output in Result[T, TaskFailure] without
+    /// flattening a Result-valued T or promoting its business error.
+    ReceiveJoinedValue { output: Type },
+    /// Discard the output value while preserving the scope's join and fault
+    /// observation responsibilities.  This is not detach or cancellation.
+    DiscardOutputKeepScopeJoin,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct ExpressionKey {
@@ -574,6 +596,125 @@ fn task_spawn_plan(
         invocation: ExprUseId::of(value),
         mode,
     }))
+}
+
+fn checked_task_uses(function: &Function) -> Result<BTreeMap<ExprUseId, TaskUse>, String> {
+    fn block(
+        statements: &[Stmt],
+        current: Option<(ScopeId, bool)>,
+        uses: &mut BTreeMap<ExprUseId, TaskUse>,
+    ) -> Result<(), String> {
+        for statement in statements {
+            for use_ in &statement.task.uses {
+                if current != Some((use_.scope, true)) {
+                    return Err("invalid checked Task scope use".into());
+                }
+                if uses
+                    .insert(use_.expression, *use_)
+                    .is_some_and(|old| old != *use_)
+                {
+                    return Err("conflicting checked Task use".into());
+                }
+            }
+            match &statement.kind {
+                S::Scope(body) => {
+                    let scope = statement
+                        .task
+                        .scope
+                        .ok_or("missing checked scope identity")?;
+                    if statement.task.bridge != scope_has_task_binding(body) {
+                        return Err("inconsistent checked Task scope bridge".into());
+                    }
+                    block(body, Some((scope, statement.task.bridge)), uses)?;
+                }
+                S::SpawnBind { .. }
+                    if current != statement.task.scope.map(|scope| (scope, true)) =>
+                {
+                    return Err("invalid checked Task spawn scope".into())
+                }
+                S::Spawn(_)
+                    if current
+                        != statement
+                            .task
+                            .scope
+                            .map(|scope| (scope, statement.task.bridge)) =>
+                {
+                    return Err("invalid checked legacy spawn scope".into())
+                }
+                S::If(_, left, right) => {
+                    block(left, current, uses)?;
+                    block(right, current, uses)?;
+                }
+                S::While(_, body) | S::For(_, _, body) => block(body, current, uses)?,
+                S::Match(_, arms) => {
+                    for arm in arms {
+                        block(&arm.body, current, uses)?;
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    let mut uses = BTreeMap::new();
+    block(&function.body, None, &mut uses)?;
+    Ok(uses)
+}
+
+fn task_output(
+    operand: &Expr,
+    program: &Program,
+    names: &crate::rust_names::RustNames,
+) -> Result<Type, String> {
+    let task = operand
+        .ty
+        .as_ref()
+        .filter(|ty| {
+            registered_resource(&ty.0, &program.modules) == Some(crate::stdlib::Resource::Task)
+        })
+        .ok_or("missing checked Task operand")?;
+    if task.1.len() != 1 {
+        return Err("invalid checked Task output type".into());
+    }
+    Ok(names.original_type(&task.1[0]))
+}
+
+fn task_use_plan(
+    expression: &Expr,
+    use_: TaskUse,
+    program: &Program,
+    names: &crate::rust_names::RustNames,
+) -> Result<TaskUsePlan, String> {
+    if use_.expression != ExprUseId::of(expression) {
+        return Err("mismatched checked Task use expression".into());
+    }
+    let (operand, mode) = match (&expression.kind, use_.action) {
+        (E::Await(operand), TaskAction::Receive) => (
+            operand.as_ref(),
+            TaskUseMode::ReceiveJoinedValue {
+                output: task_output(operand, program, names)?,
+            },
+        ),
+        (E::Call(name, types, arguments), TaskAction::Discard)
+            if types.is_empty()
+                && arguments.len() == 1
+                && expression.resolution == Some(NameResolution::Standard)
+                && crate::stdlib::operation(name)
+                    == Some(crate::stdlib::Operation::TaskDiscard) =>
+        {
+            let operand = &arguments[0];
+            task_output(operand, program, names)?;
+            (operand, TaskUseMode::DiscardOutputKeepScopeJoin)
+        }
+        _ => return Err("inconsistent checked Task use operation".into()),
+    };
+    Ok(TaskUsePlan {
+        expression: use_.expression,
+        operand: ExprUseId::of(operand),
+        scope: use_.scope,
+        mode,
+    })
 }
 
 fn scope_exit_plans(function: &Function) -> Result<BTreeMap<ScopeId, ScopeExitPlan>, String> {
@@ -1567,6 +1708,7 @@ impl EmissionPlan {
                 _ => {}
             }
             let scopes = scope_exit_plans(f)?;
+            let tasks = checked_task_uses(f)?;
             block(
                 &f.body,
                 &plan.body,
@@ -1585,6 +1727,14 @@ impl EmissionPlan {
                 }
                 if actual.operation != expected.operation {
                     return Err("inconsistent checked native operation/SQL argument plan".into());
+                }
+                let expected_task = tasks
+                    .get(&ExprUseId::of(e))
+                    .copied()
+                    .map(|use_| task_use_plan(e, use_, &self.program, &self.names))
+                    .transpose()?;
+                if actual.task != expected_task {
+                    return Err("missing or inconsistent checked Task use plan".into());
                 }
                 if let (Some(flow), E::Name(name)) = (&plan.flow, &e.kind) {
                     if flow.storage_slots.contains(name)
@@ -1724,63 +1874,16 @@ impl EmissionPlan {
                 &scopes,
                 &names,
             )?;
-            fn task_uses(
-                statements: &[Stmt],
-                current: Option<(ScopeId, bool)>,
-                uses: &mut BTreeMap<ExprUseId, TaskUse>,
-            ) -> Result<(), String> {
-                for s in statements {
-                    for use_ in &s.task.uses {
-                        if current != Some((use_.scope, true)) {
-                            return Err("invalid checked Task scope use".into());
-                        }
-                        if uses
-                            .insert(use_.expression, *use_)
-                            .is_some_and(|old| old != *use_)
-                        {
-                            return Err("conflicting checked Task use".into());
-                        }
-                    }
-                    match &s.kind {
-                        S::Scope(body) => {
-                            let scope = s.task.scope.ok_or("missing checked scope identity")?;
-                            if s.task.bridge != scope_has_task_binding(body) {
-                                return Err("inconsistent checked Task scope bridge".into());
-                            }
-                            task_uses(body, Some((scope, s.task.bridge)), uses)?;
-                        }
-                        S::SpawnBind { .. }
-                            if current != s.task.scope.map(|scope| (scope, true)) =>
-                        {
-                            return Err("invalid checked Task spawn scope".into())
-                        }
-                        S::Spawn(_)
-                            if current != s.task.scope.map(|scope| (scope, s.task.bridge)) =>
-                        {
-                            return Err("invalid checked legacy spawn scope".into())
-                        }
-                        S::If(_, a, b) => {
-                            task_uses(a, current, uses)?;
-                            task_uses(b, current, uses)?;
-                        }
-                        S::While(_, b) | S::For(_, _, b) => task_uses(b, current, uses)?,
-                        S::Match(_, arms) => {
-                            for a in arms {
-                                task_uses(&a.body, current, uses)?;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                Ok(())
-            }
-            let mut tasks = BTreeMap::new();
-            task_uses(&f.body, None, &mut tasks)?;
+            let tasks = checked_task_uses(f)?;
             let mut expressions = BTreeMap::new();
             let mut add = |e: &Expr| {
                 let key = ExpressionKey::of(e);
                 let mut plan = expression_plan(e, p)?;
-                plan.task = tasks.get(&ExprUseId::of(e)).copied();
+                plan.task = tasks
+                    .get(&ExprUseId::of(e))
+                    .copied()
+                    .map(|use_| task_use_plan(e, use_, p, &names))
+                    .transpose()?;
                 let requires_task = match &e.kind {
                     E::Await(x)
                         if x.ty.as_ref().is_some_and(|t| {
@@ -1799,7 +1902,11 @@ impl EmissionPlan {
                     }
                     _ => None,
                 };
-                if requires_task != plan.task.map(|use_| use_.action) {
+                let planned_action = plan.task.as_ref().map(|plan| match plan.mode {
+                    TaskUseMode::ReceiveJoinedValue { .. } => TaskAction::Receive,
+                    TaskUseMode::DiscardOutputKeepScopeJoin => TaskAction::Discard,
+                });
+                if requires_task != planned_action {
                     return Err("missing or inconsistent checked Task use plan".into());
                 }
                 if let Some(old) = expressions.insert(key, plan.clone()) {

@@ -1067,6 +1067,21 @@ fn first_value_task_spawn_mut(block: &mut BlockPlan) -> Option<&mut TaskSpawnPla
     None
 }
 
+fn task_use_plans(function: &FunctionPlan) -> Vec<TaskUsePlan> {
+    function
+        .expressions
+        .values()
+        .filter_map(|expression| expression.task.clone())
+        .collect()
+}
+
+fn first_task_use_mut(function: &mut FunctionPlan) -> Option<&mut TaskUsePlan> {
+    function
+        .expressions
+        .values_mut()
+        .find_map(|expression| expression.task.as_mut())
+}
+
 #[test]
 fn scope_exit_plan_preserves_rust_bytes_and_stable_nested_sibling_loop_identities() {
     // Captured with the unmodified d4c2b08 emitter, before extracting the plan.
@@ -1303,6 +1318,124 @@ fn task_spawn_plan_keeps_rust_keyword_output_types_target_neutral() {
     }
     assert_eq!(outputs[0], outputs[1]);
     assert_eq!(outputs[0], outputs[2]);
+}
+
+const TASK_USE_HIGH: &str = "from std.task import discard\nclass type:\n    code: i64\nasync def make() -> Result[type, i64]:\n    return ok(type(code=1))\nasync def consume_tasks() -> Result[unit, Error]:\n    async with scope:\n        received_task = spawn make()\n        received = await received_task\n        discarded_task = spawn make()\n        discard(discarded_task)\n    return ok(print(0))\n";
+
+fn checked_task_use_high() -> CheckedProgram {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let root = loop {
+        let path = std::env::temp_dir().join(format!(
+            "nagi-task-use-plan-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match std::fs::create_dir(&path) {
+            Ok(()) => break path,
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => panic!("exclusive Task use fixture: {error}"),
+        }
+    };
+    let source = root.join("main.nagi");
+    std::fs::write(&source, TASK_USE_HIGH).unwrap();
+    let loaded = crate::source::load(&source, true).unwrap();
+    let provenance = loaded.provenance();
+    let checked = crate::check::finalize(loaded.program, Program::default(), provenance).unwrap();
+    std::fs::remove_dir_all(root).unwrap();
+    checked
+}
+
+#[test]
+fn task_use_plan_preserves_joined_output_and_discard_scope_responsibility() {
+    let checked = checked_task_use_high();
+    let class = checked.program().classes[0].name.clone();
+    let plans = task_use_plans(scope_exit_function(&checked));
+    assert_eq!(plans.len(), 2);
+    let receive = plans
+        .iter()
+        .find(|plan| matches!(plan.mode, TaskUseMode::ReceiveJoinedValue { .. }))
+        .unwrap();
+    let TaskUseMode::ReceiveJoinedValue { output } = &receive.mode else {
+        unreachable!()
+    };
+    assert_eq!(
+        output,
+        &Type::generic("Result", vec![Type::named(&class), Type::named("i64")])
+    );
+    assert_ne!(output.1[0].0, "r#type");
+    assert_ne!(receive.expression, receive.operand);
+
+    let discard = plans
+        .iter()
+        .find(|plan| matches!(plan.mode, TaskUseMode::DiscardOutputKeepScopeJoin))
+        .unwrap();
+    assert_eq!(receive.scope, discard.scope);
+    assert_ne!(discard.expression, discard.operand);
+
+    let rust = crate::emit::rust(&checked).unwrap();
+    assert!(rust.contains(&format!(
+        "__nagi_task_scope_{}.receive(received_task).await",
+        receive.scope.0
+    )));
+    assert!(rust.contains(&format!(
+        "__nagi_task_scope_{}.discard(discarded_task)",
+        discard.scope.0
+    )));
+}
+
+#[test]
+fn task_use_plan_missing_spurious_and_tampered_facts_fail_closed() {
+    for mutation in 0..8 {
+        let mut checked = checked_task_use_high();
+        let function = scope_exit_function_mut(&mut checked);
+        if mutation == 0 {
+            first_task_use_mut(function).unwrap().expression.start += 1;
+        } else if mutation == 1 {
+            first_task_use_mut(function).unwrap().operand.start += 1;
+        } else if mutation == 2 {
+            first_task_use_mut(function).unwrap().scope = ScopeId(77);
+        } else if mutation == 3 {
+            first_task_use_mut(function).unwrap().mode = TaskUseMode::DiscardOutputKeepScopeJoin;
+        } else if mutation == 4 {
+            let plan = first_task_use_mut(function).unwrap();
+            let TaskUseMode::ReceiveJoinedValue { output } = &mut plan.mode else {
+                panic!("first Task use must be receive")
+            };
+            *output = Type::named("unit");
+        } else if mutation == 5 {
+            first_task_use_mut(function).unwrap().mode = TaskUseMode::ReceiveJoinedValue {
+                output: Type::generic("Result", vec![Type::named("r#type"), Type::named("i64")]),
+            };
+        } else if mutation == 6 {
+            let spurious = first_task_use_mut(function).unwrap().clone();
+            let expression = function
+                .expressions
+                .values_mut()
+                .find(|expression| expression.task.is_none())
+                .unwrap();
+            expression.task = Some(spurious);
+        } else {
+            function
+                .expressions
+                .values_mut()
+                .find(|expression| expression.task.is_some())
+                .unwrap()
+                .task = None;
+        }
+        let rust_error = crate::emit::rust(&checked).unwrap_err();
+        assert!(
+            rust_error.contains("checked Task use plan"),
+            "mutation {mutation}: {rust_error}"
+        );
+        let go_error = crate::go_backend::source(&checked, &[], crate::project::BuildProfile::Dev)
+            .unwrap_err();
+        assert!(
+            go_error.contains("checked Task use plan"),
+            "mutation {mutation}: {go_error}"
+        );
+    }
 }
 
 #[test]

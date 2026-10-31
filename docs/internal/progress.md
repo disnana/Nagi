@@ -1,5 +1,13 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-31: private Task use planの抽出（未リリース）
+
+#209がmain `6ab561f`へ反映された後、branch `feat/task-use-plan-20261031`で既存Rust loweringのTask受取・放棄判断をprivate `TaskUsePlan`へ抽出した。planは式とoperandの`ExprUseId`、`ScopeId`、受取時のtarget-neutral出力型、または出力を捨ててもscopeのjoin責任を残すmodeをchecker sealで保持する。`await task`は実join後の値を受け取り、入れ子の`Result`を平坦化しない。`std.task.discard(task)`（import後は`discard(task)`）は出力だけを放棄し、detach・cancel・scope fault責任の除去にはしない。join/cancel/drainは既存`ScopeExitPlan`に残す。
+
+Rust emitterは封印planを消費して既存出力を維持する。共有emission検査は、従来検査していなかったTask planの欠落・余分なplan・expression/operand/scope/mode/output改竄をRust/Go両入口で拒否する。Rust keywordと衝突するTask出力型もsemantic identityのまま保持し、Rust名を中立planへ混ぜない。公開Go task/scope、goroutine、cancel/join、runtime/APIは追加していない。
+
+Linux x86_64、Rust 1.99.1で、plan unit 2件、関連task unit 6件、scope-exit unit 4件、task handles 8件、実runtime scope contract 1件、Goのscope拒否1件が成功した。task handlesの初回6失敗はnative testが`--offline`で未取得のlock依存を読めなかった検証環境のcache不足であり、`cargo fetch --locked`後の同一8件は全成功した。fmtとdiff空白検査も成功。独立reviewで欠落planの直接回帰と実構文表記の不足を検出し、修正後の再reviewは未解決0件。全workspace、macOS/Windows、exact-head CIは未実施である。Clippyは専用cacheが空の状態で容量下限へ近づいたため中断し、exact-head CIの必須検査へ委ねる。最低空き8GiB guardを維持し、検証中の最低観測は8.0GiB、cache整理後は8.8GiB。merge/tag/releaseなし。
+
 ## 2026-10-30: private Task spawn planの抽出（未リリース）
 
 #208がmain `fc7bc42`へ反映された後、branch `feat/task-spawn-plan-20261030`で既存Rust loweringのspawn判断をprivate `TaskSpawnPlan`へ抽出した。stable ScopeId、Legacy/TaskScope bridge、Future呼出しidentity、Task binding identity、legacy unit child、legacy Result childのscope fault昇格、値Taskの出力型をchecker sealで保持する。Rust emitterは分散したscope/bridge/result boolを再推測せずplanを消費する。Goはplan欠落・scope/bridge/invocation/binding/output/outcome改竄をtoolchain起動前の共有emission境界で拒否し、公開Scope/Spawn/SpawnBindのunsupported拒否を維持する。

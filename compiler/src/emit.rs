@@ -2,7 +2,8 @@ use crate::ast::*;
 use crate::checked::{
     BlockPlan, CheckedProgram, CompareRead, CopyRead, EmissionPlan, ErrorDestination,
     ExpressionKey, ExpressionPlan, FunctionPlan, IteratorRead, MainError, ScopeBodyErrorExit,
-    ScopeBridge, ScopeNormalExit, ScopeOwnerTeardown, StaticRead, TaskSpawnMode, ViewRead,
+    ScopeBridge, ScopeNormalExit, ScopeOwnerTeardown, StaticRead, TaskSpawnMode, TaskUseMode,
+    ViewRead,
 };
 use crate::diagnostics::Generated;
 use std::{
@@ -601,8 +602,8 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
             }
         }
         E::Await(x) => {
-            if let Some(use_) = types.expression(e).task {
-                assert_eq!(use_.action, TaskAction::Receive);
+            if let Some(use_) = types.expression(e).task.as_ref() {
+                assert!(matches!(use_.mode, TaskUseMode::ReceiveJoinedValue { .. }));
                 format!(
                     "__nagi_task_scope_{}.receive({}).await",
                     use_.scope.0,
@@ -614,8 +615,8 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
         }
         E::Try(x) => try_result(re(x, types), types),
         E::Call(n, ts, a) => {
-            if let Some(use_) = types.expression(e).task {
-                assert_eq!(use_.action, TaskAction::Discard);
+            if let Some(use_) = types.expression(e).task.as_ref() {
+                assert!(matches!(use_.mode, TaskUseMode::DiscardOutputKeepScopeJoin));
                 return format!(
                     "__nagi_task_scope_{}.discard({})",
                     use_.scope.0,
