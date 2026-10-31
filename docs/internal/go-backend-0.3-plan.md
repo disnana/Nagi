@@ -1,6 +1,6 @@
 # Nagi 0.3.0: Goバックエンド段階実装計画
 
-状態: **段階実装中の採用計画**。初版の基点はmain `0d1884cb5a24235a440811a9f5d16be1bf5a664a`（2026-10-26）で、0.2系の保守公開と0.3.0開発を分離し、Rust既定を保ったままRust以外の生成先を追加する。最小Go backend、3 OS必須gate、List/Range、明示move、payloadなしenum、共有conformance、private lifecycle kernel、cold user async、callback identity、read-only `view[str]`、user async引数のsealed capture facts、G3aの限定capture release、private `ScopeExitPlan`までを実装・検証した。`ScopeExitPlan`の#208はmain `fc7bc42`へマージ済みの未リリース開発sliceであり、HTTP/DB/auth/actor/task/scope、一般borrow、完全なcleanup、性能優位、本番利用可能、0.3.0の公開日を約束しない。
+状態: **段階実装中の採用計画**。初版の基点はmain `0d1884cb5a24235a440811a9f5d16be1bf5a664a`（2026-10-26）で、0.2系の保守公開と0.3.0開発を分離し、Rust既定を保ったままRust以外の生成先を追加する。最小Go backend、3 OS必須gate、List/Range、明示move、payloadなしenum、共有conformance、private lifecycle kernel、cold user async、callback identity、read-only `view[str]`、user async引数のsealed capture facts、G3aの限定capture release、private `ScopeExitPlan`と`TaskSpawnPlan`までを実装・検証した。`ScopeExitPlan`の#208と`TaskSpawnPlan`の#209はmain `6ab561f`までにマージ済みの未リリース開発sliceであり、HTTP/DB/auth/actor/task/scope、一般borrow、完全なcleanup、性能優位、本番利用可能、0.3.0の公開日を約束しない。
 
 ## 決定済みの方向
 
@@ -25,6 +25,8 @@
 最初の限定sliceでは、既存Rustのscope退出判断だけをprivateなtarget-neutral `ScopeExitPlan`へ抽出した。stable ScopeId、Legacy/TaskScope bridge、外側のerror destination、lexical bodyの退出先、正常join、body locals退役後のcancel/drainと元error伝播、同期owner teardownのabort要求までをchecker sealで保持・検証する。Rust emitterはこのplanを消費し、既存のTaskUseによる受取/放棄identityを維持する。Goは欠落・不整合factsを共有境界で拒否し、Scope/Spawn/SpawnBindのunsupported拒否を維持する。
 
 次の限定sliceでは、legacy `spawn`と値を返すTask生成をprivateなtarget-neutral `TaskSpawnPlan`へ分離する。stable ScopeId、Legacy/TaskScope bridge、Future呼出しidentity、Task binding identity、legacy child Resultをscope faultへ昇格する経路とTaskのResult値を区別してsealする。Rust emitterは同じplanを消費して既存出力を維持し、Goは改竄されたplanを共有境界で拒否する。これもGo task/scope、goroutine、cancel token、一般owner retirement、resource close、cancel後の実joinを有効化する実装ではない。
+
+三つ目の限定sliceでは、Taskの受取と放棄をprivateなtarget-neutral `TaskUsePlan`へ分離する。式とoperandの`ExprUseId`、`ScopeId`、受取時の出力型、または出力だけを捨ててscopeのjoin責任を残すmodeをsealする。`await`は実join後の値を受け取り、入れ子の`Result`を平坦化しない。`discard`はdetach/cancelではなく、join・fault伝播・cleanupは`ScopeExitPlan`に残る。Rust emitterは同じ意味を維持し、Go入口は欠落・改竄されたplanをtoolchain起動前に拒否する。このsliceも公開Go task/scope、goroutine、cancel/join、runtime/APIを有効化しない。
 
 ## CLIとproject設定
 
