@@ -1,0 +1,201 @@
+---
+title: nagicコマンド
+description: 公開版Nagi 0.2.3の検査、ビルド、実行、コードマップと主要オプションを、動く例で確認します。
+status: released
+since: "0.1.6"
+backends: [rust]
+---
+
+`nagic`はNagiのコンパイラです。このページは公開版 **Nagi 0.2.3** のコマンドを説明します。まず版とヘルプを確認できます。この操作にRustやプロジェクト設定は要りません。
+
+```sh
+nagic --version
+nagic --help
+```
+
+表示例:
+
+```text
+nagic 0.2.3
+```
+
+## 最小ファイルを検査して実行する
+
+次を`hello.nagi`として保存します。
+
+```nagi
+def main():
+    print("Hello, Nagi!")
+```
+
+型・所有権・構文だけを先に調べるには`check`、ネイティブ実行ファイルを作ってそのまま起動するには`run`を使います。
+
+```sh
+nagic check hello.nagi --no-project
+nagic run hello.nagi --no-project --profile dev
+```
+
+実行結果:
+
+```text
+Hello, Nagi!
+```
+
+明示した`SOURCE`は単独の入力として扱われます。近くに`nagi.toml`があっても自動では読みません。`--no-project`は、その意図をコマンド上でも明確にするオプションです。
+
+## 日常的に使うコマンド
+
+| コマンド | 何をするか | Cargo / アプリ起動 |
+| --- | --- | --- |
+| `nagic check [SOURCE]` | 構文、型、所有権を検査する | どちらもしない |
+| `nagic lower [SOURCE]` | 検査し、再読込できる`generated.low`を書く | どちらもしない |
+| `nagic build [SOURCE]` | ネイティブ実行ファイルを作る | Cargoを使う。起動しない |
+| `nagic run [SOURCE]` | ネイティブ実行ファイルを作って起動する | Cargoを使い、成功後に起動する |
+| `nagic map ...` | 型、モジュール、関数呼出しを静的に図へ変換する | どちらもしない |
+| `nagic version` | コンパイラの版を表示する | どちらもしない |
+
+`symbols`と`assist`はエディター連携用のJSONコマンドです。通常のアプリ開発では直接使いません。`cache inspect`は指定した生成先とCargoキャッシュを読み取り専用で観測する上級者向けコマンドです。ライブラリを取得する`nagic install <package>`は0.2.3にはありません。
+
+生成したLowを確認または再読込する場合は、`lower`の生成先を明示できます。
+
+```sh
+nagic lower hello.nagi --no-project --out build/lowered
+nagic check build/lowered/generated.low --no-project
+```
+
+アプリを起動せず実行ファイルだけを作る場合は`build`です。
+
+```sh
+nagic build hello.nagi --no-project --profile release
+```
+
+## プロジェクトを使う
+
+複数ファイルのアプリでは、入口を`nagi.toml`へ書きます。
+
+```toml
+entry = "src/main.nagi"
+```
+
+設定ファイルのあるディレクトリ、またはその下のディレクトリでは、`SOURCE`を省略すると最も近い`nagi.toml`を上方向へ探します。
+
+```sh
+nagic check
+nagic run --profile dev
+```
+
+別の場所から選ぶ場合は、ディレクトリまたは設定ファイルを指定します。
+
+```sh
+nagic check --project ./my-app
+nagic run --project ./my-app/nagi.toml --profile dev
+```
+
+`SOURCE`とプロジェクト設定を一緒に使う場合だけ、`--project`を明示します。`nagic run src/main.nagi`だけでは設定内のnative/Rust依存を読みません。
+
+## `nagic map`でコードの関係を見る
+
+`map`はチェック済みのNagiソースから次の3種類を作ります。
+
+| view | 内容 |
+| --- | --- |
+| `types` | classなどの型と、その参照関係。view省略時の既定値 |
+| `modules` | 読み込んだモジュール間の関係 |
+| `calls` | 関数の呼出し関係 |
+
+この例を`map_example.nagi`として保存します。
+
+```nagi
+class User:
+    name: str
+
+def make_user() -> User:
+    return User(name="Nagi")
+
+def main():
+    user = make_user()
+    print(user.name)
+```
+
+既定のMermaidを標準出力へ表示します。
+
+```sh
+nagic map calls map_example.nagi
+```
+
+この例の`calls` viewには`main`と`make_user`の2ノードと、1本の呼出し関係が入ります。
+
+viewを省略した`nagic map map_example.nagi`は`types`を選びます。classや型関係がない関数だけのプログラムでは、`types`が`No matching definitions`（JSONでは0ノード）になることがあります。ファイル読込みの失敗ではありません。関数を見る場合は`calls`、ファイル間の関係を見る場合は`modules`を明示してください。
+
+ブラウザーで単独表示できるHTMLへ保存します。**mapの保存先は`--output`**です。
+
+```sh
+nagic map calls map_example.nagi --format html --output calls.html
+```
+
+ツールで処理するJSON、またはD2のテキストも出力できます。
+
+```sh
+nagic map types map_example.nagi --format json --output types.json
+nagic map modules map_example.nagi --format d2 --output modules.d2
+```
+
+`--out`は`check`、`lower`、`build`、`run`の生成コード用ディレクトリです。`map`では使えず、誤用すると`map uses --output FILE`という診断になります。
+
+### 絞り込みと画像出力
+
+`--module NAME`でモジュールを選び、`--focus NAME --depth N`で定義からN段までに絞れます。`--module`にはimportのルート別名（`import models as inventory`なら`inventory`）、またはJSON出力にある完全なmodule IDを指定します。
+
+```sh
+nagic map types --project ./my-app --focus User --depth 1 --format html --output user-types.html
+```
+
+`mermaid`、`d2`、`json`、`html`は`nagic`だけで作れます。`svg`と`png`はローカルの[D2](https://d2lang.com/)と`--output`が必要です。
+
+```sh
+nagic map modules --project ./my-app --format svg --output modules.svg --layout elk
+```
+
+`architecture`、`dataflow`、`trace`、`cost` viewは0.2.3では未実装です。ソースの検査に失敗した場合、`map`は元のNagiファイルと行を診断し、指定した出力を新規作成・更新しません。既に同名のファイルがあれば、その内容を保持します。また、読み込んだソースや`nagi.toml`を`--output`で上書きすることも拒否します。
+
+## ビルド用の主要オプション
+
+| オプション | 対象 | 用途 |
+| --- | --- | --- |
+| `--profile dev\|release` | `build`, `run` | 開発用またはreleaseビルドを選ぶ。既定は`release` |
+| `--runtime-profile full\|auto` | `build`, `run` | runtime依存を選ぶ。既定は`full` |
+| `--out DIR` | `check`, `lower`, `build`, `run` | 生成コードのディレクトリを選ぶ |
+| `--build-stats` | `build`, `run` | ビルド時間とCargo再利用情報をstderrへJSONで出す |
+| `--incremental[=units]` | `build`, `run` | `--profile dev`で生成単位を再利用する |
+| `--seed-lock` | `build`, `run` | 配布物付属の初期依存lockを明示的に使う |
+| `--cost-report` | `check`, `lower`, `build`, `run` | allocation/copyの静的な費用レポートを書く |
+| `--rust-diagnostics` | `build`, `run` | 生成Rustの診断詳細も表示する |
+| `--native FILE.low` | ソースを読むコマンド | 手書きLowを加える |
+| `--rust FILE.rs` | ソースを読むコマンド | Rustアダプターを加える |
+| `--rust-dep NAME=VERSION` | ソースを読むコマンド | Rust依存を1つ加える |
+| `--sql-schema FILE --sql-dialect sqlite` | `check` | DDL snapshotに対してliteral SQLを検査する |
+
+配布用は`--profile release`、編集中は`--profile dev`を使えます。`--incremental`はdevの`build`/`run`専用です。
+
+```sh
+nagic run --project ./my-app --profile dev --incremental --build-stats
+nagic build --project ./my-app --profile release
+```
+
+## エディター連携とキャッシュ観測
+
+`symbols`は読み込んだ定義と参照位置をJSONで標準出力へ返します。ビルドやアプリ起動は行いません。
+
+```sh
+nagic symbols --project ./my-app > symbols.json
+```
+
+`assist --editor-input`と`assist --editor-input --serve`はVS Code/JetBrains連携の内部プロトコルです。標準入力にeditor bufferのJSONが必要なので、人がソースを検査する用途では`check`を使ってください。
+
+`cache inspect`は自動で場所を探しません。2つの絶対パスと、件数・深さの上限をすべて指定すると、version付きJSONを標準出力へ返します。削除や掃除は行いません。
+
+```text
+nagic cache inspect --out-root ABS --cargo-root ABS --max-entries 4096 --max-depth 64
+```
+
+正確な利用可能オプションは、導入済みの版で`nagic --help`を実行して確認してください。開発中のGoターゲットは公開0.2.3に含まれません。対応状況は[ターゲット別の対応表](../reference/support)で確認できます。

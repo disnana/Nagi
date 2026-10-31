@@ -1,0 +1,77 @@
+---
+title: Nagiをインストール
+description: 公開版Nagi 0.2.3を導入し、nagicコマンドとネイティブアプリのビルド環境を確認します。
+status: released
+since: "0.1.6"
+backends: [rust]
+---
+
+## コンパイラを導入する
+
+利用しているOSのコマンドを実行します。インストーラーは最新の公開リリースを取得し、SHA-256を確認してから、管理者権限なしで`nagic`を導入します。
+
+### Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1')))
+```
+
+### Linux / macOS
+
+```sh
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash) && export PATH="$HOME/.local/bin:$PATH"
+```
+
+同じターミナルで導入結果を確認します。現在の公開版では`nagic 0.2.3`と表示されます。
+
+```sh
+nagic --version
+nagic --help
+```
+
+VS CodeやJetBrains IDEを開いていた場合は、`nagic`を見つけられるようにIDEを再起動してください。
+
+## アプリのビルドに必要なもの
+
+配布された`nagic`のバージョン表示や型検査だけなら、Rustは不要です。`nagic build`や`nagic run`でネイティブ実行ファイルを作る場合は、次も用意します。
+
+- [stable Rust / Cargo](https://www.rust-lang.org/tools/install)
+- Windows: Visual Studio Build ToolsのC++ビルドツール、または対応するMSYS2/MinGW環境
+- macOS: `xcode-select --install`で導入するCommand Line Tools
+- Linux: Cコンパイラ、リンカー、`pkg-config`
+
+準備できたら[最初のNagiプログラム](../writing)を検査して実行します。各コマンドとオプションは[`nagic`コマンド](../commands)で確認できます。
+
+## 更新する、版を固定する
+
+同じインストールコマンドを再実行すると、Latestの公開版を検証して切り替えます。更新に失敗した場合は、以前のコマンドとPATHを維持します。特定版を導入する場合はバージョンを明示します。
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.ps1'))) -Version 0.2.3
+```
+
+```sh
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/install.sh | bash -s -- --version 0.2.3) && export PATH="$HOME/.local/bin:$PATH"
+```
+
+これはNagiコンパイラ本体の導入です。Nagiライブラリを取得する`nagic install <package>`コマンドは、0.2.3にはありません。
+
+## エディター拡張
+
+- [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Disnana.nagi-lang)
+- [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34891-nagi)
+- 手動導入用のVSIX・ZIPとチェックサムは[GitHub Releases](https://github.com/disnana/Nagi/releases)
+
+エディター拡張にコンパイラは含まれません。このページの手順で`nagic`も導入してください。
+
+## アンインストール
+
+```powershell
+& ([scriptblock]::Create((Invoke-RestMethod 'https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.ps1')))
+```
+
+```sh
+(set -o pipefail; curl -fsSL https://raw.githubusercontent.com/disnana/Nagi/main/scripts/uninstall.sh | bash)
+```
+
+保存先やPATH設定を変更した場合は、インストール時と同じオプションをアンインストーラーへ渡します。

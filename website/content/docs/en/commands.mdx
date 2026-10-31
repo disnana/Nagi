@@ -1,0 +1,201 @@
+---
+title: nagic commands
+description: Use the checks, builds, runs, code maps, and main options in published Nagi 0.2.3 with working examples.
+status: released
+since: "0.1.6"
+backends: [rust]
+---
+
+`nagic` is the Nagi compiler. This page documents commands in published **Nagi 0.2.3**. Start by checking the version and help. Neither command needs Rust or a project configuration.
+
+```sh
+nagic --version
+nagic --help
+```
+
+Example output:
+
+```text
+nagic 0.2.3
+```
+
+## Check and run one file
+
+Save this as `hello.nagi`.
+
+```nagi
+def main():
+    print("Hello, Nagi!")
+```
+
+Use `check` to validate syntax, types, and ownership first. Use `run` to build a native executable and then start it.
+
+```sh
+nagic check hello.nagi --no-project
+nagic run hello.nagi --no-project --profile dev
+```
+
+Output:
+
+```text
+Hello, Nagi!
+```
+
+An explicit `SOURCE` is treated as a standalone input. A nearby `nagi.toml` is not loaded automatically. `--no-project` also makes that intent visible in the command.
+
+## Everyday commands
+
+| Command | What it does | Cargo / app execution |
+| --- | --- | --- |
+| `nagic check [SOURCE]` | Checks syntax, types, and ownership | Neither |
+| `nagic lower [SOURCE]` | Checks and writes a reloadable `generated.low` | Neither |
+| `nagic build [SOURCE]` | Builds a native executable | Uses Cargo; does not start the app |
+| `nagic run [SOURCE]` | Builds and starts a native executable | Uses Cargo and starts the app after success |
+| `nagic map ...` | Statically maps types, modules, or function calls | Neither |
+| `nagic version` | Prints the compiler version | Neither |
+
+`symbols` and `assist` are JSON commands for editor integration, not ordinary application workflows. `cache inspect` is an advanced, read-only observation of explicitly selected generated-output and Cargo cache roots. Nagi 0.2.3 does not provide `nagic install <package>` for downloading libraries.
+
+Select the output directory when you want to inspect or reload saved Low.
+
+```sh
+nagic lower hello.nagi --no-project --out build/lowered
+nagic check build/lowered/generated.low --no-project
+```
+
+Use `build` to create the executable without starting it.
+
+```sh
+nagic build hello.nagi --no-project --profile release
+```
+
+## Use a project
+
+For a multi-file application, record the entry point in `nagi.toml`.
+
+```toml
+entry = "src/main.nagi"
+```
+
+When `SOURCE` is omitted, `nagic` searches upward from the current directory for the nearest `nagi.toml`.
+
+```sh
+nagic check
+nagic run --profile dev
+```
+
+Select another project with a directory or the manifest itself.
+
+```sh
+nagic check --project ./my-app
+nagic run --project ./my-app/nagi.toml --profile dev
+```
+
+Specify `--project` when combining an explicit `SOURCE` with project settings. `nagic run src/main.nagi` alone does not load native or Rust dependencies from the manifest.
+
+## Inspect relationships with `nagic map`
+
+`map` derives three views from checked Nagi source.
+
+| View | Contents |
+| --- | --- |
+| `types` | Classes and other types with their relationships; the default view |
+| `modules` | Relationships between loaded modules |
+| `calls` | Function call relationships |
+
+Save this example as `map_example.nagi`.
+
+```nagi
+class User:
+    name: str
+
+def make_user() -> User:
+    return User(name="Nagi")
+
+def main():
+    user = make_user()
+    print(user.name)
+```
+
+Print the default Mermaid format to stdout.
+
+```sh
+nagic map calls map_example.nagi
+```
+
+For this example, the `calls` view contains two nodes (`main` and `make_user`) and one call relationship.
+
+`nagic map map_example.nagi` without a view selects `types`. A function-only program with no class or type relationship can therefore report `No matching definitions` (zero nodes in JSON). This does not mean that source loading failed. Select `calls` for functions or `modules` for relationships between files.
+
+Write a standalone HTML file that opens in a browser. **A map destination uses `--output`.**
+
+```sh
+nagic map calls map_example.nagi --format html --output calls.html
+```
+
+JSON for tools and D2 source are available as well.
+
+```sh
+nagic map types map_example.nagi --format json --output types.json
+nagic map modules map_example.nagi --format d2 --output modules.d2
+```
+
+`--out` selects the generated-code directory for `check`, `lower`, `build`, and `run`. It is not a map option; using it with `map` reports `map uses --output FILE`.
+
+### Filters and image output
+
+Select a module with `--module NAME`. Use the root import alias (`inventory` for `import models as inventory`) or a complete module ID from JSON output. Limit the graph to a definition and N relationship levels with `--focus NAME --depth N`.
+
+```sh
+nagic map types --project ./my-app --focus User --depth 1 --format html --output user-types.html
+```
+
+`mermaid`, `d2`, `json`, and `html` need only `nagic`. `svg` and `png` need local [D2](https://d2lang.com/) and `--output`.
+
+```sh
+nagic map modules --project ./my-app --format svg --output modules.svg --layout elk
+```
+
+The `architecture`, `dataflow`, `trace`, and `cost` views are not implemented in 0.2.3. If source checking fails, `map` reports the original Nagi file and line without creating or updating the requested output. An existing file at that path is preserved. It also refuses to overwrite loaded source or `nagi.toml` through `--output`.
+
+## Main build options
+
+| Option | Commands | Purpose |
+| --- | --- | --- |
+| `--profile dev\|release` | `build`, `run` | Select a development or release build; default `release` |
+| `--runtime-profile full\|auto` | `build`, `run` | Select runtime dependencies; default `full` |
+| `--out DIR` | `check`, `lower`, `build`, `run` | Select the generated-code directory |
+| `--build-stats` | `build`, `run` | Write build timing and Cargo reuse JSON to stderr |
+| `--incremental[=units]` | `build`, `run` | Reuse generated units with `--profile dev` |
+| `--seed-lock` | `build`, `run` | Explicitly use the initial dependency lock bundled with the distribution |
+| `--cost-report` | `check`, `lower`, `build`, `run` | Write a static allocation/copy cost report |
+| `--rust-diagnostics` | `build`, `run` | Include generated Rust diagnostic details |
+| `--native FILE.low` | source-reading commands | Add handwritten Low |
+| `--rust FILE.rs` | source-reading commands | Add a Rust adapter |
+| `--rust-dep NAME=VERSION` | source-reading commands | Add one Rust dependency |
+| `--sql-schema FILE --sql-dialect sqlite` | `check` | Check literal SQL against a DDL snapshot |
+
+Use `--profile dev` while editing and `--profile release` for distribution builds. `--incremental` is limited to dev `build`/`run` commands.
+
+```sh
+nagic run --project ./my-app --profile dev --incremental --build-stats
+nagic build --project ./my-app --profile release
+```
+
+## Editor integration and cache observation
+
+`symbols` writes loaded definitions and reference locations as JSON on stdout. It does not build or start the application.
+
+```sh
+nagic symbols --project ./my-app > symbols.json
+```
+
+`assist --editor-input` and `assist --editor-input --serve` are internal protocols used by VS Code and JetBrains integration. They require editor-buffer JSON on stdin. Use `check` for a human-operated source check.
+
+`cache inspect` does not discover locations automatically. Supply two absolute paths and both entry/depth bounds to receive versioned JSON on stdout. It never deletes or cleans files.
+
+```text
+nagic cache inspect --out-root ABS --cargo-root ABS --max-entries 4096 --max-depth 64
+```
+
+Run `nagic --help` with the installed version for the exact available options. The Go target under development is not part of published Nagi 0.2.3. See the [target support matrix](../reference/support) for its status.

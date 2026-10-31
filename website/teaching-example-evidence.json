@@ -7,9 +7,29 @@
     "compilerSha256": "96862e06537394d5a98e85b53f6e5e1e0c95908ea8c7efac7fa061536b1b0539"
   },
   "compilerCheck": {
-    "checkedAt": "2026-10-30",
+    "checkedAt": "2026-10-31",
     "result": "passed",
     "blocks": [
+      {
+        "page": "commands.mdx",
+        "block": 1,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "7673e8b9878fa91190224fb6668c6df6d914073ca5f27aa473113a9c461e3126",
+        "validation": "nagic-check-public-0.2.3"
+      },
+      {
+        "page": "commands.mdx",
+        "block": 2,
+        "locales": [
+          "ja",
+          "en"
+        ],
+        "sha256": "9ad1b856450555cca9c676df862fbe519b3957f510c29a023be182bd62c85252",
+        "validation": "nagic-check-and-map-public-0.2.3"
+      },
       {
         "page": "backend/http.mdx",
         "block": 1,

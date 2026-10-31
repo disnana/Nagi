@@ -16,6 +16,49 @@ test('Japanese and English pages remain separate and navigable', async ({ page }
   await expect(page.getByRole('button', { name: 'Open Search' })).toBeVisible();
 });
 
+test('installation guide is discoverable and the old route points to it', async ({ page }) => {
+  await page.goto(sitePath('/'));
+  await page.getByRole('link', { name: 'Nagiをインストール', exact: true }).click();
+  await expect(page).toHaveURL(/\/docs\/install\/$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Nagiをインストール' })).toBeVisible();
+  await expect(page.locator('pre').filter({ hasText: 'scripts/install.ps1' }).first()).toBeVisible();
+  await expect(page.locator('pre').filter({ hasText: 'scripts/install.sh' }).first()).toBeVisible();
+
+  await page.goto(sitePath('/docs/getting-started/'));
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    'href',
+    'https://nagi.disnana.com/docs/install/',
+  );
+  await page.getByRole('link', { name: '新しいページを開く' }).click();
+  await expect(page).toHaveURL(/\/docs\/install\/$/);
+
+  await page.goto(sitePath('/en/docs/getting-started/'));
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    'href',
+    'https://nagi.disnana.com/en/docs/install/',
+  );
+  await page.getByRole('link', { name: 'Open the new page' }).click();
+  await expect(page).toHaveURL(/\/en\/docs\/install\/$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Install Nagi' })).toBeVisible();
+});
+
+test('command guide documents runnable map output without claiming package install', async ({ page }) => {
+  await page.goto(sitePath('/docs/commands/'));
+  await expect(page.getByRole('heading', { level: 1, name: 'nagicコマンド' })).toBeVisible();
+  await expect(page.locator('pre').filter({ hasText: 'nagic map calls map_example.nagi' }).first()).toBeVisible();
+  await expect(page.getByText('No matching definitions', { exact: false })).toBeVisible();
+  await expect(page.getByText('map uses --output FILE', { exact: false })).toBeVisible();
+  const japaneseInstallStatus = page.locator('p').filter({ hasText: 'nagic install <package>' });
+  await expect(japaneseInstallStatus).toContainText('0.2.3にはありません');
+
+  await page.goto(sitePath('/en/docs/commands/'));
+  await expect(page.getByRole('heading', { level: 1, name: 'nagic commands' })).toBeVisible();
+  await expect(page.locator('pre').filter({ hasText: 'nagic map calls map_example.nagi' }).first()).toBeVisible();
+  await expect(page.getByText('No matching definitions', { exact: false })).toBeVisible();
+  const englishInstallStatus = page.locator('p').filter({ hasText: 'nagic install <package>' });
+  await expect(englishInstallStatus).toContainText('does not provide');
+});
+
 test('language switch preserves the equivalent docs route', async ({ page }) => {
   await page.goto(sitePath('/docs/writing/#keep-me'));
   const japaneseSwitch = page.getByRole('button', { name: '表示言語を選択: 日本語' }).first();
