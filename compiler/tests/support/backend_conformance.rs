@@ -33,6 +33,21 @@ use windows_sys::Win32::{
     System::Threading::{GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
 };
 
+#[cfg(windows)]
+const WINDOWS_JOB_FIXTURE_TEST: &str =
+    "shared_oracle_rejects_wrong_results_and_keeps_infra_distinct";
+#[cfg(windows)]
+const WINDOWS_JOB_FIXTURE_ROLE: &str = "NAGI_BACKEND_CONFORMANCE_JOB_ROLE";
+#[cfg(windows)]
+const WINDOWS_JOB_FIXTURE_ROOT: &str = "NAGI_BACKEND_CONFORMANCE_JOB_ROOT";
+
+#[cfg(windows)]
+fn windows_job_fixture_markers(root: &Path) -> String {
+    let pid = fs::read_to_string(root.join("child.pid"));
+    let ready = fs::read_to_string(root.join("child.ready"));
+    format!("pid={pid:?} ready={ready:?}")
+}
+
 #[cfg(unix)]
 unsafe extern "C" {
     fn kill(pid: i32, signal: i32) -> i32;
@@ -989,6 +1004,86 @@ pub fn fake_observation(
     }
 }
 
+/// Re-enter the existing Go integration test as a native Windows Job fixture.
+/// The normal test process has no role environment and returns `false`. The
+/// leader starts the same test as a descendant, waits until that process has
+/// proved it is alive, and then exits normally. `capture` can then terminate
+/// the completed leader's Job and verify that the descendant was reaped.
+#[cfg(windows)]
+pub fn dispatch_windows_job_fixture() -> Result<bool, String> {
+    let Some(role) = std::env::var_os(WINDOWS_JOB_FIXTURE_ROLE) else {
+        return Ok(false);
+    };
+    let root = std::env::var_os(WINDOWS_JOB_FIXTURE_ROOT)
+        .map(PathBuf::from)
+        .ok_or("Windows Job fixture role is missing its root")?;
+    let role = role
+        .to_str()
+        .ok_or("Windows Job fixture role is not UTF-8")?;
+    match role {
+        "descendant" => {
+            let pid = std::process::id().to_string();
+            fs::write(root.join("child.pid"), &pid)
+                .map_err(|error| format!("role=descendant stage=pid: {error}"))?;
+            fs::write(root.join("child.ready"), &pid)
+                .map_err(|error| format!("role=descendant stage=ready: {error}"))?;
+            std::thread::sleep(Duration::from_secs(60));
+            Ok(true)
+        }
+        "leader" => {
+            let executable = std::env::current_exe()
+                .map_err(|error| format!("role=leader stage=executable: {error}"))?;
+            let mut descendant = Command::new(executable)
+                .args(["--exact", WINDOWS_JOB_FIXTURE_TEST, "--nocapture"])
+                .env(WINDOWS_JOB_FIXTURE_ROLE, "descendant")
+                .env(WINDOWS_JOB_FIXTURE_ROOT, &root)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .map_err(|error| format!("role=leader stage=spawn: {error}"))?;
+            let expected = descendant.id().to_string();
+            let started = Instant::now();
+            while started.elapsed() < Duration::from_secs(8) {
+                match descendant.try_wait() {
+                    Ok(Some(status)) => {
+                        return Err(format!(
+                            "role=leader stage=wait-ready: descendant {expected} exited with {status}"
+                        ));
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        return Err(format!(
+                            "role=leader stage=wait-ready: cannot inspect descendant {expected}: {error}"
+                        ));
+                    }
+                }
+                if root.join("child.ready").is_file() {
+                    let pid = fs::read_to_string(root.join("child.pid"))
+                        .map_err(|error| format!("role=leader stage=pid: {error}"))?;
+                    let ready = fs::read_to_string(root.join("child.ready"))
+                        .map_err(|error| format!("role=leader stage=ready: {error}"))?;
+                    if pid.trim() != expected || ready.trim() != expected {
+                        return Err(format!(
+                            "role=leader stage=identity: spawned={expected} pid={} ready={}",
+                            pid.trim(),
+                            ready.trim()
+                        ));
+                    }
+                    return Ok(true);
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            let killed = descendant.kill();
+            let reaped = descendant.wait();
+            Err(format!(
+                "role=leader stage=wait-ready: descendant {expected} did not become ready within 8s; kill={killed:?} wait={reaped:?}"
+            ))
+        }
+        other => Err(format!("unknown Windows Job fixture role {other:?}")),
+    }
+}
+
 #[cfg(unix)]
 pub fn deadline_reaps_descendant() -> Result<(), String> {
     let fixture = Fixture::new("deadline-tree").map_err(|error| error.to_string())?;
@@ -1032,28 +1127,33 @@ pub fn deadline_reaps_descendant() -> Result<(), String> {
 #[cfg(windows)]
 pub fn deadline_reaps_descendant() -> Result<(), String> {
     let fixture = Fixture::new("job-tree").map_err(|error| error.to_string())?;
-    let pid_path = fixture.0.join("child.pid");
-    let pid_path = pid_path.display().to_string().replace('\'', "''");
-    let parent = format!(
-        "$p=[System.Diagnostics.Process]::Start('powershell.exe','-NoProfile -Command Start-Sleep -Seconds 300'); [System.IO.File]::WriteAllText('{pid_path}',$p.Id.ToString()); [System.Environment]::Exit(0)"
-    );
-    let mut command = Command::new("powershell.exe");
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("cannot resolve current test executable: {error}"))?;
+    let mut command = Command::new(executable);
     command
-        .args(["-NoProfile", "-Command", &parent])
+        .args(["--exact", WINDOWS_JOB_FIXTURE_TEST, "--nocapture"])
+        .env(WINDOWS_JOB_FIXTURE_ROLE, "leader")
+        .env(WINDOWS_JOB_FIXTURE_ROOT, &fixture.0)
         .current_dir(&fixture.0);
     let output = capture(
         &mut command,
         Backend::Go,
         Stage::Compile,
-        Duration::from_secs(10),
+        Duration::from_secs(15),
         &fixture,
         "job-tree",
     )
-    .map_err(|error| format!("leader-exit Job regression failed: {error}"))?;
+    .map_err(|error| {
+        format!(
+            "leader-exit Job regression failed: role=leader {}: {error}",
+            windows_job_fixture_markers(&fixture.0)
+        )
+    })?;
     if !output.status.success() {
         return Err(format!(
-            "leader-exit fixture failed {:?}: {}{}",
+            "leader-exit fixture failed {:?}: role=leader {}: {}{}",
             output.status.code(),
+            windows_job_fixture_markers(&fixture.0),
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         ));
