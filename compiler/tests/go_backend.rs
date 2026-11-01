@@ -308,6 +308,14 @@ fn go_backend_runs_cold_user_async_from_high_saved_low_and_main() {
     assert!(go.contains("future.body = nil"));
     assert!(go.contains("defer func() { body = nil }()"));
     assert!(go.contains("__nagi_capture_"));
+    assert!(
+        !go.contains("taskscope"),
+        "private Task kernel leaked into generated Go"
+    );
+    assert!(
+        !go.contains("nagiTaskScope"),
+        "private Task API leaked into generated Go"
+    );
 
     fixture.write(
         "out-high-async/go/future_test.go",

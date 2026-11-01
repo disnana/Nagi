@@ -89,23 +89,72 @@ pub fn private_lifecycle_contracts(directory: &Path) -> Result<(), String> {
             String::from_utf8_lossy(&output.stderr)
         ));
     }
+    let lifecycle = "nagi.internal/go-runtime/internal/lifecycle";
+    let taskscope = "nagi.internal/go-runtime/internal/taskscope";
     let expected = std::collections::BTreeSet::from([
-        "TestRegistrationAndColdStart",
-        "TestQueuedWorkerFailureCannotBecomeLateCancellation",
-        "TestOneForOnePanicRestart",
-        "TestTemporaryFailureIsStickyUntilHealthySiblingJoins",
-        "TestBusinessReplyIsNotAWorkerFailure",
-        "TestPermanentCompletionUsesGlobalRestartBudget",
-        "TestRestartBudgetIsSharedAndExactBoundaryExpires",
-        "TestStopCancelsPendingRestartAndNeverRestartsCancellation",
-        "TestStopRacesRestartRepeatedly",
-        "TestBlockedWorkerRetainsRecordUntilActualReturn",
-        "TestBlockedCleanupRunsOutsideLocksAndRetainsCompletion",
-        "TestDeferredCleanupPrecedesJoinAndFailureSurvivesStop",
-        "TestCleanupPanicAndUnstartedStop",
+        (lifecycle, "TestRegistrationAndColdStart"),
+        (
+            lifecycle,
+            "TestQueuedWorkerFailureCannotBecomeLateCancellation",
+        ),
+        (lifecycle, "TestOneForOnePanicRestart"),
+        (
+            lifecycle,
+            "TestTemporaryFailureIsStickyUntilHealthySiblingJoins",
+        ),
+        (lifecycle, "TestBusinessReplyIsNotAWorkerFailure"),
+        (lifecycle, "TestPermanentCompletionUsesGlobalRestartBudget"),
+        (
+            lifecycle,
+            "TestRestartBudgetIsSharedAndExactBoundaryExpires",
+        ),
+        (
+            lifecycle,
+            "TestStopCancelsPendingRestartAndNeverRestartsCancellation",
+        ),
+        (lifecycle, "TestStopRacesRestartRepeatedly"),
+        (lifecycle, "TestBlockedWorkerRetainsRecordUntilActualReturn"),
+        (
+            lifecycle,
+            "TestBlockedCleanupRunsOutsideLocksAndRetainsCompletion",
+        ),
+        (
+            lifecycle,
+            "TestDeferredCleanupPrecedesJoinAndFailureSurvivesStop",
+        ),
+        (lifecycle, "TestCleanupPanicAndUnstartedStop"),
+        (taskscope, "TestTaskScopeColdConcurrentChildren"),
+        (
+            taskscope,
+            "TestTaskScopeReceiveWaitsForCleanupButNotSibling",
+        ),
+        (taskscope, "TestTaskScopeDiscardKeepsJoinAndReleasesOutput"),
+        (taskscope, "TestTaskScopeHandleIdentityAndSingleConsumption"),
+        (taskscope, "TestTaskScopeFailureNeverPublishesAValue"),
+        (
+            taskscope,
+            "TestTaskScopeFailureNeverPublishesAValue/work_panic",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeFailureNeverPublishesAValue/cleanup_panic",
+        ),
+        (taskscope, "TestTaskScopeFailureNeverPublishesAValue/goexit"),
+        (
+            taskscope,
+            "TestTaskScopeFinishSealsRegistrationAndJoinsDiscarded",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeConcurrentConsumersShareReceiptState",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeFinishOverlapsClaimedReceiveAndCleanup",
+        ),
     ]);
     let mut passed = std::collections::BTreeSet::new();
-    let mut package_passes = 0;
+    let mut package_passes = std::collections::BTreeSet::new();
     for line in output
         .stdout
         .split(|byte| *byte == b'\n')
@@ -120,25 +169,29 @@ pub fn private_lifecycle_contracts(directory: &Path) -> Result<(), String> {
                 ))
             }
             Some("pass") => {
+                let package = row["Package"]
+                    .as_str()
+                    .ok_or_else(|| format!("Go test result has no package: {row}"))?;
                 if let Some(test) = row["Test"].as_str() {
-                    if !passed.insert(test.to_owned()) {
-                        return Err(format!("duplicate Go native test: {test}"));
+                    if !passed.insert((package.to_owned(), test.to_owned())) {
+                        return Err(format!("duplicate Go native test: {package}::{test}"));
                     }
-                } else {
-                    package_passes += 1;
+                } else if !package_passes.insert(package.to_owned()) {
+                    return Err(format!("duplicate Go package pass: {package}"));
                 }
             }
             _ => {}
         }
     }
-    if package_passes != 1
+    if package_passes
+        != std::collections::BTreeSet::from([lifecycle.to_owned(), taskscope.to_owned()])
         || passed
             .iter()
-            .map(String::as_str)
+            .map(|(package, test)| (package.as_str(), test.as_str()))
             .collect::<std::collections::BTreeSet<_>>()
             != expected
     {
-        return Err(format!("private Go lifecycle execution incomplete: packages={package_passes}, passed={passed:?}"));
+        return Err(format!("private Go lifecycle execution incomplete: packages={package_passes:?}, passed={passed:?}"));
     }
     Ok(())
 }

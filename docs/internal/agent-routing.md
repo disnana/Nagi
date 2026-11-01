@@ -118,6 +118,16 @@ Enter補助の独立Sol 6.1 High監査で、SDK `DocumentEx.getModificationSeque
 base `765f0b0`。Sol 6.1 High担当がread-onlyでhover/diagnostic/compiler JSONとsnapshot境界を調査し、親の設計採用後、専用worktreeでplugin実装・意味のあるnegative/実compiler/JVM表示testsを担当した。compiler/CIは変更せず、子の追加spawnなし。親はSDK bootstrapと別PRのQA・後続PR操作を担当し、Gradleは同じcacheを使うため単独実行した。必要な検証後の独立最終auditは別担当へ渡す。
 
 全214件と追加HTML renderer1件を確認し、原文保持・HTML表示・exact location接続を実fixtureで検証した。SDK準備中に編集開始したbootstrapは厳密なmain baselineと数えない。packagingのread-only data pathとVerifierのread-only home/remote接続失敗をsource不具合と分け、原ログを保持して専有設定だけを修正する。Verifier/他IDE CI/実GUIの未完gateはPRに残す。[詳細記録](jetbrains-documentation-plan.md)。モデル別時間・使用量・料金・service-tierは未計測で、テスト時間をmodel速度の比較には使わない。
+
+## 2026-10-31: Go private Task scope正常終了kernel
+
+main `012f856a`を基点に、Sol 6.1 Highが実装前にADR 012とprivate runtime境界を確認し、
+親が正常終了だけのkernel・native test・Rust完全在庫入口・内部文書を実装した。必要検証後、
+別のSol 6.1 Highがread-only最終監査を担当した。監査は即時`default` selectではgoroutine開始を
+証明しないtest gapを1件指摘し、親がReceive取得済み・Finish封印済みをlock下で観測する
+競合回帰へ修正した。通常・race各20回とRust在庫入口を再実行し、同担当が更新差分を再監査して
+blocking findingなしとした。公開Go Task/scope、fault/cancel/owner teardownは有効化していない。
+model単独時間、token、料金、service tierは観測不能。test時間はmodel速度の比較に使わない。
 ## 2026-10-22: 0.2.1の重複処理と計測基盤
 
 base `e2d7280`。Sol 6.1 Highの事前調査でparser token再利用、既存unitsの境界と将来のasync段階案を確認し、親がparser/sourceと回帰・実計測を担当した。CI担当Luna Maxの再開はcapacityエラーで実行できず、同じ証拠と限定file範囲を既存High担当へ渡した。モデル品質の失敗とは扱わず、同じ探索は繰り返さない。HighがCIの未使用release build除去・fixture cache共有・exact inverse検査を実装し、その後に独立fileの8ケースmatrix harnessとpure safety testsを担当した。親を含め最大3体、子spawnと同じfileの並行編集はなし。実行後の最終auditは実装者と別のfresh Highへ分離する。

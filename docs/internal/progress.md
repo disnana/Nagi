@@ -1,5 +1,26 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-10-31: Go private Task scope正常終了kernel（ローカル・未公開）
+
+main `012f856a`を基点に、`compiler/go-runtime/internal/taskscope`へ公開未接続の
+正常終了kernelを追加した。Task receiptをscopeへ登録してからworkを実goroutineで開始し、
+workのdeferと明示cleanupが戻った後だけ値を一回受け取る。discardは値参照だけを放棄し、
+Finishが全childの終了境界を待つ。handle copyは共有receipt stateで二重消費を拒否し、
+wrong scope・zero/forged handle・終了後Spawnをfail closedにする。Result相当の値は
+平坦化しない。Goに物理goroutine join APIはないため、completionはcallback/defer/cleanup
+のreturnを証明し、schedulerによるgoroutine破棄とは表現しない。
+
+panic、cleanup panic、Goexitは成功値を公開せずprivate failureへ閉じるだけで、公開
+TaskFailure/sticky fault/兄弟cancel/body Err優先/owner teardownは未実装。生成Go appへ
+runtimeをコピーせず、公開High/LowのScope/SpawnBind/Taskはtoolchain前拒否を維持する。
+native testはpackage/test identityの完全在庫でzero/skip/fail/重複/欠落を拒否する。
+最終差分でtaskscope通常・raceを各20回、Go module全体、Go vet、Rust側の完全在庫入口、
+公開scope拒否、cold async生成への非混入、Go backend 34件、targeted Clippyとfmtを成功確認した。
+完了channelをreceipt lock内で閉じ、Receive取得済みとFinish封印済みを観測してcleanupを
+解放する決定的競合回帰も追加した。別のSol 6.1 High最終監査は指摘修正後の差分を再確認し、
+blocking findingなし。4 OS exact-head CIはremote送信前のため未実施であり、fault/cancel/
+body Err/owner teardownと公開runtime接続は次段階に残す。
+
 ## 2026-10-31: private Task use planの抽出（未リリース）
 
 #209がmain `6ab561f`へ反映された後、branch `feat/task-use-plan-20261031`で既存Rust loweringのTask受取・放棄判断をprivate `TaskUsePlan`へ抽出した。planは式とoperandの`ExprUseId`、`ScopeId`、受取時のtarget-neutral出力型、または出力を捨ててもscopeのjoin責任を残すmodeをchecker sealで保持する。`await task`は実join後の値を受け取り、入れ子の`Result`を平坦化しない。`std.task.discard(task)`（import後は`discard(task)`）は出力だけを放棄し、detach・cancel・scope fault責任の除去にはしない。join/cancel/drainは既存`ScopeExitPlan`に残す。
