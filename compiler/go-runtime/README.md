@@ -15,7 +15,10 @@ cancellation, and is returned only after every registered child is drained.
 Business values are never flattened or reclassified as task faults. Go has no
 physical goroutine join primitive: the closed completion channel proves the
 callback, its defers, and cleanup returned, not that the runtime destroyed the
-goroutine. Body-error precedence, parent deadlines, synchronous owner teardown,
+goroutine. The private body-error exit preserves the exact generic body error
+while cancellation and actual cleanup drain complete. Synchronous owner teardown
+only seals and requests cancellation; it never reports join completion. Parent
+deadlines, automatic body-local handle retirement, legacy task-fault bridging,
 and public lowering remain intentionally unconnected. Public Nagi Task/scope
 syntax remains rejected before the Go toolchain.
 

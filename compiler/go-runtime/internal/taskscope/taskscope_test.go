@@ -728,6 +728,126 @@ func TestTaskScopePublicationOrderChoosesPrimaryAndRelated(t *testing.T) {
 	}
 }
 
+func TestTaskScopeBodyErrorPrecedesObservedFaultAndDrains(t *testing.T) {
+	type bodyFailure struct{ message string }
+
+	scope := New()
+	siblingStarted := make(chan struct{})
+	siblingCancelled := make(chan struct{})
+	cleanupStarted := make(chan struct{})
+	cleanupRelease := make(chan struct{})
+	cleanupScope(t, scope, cleanupRelease)
+	sibling, err := Spawn(scope, func(ctx context.Context) int {
+		close(siblingStarted)
+		<-ctx.Done()
+		close(siblingCancelled)
+		panic("late private fault")
+	}, func() {
+		close(cleanupStarted)
+		<-cleanupRelease
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	signal(t, siblingStarted)
+	fault, err := Spawn(scope, func(context.Context) int { panic("private") }, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signal(t, fault.receipt.done)
+	waitEntryReady(t, scope, fault.ticket)
+	if !scope.recordReady() {
+		t.Fatal("completed fault was not recorded")
+	}
+	if !errors.Is(scope.primary, ErrTaskPanicked) {
+		t.Fatalf("recorded primary = %v", scope.primary)
+	}
+	if err := Discard(scope, fault); err != nil {
+		t.Fatal(err)
+	}
+	if err := Discard(scope, sibling); err != nil {
+		t.Fatal(err)
+	}
+	signal(t, siblingCancelled)
+	signal(t, cleanupStarted)
+
+	body := &bodyFailure{message: "original body error"}
+	exited := make(chan *bodyFailure, 1)
+	go func() { exited <- FinishBodyError(scope, body) }()
+	waitScopeClosed(t, scope)
+	select {
+	case problem := <-exited:
+		t.Fatalf("body error returned before child cleanup: %p", problem)
+	default:
+	}
+	close(cleanupRelease)
+	select {
+	case problem := <-exited:
+		if problem != body {
+			t.Fatalf("body error identity changed: got %p want %p", problem, body)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("body error drain deadline exceeded")
+	}
+	if !errors.Is(scope.primary, ErrTaskPanicked) {
+		t.Fatalf("child diagnostic was lost: %v", scope.primary)
+	}
+	if len(scope.related) != 1 || !errors.Is(scope.related[0], ErrTaskPanicked) {
+		t.Fatalf("drain fault was not retained as related: %v", scope.related)
+	}
+	if len(scope.entries) != 0 {
+		t.Fatalf("body error retained %d child entries", len(scope.entries))
+	}
+}
+
+func TestTaskScopeOwnerTeardownRequestsOnlyAndSeals(t *testing.T) {
+	for iteration := 0; iteration < 64; iteration++ {
+		scope := New()
+		started := make(chan struct{})
+		cancelled := make(chan struct{})
+		cleanupStarted := make(chan struct{})
+		cleanupRelease := make(chan struct{})
+		cleanupScope(t, scope, cleanupRelease)
+		handle, err := Spawn(scope, func(ctx context.Context) int {
+			close(started)
+			<-ctx.Done()
+			close(cancelled)
+			return iteration
+		}, func() {
+			close(cleanupStarted)
+			<-cleanupRelease
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		signal(t, started)
+		if err := Discard(scope, handle); err != nil {
+			t.Fatal(err)
+		}
+
+		scope.RequestOwnerTeardown()
+		scope.RequestOwnerTeardown()
+		signal(t, cancelled)
+		signal(t, cleanupStarted)
+		select {
+		case <-handle.receipt.done:
+			t.Fatalf("iteration %d teardown reported cleanup complete", iteration)
+		default:
+		}
+		if _, err := Spawn(scope, task(func() int { return 99 }), nil); err != ErrClosed {
+			t.Fatalf("iteration %d spawn after teardown = %v", iteration, err)
+		}
+		waitRequestedCancel(t, scope, handle.ticket)
+		close(cleanupRelease)
+		if err := scope.Cancel(); err != nil {
+			t.Fatalf("iteration %d drain = %v", iteration, err)
+		}
+		if len(scope.entries) != 0 {
+			t.Fatalf("iteration %d retained %d entries", iteration, len(scope.entries))
+		}
+	}
+}
+
 func TestTaskScopeCancelDrainsWithoutInventingFailureOrConsumption(t *testing.T) {
 	t.Run("normal business value after cancellation", func(t *testing.T) {
 		scope := New()
