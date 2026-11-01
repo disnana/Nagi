@@ -28,7 +28,9 @@
 
 三つ目の限定sliceでは、Taskの受取と放棄をprivateなtarget-neutral `TaskUsePlan`へ分離する。式とoperandの`ExprUseId`、`ScopeId`、受取時の出力型、または出力だけを捨ててscopeのjoin責任を残すmodeをsealする。`await`は実join後の値を受け取り、入れ子の`Result`を平坦化しない。`discard`はdetach/cancelではなく、join・fault伝播・cleanupは`ScopeExitPlan`に残る。Rust emitterは同じ意味を維持し、Go入口は欠落・改竄されたplanをtoolchain起動前に拒否する。このsliceも公開Go task/scope、goroutine、cancel/join、runtime/APIを有効化しない。
 
-次のprivate sliceは、上記planを公開生成へまだ接続せず、Go Task scope kernelのcompletion/fault/cancel/drain境界を実行する。receipt登録後のgoroutine開始、callback/defer/明示cleanup後の一回受取、Result相当値の非平坦化、discard後も残るscope join、wrong scope/handle copyの単一消費、全child Finishを固定する。panic/Goexitをprivate faultへ閉じ、最初に観測したfaultをsticky primaryとして兄弟へcooperative cancelを要求した後、全completionをdrainする。completion channelはcallbackとcleanupのreturnを証明するが、Go runtimeによる物理goroutine破棄の証拠ではない。body Err/legacy task fault/親deadline/owner teardownは未接続のまま、公開Scope/SpawnBind/Task拒否を維持する。
+次のprivate sliceは、上記planを公開生成へまだ接続せず、Go Task scope kernelのcompletion/fault/cancel/drain境界を実行する。receipt登録後のgoroutine開始、callback/defer/明示cleanup後の一回受取、Result相当値の非平坦化、discard後も残るscope join、wrong scope/handle copyの単一消費、全child Finishを固定する。panic/Goexitをprivate faultへ閉じ、最初に観測したfaultをsticky primaryとして兄弟へcooperative cancelを要求した後、全completionをdrainする。completion channelはcallbackとcleanupのreturnを証明するが、Go runtimeによる物理goroutine破棄の証拠ではない。
+
+その次のprivate退出sliceでは、`ScopeExitPlan`の既存判断を増やさず、任意型のbody Errをkernel外に保持してcancelとactual drain後に同じ値を返す経路と、同期owner teardownがcancel要求だけを行う経路を分ける。先に観測したchild faultもbody Errを置換せず、owner teardownはcleanup完了を偽装しない。legacy task fault、親deadline、body-local Task outputの自動放棄、一般resource release、公開loweringは未接続のまま、公開Scope/SpawnBind/Task拒否を維持する。
 
 ## CLIとproject設定
 

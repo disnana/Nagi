@@ -1,6 +1,26 @@
 # コンパイラ・Rust境界の進捗
 
-## 2026-11-01: Go private Task scope fault/cancel/drain（ローカル・未公開）
+## 2026-11-01: Go private Task body error / owner teardown（ローカル・未公開）
+
+main `c16478d5`のprivate Task scope kernelへ、採用済み`ScopeExitPlan`の退出順序を
+増やさず二経路だけ追加した。`FinishBodyError[E]`は任意型の元body errorをkernelの
+fault stateへ格納・formatせず、owner teardownのcancel要求と全callback/defer/cleanupの
+drain後に同じ値を返す。先に観測したchild primaryとdrain中のrelated faultは診断用に
+保持するが、元body errorを置換しない。`RequestOwnerTeardown`はSpawnを封印し、live childの
+CancelFuncを一度だけlock外で実行して同期的に戻る。cancel要求をjoin/cleanup完了とは扱わず、
+後続`Cancel`が同じobligationをdrainできる。
+
+Go 1.27.3で新2回帰を通常1000回、race 20回（既存Cancel/Finish競合を含む）成功確認した。
+module全体の通常/race、Go vet、taskscopeのGo JSON pass 26件とRust側expected inventory
+26件の完全一致、diff checkも成功した。別のSol 6.1 High独立reviewは、呼出し開始前でも
+未完了assertが通り得るtest oracleを検出したため、scope封印barrierを追加した。修正後に
+独立taskscope raceと再reviewを行い、未解決finding 0件。
+
+公開Go Task/scopeとlowering、body-local Task outputの自動放棄、legacy task fault、
+親deadline、一般resource releaseは未接続のまま。ローカル環境にRust toolchainがなく、
+8 GiB空き下限を守るためRust harness・他OSは最終HEADのCI gateへ残す。merge・releaseなし。
+
+## 2026-11-01: Go private Task scope fault/cancel/drain（main統合済み・未リリース）
 
 正常終了kernelを公開生成へ接続せず拡張し、callback/cleanupのpanicとGoexitをprivate
 faultへ閉じた。Receive/Finish/Cancelがcompletion公開順に最初のfaultを観測した時だけ
@@ -12,7 +32,10 @@ business value内の`context.Canceled`もfaultへ再分類しない。Discardは
 
 決定的barrier testでfault観測順、兄弟cancel、late spawnへのcancel継承、blocked sibling
 drain、cancel後panic、cleanup二次fault、Receive/DiscardとCancel/Finishの競合を検査する。
-最終回帰・独立review・exact-head CIは未完了であり、この記録だけで公開対応済みとはしない。
+PR #215のHEAD `ed944734`で最終回帰・独立review・exact-head CIを完了し、main
+`c16478d5`へ統合した。統合後runは通常24成功・3想定skip、CodeQL 7言語、websiteが
+すべて成功した。公開Go Task/scope、body Err優先、legacy task統合、親deadline、
+owner/resource teardownは引き続き未接続であり、main統合を公開対応済みとはしない。
 
 ## 2026-10-31: Go private Task scope正常終了kernel（main統合済み）
 

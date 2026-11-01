@@ -439,6 +439,32 @@ func (scope *Scope) seal() {
 	scope.mu.Unlock()
 }
 
+// RequestOwnerTeardown seals registration and requests cooperative cancellation
+// exactly once per live child. It deliberately does not wait: the checked
+// owner-teardown contract is only an abort-request boundary. Finish, Cancel, or
+// FinishBodyError must still drain callback and cleanup completion explicitly.
+func (scope *Scope) RequestOwnerTeardown() {
+	if scope == nil {
+		panic(ErrInvalid)
+	}
+	scope.mu.Lock()
+	scope.closed = true
+	cancels := scope.requestCancellationLocked()
+	scope.mu.Unlock()
+	runCancels(cancels)
+}
+
+// FinishBodyError models the checked scope body-error exit without flattening
+// or formatting E. The original body error stays outside the Task fault state,
+// owner teardown requests cancellation, and the exact value is returned only
+// after every registered callback and cleanup boundary has completed. Public Go
+// lowering and body-local output abandonment remain separate later stages.
+func FinishBodyError[E any](scope *Scope, bodyError E) E {
+	scope.RequestOwnerTeardown()
+	scope.drain()
+	return bodyError
+}
+
 // Finish seals registration, observes completions in publication order, starts
 // cooperative sibling cancellation at the first observed fault, and drains all
 // callback/cleanup boundaries. Sticky faults take precedence over unconsumed T.
@@ -467,11 +493,7 @@ func (scope *Scope) Cancel() error {
 	if scope == nil {
 		return ErrInvalid
 	}
-	scope.mu.Lock()
-	scope.closed = true
-	cancels := scope.requestCancellationLocked()
-	scope.mu.Unlock()
-	runCancels(cancels)
+	scope.RequestOwnerTeardown()
 	scope.drain()
 	scope.mu.Lock()
 	defer scope.mu.Unlock()
