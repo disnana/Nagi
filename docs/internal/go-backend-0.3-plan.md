@@ -32,6 +32,12 @@
 
 その次のprivate退出sliceでは、`ScopeExitPlan`の既存判断を増やさず、任意型のbody Errをkernel外に保持してcancelとactual drain後に同じ値を返す経路と、同期owner teardownがcancel要求だけを行う経路を分ける。先に観測したchild faultもbody Errを置換せず、owner teardownはcleanup完了を偽装しない。legacy task fault、親deadline、body-local Task outputの自動放棄、一般resource release、公開loweringは未接続のまま、公開Scope/SpawnBind/Task拒否を維持する。
 
+続くprivate body-local output sliceでは、body Err出口で未claimのTask出力をbody localsの
+退役として先に放棄し、その後にcancel要求とactual drainを行う。完了済みbufferと
+drain中に返る値をkernelへ保持せず、先にclaim済みのReceiveは奪わない。通常Finishの
+must-consume、Cancelの非消費、元body Errとsticky faultの優先は変えない。任意`T`の
+Close/finalizer/GCや一般resource release、公開loweringはこのsliceの保証外である。
+
 ## CLIとproject設定
 
 候補名は、OS/CPU target tripleと区別するため`backend`とする。

@@ -34,6 +34,7 @@ const (
 
 type receiptView interface {
 	doneChannel() <-chan struct{}
+	abandonOutput() bool
 	isRetirable() bool
 	isUnconsumed() bool
 	completionFaults() []error
@@ -53,6 +54,20 @@ func newReceipt[T any]() *receipt[T] {
 }
 
 func (r *receipt[T]) doneChannel() <-chan struct{} { return r.done }
+
+// abandonOutput models lexical retirement of a body-local Task handle. A
+// Receive that already claimed the handle keeps ownership; body exit must not
+// steal an in-flight receive or turn its result into a protocol fault.
+func (r *receipt[T]) abandonOutput() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.state != receiptLive {
+		return false
+	}
+	r.state = receiptDiscarded
+	r.value = nil
+	return true
+}
 
 func (r *receipt[T]) isRetirable() bool {
 	r.mu.Lock()
@@ -439,6 +454,26 @@ func (scope *Scope) seal() {
 	scope.mu.Unlock()
 }
 
+// sealAndAbandonBodyOutputs atomically seals registration and retires only
+// unclaimed body-local outputs. It runs before cancellation so lexical body
+// retirement precedes child abort/drain, matching ScopeBodyErrorExit. Values
+// completing later observe receiptDiscarded and are never installed. This only
+// ends the kernel's reference retention; it does not promise Close, a Go
+// finalizer, GC, or physical memory reclamation for T.
+func (scope *Scope) sealAndAbandonBodyOutputs() {
+	if scope == nil {
+		panic(ErrInvalid)
+	}
+	scope.mu.Lock()
+	scope.closed = true
+	for ticket, entry := range scope.entries {
+		if entry.receipt.abandonOutput() {
+			scope.retireLocked(ticket, entry.receipt)
+		}
+	}
+	scope.mu.Unlock()
+}
+
 // RequestOwnerTeardown seals registration and requests cooperative cancellation
 // exactly once per live child. It deliberately does not wait: the checked
 // owner-teardown contract is only an abort-request boundary. Finish, Cancel, or
@@ -458,8 +493,9 @@ func (scope *Scope) RequestOwnerTeardown() {
 // or formatting E. The original body error stays outside the Task fault state,
 // owner teardown requests cancellation, and the exact value is returned only
 // after every registered callback and cleanup boundary has completed. Public Go
-// lowering and body-local output abandonment remain separate later stages.
+// lowering remains a separate later stage.
 func FinishBodyError[E any](scope *Scope, bodyError E) E {
+	scope.sealAndAbandonBodyOutputs()
 	scope.RequestOwnerTeardown()
 	scope.drain()
 	return bodyError

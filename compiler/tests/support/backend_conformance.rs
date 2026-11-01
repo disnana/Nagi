@@ -189,6 +189,14 @@ pub fn private_lifecycle_contracts(directory: &Path) -> Result<(), String> {
         ),
         (
             taskscope,
+            "TestTaskScopeBodyErrorAbandonsOutputsBeforeCancelAndDrain",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeBodyErrorKeepsReceiveOwnership",
+        ),
+        (
+            taskscope,
             "TestTaskScopeOwnerTeardownRequestsOnlyAndSeals",
         ),
         (

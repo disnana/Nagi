@@ -1,5 +1,28 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-11-01: Go private Task body-local output放棄（ローカル・未公開）
+
+main `ca848078`のprivate Task scope kernelへ、採用済み
+`LeaveBodyThenCancelDrainAndPropagateOriginal`の順序を変えず、body Err出口専用の
+未claim出力放棄を追加した。`receiptLive`だけを`receiptDiscarded`へ移し、既に保持した値を
+解放してからcancelを要求する。scope封印と放棄を同じlock区間で行い、その間のSpawnを
+拒否する。後から完了するchildも値を再格納しない。先にReceiveがclaimした
+`receiptReceiving`は奪わず、通常Finishのmust-consumeとCancelの非消費を維持する。
+完了済みrecord、未記録completion、drain中completionを退役し、元body Errのidentity、
+sticky primary/related fault、全callback/defer/cleanup drainを変えない。
+
+test-owned CancelFuncと決定的barrierで、出力放棄がcancel呼出しより先であること、
+cleanup前に退出しないこと、claimとbody exitの両順序、Spawn競合、fault競合、最終entry退役を
+確認した。Go 1.27.3でbody-error回帰1000回、関連race回帰20回、module全体の通常/race、
+Go vet、Rust側native test在庫入口、Go backend 34件、targeted Clippy、fmt、diff checkが
+成功した。独立reviewで放棄と封印の隙間、scheduler依存のcancel順序oracleを検出し、
+atomic封印と同期cancel wrapperへ修正した。修正後の独立再reviewは競合fixtureのlock/gate、
+Receive/Finish/Cancel、body Err/fault/drain、公開拒否と在庫を再照合し、未解決finding 0件。
+
+任意`T`のClose、finalizer、GCや物理memory回収は保証せず、kernel参照保持の終了だけを
+検査する。公開Go Task/scope、legacy fault、親deadline、一般resource release、
+公開loweringは未接続のまま維持する。
+
 ## 2026-11-01: Go private Task body error / owner teardown（ローカル・未公開）
 
 main `c16478d5`のprivate Task scope kernelへ、採用済み`ScopeExitPlan`の退出順序を
