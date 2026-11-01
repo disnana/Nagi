@@ -127,6 +127,16 @@ main `012f856a`を基点に、Sol 6.1 Highが実装前にADR 012とprivate runti
 証明しないtest gapを1件指摘し、親がReceive取得済み・Finish封印済みをlock下で観測する
 競合回帰へ修正した。通常・race各20回とRust在庫入口を再実行し、同担当が更新差分を再監査して
 blocking findingなしとした。公開Go Task/scope、fault/cancel/owner teardownは有効化していない。
+
+## 2026-11-01: Go private Task fault/cancel/drain
+
+Sol 6.1 Highの事前設計reviewで、completion公開だけではbodyを中断せず、Receive/Finish/
+Cancelによる観測時にpublication順のfirst faultをsticky化し、lock外で兄弟cancelを要求後、
+全callback/cleanup境界をdrainする方針を固定した。receipt消費とscope accountingを分け、
+business `Result`/`context.Canceled`値をfaultへ平坦化せず、panic/Goexitとcleanup二次faultを
+private分類する。公開Go Task/scope、body Err/legacy task/owner cleanup接続は対象外。
+実装後はrace反復、Go module、Rust完全在庫入口、公開拒否回帰を通し、別Highの最終reviewを
+必須とする。新しいremote送信は成果報告後まで行わない。
 model単独時間、token、料金、service tierは観測不能。test時間はmodel速度の比較に使わない。
 ## 2026-10-22: 0.2.1の重複処理と計測基盤
 

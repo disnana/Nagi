@@ -139,7 +139,18 @@ pub fn private_lifecycle_contracts(directory: &Path) -> Result<(), String> {
             taskscope,
             "TestTaskScopeFailureNeverPublishesAValue/cleanup_panic",
         ),
-        (taskscope, "TestTaskScopeFailureNeverPublishesAValue/goexit"),
+        (
+            taskscope,
+            "TestTaskScopeFailureNeverPublishesAValue/work_goexit",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeFailureNeverPublishesAValue/cleanup_goexit",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeFailureNeverPublishesAValue/work_and_cleanup_panic",
+        ),
         (
             taskscope,
             "TestTaskScopeFinishSealsRegistrationAndJoinsDiscarded",
@@ -151,6 +162,50 @@ pub fn private_lifecycle_contracts(directory: &Path) -> Result<(), String> {
         (
             taskscope,
             "TestTaskScopeFinishOverlapsClaimedReceiveAndCleanup",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeBusinessErrorAndCancelledValueStayValues",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeObservedFaultCancelsAndDrainsSibling",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeDiscardNeverLosesUnobservedFault",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeFinishObservesFaultBeforeBlockedSibling",
+        ),
+        (
+            taskscope,
+            "TestTaskScopePublicationOrderChoosesPrimaryAndRelated",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeCancelDrainsWithoutInventingFailureOrConsumption",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeCancelDrainsWithoutInventingFailureOrConsumption/normal_business_value_after_cancellation",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeCancelDrainsWithoutInventingFailureOrConsumption/noncooperative_callback",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeCancelDrainsWithoutInventingFailureOrConsumption/panic_after_cancellation_remains_a_fault",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeConcurrentReceiveAndDiscardHaveOneWinner",
+        ),
+        (
+            taskscope,
+            "TestTaskScopeConcurrentCancelAndFinishShareDrain",
         ),
     ]);
     let mut passed = std::collections::BTreeSet::new();
