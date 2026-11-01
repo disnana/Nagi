@@ -6,6 +6,7 @@ import unittest
 import high_elif_projection as projection
 import go_backend_projection
 import levels_projection
+import sf06_failure_projection
 import sf07_request_projection as history
 from sf07_projection_contract import BASE_WORKFLOW_SHA256
 
@@ -23,6 +24,7 @@ class HighElifProjectionTests(unittest.TestCase):
     def test_exact_command_inverse_retains_raw_and_frozen_history(self):
         restored = projection.inverse_workflow(self.source)
         inherited = go_backend_projection.inverse_workflow(restored)
+        inherited = sf06_failure_projection.inverse_port_pair_inventory(inherited)
         self.assertEqual(hashlib.sha256(inherited.encode()).hexdigest(), BEFORE_ELIF_WORKFLOW_SHA256)
         self.assertEqual(restored.count(projection.ORIGINAL_STEP), 1)
         self.assertNotIn("--test high_elif", restored)
@@ -68,6 +70,7 @@ class HighElifProjectionTests(unittest.TestCase):
         restored = projection.inverse_workflow(mutant)
         self.assertIn(after, restored)
         inherited = go_backend_projection.inverse_workflow(restored)
+        inherited = sf06_failure_projection.inverse_port_pair_inventory(inherited)
         self.assertNotEqual(hashlib.sha256(inherited.encode()).hexdigest(), BEFORE_ELIF_WORKFLOW_SHA256)
         try:
             inherited = history.inverse_workflow(mutant)

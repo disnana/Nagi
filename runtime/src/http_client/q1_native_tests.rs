@@ -4,7 +4,7 @@ use super::super::super::q1_dial::{
 use super::*;
 use std::{
     io::{Error, ErrorKind},
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener as StdTcpListener},
     num::NonZeroU64,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -106,17 +106,89 @@ fn mixed_loopback_plan(port: u16) -> DialPlan {
     .unwrap()
 }
 
+const LOOPBACK_PORT_PAIR_ATTEMPTS: usize = 32;
+
+struct RefusedV4Guard {
+    socket: Option<TcpSocket>,
+    drop_count: Option<Arc<AtomicUsize>>,
+}
+
+impl RefusedV4Guard {
+    fn new(socket: TcpSocket, drop_count: Option<Arc<AtomicUsize>>) -> Self {
+        Self {
+            socket: Some(socket),
+            drop_count,
+        }
+    }
+
+    fn local_addr(&self) -> std::io::Result<SocketAddr> {
+        self.socket.as_ref().expect("live IPv4 guard").local_addr()
+    }
+}
+
+impl Drop for RefusedV4Guard {
+    fn drop(&mut self) {
+        // Close the owned socket before publishing the test-only observation.
+        drop(self.socket.take());
+        if let Some(drop_count) = &self.drop_count {
+            drop_count.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+}
+
+fn reserve_refused_v4_and_live_v6_pair_with<B, C>(
+    mut bind_v6: B,
+    mut after_collision: C,
+    drop_count: Option<Arc<AtomicUsize>>,
+) -> std::io::Result<(RefusedV4Guard, TcpListener, SocketAddr)>
+where
+    B: FnMut(u16) -> std::io::Result<StdTcpListener>,
+    C: FnMut(SocketAddr) -> std::io::Result<()>,
+{
+    for _ in 0..LOOPBACK_PORT_PAIR_ATTEMPTS {
+        let first_socket = TcpSocket::new_v4()?;
+        first_socket.bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))?;
+        let first_addr = first_socket.local_addr()?;
+        let first_guard = RefusedV4Guard::new(first_socket, drop_count.clone());
+        match bind_v6(first_addr.port()) {
+            Ok(listener) => {
+                listener.set_nonblocking(true)?;
+                let listener = TcpListener::from_std(listener)?;
+                let second_addr = listener.local_addr()?;
+                return Ok((first_guard, listener, second_addr));
+            }
+            Err(error) if error.kind() == ErrorKind::AddrInUse => {
+                // The rejected-address guard must not survive a failed pair
+                // attempt. The hook gives the regression test a deterministic
+                // point to observe that the owned socket was closed first.
+                drop(first_guard);
+                after_collision(first_addr)?;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(Error::new(
+        ErrorKind::AddrInUse,
+        "could not reserve an IPv4 refusal guard and IPv6 listener port pair",
+    ))
+}
+
+fn reserve_refused_v4_and_live_v6_pair(
+) -> std::io::Result<(RefusedV4Guard, TcpListener, SocketAddr)> {
+    reserve_refused_v4_and_live_v6_pair_with(
+        |port| StdTcpListener::bind((Ipv6Addr::LOCALHOST, port)),
+        |_| Ok(()),
+        None,
+    )
+}
+
 #[test]
 fn q1_native_refused_first_address_connects_only_checked_second_peer() {
     runtime().block_on(async {
-        let listener = TcpListener::bind((Ipv6Addr::LOCALHOST, 0)).await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let first_guard = TcpSocket::new_v4().unwrap();
-        first_guard
-            .bind(SocketAddr::from((Ipv4Addr::LOCALHOST, addr.port())))
-            .unwrap();
+        let (_first_guard, listener, addr) = reserve_refused_v4_and_live_v6_pair().unwrap();
         // A bound non-listening owned socket keeps this exact first address
-        // reserved while the native connect receives refusal. No port race.
+        // reserved while the native connect receives refusal. Both family
+        // endpoints are held before the connection plan begins.
         let control = DialControl::new();
         let quota = SocketQuota::checked(1).unwrap();
         let (socket, _) = connect_plan(mixed_loopback_plan(addr.port()), &control, &quota)
@@ -139,6 +211,72 @@ fn q1_native_refused_first_address_connects_only_checked_second_peer() {
                 .unwrap()
                 .unwrap(),
             0
+        );
+    });
+}
+
+#[test]
+fn q1_native_port_pair_retry_releases_guard_and_is_bounded() {
+    use std::cell::Cell;
+
+    runtime().block_on(async {
+        let bind_calls = Cell::new(0usize);
+        let collision_port = Cell::new(None);
+        let cleanup_checks = Cell::new(0usize);
+        let drop_count = Arc::new(AtomicUsize::new(0));
+        let (first_guard, listener, second_addr) = reserve_refused_v4_and_live_v6_pair_with(
+            |port| {
+                let call = bind_calls.get();
+                bind_calls.set(call + 1);
+                if call == 0 {
+                    collision_port.set(Some(port));
+                    return Err(Error::from(ErrorKind::AddrInUse));
+                }
+                StdTcpListener::bind((Ipv6Addr::LOCALHOST, port))
+            },
+            |failed_addr| {
+                let cleanup = cleanup_checks.get() + 1;
+                if cleanup == 1 {
+                    assert_eq!(collision_port.get(), Some(failed_addr.port()));
+                }
+                cleanup_checks.set(cleanup);
+                assert_eq!(drop_count.load(Ordering::SeqCst), cleanup);
+                Ok(())
+            },
+            Some(Arc::clone(&drop_count)),
+        )
+        .unwrap();
+        assert!((2..=LOOPBACK_PORT_PAIR_ATTEMPTS).contains(&bind_calls.get()));
+        assert_eq!(cleanup_checks.get() + 1, bind_calls.get());
+        assert_eq!(drop_count.load(Ordering::SeqCst), cleanup_checks.get());
+        assert_eq!(first_guard.local_addr().unwrap().port(), second_addr.port());
+        assert_eq!(listener.local_addr().unwrap(), second_addr);
+        drop(listener);
+        drop(first_guard);
+        assert_eq!(drop_count.load(Ordering::SeqCst), cleanup_checks.get() + 1);
+
+        let bind_calls = Cell::new(0usize);
+        let cleanup_checks = Cell::new(0usize);
+        let drop_count = Arc::new(AtomicUsize::new(0));
+        let result = reserve_refused_v4_and_live_v6_pair_with(
+            |_| {
+                bind_calls.set(bind_calls.get() + 1);
+                Err(Error::from(ErrorKind::AddrInUse))
+            },
+            |_| {
+                let cleanup = cleanup_checks.get() + 1;
+                cleanup_checks.set(cleanup);
+                assert_eq!(drop_count.load(Ordering::SeqCst), cleanup);
+                Ok(())
+            },
+            Some(Arc::clone(&drop_count)),
+        );
+        assert!(matches!(result, Err(error) if error.kind() == ErrorKind::AddrInUse));
+        assert_eq!(bind_calls.get(), LOOPBACK_PORT_PAIR_ATTEMPTS);
+        assert_eq!(cleanup_checks.get(), LOOPBACK_PORT_PAIR_ATTEMPTS);
+        assert_eq!(
+            drop_count.load(Ordering::SeqCst),
+            LOOPBACK_PORT_PAIR_ATTEMPTS
         );
     });
 }

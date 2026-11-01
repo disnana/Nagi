@@ -30,6 +30,35 @@ ARTIFACT = "          path: ${{ runner.temp }}/sf06-http-client-native/sf06-nati
 OBSERVED_ARTIFACT = ("          path: |\n"
                      "            ${{ runner.temp }}/sf06-http-client-native/sf06-native-diagnostic.json\n"
                      "            ${{ steps.sf06_public_client.outputs.closed_failure_diagnostic }}\n")
+PRIVATE_TRANSPORT_CURRENT = '"sf06-private-transport.log": 83'
+PRIVATE_TRANSPORT_INHERITED = '"sf06-private-transport.log": 82'
+PUBLIC_RUNTIME_CURRENT = '"runtime-http-client": (222, None, RUNTIME_CASES),'
+PUBLIC_RUNTIME_INHERITED = '"runtime-http-client": (221, None, RUNTIME_CASES),'
+Q1_PORT_PAIR_LINE = (
+    "              'http_client::address::socket_pin::q1_native::tests::"
+    "q1_native_port_pair_retry_releases_guard_and_is_bounded',\n"
+)
+
+
+def inverse_port_pair_inventory(source, *, allow_inherited=False):
+    """Restore only the reviewed SF06 port-pair test inventory delta."""
+    current = (source.count(PRIVATE_TRANSPORT_CURRENT) == 2
+               and source.count(PRIVATE_TRANSPORT_INHERITED) == 0
+               and source.count(PUBLIC_RUNTIME_CURRENT) == 1
+               and source.count(PUBLIC_RUNTIME_INHERITED) == 0
+               and source.count(Q1_PORT_PAIR_LINE) == 2)
+    inherited = (source.count(PRIVATE_TRANSPORT_CURRENT) == 0
+                 and source.count(PRIVATE_TRANSPORT_INHERITED) == 2
+                 and source.count(PUBLIC_RUNTIME_CURRENT) == 0
+                 and source.count(PUBLIC_RUNTIME_INHERITED) == 1
+                 and source.count(Q1_PORT_PAIR_LINE) == 0)
+    if allow_inherited and inherited:
+        return source
+    if not current:
+        raise ValueError('SF06 port-pair inventory mismatch')
+    source = source.replace(PRIVATE_TRANSPORT_CURRENT, PRIVATE_TRANSPORT_INHERITED)
+    source = source.replace(PUBLIC_RUNTIME_CURRENT, PUBLIC_RUNTIME_INHERITED)
+    return source.replace(Q1_PORT_PAIR_LINE, '')
 
 
 def inverse_workflow(source):
@@ -49,4 +78,4 @@ def inverse_workflow(source):
         if source.count(new) != 1:
             raise ValueError("SF06 diagnostic registration missing or duplicated")
         source = source.replace(new, old, 1)
-    return source
+    return inverse_port_pair_inventory(source)

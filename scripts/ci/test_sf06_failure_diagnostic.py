@@ -33,8 +33,8 @@ def cargo_text(failed=None):
     names = diag.INVENTORY["tests"]["runtime-http-client"]
     rows = [f"test {name} ... {'FAILED' if name == failed else 'ok'}" for name in names]
     count = int(failed is not None)
-    return ("running 221 tests\n" + "\n".join(rows)
-            + f"\ntest result: {'FAILED' if count else 'ok'}. {221-count} passed; {count} failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s\n")
+    return ("running 222 tests\n" + "\n".join(rows)
+            + f"\ntest result: {'FAILED' if count else 'ok'}. {222-count} passed; {count} failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s\n")
 
 
 class DiagnosticTests(unittest.TestCase):
@@ -59,7 +59,7 @@ class DiagnosticTests(unittest.TestCase):
         assignments = [node for node in tree.body if isinstance(node, ast.Assign)
                        and any(isinstance(n, ast.Name) and n.id in ("RUNTIME_CASES", "SUITES") for n in node.targets)]
         exec(compile(ast.Module(body=assignments, type_ignores=[]), "inventory", "exec"), namespace)
-        self.assertEqual(len(diag.INVENTORY["tests"]["runtime-http-client"]), 221)
+        self.assertEqual(len(diag.INVENTORY["tests"]["runtime-http-client"]), 222)
         for name, (count, exact, required) in namespace["SUITES"].items():
             inventory = set(diag.INVENTORY["tests"][name])
             self.assertEqual(len(inventory), count)
@@ -157,7 +157,7 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_complete_and_malformed_records_are_distinct(self):
         self.assertEqual(diag.analyze("runtime-http-client", 0, 1, cargo_text(), "ok")["parse_state"], "complete")
-        for text in ("", cargo_text().replace("221 passed", "220 passed"), cargo_text() + cargo_text()):
+        for text in ("", cargo_text().replace("222 passed", "221 passed"), cargo_text() + cargo_text()):
             self.assertEqual(diag.analyze("runtime-http-client", 0, 1, text, "ok")["parse_state"], "incomplete")
         self.assertEqual(diag.analyze(PUBLIC_FIXTURE_MARKER, 101, 1, PUBLIC_FIXTURE_MARKER, "ok")["suite"], "unknown")
 
@@ -235,7 +235,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("reason=invocation_error", result.stdout)
 
     def test_strict_guard_inventory_failure_still_fails(self):
-        result, record = self.invoke(cargo_text().replace("221 passed", "220 passed"), 0)
+        result, record = self.invoke(cargo_text().replace("222 passed", "221 passed"), 0)
         self.assertEqual(result.returncode, 1)
         self.assertEqual(record["cargo_exit"], 0)
         self.assertEqual(record["parse_state"], "incomplete")
@@ -250,7 +250,7 @@ class WorkflowTests(unittest.TestCase):
                          ('unset GITHUB_OUTPUT; "$@"', '"$@"'),
                          ('steps.sf06_public_client.outputs.closed_failure_diagnostic', 'runner.temp'),
                          (projection.OBSERVED_ARTIFACT, projection.OBSERVED_ARTIFACT + '            ${{ runner.temp }}/sf06-runtime-http-client.log\n'),
-                         ('"runtime-http-client": (221,', '"runtime-http-client": (220,')]:
+                         ('"runtime-http-client": (222,', '"runtime-http-client": (221,')]:
             with self.subTest(old=old[:40]):
                 mutant = source.replace(old, new, 1)
                 try:
