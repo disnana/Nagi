@@ -5,15 +5,19 @@ slice. It is not copied into generated applications and exposes no Nagi API.
 `std.actor`, public scope/task, mailbox, READY/events, and payload charging remain
 unsupported by the Go backend.
 
-`internal/taskscope` covers only the normal-success Task boundary. It starts
-real goroutines after registering typed receipts, publishes an output only after
-the callback and explicit cleanup return, consumes a copied handle at most once,
-and keeps discarded outputs in the scope's join set until `Finish`. Go has no
+`internal/taskscope` starts real goroutines after registering typed receipts,
+publishes an output only after the callback and explicit cleanup boundary,
+consumes a copied handle at most once, and keeps discarded outputs in the
+scope's join set until `Finish`. Panic and `Goexit` at the callback or cleanup
+boundary become private faults. The first completion fault observed by
+`Receive`, `Finish`, or `Cancel` is sticky, requests cooperative sibling
+cancellation, and is returned only after every registered child is drained.
+Business values are never flattened or reclassified as task faults. Go has no
 physical goroutine join primitive: the closed completion channel proves the
 callback, its defers, and cleanup returned, not that the runtime destroyed the
-goroutine. Panic/fault propagation, cancellation, sticky primary faults, body
-error precedence, and synchronous owner teardown are intentionally not connected.
-Public Nagi Task/scope syntax remains rejected before the Go toolchain.
+goroutine. Body-error precedence, parent deadlines, synchronous owner teardown,
+and public lowering remain intentionally unconnected. Public Nagi Task/scope
+syntax remains rejected before the Go toolchain.
 
 `internal/lifecycle` runs one manager and at most one active goroutine per child.
 Registration is cold. Each generation invokes `Factory(context.Context) error`

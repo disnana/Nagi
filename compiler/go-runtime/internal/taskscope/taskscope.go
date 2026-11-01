@@ -1,20 +1,24 @@
-// Package taskscope is a private normal-success prototype for Nagi Task scopes.
-// It is not copied into generated applications and does not expose a Nagi API.
+// Package taskscope is a private Task-scope prototype for the Go backend.
+// It is not copied into generated applications and exposes no Nagi API.
 package taskscope
 
 import (
+	"context"
 	"errors"
 	"sync"
 )
 
 var (
-	ErrClosed        = errors.New("task scope is closed")
-	ErrInvalid       = errors.New("invalid task handle")
-	ErrWrongScope    = errors.New("task handle belongs to another scope")
-	ErrConsumed      = errors.New("task handle was already consumed")
-	ErrTaskFailed    = errors.New("task callback did not return normally")
-	ErrCleanupFailed = errors.New("task cleanup did not return normally")
-	ErrUnconsumed    = errors.New("task scope has an unconsumed result")
+	ErrClosed          = errors.New("task scope is closed")
+	ErrInvalid         = errors.New("invalid task handle")
+	ErrWrongScope      = errors.New("task handle belongs to another scope")
+	ErrConsumed        = errors.New("task handle was already consumed")
+	ErrTaskPanicked    = errors.New("task callback panicked")
+	ErrTaskGoexit      = errors.New("task callback exited without returning")
+	ErrCleanupPanicked = errors.New("task cleanup panicked")
+	ErrCleanupGoexit   = errors.New("task cleanup exited without returning")
+	ErrMissingOutput   = errors.New("task completed without an output")
+	ErrUnconsumed      = errors.New("task scope has an unconsumed result")
 )
 
 type identity struct{ marker byte }
@@ -30,15 +34,16 @@ const (
 
 type receiptView interface {
 	doneChannel() <-chan struct{}
-	isConsumed() bool
-	isComplete() bool
+	isRetirable() bool
+	isUnconsumed() bool
+	completionFaults() []error
 }
 
 type receipt[T any] struct {
 	mu       sync.Mutex
 	state    receiptState
 	value    *T
-	problem  error
+	faults   []error
 	complete bool
 	done     chan struct{}
 }
@@ -49,34 +54,44 @@ func newReceipt[T any]() *receipt[T] {
 
 func (r *receipt[T]) doneChannel() <-chan struct{} { return r.done }
 
-func (r *receipt[T]) isConsumed() bool {
+func (r *receipt[T]) isRetirable() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.state >= receiptReceiving
+	return r.state == receiptReceived || r.state == receiptDiscarded
 }
 
-func (r *receipt[T]) isComplete() bool {
+func (r *receipt[T]) isUnconsumed() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.complete
+	return r.state == receiptLive
 }
 
-// publish is the last wrapper action after the callback and cleanup return.
+func (r *receipt[T]) completionFaults() []error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]error(nil), r.faults...)
+}
+
+// publish is the last wrapper action after the callback and cleanup boundaries.
 // Closing done proves those boundaries returned; it does not claim that the Go
 // runtime has physically destroyed the goroutine.
-func (r *receipt[T]) publish(value T, usable bool, problem error) {
+func (r *receipt[T]) publish(value T, usable bool, faults []error) {
 	r.mu.Lock()
 	if usable && r.state != receiptDiscarded {
 		r.value = &value
 	}
-	r.problem = problem
+	r.faults = append([]error(nil), faults...)
 	r.complete = true
 	close(r.done)
 	r.mu.Unlock()
 }
 
 type entry struct {
-	receipt receiptView
+	receipt         receiptView
+	cancel          context.CancelFunc
+	ready           bool
+	recorded        bool
+	requestedCancel bool
 }
 
 type Scope struct {
@@ -84,14 +99,19 @@ type Scope struct {
 	identity *identity
 	next     uint64
 	closed   bool
-	entries  map[uint64]entry
+	entries  map[uint64]*entry
+	ready    []uint64
+	notify   chan struct{}
+	primary  error
+	related  []error
 }
 
 func New() *Scope {
 	return &Scope{
 		identity: &identity{marker: 1},
 		next:     1,
-		entries:  make(map[uint64]entry),
+		entries:  make(map[uint64]*entry),
+		notify:   make(chan struct{}),
 	}
 }
 
@@ -101,54 +121,106 @@ type Handle[T any] struct {
 	receipt *receipt[T]
 }
 
-// Spawn registers the receipt before starting the child goroutine. Work runs
-// once inside that goroutine; cleanup, when provided, runs after work returns.
-func Spawn[T any](scope *Scope, work func() T, cleanup func()) (Handle[T], error) {
+func classifyBoundary(recovered any, panicked, goexit error) error {
+	if recovered == nil {
+		return goexit
+	}
+	return panicked
+}
+
+// runChild uses nested deferred boundaries so explicit cleanup runs once after
+// normal return, panic, or Goexit, and final publication still happens if the
+// cleanup itself panics or calls Goexit. Arbitrary panic payloads are discarded
+// without formatting or retaining them.
+func runChild[T any](ctx context.Context, work func(context.Context) T, cleanup func(), publish func(T, bool, []error)) {
+	var value T
+	var faults []error
+	workReturned := false
+	cleanupReturned := cleanup == nil
+	defer func() {
+		publish(value, workReturned && cleanupReturned && len(faults) == 0, faults)
+	}()
+	defer func() {
+		if !workReturned {
+			faults = append(faults, classifyBoundary(recover(), ErrTaskPanicked, ErrTaskGoexit))
+		}
+		if cleanup == nil {
+			return
+		}
+		defer func() {
+			if !cleanupReturned {
+				faults = append(faults, classifyBoundary(recover(), ErrCleanupPanicked, ErrCleanupGoexit))
+			}
+		}()
+		cleanup()
+		cleanupReturned = true
+	}()
+	value = work(ctx)
+	workReturned = true
+}
+
+// Spawn registers the receipt and cancellation owner before starting the child
+// goroutine. Cancellation is advisory: a normal callback return remains T even
+// when ctx is cancelled, including T values that contain context.Canceled.
+func Spawn[T any](scope *Scope, work func(context.Context) T, cleanup func()) (Handle[T], error) {
 	if scope == nil || work == nil {
 		return Handle[T]{}, ErrInvalid
 	}
 	receipt := newReceipt[T]()
+	ctx, cancel := context.WithCancel(context.Background())
 	scope.mu.Lock()
 	if scope.closed {
 		scope.mu.Unlock()
+		cancel()
 		return Handle[T]{}, ErrClosed
 	}
 	if scope.next == 0 {
 		scope.mu.Unlock()
+		cancel()
 		return Handle[T]{}, ErrClosed
 	}
 	ticket := scope.next
 	scope.next++
-	scope.entries[ticket] = entry{receipt: receipt}
+	requestedCancel := scope.primary != nil
+	entryCancel := cancel
+	if requestedCancel {
+		entryCancel = nil
+	}
+	scope.entries[ticket] = &entry{
+		receipt:         receipt,
+		cancel:          entryCancel,
+		requestedCancel: requestedCancel,
+	}
 	owner := scope.identity
 	scope.mu.Unlock()
+	if requestedCancel {
+		cancel()
+	}
 
 	go func() {
-		var value T
-		returned := false
-		cleaned := false
-		defer func() {
-			if !returned {
-				_ = recover()
-				receipt.publish(value, false, ErrTaskFailed)
-				return
-			}
-			if !cleaned {
-				_ = recover()
-				receipt.publish(value, false, ErrCleanupFailed)
-				return
-			}
-			receipt.publish(value, true, nil)
-		}()
-		value = work()
-		returned = true
-		if cleanup != nil {
-			cleanup()
-		}
-		cleaned = true
+		runChild(ctx, work, cleanup, func(value T, usable bool, faults []error) {
+			receipt.publish(value, usable, faults)
+			scope.publish(ticket, receipt)
+		})
 	}()
 
 	return Handle[T]{owner: owner, ticket: ticket, receipt: receipt}, nil
+}
+
+// publish only queues immutable completion. Child failure does not interrupt an
+// executing scope body; Receive, Finish, or Cancel records the completion.
+func (scope *Scope) publish(ticket uint64, receipt receiptView) {
+	scope.mu.Lock()
+	entry, ok := scope.entries[ticket]
+	if !ok || entry.receipt != receipt || entry.ready || entry.recorded {
+		scope.mu.Unlock()
+		panic("invalid private task completion")
+	}
+	entry.ready = true
+	scope.ready = append(scope.ready, ticket)
+	close(scope.notify)
+	scope.notify = make(chan struct{})
+	scope.mu.Unlock()
 }
 
 func entryFor[T any](scope *Scope, handle Handle[T]) (*receipt[T], error) {
@@ -167,17 +239,121 @@ func entryFor[T any](scope *Scope, handle Handle[T]) (*receipt[T], error) {
 	return handle.receipt, nil
 }
 
-func (scope *Scope) retire(ticket uint64, receipt receiptView) {
-	scope.mu.Lock()
-	defer scope.mu.Unlock()
+func (scope *Scope) retireLocked(ticket uint64, receipt receiptView) {
 	entry, ok := scope.entries[ticket]
-	if ok && entry.receipt == receipt && receipt.isComplete() && receipt.isConsumed() {
+	if ok && entry.receipt == receipt && entry.recorded && receipt.isRetirable() {
 		delete(scope.entries, ticket)
 	}
 }
 
-// Receive claims one handle, then waits for that child callback and cleanup.
-// It never waits for an unrelated sibling.
+func (scope *Scope) retire(ticket uint64, receipt receiptView) {
+	scope.mu.Lock()
+	scope.retireLocked(ticket, receipt)
+	scope.mu.Unlock()
+}
+
+func runCancels(cancels []context.CancelFunc) {
+	for _, cancel := range cancels {
+		cancel()
+	}
+}
+
+func (scope *Scope) requestCancellationLocked() []context.CancelFunc {
+	var cancels []context.CancelFunc
+	for _, entry := range scope.entries {
+		if entry.recorded || entry.requestedCancel || entry.cancel == nil {
+			continue
+		}
+		entry.requestedCancel = true
+		cancels = append(cancels, entry.cancel)
+		entry.cancel = nil
+	}
+	return cancels
+}
+
+// recordReady records one completion in publication order. The first observed
+// fault becomes sticky and requests sibling cancellation in the same locked
+// transition; CancelFuncs run after unlocking and before further drain waits.
+func (scope *Scope) recordReady() bool {
+	var cancels []context.CancelFunc
+	scope.mu.Lock()
+	if len(scope.ready) == 0 {
+		scope.mu.Unlock()
+		return false
+	}
+	ticket := scope.ready[0]
+	copy(scope.ready, scope.ready[1:])
+	scope.ready = scope.ready[:len(scope.ready)-1]
+	entry := scope.entries[ticket]
+	if entry == nil || !entry.ready || entry.recorded {
+		scope.mu.Unlock()
+		panic("invalid private task accounting")
+	}
+	entry.ready = false
+	entry.recorded = true
+	faults := entry.receipt.completionFaults()
+	if entry.cancel != nil {
+		cancels = append(cancels, entry.cancel)
+		entry.cancel = nil
+	}
+	if len(faults) != 0 {
+		if scope.primary == nil {
+			scope.primary = faults[0]
+			scope.related = append(scope.related, faults[1:]...)
+			cancels = append(cancels, scope.requestCancellationLocked()...)
+		} else {
+			scope.related = append(scope.related, faults...)
+		}
+	}
+	scope.retireLocked(ticket, entry.receipt)
+	scope.mu.Unlock()
+	runCancels(cancels)
+	return true
+}
+
+func (scope *Scope) allRecordedLocked() bool {
+	for _, entry := range scope.entries {
+		if !entry.recorded {
+			return false
+		}
+	}
+	return true
+}
+
+func (scope *Scope) drain() {
+	for {
+		scope.mu.Lock()
+		hasReady := len(scope.ready) != 0
+		if scope.allRecordedLocked() {
+			scope.mu.Unlock()
+			return
+		}
+		notify := scope.notify
+		scope.mu.Unlock()
+		if hasReady {
+			scope.recordReady()
+			continue
+		}
+		<-notify
+	}
+}
+
+func consumePrimary[T any](scope *Scope, ticket uint64, receipt *receipt[T]) error {
+	scope.drain()
+	scope.mu.Lock()
+	primary := scope.primary
+	receipt.mu.Lock()
+	receipt.value = nil
+	receipt.state = receiptReceived
+	receipt.mu.Unlock()
+	scope.retireLocked(ticket, receipt)
+	scope.mu.Unlock()
+	return primary
+}
+
+// Receive claims one handle, then records completions until its target joins or
+// a sticky scope fault is observed. A sticky fault drains every child before it
+// is returned and never flattens or inspects a business T value.
 func Receive[T any](scope *Scope, handle Handle[T]) (T, error) {
 	var zero T
 	receipt, problem := entryFor(scope, handle)
@@ -192,23 +368,54 @@ func Receive[T any](scope *Scope, handle Handle[T]) (T, error) {
 	receipt.state = receiptReceiving
 	receipt.mu.Unlock()
 
-	<-receipt.done
-	receipt.mu.Lock()
-	problem = receipt.problem
-	if problem == nil && receipt.value != nil {
-		zero = *receipt.value
-		receipt.value = nil
-	} else if problem == nil {
-		problem = ErrTaskFailed
+	for {
+		scope.mu.Lock()
+		if scope.primary != nil {
+			scope.mu.Unlock()
+			return zero, consumePrimary(scope, handle.ticket, receipt)
+		}
+		entry, ok := scope.entries[handle.ticket]
+		if !ok || entry.receipt != receipt {
+			scope.mu.Unlock()
+			return zero, ErrInvalid
+		}
+		if entry.recorded {
+			receipt.mu.Lock()
+			if len(receipt.faults) != 0 {
+				receipt.mu.Unlock()
+				scope.mu.Unlock()
+				return zero, consumePrimary(scope, handle.ticket, receipt)
+			}
+			if receipt.value == nil {
+				receipt.state = receiptReceived
+				receipt.mu.Unlock()
+				scope.primary = ErrMissingOutput
+				cancels := scope.requestCancellationLocked()
+				scope.mu.Unlock()
+				runCancels(cancels)
+				return zero, consumePrimary(scope, handle.ticket, receipt)
+			}
+			zero = *receipt.value
+			receipt.value = nil
+			receipt.state = receiptReceived
+			receipt.mu.Unlock()
+			scope.retireLocked(handle.ticket, receipt)
+			scope.mu.Unlock()
+			return zero, nil
+		}
+		hasReady := len(scope.ready) != 0
+		notify := scope.notify
+		scope.mu.Unlock()
+		if hasReady {
+			scope.recordReady()
+			continue
+		}
+		<-notify
 	}
-	receipt.state = receiptReceived
-	receipt.mu.Unlock()
-	scope.retire(handle.ticket, receipt)
-	return zero, problem
 }
 
-// Discard abandons only the output. It neither cancels nor detaches the child;
-// Finish still waits for the callback and cleanup boundary.
+// Discard abandons only the output. It neither records completion nor cancels
+// or detaches the child; Finish remains responsible for observing and draining.
 func Discard[T any](scope *Scope, handle Handle[T]) error {
 	receipt, problem := entryFor(scope, handle)
 	if problem != nil {
@@ -221,41 +428,52 @@ func Discard[T any](scope *Scope, handle Handle[T]) error {
 	}
 	receipt.state = receiptDiscarded
 	receipt.value = nil
-	complete := receipt.complete
 	receipt.mu.Unlock()
-	if complete {
-		scope.retire(handle.ticket, receipt)
+	scope.retire(handle.ticket, receipt)
+	return nil
+}
+
+func (scope *Scope) seal() {
+	scope.mu.Lock()
+	scope.closed = true
+	scope.mu.Unlock()
+}
+
+// Finish seals registration, observes completions in publication order, starts
+// cooperative sibling cancellation at the first observed fault, and drains all
+// callback/cleanup boundaries. Sticky faults take precedence over unconsumed T.
+func (scope *Scope) Finish() error {
+	if scope == nil {
+		return ErrInvalid
+	}
+	scope.seal()
+	scope.drain()
+	scope.mu.Lock()
+	defer scope.mu.Unlock()
+	if scope.primary != nil {
+		return scope.primary
+	}
+	for _, entry := range scope.entries {
+		if entry.receipt.isUnconsumed() {
+			return ErrUnconsumed
+		}
 	}
 	return nil
 }
 
-// Finish seals registration and waits for every registered callback and cleanup.
-// Repeated calls are idempotent after all explicit receive/discard obligations
-// have retired. An unconsumed result is an internal contract error: the public
-// checker prevents that state before this prototype can be connected.
-func (scope *Scope) Finish() error {
+// Cancel seals the scope, requests cooperative cancellation, and drains every
+// callback/cleanup boundary. Cancellation does not fabricate result consumption.
+func (scope *Scope) Cancel() error {
 	if scope == nil {
 		return ErrInvalid
 	}
 	scope.mu.Lock()
 	scope.closed = true
-	entries := make([]entry, 0, len(scope.entries))
-	for _, entry := range scope.entries {
-		entries = append(entries, entry)
-	}
+	cancels := scope.requestCancellationLocked()
 	scope.mu.Unlock()
-	for _, entry := range entries {
-		<-entry.receipt.doneChannel()
-	}
+	runCancels(cancels)
+	scope.drain()
 	scope.mu.Lock()
 	defer scope.mu.Unlock()
-	for ticket, entry := range scope.entries {
-		if entry.receipt.isComplete() && entry.receipt.isConsumed() {
-			delete(scope.entries, ticket)
-		}
-	}
-	if len(scope.entries) != 0 {
-		return ErrUnconsumed
-	}
-	return nil
+	return scope.primary
 }

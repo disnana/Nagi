@@ -1,6 +1,20 @@
 # コンパイラ・Rust境界の進捗
 
-## 2026-10-31: Go private Task scope正常終了kernel（ローカル・未公開）
+## 2026-11-01: Go private Task scope fault/cancel/drain（ローカル・未公開）
+
+正常終了kernelを公開生成へ接続せず拡張し、callback/cleanupのpanicとGoexitをprivate
+faultへ閉じた。Receive/Finish/Cancelがcompletion公開順に最初のfaultを観測した時だけ
+sticky primaryを確定し、未完了兄弟へcooperative cancellationを要求して全childの
+callback/defer/cleanup境界をdrainする。Cancel要求はjoinやcleanup完了と扱わず、
+business value内の`context.Canceled`もfaultへ再分類しない。Discardは未観測faultを
+失わず、Cancelはresult消費を偽装しない。公開Go Task/scope、body Err優先、legacy task
+統合、親deadline、owner/resource teardownは未接続のまま維持する。
+
+決定的barrier testでfault観測順、兄弟cancel、late spawnへのcancel継承、blocked sibling
+drain、cancel後panic、cleanup二次fault、Receive/DiscardとCancel/Finishの競合を検査する。
+最終回帰・独立review・exact-head CIは未完了であり、この記録だけで公開対応済みとはしない。
+
+## 2026-10-31: Go private Task scope正常終了kernel（main統合済み）
 
 main `012f856a`を基点に、`compiler/go-runtime/internal/taskscope`へ公開未接続の
 正常終了kernelを追加した。Task receiptをscopeへ登録してからworkを実goroutineで開始し、
