@@ -24,6 +24,11 @@ _STREAM_SPEC = importlib.util.spec_from_file_location(
 _STREAM = importlib.util.module_from_spec(_STREAM_SPEC)
 _STREAM_SPEC.loader.exec_module(_STREAM)
 
+_SF06_SPEC = importlib.util.spec_from_file_location(
+    "sf06_failure_projection", Path(__file__).with_name("sf06_failure_projection.py"))
+_SF06 = importlib.util.module_from_spec(_SF06_SPEC)
+_SF06_SPEC.loader.exec_module(_SF06)
+
 
 def norm(source):
     tokens = re.findall(r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/|[A-Za-z_][A-Za-z_0-9]*|[0-9]+|[^\s]', source, re.S)
@@ -476,6 +481,8 @@ def inverse_workflow(source):
     source = inverse_prelogin_owner_diagnostic(source)
     if "\n  ci-plan:\n" in source:
         source = _LEVELS.inverse_workflow(source)
+    else:
+        source = _SF06.inverse_port_pair_inventory(source, allow_inherited=True)
     source = _B1.inverse_failure_diagnostic(source)
     # The guarded Busy regression is the fifteenth case in the exact SF03
     # deadline inventory.  Restore the inherited fourteen-case workflow only

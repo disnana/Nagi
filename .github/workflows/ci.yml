@@ -320,7 +320,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 82, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 83, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -437,6 +437,7 @@ jobs:
               'http_client::address::socket_pin::q1_native::tests::q1_native_cancelled_caller_is_joined_before_reusing_socket_quota',
               'http_client::address::socket_pin::q1_native::tests::q1_native_ttl_zero_is_usable_for_one_owned_operation_without_cache',
               'http_client::address::socket_pin::q1_native::tests::q1_native_refused_first_address_connects_only_checked_second_peer',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_port_pair_retry_releases_guard_and_is_bounded',
               'http_client::address::socket_pin::q1_native::tests::q1_native_expired_original_connect_end_does_not_reset_budget',
           }
           transport_text = (root / "sf06-private-transport.log").read_text(encoding="utf-8")
@@ -1320,7 +1321,7 @@ jobs:
               'http_client::ledger::operation::startup::retention::tests::unregistered_services_count_individually_before_root_copy_and_refund_on_drop',
           }
           SUITES = {
-              "runtime-http-client": (221, None, RUNTIME_CASES),
+              "runtime-http-client": (222, None, RUNTIME_CASES),
               "production-dns": (1, {
                   "production_public_handle_rejects_loopback_before_tcp_or_http",
               }, None),
@@ -1637,7 +1638,7 @@ jobs:
           python - <<'PY_SUMMARY'
           import os, pathlib, re
           root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 82, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 83, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
           for name, count in expected.items():
               data = (root / name).read_text(encoding="utf-8")
               running = re.findall(r"(?m)^running (\d+) tests?$", data)
@@ -1754,6 +1755,7 @@ jobs:
               'http_client::address::socket_pin::q1_native::tests::q1_native_cancelled_caller_is_joined_before_reusing_socket_quota',
               'http_client::address::socket_pin::q1_native::tests::q1_native_ttl_zero_is_usable_for_one_owned_operation_without_cache',
               'http_client::address::socket_pin::q1_native::tests::q1_native_refused_first_address_connects_only_checked_second_peer',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_port_pair_retry_releases_guard_and_is_bounded',
               'http_client::address::socket_pin::q1_native::tests::q1_native_expired_original_connect_end_does_not_reset_budget',
           }
           transport_text = (root / "sf06-private-transport.log").read_text(encoding="utf-8")
