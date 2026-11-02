@@ -18,6 +18,8 @@ SAMPLES = "      - run: cargo build --release --examples --bins --locked\n      
 NEEDS = [('    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]\n', '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]\n'), ('    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]\n', '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]\n')]
 
 def inverse_workflow(source):
+    import platform_contract_projection
+    source = platform_contract_projection.inverse_workflow(source)
     # Historical component callers may already have consumed this outer layer.
     if '  linux-workspace-shards:\n' not in source:
         if any(marker in source for marker in ('  linux-csrf-mutants:\n', '  linux-samples:\n')) or ('linux-workspace' in source and '  linux-workspace:\n' not in source):

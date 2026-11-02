@@ -1383,8 +1383,6 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
         with:
           python-version: '3.12'
-      - name: Check SF06 signature diagnostic fake cases
-        run: python -m unittest discover -s tests -p 'test_sf06_http_client_signature_diagnostic.py'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ci-pin:v4
         with:
           node-version: '22'
@@ -1404,6 +1402,908 @@ jobs:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Check call_member_ recovery first with exact result on the target platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
+          python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
+      - name: Diagnose G3 generation-token failure before crypto checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api guarded_rotation_and_logout_invalidate_old_generation_tokens -- --exact 2>&1 | tee "$RUNNER_TEMP/g3-generation-target.log"
+          python - <<'PY'
+          import os, pathlib, re
+          text = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "g3-generation-target.log").read_text(encoding="utf-8")
+          summaries = re.findall(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
+          if summaries != [("ok", "1", "0", "0")]:
+              raise AssertionError(f"expected exactly one passing focused test (1 passed, 0 failed, 0 ignored), got {summaries}")
+          PY
+      - name: Check SF06 private native modules before broad runtime checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib http_client::ledger:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-ledger.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-transport.log"
+          cargo test --locked -p nagi-runtime --lib auth::admission_bridge_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-admission.log"
+          cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-auth-core.log"
+          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-credential.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-core.log"
+          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::hickory::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-hickory.log"
+          cargo test --locked -p nagi-runtime --lib http_client::address::q1_dial::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-q1-pure.log"
+          python - <<'PY_SUMMARY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 83, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
+          for name, count in expected.items():
+              data = (root / name).read_text(encoding="utf-8")
+              running = re.findall(r"(?m)^running (\d+) tests?$", data)
+              results = re.findall(r"(?m)^test result: ok\. (\d+) passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in .+$", data)
+              if running != [str(count)] or results != [str(count)]:
+                  raise AssertionError(f"{name}: expected exactly {count} real, passing tests")
+          required_parent = {
+              'http_client::ledger::admission::tests::auth_enqueue_winning_entry_retains_record_after_concurrent_stop',
+              'http_client::ledger::admission::tests::branded_driver_history_rejects_second_driver_after_first_actual_join',
+              'http_client::ledger::admission::tests::branded_phase_winner_finishes_once_then_stop_denies_next_entry',
+              'http_client::ledger::admission::tests::branded_runner_rejects_foreign_same_id_at_every_port',
+              'http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock',
+              'http_client::ledger::admission::tests::entry_guard_preserves_stop_after_a_winning_cas',
+              'http_client::ledger::admission::tests::last_sender_drop_does_not_wait_for_watch_value_borrow',
+              'http_client::ledger::admission::tests::old_key_cannot_authorize_reused_numeric_slot',
+              'http_client::ledger::admission::tests::owner_destructor_posts_stop_without_waiting_for_waiter_gate',
+              'http_client::ledger::admission::tests::parent_drop_posts_stop_and_pending_grant_cannot_enqueue',
+              'http_client::ledger::admission::tests::repeated_stop_has_no_self_wake_while_pending_root_is_joined',
+              'http_client::ledger::admission::tests::runner_handle_is_not_counted_and_last_sender_closes_eof',
+              'http_client::ledger::admission::tests::stop_after_consumed_real_auth_permit_refuses_record_publication',
+              'http_client::ledger::admission::tests::unwinding_entry_guard_closes_without_clearing_stop',
+          }
+          ledger_text = (root / "sf06-private-ledger.log").read_text(encoding="utf-8")
+          passed_parent = set(re.findall(
+              r"(?m)^test (http_client::ledger::admission::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          ))
+          if not required_parent.issubset(passed_parent):
+              raise AssertionError("SF06 branded parent test names missing or unsuccessful")
+          required_added = {
+              'http_client::ledger::admission::tests::abandon_popped_unstarted_retires_without_parent_stop',
+              'http_client::ledger::admission::tests::abandon_drop_under_owner_waiter_watch_gates_is_prompt_and_reaped',
+              'http_client::ledger::admission::tests::abandon_unwind_before_root_registration_retires',
+              'http_client::ledger::admission::tests::abandon_cancel_keeps_popped_payload_until_drop',
+              'http_client::ledger::admission::tests::borrowed_root_requires_command_and_keeps_join_distinct_from_payload_drop',
+              'http_client::ledger::admission::tests::rejected_root_future_drops_outside_owner_and_command_remains_armed',
+              'http_client::ledger::admission::tests::rejected_root_future_unwind_leaves_command_abandonment_reapable',
+              'http_client::ledger::admission::tests::successful_root_completion_does_not_report_command_abandonment',
+              'http_client::ledger::admission::tests::unexpected_root_abort_retains_sticky_fault_not_abandonment',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_abort',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_panic',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_foreign_same_numeric_id_must_not_construct',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_stale_phase_fail_must_not_poison_reused_id',
+              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_native_poll_must_hold_busy_entry_through_stop',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_unregistered_root_refuses_then_same_key_starts',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_stop_before_entry_keeps_native_and_fault_zero',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_entry_winner_registers_one_child_after_stop',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_cancelled_root_keeps_ticket_until_receipt_and_join',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_joined_root_refuses_start_but_same_key_receipt_drains',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_deadline_after_entry_skips_native_primitive',
+              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_root_finishes_during_book_wait_skips_io',
+          }
+          required_delivery = {
+              'http_client::ledger::admission::tests::sf06_closed_runtime_child_drop_is_outside_owner_and_entry',
+              'http_client::ledger::admission::tests::sf06_closed_runtime_root_drop_is_outside_owner_and_entry',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_fallback_retains_external_child_and_wakes_after_cancelled_waiter',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_monitor_retains_external_child_paused_delivery',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_poisoned_owner_retains_external_child_until_delivery',
+              'http_client::ledger::tests::sf06_delivery_drop_panic_does_not_acknowledge',
+              'http_client::ledger::tests::sf06_delivery_register_recheck_and_independent_broadcast_wakes',
+              'http_client::ledger::tests::sf06_failed_send_blocking_drop_retains_debt_and_cancelled_bare_drain',
+              'http_client::ledger::tests::sf06_paused_delivery_retains_actual_handle_quota_and_join_bit',
+              'http_client::ledger::tests::sf06_receipt_tracks_exact_reused_task_slot',
+              'http_client::ledger::tests::sf06_stop_expiry_and_fault_cannot_join_before_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_closed_runtime_dns_drop_is_outside_owner_book_and_entry',
+              'http_client::ledger::tracked_dns::tests::sf06_multiple_dns_waiters_and_cancelled_waiter_wake_on_delivery',
+              'http_client::ledger::tracked_dns::tests::sf06_paused_dns_delivery_retains_io_ticket_until_failed_send_drop',
+          }
+          passed_ledger = set(re.findall(
+              r"(?m)^test (http_client::ledger::[a-z0-9_:]+) \.\.\. ok$", ledger_text,
+          ))
+          if not required_added.issubset(passed_ledger):
+              raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
+          if not required_delivery.issubset(passed_ledger):
+              raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
+          required_operation = {
+              'http_client::ledger::operation::tests::adapter_panic_remains_fault_after_actual_root_join',
+              'http_client::ledger::operation::tests::dropped_execute_retains_cleanup_until_actual_native_joins',
+              'http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join',
+              'http_client::ledger::operation::tests::owner_close_refuses_publish_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unpolled_execute_starts_no_admission_or_native_resolution',
+              'http_client::ledger::operation::tests::original_deadline_survives_provisional_response_and_join_wait',
+              'http_client::ledger::operation::tests::unreceived_response_keeps_core_budget_after_actual_native_joins',
+              'http_client::ledger::operation::tests::unsupported_encoding_is_unknown_and_never_replayed',
+          }
+          passed_operation = re.findall(
+              r"(?m)^test (http_client::ledger::operation::tests::[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_operation) != required_operation or len(passed_operation) != len(required_operation):
+              raise AssertionError("SF06 operation test names missing, duplicated, or unsuccessful")
+          required_h0 = {
+              'http_client::ledger::admission::tests::sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings',
+              'http_client::ledger::admission::tests::sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority',
+              'http_client::ledger::admission::tests::sf06_h0_paused_root_return_preserves_stage_through_stop_expiry_and_poison',
+              'http_client::ledger::admission::tests::sf06_h0_pre_bind_unwind_retains_debt_and_original_payload',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_inner_unwind_retains_debt_and_reaps_known_client_fault',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_outer_unwind_cannot_retire_monitor_record_as_joined',
+              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_unresolved_outer_drains_known_inner_without_retiring',
+              'http_client::ledger::tests::sf06_h0_launch_publication_wakes_independent_waiters_and_retains_receipt',
+              'http_client::ledger::tracked_dns::tests::sf06_h0_paused_dns_root_retains_quota_without_io_authority',
+          }
+          passed_h0 = re.findall(
+              r"(?m)^test ([a-z0-9_:]*::sf06_h0_[a-z0-9_]+) \.\.\. ok$",
+              ledger_text,
+          )
+          if set(passed_h0) != required_h0 or len(passed_h0) != len(required_h0):
+              raise AssertionError("SF06 H0 test names missing, duplicated, or unsuccessful")
+          required_q1_native = {
+              'http_client::address::socket_pin::q1_native::tests::q1_native_attempt_cap_prevents_second_connector_and_releases_first_slot',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_closed_plan_starts_no_connector',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_close_during_pending_connect_does_not_attempt_second_address',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_terminal_connect_failure_does_not_try_another_candidate',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_cancelled_caller_is_joined_before_reusing_socket_quota',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_ttl_zero_is_usable_for_one_owned_operation_without_cache',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_refused_first_address_connects_only_checked_second_peer',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_port_pair_retry_releases_guard_and_is_bounded',
+              'http_client::address::socket_pin::q1_native::tests::q1_native_expired_original_connect_end_does_not_reset_budget',
+          }
+          transport_text = (root / "sf06-private-transport.log").read_text(encoding="utf-8")
+          passed_q1_native = re.findall(
+              r"(?m)^test (http_client::address::socket_pin::q1_native::tests::q1_native_[a-z0-9_]+) \.\.\. ok$",
+              transport_text,
+          )
+          if set(passed_q1_native) != required_q1_native or len(passed_q1_native) != len(required_q1_native):
+              raise AssertionError("SF06 Q1 native test names missing, duplicated, unexpected, or unsuccessful")
+          PY_SUMMARY
+      - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib auth::ed25519:: 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-core.log"
+          cargo test --locked -p nagi-runtime --test ed25519_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-public.log"
+          python - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf02-ed25519-core.log": 14, "sf02-ed25519-public.log": 1}.items():
+              text = (root / name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;", text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PY
+      - name: Check SF07 charged native wire checkpoint
+        id: sf07_checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            NAGI_TEST_BASH="$(cygpath -w "$BASH")"
+          else
+            NAGI_TEST_BASH="$BASH"
+          fi
+          export NAGI_TEST_BASH
+          python -B scripts/tests/test_sf07_owned_state_summary.py
+          python -B scripts/tests/test_sf07_prelogin_owner_diagnostic.py
+          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
+          cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
+          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup
+          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::retained_catalog_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py catalog-retained
+          cargo test --locked -p nagi-runtime --lib auth::csrf::fixed_body::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py fixed-owner
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py csrf-issuer
+          cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py prelogin-issuer
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send
+      - name: Capture bounded SF07 prelogin owner stages after checkpoint failure
+        id: sf07_prelogin_owner_diag
+        if: failure() && steps.sf07_checkpoint.outcome == 'failure' && !cancelled()
+        shell: bash
+        run: |
+          python -B scripts/ci/sf07_prelogin_owner_diagnostic.py "$RUNNER_TEMP/sf07-prelogin-owner"
+      - name: Preserve bounded SF07 prelogin owner stages
+        if: always() && steps.sf07_checkpoint.outcome == 'failure' && steps.sf07_prelogin_owner_diag.outputs.sanitized == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: sf07-prelogin-owner-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: ${{ runner.temp }}/sf07-prelogin-owner/auth-stage-prelogin.trace
+          if-no-files-found: ignore
+      - name: Check owned BrowserLogin business stage and cancellation witnesses
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
+      - name: Observe resources before the B1 acceptance group
+        shell: bash
+        run: |
+          python - <<'PYB1RESOURCE'
+          import math, os, pathlib, shutil
+          cpu = os.cpu_count() or 0
+          cpu = cpu if 0 < cpu <= 65535 else 0
+          load_ok, load = 0, [0, 0, 0]
+          try:
+              values = os.getloadavg()
+              if len(values) == 3 and all(math.isfinite(v) and 0 <= v <= 1000000 for v in values):
+                  load_ok, load = 1, [int(v * 1000) for v in values]
+          except (AttributeError, OSError):
+              pass
+          memory_ok, memory = 0, [0, 0, 0, 0, 0]
+          try:
+              with open('/proc/meminfo', 'rb') as source:
+                  raw = source.read(4097)
+              fields = {}
+              if len(raw) <= 4096:
+                  for line in raw.decode('ascii').splitlines():
+                      key, _, rest = line.partition(':')
+                      if key in ('MemTotal', 'MemAvailable', 'SwapFree', 'Dirty', 'Writeback'):
+                          value, unit = rest.split()
+                          if unit != 'kB' or not value.isdecimal() or len(value) > 16:
+                              raise ValueError('invalid memory field')
+                          fields[key] = int(value)
+                  if len(fields) == 5:
+                      memory_ok = 1
+                      memory = [fields[key] for key in ('MemTotal', 'MemAvailable', 'SwapFree', 'Dirty', 'Writeback')]
+          except (OSError, UnicodeError, ValueError):
+              pass
+          disk_ok, disk = 0, [0, 0]
+          try:
+              usage = shutil.disk_usage(pathlib.Path(os.environ['RUNNER_TEMP']))
+              if 0 <= usage.free <= usage.total < 2**64:
+                  disk_ok, disk = 1, [usage.total, usage.free]
+          except (KeyError, OSError):
+              pass
+          print('b1_bootstrap_resources cpu={} load_supported={} load1_milli={} load5_milli={} load15_milli={} memory_supported={} mem_total_kib={} mem_available_kib={} swap_free_kib={} dirty_kib={} writeback_kib={} disk_supported={} disk_total_bytes={} disk_free_bytes={}'.format(cpu, load_ok, *load, memory_ok, *memory, disk_ok, *disk))
+          # Unsupported resource fields remain explicitly unavailable.
+          PYB1RESOURCE
+      - name: Check B1 Session CSRF runtime and public socket contracts
+        id: b1_csrf_runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          python -B scripts/tests/test_csrf_deadline_mutations.py
+          cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-core.log"
+          cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"
+          cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":15, "sf03-b1-csrf-public.log":10}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          required_csrf_capacity = {
+              "auth::csrf::tests::bytes_limit_is_independent_and_expired_cleanup_spends_one_batch",
+              "auth::csrf::tests::expired_token_reclaims_byte_capacity_without_relaxing_live_token_cap",
+              "auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry",
+              "auth::csrf::tests::reopened_context_preserves_original_token_expiry_and_rejects_after_deadline",
+          }
+          csrf_text=(root/"sf03-b1-csrf-core.log").read_text(encoding="utf-8")
+          for required in required_csrf_capacity:
+              passed=re.findall(rf"(?m)^test {re.escape(required)} \.\.\. ok$",csrf_text)
+              if len(passed)!=1:
+                  raise AssertionError("CSRF capacity oracle missing, duplicate, or unsuccessful")
+          PYCODE
+          python -B scripts/ci/csrf_deadline_mutations.py --coverage "$RUNNER_TEMP/sf03-b1-csrf-deadline.log" 0 "$RUNNER_TEMP/csrf-deadline-coverage.json"
+      - name: Observe B1 bootstrap only after original acceptance failure
+        if: failure() && steps.b1_csrf_runtime.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PYB1RESOURCE'
+          import math, os, pathlib, shutil
+          cpu = os.cpu_count() or 0
+          cpu = cpu if 0 < cpu <= 65535 else 0
+          load_ok, load = 0, [0, 0, 0]
+          try:
+              values = os.getloadavg()
+              if len(values) == 3 and all(math.isfinite(v) and 0 <= v <= 1000000 for v in values):
+                  load_ok, load = 1, [int(v * 1000) for v in values]
+          except (AttributeError, OSError):
+              pass
+          memory_ok, memory = 0, [0, 0, 0, 0, 0]
+          try:
+              with open('/proc/meminfo', 'rb') as source:
+                  raw = source.read(4097)
+              fields = {}
+              if len(raw) <= 4096:
+                  for line in raw.decode('ascii').splitlines():
+                      key, _, rest = line.partition(':')
+                      if key in ('MemTotal', 'MemAvailable', 'SwapFree', 'Dirty', 'Writeback'):
+                          value, unit = rest.split()
+                          if unit != 'kB' or not value.isdecimal() or len(value) > 16:
+                              raise ValueError('invalid memory field')
+                          fields[key] = int(value)
+                  if len(fields) == 5:
+                      memory_ok = 1
+                      memory = [fields[key] for key in ('MemTotal', 'MemAvailable', 'SwapFree', 'Dirty', 'Writeback')]
+          except (OSError, UnicodeError, ValueError):
+              pass
+          disk_ok, disk = 0, [0, 0]
+          try:
+              usage = shutil.disk_usage(pathlib.Path(os.environ['RUNNER_TEMP']))
+              if 0 <= usage.free <= usage.total < 2**64:
+                  disk_ok, disk = 1, [usage.total, usage.free]
+          except (KeyError, OSError):
+              pass
+          print('b1_supplement_resources cpu={} load_supported={} load1_milli={} load5_milli={} load15_milli={} memory_supported={} mem_total_kib={} mem_available_kib={} swap_free_kib={} dirty_kib={} writeback_kib={} disk_supported={} disk_total_bytes={} disk_free_bytes={}'.format(cpu, load_ok, *load, memory_ok, *memory, disk_ok, *disk))
+          # Unsupported resource fields remain explicitly unavailable.
+          PYB1RESOURCE
+          set +e
+          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib worker2_ -- --show-output 2>&1 | python -c 'import sys
+          remaining=256*1024+1
+          while True:
+           chunk=sys.stdin.buffer.read(8192)
+           if not chunk:
+            break
+           if remaining:
+            sys.stdout.buffer.write(chunk[:remaining])
+            remaining-=min(remaining,len(chunk))
+          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/b1-bootstrap-supplement.raw"
+          b1_diag_status=("${PIPESTATUS[@]}")
+          set -e
+          B1_DIAGNOSTIC_CARGO_RC="${b1_diag_status[0]}" B1_DIAGNOSTIC_CAPTURE_RC="${b1_diag_status[1]}" python - <<'PYB1LOG'
+          import os, pathlib, re
+          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'b1-bootstrap-supplement.raw'
+          raw, read_ok = b'', 0
+          try:
+              with path.open('rb') as source:
+                  raw = source.read(256 * 1024 + 1)
+              read_ok = 1
+          except OSError:
+              pass
+          finally:
+              try:
+                  path.unlink(missing_ok=True)
+              except OSError:
+                  read_ok = 0
+          def code(name):
+              value = os.environ.get(name, '')
+              return int(value) if re.fullmatch(r'[0-9]{1,3}', value) and int(value) <= 255 else 255
+          cargo_rc = code('B1_DIAGNOSTIC_CARGO_RC')
+          capture_rc = code('B1_DIAGNOSTIC_CAPTURE_RC')
+          fields = {
+              'session_deadline_diag': 'status phase event db exit polls begins commands commits budget_ms entry_remaining_ms phase_remaining_ms exit_remaining_ms',
+              'session_private_deadline_diag': 'status phase event db polls begins commands commits budget_ms entry_remaining_ms phase_remaining_ms exit_remaining_ms terminal',
+              'csrf_token_deadline_diag': 'status phase event db exit polls begins commands commits budget_ms entry_remaining_ms phase_remaining_ms exit_remaining_ms terminal',
+              'csrf_guarded_deadline_diag': 'status phase event db exit polls begins commands commits budget_ms entry_remaining_ms phase_remaining_ms exit_remaining_ms selected_deadline_passed terminal',
+              'session_native_finish_diag': 'status origin terminal diagnostic_valid native_state commit_result cleanup_result cleanup_reason commit_enter_us commit_return_us cleanup_enter_us cleanup_return_us settled_us begins commits selected_deadline_passed',
+              'session_native_call_diag': 'status origin terminal diagnostic_valid native_call_state generation call_enter_us call_return_us native_state commit_result settled_us begins commits selected_deadline_passed',
+              'b1_startup_bootstrap': 'stage status created idle elapsed_us',
+              'b1_startup_bootstrap_gate': 'stage created idle elapsed_us',
+          }
+          patterns = {prefix: re.compile(prefix + ''.join(' ' + key + '=' + (r'(?:issue|csrf)' if key == 'stage' else r'[0-9]{1,20}') for key in keys.split())) for prefix, keys in fields.items()}
+          case_root = 'http_server::csrf_http::deadline_tests::pool_readiness_tests::'
+          cases = ('cold_worker2_startup_spends_original_guarded_http_budget', 'ready_worker2_setup_preserves_same_guarded_http_budget')
+          inventory = re.compile(r'^test ' + re.escape(case_root) + '(' + '|'.join(cases) + r') \.\.\. (ok|FAILED)$')
+          summary = re.compile(r'^test result: (ok|FAILED)\. ([0-9]+) passed; ([0-9]+) failed; ([0-9]+) ignored; ([0-9]+) measured; ([0-9]+) filtered out; finished in [0-9]+(?:\.[0-9]+)?s$')
+          heading = re.compile(r'^---- ' + re.escape(case_root) + '(' + '|'.join(re.escape(name) for name in cases) + r') stdout ----$')
+          arm = 0
+          rows, seen, summaries, malformed = [], [], [], 0
+          for line in raw.decode('utf-8', errors='replace').splitlines():
+              if line.startswith('---- ') and line.endswith(' stdout ----'):
+                  match = heading.fullmatch(line)
+                  arm = cases.index(match.group(1)) + 1 if match else 0
+              elif line.startswith(('test result:', 'successes:', 'failures:')):
+                  arm = 0
+              prefix = line.split(' ', 1)[0]
+              if prefix in patterns:
+                  if len(line) <= 1024 and patterns[prefix].fullmatch(line) and len(rows) < 64:
+                      rows.append((arm, line))
+                  else:
+                      malformed = 1
+              found = inventory.fullmatch(line)
+              if found:
+                  seen.append(found.groups())
+              found = summary.fullmatch(line)
+              if found:
+                  summaries.append(found.groups())
+          overflow = int(len(raw) > 256 * 1024)
+          inventory_ok = int(len(seen) == 2 and sorted(name for name, _ in seen) == sorted(cases))
+          summary_ok = 0
+          if inventory_ok and len(summaries) == 1:
+              kind, passed, failed, ignored, measured, _ = summaries[0]
+              passed, failed = int(passed), int(failed)
+              expected_passed = sum(state == 'ok' for _, state in seen)
+              summary_ok = int(passed == expected_passed and passed + failed == 2 and ignored == '0' and measured == '0' and ((cargo_rc == 0 and kind == 'ok' and failed == 0) or (cargo_rc != 0 and kind == 'FAILED' and failed > 0)))
+          bootstrap = [row for _, row in rows if row.startswith('b1_startup_bootstrap')]
+          bootstrap_ok = int(bool(bootstrap))
+          if cargo_rc == 0:
+              bootstrap_ok = int(len(bootstrap) == 4 and sum(row.startswith('b1_startup_bootstrap stage=issue status=200 ') for row in bootstrap) == 2 and sum(row.startswith('b1_startup_bootstrap stage=csrf status=200 ') for row in bootstrap) == 2)
+          available = int(read_ok and not capture_rc and not overflow and not malformed and inventory_ok and summary_ok and bootstrap_ok)
+          if not overflow and not malformed:
+              for arm, row in rows:
+                  print('b1_supplement_record arm={} {}'.format(arm, row))
+          print('b1_supplement_result cargo_rc={} capture_rc={} captured_bytes={} overflow={} malformed={} records={} inventory_ok={} summary_ok={} bootstrap_ok={} diagnostic_available={}'.format(cargo_rc, capture_rc, len(raw), overflow, malformed, len(rows), inventory_ok, summary_ok, bootstrap_ok, available))
+          raise SystemExit(cargo_rc if available else 1)
+          PYB1LOG
+      - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-b1-compiler-evidence"
+          cargo test --locked -p nagic --lib stdlib::csrf_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-metadata.log"
+          cargo test --locked -p nagic --test security_sf03_b1 2>&1 | tee "$RUNNER_TEMP/sf03-b1-compiler.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf03-b1-metadata.log":2, "sf03-b1-compiler.log":5}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          generated=list((root/'sf03-b1-compiler-evidence').glob('*sf03-b1-guarded*-generated.rs'))
+          if len(generated)!=3 or any(not p.read_bytes() for p in generated):
+              raise AssertionError(f"expected three unmodified generated Rust artifacts, found {generated}")
+          PYCODE
+      - name: Check SF03 CORS runtime metadata socket and native compiler contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-cors-evidence"
+          cargo test --locked -p nagi-runtime --lib http_server::cors::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-runtime.log"
+          cargo test --locked -p nagi-runtime --test cors_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-cors-socket.log"
+          cargo test --locked -p nagic --lib stdlib::cors_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-metadata.log"
+          cargo test --locked -p nagic --test security_sf03_cors 2>&1 | tee "$RUNNER_TEMP/sf03-cors-compiler.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name,count in {'sf03-cors-runtime.log': 6, 'sf03-cors-socket.log': 7, 'sf03-cors-metadata.log': 2, 'sf03-cors-compiler.log': 5}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: positive exact selected cases required")
+          generated=list((root/'sf03-cors-evidence').glob('*sf03-cors-*-generated.rs'))
+          if len(generated)!=6 or any(not path.read_bytes() for path in generated):
+              raise AssertionError("expected six unmodified generated Rust artifacts")
+          PYCODE
+      - name: Capture current compiler resource goldens with assertions enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          NAGI_GOLDEN_CAPTURE_DIR="$RUNNER_TEMP/sf03-cors-goldens" cargo test --locked -p nagic --lib resource_contract_goldens::
+      - name: Retain CORS native and actual golden capture evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: sf03-cors-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            ${{ runner.temp }}/sf03-cors-*.log
+            ${{ runner.temp }}/sf03-cors-evidence/
+            ${{ runner.temp }}/sf03-cors-goldens/
+          if-no-files-found: ignore
+      - name: Check canonical Session metadata and High Low native contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -c 'import os; print("ICU4X_DATA_DIR present:", "ICU4X_DATA_DIR" in os.environ)'
+          unset ICU4X_DATA_DIR
+          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf02-compiler-evidence"
+          cargo test --locked -p nagic --lib stdlib::session_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-session-metadata.log"
+          cargo test --locked -p nagic --test security_sf02 2>&1 | tee "$RUNNER_TEMP/sf02-session-compiler.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          root=pathlib.Path(os.environ["RUNNER_TEMP"])
+          for name, count in {"sf02-session-metadata.log":3, "sf02-session-compiler.log":4}.items():
+              text=(root/name).read_text(encoding="utf-8")
+              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
+                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
+          PYCODE
+      - name: Check test-only SF07 indexed core and frozen reference inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
+          python scripts/check_sf07_private_tests.py "$RUNNER_TEMP/sf07-private-core.log"
+      - run: cargo build --release --locked -p nagic
+      - name: Check HTTP registry emission before the platform regression
+        run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization --test security_sf05_native
+      - name: Check editor behavior on the target platform
+        shell: bash
+        run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
+      - name: Check SF05 Query migration and protected native SQL on the target platform
+        shell: bash
+        env:
+          NAGI_TEST_ARTIFACT_DIR: ${{ github.workspace }}/build/security-sf05/native
+          SF05_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -o pipefail
+          mkdir -p build/security-sf05
+          cargo test --locked -p nagic --test security_sf05 2>&1 | tee "build/security-sf05/sf05-checker.log"
+          cargo test --locked -p nagic --test security_sf05_native 2>&1 | tee "build/security-sf05/sf05-native.log"
+          cargo test --locked -p nagi-runtime --lib sqlite::security_sf05_tests:: 2>&1 | tee "build/security-sf05/sf05-admission.log"
+          python -c 'import pathlib,re,os; root=pathlib.Path("build/security-sf05"); counts={"sf05-checker.log":13,"sf05-native.log":1,"sf05-admission.log":6}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
+          python benchmarks/security-sf05/ci_provenance.py build/security-sf05
+      - name: Preserve SF05 source identity and native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: security-sf05-${{ matrix.platform }}
+          path: build/security-sf05/
+          if-no-files-found: warn
+      - name: Check SQLite High and handwritten Low contract registration
+        run: cargo test --locked -p nagic --test sqlite_contract_inputs
+      - name: Verify bilingual first-app tutorial in High and saved Low
+        run: python scripts/verify_onboarding_examples.py
+      - name: Check planned SQLite runner stage and source-location oracles
+        run: cargo test --locked -p nagic --example sqlite-contract-check
+      - name: Check SQLite contracts and native High, saved Low and handwritten Low
+        shell: bash
+        run: |
+          cargo run --locked -p nagic --example sqlite-contract-check -- --report "$RUNNER_TEMP/sqlite-contracts.json"
+          cargo test --locked -p nagic --test sqlite_public
+      - name: Check public Task bridge lifecycle on the target platform
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked -p nagi-runtime --lib task::tests:: 2>&1 | tee "$RUNNER_TEMP/task-runtime.log"
+          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"task-runtime.log").read_text(); assert re.search(r"test result: ok\. 17 passed; 0 failed; 0 ignored;",text),text'
+          cargo test --locked -p nagi-runtime --test task_handles
+          cargo test --locked -p nagi-runtime --doc
+
+      - name: Check Task checker contracts on the target platform
+        shell: bash
+        run: cargo run --locked -p nagic --example task-contract-red -- --report "$RUNNER_TEMP/task-contracts.json"
+      - name: Check Task examples in High, saved Low and handwritten Low
+        run: python scripts/verify_library_examples.py --only task-results
+      - name: Check typed monitor and HTTP service in all three forms
+        run: python scripts/verify_library_examples.py --only supervised-service
+      - name: Check successful application artifact selection
+        run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
+      - name: Check Axum native test execution and result validation
+        run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
+      - name: Check oversized HTTP bodies and connection recovery on the target platform
+        run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1 --nocapture
+      - name: Check HTTP panic recovery on the target platform
+        run: cargo test --locked -p nagi-runtime panic_ -- --test-threads=1
+      - name: Check HTTP handler deadlines on the target platform
+        run: cargo test --locked -p nagi-runtime handler_timeout_ -- --test-threads=1
+      - name: Check native buffered send deadline and idle Keep-Alive on the target platform
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PYSOURCE'
+          import hashlib, pathlib
+          expected = {
+              'runtime/src/http_server.rs': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
+              'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
+              'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
+              'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
+              'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
+          }
+          for name, digest in expected.items():
+              source = pathlib.Path(name).read_bytes()
+              if b"\r" in source.replace(b"\r\n", b"\n"):
+                  raise AssertionError("unexpected lone CR in native fixture source")
+              actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+              if actual != digest:
+                  raise AssertionError("reviewed native send fixture source differs: " + name)
+              print("native send fixture sha256=" + actual + " file=" + name)
+          PYSOURCE
+          cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-send-deadline.log").read_text(encoding="utf-8")
+          required={
+              "header_flush_before_buffered_frame_keeps_original_send_end",
+              "empty_response_completion_does_not_expire_idle_keep_alive",
+              "buffered_response_completion_does_not_expire_idle_keep_alive",
+          }
+          summaries=re.findall(r"(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;.*$",text)
+          if len(summaries)!=1:
+              raise AssertionError("three actual native send-deadline cases required")
+          for name in required:
+              pattern=rf"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \.\.\. ok$"
+              if len(re.findall(pattern,text))!=1:
+                  raise AssertionError("native send-deadline case missing, duplicate or failed")
+          PYCODE
+      - name: Check demo packaging with Windows PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          ./scripts/build_windows_demo.ps1 -Source examples/hello.nagi -Offline
+          $output = & ./build/distribution/nagi-hello.exe
+          if ($LASTEXITCODE -ne 0 -or $output -notcontains 'Hello, Nagi!') { throw 'Packaged Hello failed.' }
+      - name: Check demo packaging with PowerShell 7
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/build_windows_demo.ps1 -Source examples/hello.nagi -Offline
+          $output = & ./build/distribution/nagi-hello.exe
+          if ($LASTEXITCODE -ne 0 -or $output -notcontains 'Hello, Nagi!') { throw 'Packaged Hello failed.' }
+          ./test-nagi-code/build_fractal_exe.ps1 -Offline
+          $output = 'q' | & ./build/distribution/nagi-fractal.exe
+          if ($LASTEXITCODE -ne 0 -or -not ($output -match 'Goodbye!')) { throw 'Packaged fractal failed.' }
+      - name: Package tracked source and the compiler
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_EXECUTABLE: ${{ matrix.executable }}
+        shell: bash
+        run: python scripts/releases/package.py --binary "target/release/$RELEASE_EXECUTABLE" --version "$RELEASE_VERSION" --platform "$RELEASE_PLATFORM"
+      - name: Verify an extracted distribution outside the checkout
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_EXECUTABLE: ${{ matrix.executable }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts/releases')
+          from verify import verify
+          version, platform = os.environ['RELEASE_VERSION'], os.environ['RELEASE_PLATFORM']
+          suffix = '.zip' if os.name == 'nt' else '.tar.gz'
+          verify(Path('build/distribution') / f'nagi-{version}-{platform}{suffix}', version, platform, Path('native-target'))
+          PY
+      - name: Check HTTP route parameters on the target platform
+        run: python tests/route_integration.py
+      - name: Check standard HTTP High and saved Low on the target platform
+        run: python tests/http_stdlib_integration.py
+      - name: Check scoped task captures on the target platform
+        run: cargo test --locked -p nagic --test scoped_tasks
+      - name: Check actor lifecycle and supervisor cancellation on the target platform
+        run: |
+          cargo test --locked -p nagi-runtime actor::
+          cargo test --locked -p nagi-runtime supervisor_drop
+      - name: Check SQLite row counts on the target platform
+        run: cargo test --locked -p nagi-runtime database::tests
+      - name: Check public SQLite session cleanup, cancellation and close on the target platform
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked -p nagi-runtime --lib sqlite:: 2>&1 | tee "$RUNNER_TEMP/sqlite-runtime.log"
+          python scripts/ci/assert_sqlite_test_summary.py "$RUNNER_TEMP/sqlite-runtime.log"
+          cargo test --locked -p nagi-runtime --test sqlite_public_api
+      - name: Check SF04 HTML core, finalizer, and public runtime API on the target platform
+        shell: bash
+        run: |
+          set -o pipefail
+          if [[ ${ICU4X_DATA_DIR+x} ]]; then
+            echo "ICU4X_DATA_DIR_PRESENT=true"
+          else
+            echo "ICU4X_DATA_DIR_PRESENT=false"
+          fi
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib html::tests:: 2>&1 | tee "$RUNNER_TEMP/sf04-html-core.log"
+          cargo test --locked -p nagi-runtime --lib http_server::finalizer_ 2>&1 | tee "$RUNNER_TEMP/sf04-html-finalizer.log"
+          cargo test --locked -p nagi-runtime --test html_core_api 2>&1 | tee "$RUNNER_TEMP/sf04-html-api.log"
+          NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf04-native-artifacts" cargo test --locked -p nagic --test security_sf04 2>&1 | tee "$RUNNER_TEMP/sf04-native-contracts.log"
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          expected = {
+              "sf04-html-core.log": 20,
+              "sf04-html-finalizer.log": 9,
+              "sf04-html-api.log": 1,
+              "sf04-native-contracts.log": 4,
+          }
+          for filename, count in expected.items():
+              text = (root / filename).read_text(encoding="utf-8")
+              pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out;"
+              assert re.search(pattern, text), f"expected exactly {count} passing tests in {filename}; got:\n{text}"
+          PY
+      - name: Verify bilingual SQLite tutorial through High and independent saved Low
+        run: python scripts/verify_sqlite_example.py
+      - name: Verify High, saved Low, and standalone Low applications
+        run: python scripts/verify_application_examples.py
+      - name: Verify the PowerShell installer and User PATH
+        if: matrix.platform == 'windows-x86_64'
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
+        shell: pwsh
+        run: ./scripts/releases/test_install.ps1 -Archive "build/distribution/nagi-$env:RELEASE_VERSION-windows-x86_64.zip" -Version $env:RELEASE_VERSION -TestUserPath
+      - name: Verify Windows PowerShell 5.1 installation and upgrades
+        if: matrix.platform == 'windows-x86_64'
+        env:
+          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
+        shell: powershell
+        run: ./scripts/releases/test_install.ps1 -Archive "build/distribution/nagi-$env:RELEASE_VERSION-windows-x86_64.zip" -Version $env:RELEASE_VERSION -TestUserPath
+      - name: Verify uninstallation with PowerShell 7
+        if: matrix.platform == 'windows-x86_64'
+        shell: pwsh
+        run: ./scripts/releases/test_uninstall.ps1
+      - name: Verify uninstallation with Windows PowerShell 5.1
+        if: matrix.platform == 'windows-x86_64'
+        shell: powershell
+        run: ./scripts/releases/test_uninstall.ps1
+      - name: Verify the shell installer
+        if: matrix.platform != 'windows-x86_64'
+        run: python -m unittest discover -s scripts/releases -p 'test_install.py'
+      - name: Verify the shell uninstaller
+        if: matrix.platform != 'windows-x86_64'
+        run: python -m unittest discover -s scripts/releases -p 'test_uninstall.py'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 14 # ci-retention
+          name: release-${{ matrix.platform }}
+          path: |
+            build/distribution/nagi-*.zip
+            build/distribution/nagi-*.tar.gz
+            build/distribution/nagi-*.sha256
+          if-no-files-found: error
+      - name: Preserve target-platform HTTP receipt observation
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: http413-observation-${{ matrix.platform }}
+          path: build/compiler-failures/http413-nodelay-*.json
+          if-no-files-found: ignore
+      - name: Measure bounded SF07 response and rate profile
+        env:
+          CARGO_TERM_COLOR: never
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B scripts/tests/test_sf07_profile_summary.py
+          cargo test --locked -p nagi-runtime --test sf07_small_profile --no-run
+          cargo test --locked -p nagi-runtime --test sf07_small_profile -- --list > "$RUNNER_TEMP/sf07-profile-list.log"
+          python - <<'PYSF07LIST'
+          import os,pathlib,re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"sf07-profile-list.log").read_text()
+          if re.findall(r"(?m)^([a-z0-9_]+): test$",text) != ["response_profile_reports_closed_measurements"]:
+              raise SystemExit("sf07_profile_inventory=invalid")
+          PYSF07LIST
+          set +e
+          cargo test --locked -p nagi-runtime --test sf07_small_profile response_profile_reports_closed_measurements -- --exact --show-output > "$RUNNER_TEMP/sf07-profile-native.log" 2>&1
+          profile_rc=$?
+          set -e
+          python -B scripts/ci/sf07_profile_summary.py --cargo-exit-code "$profile_rc" < "$RUNNER_TEMP/sf07-profile-native.log"
+      - name: Preserve target-platform compiler, application, and HTTP observation evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: compiler-failures-${{ matrix.platform }}
+          path: build/compiler-failures/
+          if-no-files-found: ignore
+
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
+  platform-contracts:
+    name: Compiler and runtime contracts (${{ matrix.platform }})
+    needs: [changes, release-plan, ci-plan]
+    if: >-
+      always() && !cancelled() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
+      needs.ci-plan.result == 'success' && needs.ci-plan.outputs.package_checks == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.ci-plan.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    env:
+      NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+        id: rust
+      - name: Restore isolated platform contract builds
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        id: nagi_rust_cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: nagi-platform-contracts-v1-${{ matrix.platform }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-config-default-auth-browser-sf01-oracle-sf06-nodebug-noincremental-v1-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/ci/**', 'scripts/tests/**', 'tests/test_sf06_http_client_signature_diagnostic.py') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**', 'runtime-core/**') }}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - name: Verify the compiler host architecture
+        env:
+          RELEASE_RUST_HOST: ${{ matrix.rust_host }}
+        shell: bash
+        run: |
+          python - <<'PYHOST'
+          import os, subprocess
+          lines = subprocess.check_output(['rustc', '-vV'], text=True).splitlines()
+          host = next(line.removeprefix('host: ') for line in lines if line.startswith('host: '))
+          assert host == os.environ['RELEASE_RUST_HOST'], host
+          PYHOST
+      - name: Fetch locked runtime dependencies before offline tests
+        env:
+          RELEASE_RUST_HOST: ${{ matrix.rust_host }}
+        shell: bash
+        run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
+      - name: Check native buffered send deadline and idle Keep-Alive early on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PYSOURCE'
+          import hashlib, pathlib
+          expected = {
+              'runtime/src/http_server.rs': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
+              'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
+              'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
+              'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
+              'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
+          }
+          for name, digest in expected.items():
+              source = pathlib.Path(name).read_bytes()
+              if b"\r" in source.replace(b"\r\n", b"\n"):
+                  raise AssertionError("unexpected lone CR in native fixture source")
+              actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
+              if actual != digest:
+                  raise AssertionError("reviewed native send fixture source differs: " + name)
+              print("native send fixture sha256=" + actual + " file=" + name)
+          PYSOURCE
+          cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
+          python - <<'PYCODE'
+          import os, pathlib, re
+          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-send-deadline.log").read_text(encoding="utf-8")
+          required={
+              "header_flush_before_buffered_frame_keeps_original_send_end",
+              "empty_response_completion_does_not_expire_idle_keep_alive",
+              "buffered_response_completion_does_not_expire_idle_keep_alive",
+          }
+          summaries=re.findall(r"(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;.*$",text)
+          if len(summaries)!=1:
+              raise AssertionError("three actual native send-deadline cases required")
+          for name in required:
+              pattern=rf"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \.\.\. ok$"
+              if len(re.findall(pattern,text))!=1:
+                  raise AssertionError("native send-deadline case missing, duplicate or failed")
+          PYCODE
+      - name: Diagnose private Session phase deadlines on Windows
+        if: always() && runner.os == 'Windows'
+        timeout-minutes: 30
+        shell: bash
+        run: |
+          set +e
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
+            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
+              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
+              exit 2
+            fi
+            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
+          fi
+          python -B scripts/tests/test_session_private_deadline_diagnostic.py
+          fake_rc=$?
+          python -B scripts/ci/session_private_deadline_diagnostic.py --run
+          native_rc=$?
+          if [ "$fake_rc" -ne 0 ] || [ "$native_rc" -ne 0 ]; then exit 1; fi
+      - name: Check SF06 signature diagnostic fake cases
+        run: python -m unittest discover -s tests -p 'test_sf06_http_client_signature_diagnostic.py'
       - name: Check stalled send permit release and graceful join early on Windows
         if: runner.os == 'Windows'
         shell: bash
@@ -1425,12 +2325,6 @@ jobs:
               if len(re.findall(pattern,text))!=1:
                   raise AssertionError("stalled-send case missing, duplicate or failed")
           PYCODE
-      - name: Check call_member_ recovery first with exact result on the target platform
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test --locked -p nagic --test editor_assistance call_member_ -- --test-threads=1 2>&1 | tee "$RUNNER_TEMP/call-member-tests.log"
-          python scripts/ci/assert_call_member_test_summary.py "$RUNNER_TEMP/call-member-tests.log"
       - name: Check SF06 public HTTP client across package targets
         id: sf06_public_client
         env:
@@ -1754,223 +2648,6 @@ jobs:
           name: sf06-http-client-signature-${{ matrix.platform }}
           path: ${{ runner.temp }}/sf06-http-client-native/sf06-signature-diagnostic.json
           if-no-files-found: ignore
-      - name: Diagnose G3 generation-token failure before crypto checks
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${RUNNER_OS:-}" = "Windows" ]; then
-            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
-              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
-              exit 2
-            fi
-            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
-          fi
-          cargo test --locked -p nagi-runtime --test session_csrf_public_api guarded_rotation_and_logout_invalidate_old_generation_tokens -- --exact 2>&1 | tee "$RUNNER_TEMP/g3-generation-target.log"
-          python - <<'PY'
-          import os, pathlib, re
-          text = (pathlib.Path(os.environ["RUNNER_TEMP"]) / "g3-generation-target.log").read_text(encoding="utf-8")
-          summaries = re.findall(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;", text)
-          if summaries != [("ok", "1", "0", "0")]:
-              raise AssertionError(f"expected exactly one passing focused test (1 passed, 0 failed, 0 ignored), got {summaries}")
-          PY
-      - name: Check SF06 private native modules before broad runtime checks
-        shell: bash
-        run: |
-          set -euo pipefail
-          unset ICU4X_DATA_DIR
-          cargo test --locked -p nagi-runtime --lib http_client::ledger:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-ledger.log"
-          cargo test --locked -p nagi-runtime --lib http_client::address:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-transport.log"
-          cargo test --locked -p nagi-runtime --lib auth::admission_bridge_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-admission.log"
-          cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-auth-core.log"
-          cargo test --locked -p nagi-runtime --lib auth::credential_metadata_tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-credential.log"
-          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-core.log"
-          cargo test --locked -p nagi-runtime --lib http_client::ledger::tracked_dns::hickory::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-dns-hickory.log"
-          cargo test --locked -p nagi-runtime --lib http_client::address::q1_dial::tests:: 2>&1 | tee "$RUNNER_TEMP/sf06-private-q1-pure.log"
-          python - <<'PY_SUMMARY'
-          import os, pathlib, re
-          root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"sf06-private-ledger.log": 135, "sf06-private-transport.log": 83, "sf06-private-admission.log": 7, "sf06-private-auth-core.log": 9, "sf06-private-credential.log": 2, "sf06-private-dns-core.log": 30, "sf06-private-dns-hickory.log": 7, "sf06-private-q1-pure.log": 36}
-          for name, count in expected.items():
-              data = (root / name).read_text(encoding="utf-8")
-              running = re.findall(r"(?m)^running (\d+) tests?$", data)
-              results = re.findall(r"(?m)^test result: ok\. (\d+) passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in .+$", data)
-              if running != [str(count)] or results != [str(count)]:
-                  raise AssertionError(f"{name}: expected exactly {count} real, passing tests")
-          required_parent = {
-              'http_client::ledger::admission::tests::auth_enqueue_winning_entry_retains_record_after_concurrent_stop',
-              'http_client::ledger::admission::tests::branded_driver_history_rejects_second_driver_after_first_actual_join',
-              'http_client::ledger::admission::tests::branded_phase_winner_finishes_once_then_stop_denies_next_entry',
-              'http_client::ledger::admission::tests::branded_runner_rejects_foreign_same_id_at_every_port',
-              'http_client::ledger::admission::tests::drop_posts_stop_without_owner_or_waiter_lock',
-              'http_client::ledger::admission::tests::entry_guard_preserves_stop_after_a_winning_cas',
-              'http_client::ledger::admission::tests::last_sender_drop_does_not_wait_for_watch_value_borrow',
-              'http_client::ledger::admission::tests::old_key_cannot_authorize_reused_numeric_slot',
-              'http_client::ledger::admission::tests::owner_destructor_posts_stop_without_waiting_for_waiter_gate',
-              'http_client::ledger::admission::tests::parent_drop_posts_stop_and_pending_grant_cannot_enqueue',
-              'http_client::ledger::admission::tests::repeated_stop_has_no_self_wake_while_pending_root_is_joined',
-              'http_client::ledger::admission::tests::runner_handle_is_not_counted_and_last_sender_closes_eof',
-              'http_client::ledger::admission::tests::stop_after_consumed_real_auth_permit_refuses_record_publication',
-              'http_client::ledger::admission::tests::unwinding_entry_guard_closes_without_clearing_stop',
-          }
-          ledger_text = (root / "sf06-private-ledger.log").read_text(encoding="utf-8")
-          passed_parent = set(re.findall(
-              r"(?m)^test (http_client::ledger::admission::tests::[a-z0-9_]+) \.\.\. ok$",
-              ledger_text,
-          ))
-          if not required_parent.issubset(passed_parent):
-              raise AssertionError("SF06 branded parent test names missing or unsuccessful")
-          required_added = {
-              'http_client::ledger::admission::tests::abandon_popped_unstarted_retires_without_parent_stop',
-              'http_client::ledger::admission::tests::abandon_drop_under_owner_waiter_watch_gates_is_prompt_and_reaped',
-              'http_client::ledger::admission::tests::abandon_unwind_before_root_registration_retires',
-              'http_client::ledger::admission::tests::abandon_cancel_keeps_popped_payload_until_drop',
-              'http_client::ledger::admission::tests::borrowed_root_requires_command_and_keeps_join_distinct_from_payload_drop',
-              'http_client::ledger::admission::tests::rejected_root_future_drops_outside_owner_and_command_remains_armed',
-              'http_client::ledger::admission::tests::rejected_root_future_unwind_leaves_command_abandonment_reapable',
-              'http_client::ledger::admission::tests::successful_root_completion_does_not_report_command_abandonment',
-              'http_client::ledger::admission::tests::unexpected_root_abort_retains_sticky_fault_not_abandonment',
-              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_abort',
-              'http_client::ledger::parent_drain::fallback_lost_wake_tests::fallback_lost_wake_after_monitor_panic',
-              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_foreign_same_numeric_id_must_not_construct',
-              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_stale_phase_fail_must_not_poison_reused_id',
-              'http_client::ledger::tracked_dns::tests::dns_brand_tests::dns_brand_native_poll_must_hold_busy_entry_through_stop',
-              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_unregistered_root_refuses_then_same_key_starts',
-              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_stop_before_entry_keeps_native_and_fault_zero',
-              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_entry_winner_registers_one_child_after_stop',
-              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_cancelled_root_keeps_ticket_until_receipt_and_join',
-              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_joined_root_refuses_start_but_same_key_receipt_drains',
-              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_deadline_after_entry_skips_native_primitive',
-              'http_client::ledger::tracked_dns::tests::dns_brand_extra_tests::dns_brand_root_finishes_during_book_wait_skips_io',
-          }
-          required_delivery = {
-              'http_client::ledger::admission::tests::sf06_closed_runtime_child_drop_is_outside_owner_and_entry',
-              'http_client::ledger::admission::tests::sf06_closed_runtime_root_drop_is_outside_owner_and_entry',
-              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_fallback_retains_external_child_and_wakes_after_cancelled_waiter',
-              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_monitor_retains_external_child_paused_delivery',
-              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_poisoned_owner_retains_external_child_until_delivery',
-              'http_client::ledger::tests::sf06_delivery_drop_panic_does_not_acknowledge',
-              'http_client::ledger::tests::sf06_delivery_register_recheck_and_independent_broadcast_wakes',
-              'http_client::ledger::tests::sf06_failed_send_blocking_drop_retains_debt_and_cancelled_bare_drain',
-              'http_client::ledger::tests::sf06_paused_delivery_retains_actual_handle_quota_and_join_bit',
-              'http_client::ledger::tests::sf06_receipt_tracks_exact_reused_task_slot',
-              'http_client::ledger::tests::sf06_stop_expiry_and_fault_cannot_join_before_delivery',
-              'http_client::ledger::tracked_dns::tests::sf06_closed_runtime_dns_drop_is_outside_owner_book_and_entry',
-              'http_client::ledger::tracked_dns::tests::sf06_multiple_dns_waiters_and_cancelled_waiter_wake_on_delivery',
-              'http_client::ledger::tracked_dns::tests::sf06_paused_dns_delivery_retains_io_ticket_until_failed_send_drop',
-          }
-          passed_ledger = set(re.findall(
-              r"(?m)^test (http_client::ledger::[a-z0-9_:]+) \.\.\. ok$", ledger_text,
-          ))
-          if not required_added.issubset(passed_ledger):
-              raise AssertionError("SF06 new lifecycle/DNS test names missing or unsuccessful")
-          if not required_delivery.issubset(passed_ledger):
-              raise AssertionError("SF06 returned-handle delivery test names missing or unsuccessful")
-          required_operation = {
-              'http_client::ledger::operation::tests::adapter_panic_remains_fault_after_actual_root_join',
-              'http_client::ledger::operation::tests::dropped_execute_retains_cleanup_until_actual_native_joins',
-              'http_client::ledger::operation::tests::operation_withholds_real_https_response_until_actual_driver_join',
-              'http_client::ledger::operation::tests::owner_close_refuses_publish_after_actual_native_joins',
-              'http_client::ledger::operation::tests::unpolled_execute_starts_no_admission_or_native_resolution',
-              'http_client::ledger::operation::tests::original_deadline_survives_provisional_response_and_join_wait',
-              'http_client::ledger::operation::tests::unreceived_response_keeps_core_budget_after_actual_native_joins',
-              'http_client::ledger::operation::tests::unsupported_encoding_is_unknown_and_never_replayed',
-          }
-          passed_operation = re.findall(
-              r"(?m)^test (http_client::ledger::operation::tests::[a-z0-9_]+) \.\.\. ok$",
-              ledger_text,
-          )
-          if set(passed_operation) != required_operation or len(passed_operation) != len(required_operation):
-              raise AssertionError("SF06 operation test names missing, duplicated, or unsuccessful")
-          required_h0 = {
-              'http_client::ledger::admission::tests::sf06_h0_expired_driver_publication_autonomously_joins_existing_siblings',
-              'http_client::ledger::admission::tests::sf06_h0_paused_driver_return_rejects_duplicate_without_registered_authority',
-              'http_client::ledger::admission::tests::sf06_h0_paused_root_return_preserves_stage_through_stop_expiry_and_poison',
-              'http_client::ledger::admission::tests::sf06_h0_pre_bind_unwind_retains_debt_and_original_payload',
-              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_inner_unwind_retains_debt_and_reaps_known_client_fault',
-              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_outer_unwind_cannot_retire_monitor_record_as_joined',
-              'http_client::ledger::parent_drain::fallback_lost_wake_tests::sf06_h0_unresolved_outer_drains_known_inner_without_retiring',
-              'http_client::ledger::tests::sf06_h0_launch_publication_wakes_independent_waiters_and_retains_receipt',
-              'http_client::ledger::tracked_dns::tests::sf06_h0_paused_dns_root_retains_quota_without_io_authority',
-          }
-          passed_h0 = re.findall(
-              r"(?m)^test ([a-z0-9_:]*::sf06_h0_[a-z0-9_]+) \.\.\. ok$",
-              ledger_text,
-          )
-          if set(passed_h0) != required_h0 or len(passed_h0) != len(required_h0):
-              raise AssertionError("SF06 H0 test names missing, duplicated, or unsuccessful")
-          required_q1_native = {
-              'http_client::address::socket_pin::q1_native::tests::q1_native_attempt_cap_prevents_second_connector_and_releases_first_slot',
-              'http_client::address::socket_pin::q1_native::tests::q1_native_closed_plan_starts_no_connector',
-              'http_client::address::socket_pin::q1_native::tests::q1_native_close_during_pending_connect_does_not_attempt_second_address',
-              'http_client::address::socket_pin::q1_native::tests::q1_native_terminal_connect_failure_does_not_try_another_candidate',
-              'http_client::address::socket_pin::q1_native::tests::q1_native_cancelled_caller_is_joined_before_reusing_socket_quota',
-              'http_client::address::socket_pin::q1_native::tests::q1_native_ttl_zero_is_usable_for_one_owned_operation_without_cache',
-              'http_client::address::socket_pin::q1_native::tests::q1_native_refused_first_address_connects_only_checked_second_peer',
-              'http_client::address::socket_pin::q1_native::tests::q1_native_port_pair_retry_releases_guard_and_is_bounded',
-              'http_client::address::socket_pin::q1_native::tests::q1_native_expired_original_connect_end_does_not_reset_budget',
-          }
-          transport_text = (root / "sf06-private-transport.log").read_text(encoding="utf-8")
-          passed_q1_native = re.findall(
-              r"(?m)^test (http_client::address::socket_pin::q1_native::tests::q1_native_[a-z0-9_]+) \.\.\. ok$",
-              transport_text,
-          )
-          if set(passed_q1_native) != required_q1_native or len(passed_q1_native) != len(required_q1_native):
-              raise AssertionError("SF06 Q1 native test names missing, duplicated, unexpected, or unsuccessful")
-          PY_SUMMARY
-      - name: Check SF02 Ed25519 fixed-profile runtime and trusted adapter
-        shell: bash
-        run: |
-          set -euo pipefail
-          unset ICU4X_DATA_DIR
-          cargo test --locked -p nagi-runtime --lib auth::ed25519:: 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-core.log"
-          cargo test --locked -p nagi-runtime --test ed25519_public_api 2>&1 | tee "$RUNNER_TEMP/sf02-ed25519-public.log"
-          python - <<'PY'
-          import os, pathlib, re
-          root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf02-ed25519-core.log": 14, "sf02-ed25519-public.log": 1}.items():
-              text = (root / name).read_text(encoding="utf-8")
-              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;", text):
-                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
-          PY
-      - name: Check SF07 charged native wire checkpoint
-        id: sf07_checkpoint
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            NAGI_TEST_BASH="$(cygpath -w "$BASH")"
-          else
-            NAGI_TEST_BASH="$BASH"
-          fi
-          export NAGI_TEST_BASH
-          python -B scripts/tests/test_sf07_owned_state_summary.py
-          python -B scripts/tests/test_sf07_prelogin_owner_diagnostic.py
-          cargo test --locked -p nagi-runtime --lib http_server::response_budget:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py wire
-          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py quota
-          cargo test --locked -p nagi-runtime --lib http_server::response_send::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py transport
-          cargo test --locked -p nagi-runtime --lib http_server::request_headers::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py request
-          cargo test --locked -p nagi-runtime --lib security_sf07_private::startup_rate::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py rate-startup
-          cargo test --locked -p nagi-runtime --lib security_sf07_private::quota::retained_catalog_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py catalog-retained
-          cargo test --locked -p nagi-runtime --lib auth::csrf::fixed_body::tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py fixed-owner
-          cargo test --locked -p nagi-runtime --lib auth::csrf::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py csrf-issuer
-          cargo test --locked -p nagi-runtime --lib auth::prelogin::tests::fixed_wire_owner_tests:: 2>&1 | python -B scripts/ci/sf07_checkpoint_summary.py prelogin-issuer
-          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_lock::tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py lock
-          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private::owned_state_owner_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py owners
-          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib http_server::response_send::owned_state_lock_tests:: 2>&1 | python -B scripts/ci/sf07_owned_state_summary.py send
-      - name: Capture bounded SF07 prelogin owner stages after checkpoint failure
-        id: sf07_prelogin_owner_diag
-        if: failure() && steps.sf07_checkpoint.outcome == 'failure' && !cancelled()
-        shell: bash
-        run: |
-          python -B scripts/ci/sf07_prelogin_owner_diagnostic.py "$RUNNER_TEMP/sf07-prelogin-owner"
-      - name: Preserve bounded SF07 prelogin owner stages
-        if: always() && steps.sf07_checkpoint.outcome == 'failure' && steps.sf07_prelogin_owner_diag.outputs.sanitized == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
-        with:
-          retention-days: 7 # ci-retention
-          name: sf07-prelogin-owner-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
-          path: ${{ runner.temp }}/sf07-prelogin-owner/auth-stage-prelogin.trace
-          if-no-files-found: ignore
       - name: Check SF02 public Session runtime and one-use delivery before other checks
         shell: bash
         run: |
@@ -2146,316 +2823,15 @@ jobs:
             ${{ runner.temp }}/session-deadline-delivery-head.json
             ${{ runner.temp }}/session-deadline-delivery-expiry.json
           if-no-files-found: ignore
-      - name: Check owned BrowserLogin business stage and cancellation witnesses
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test --locked -p nagi-runtime --lib http_server::browser_login::stage_tests:: 2>&1 | python -B scripts/tests/test_browser_login_stage_backport.py --native-summary
-      - name: Observe resources before the B1 acceptance group
-        shell: bash
-        run: |
-          python - <<'PYB1RESOURCE'
-          import math, os, pathlib, shutil
-          cpu = os.cpu_count() or 0
-          cpu = cpu if 0 < cpu <= 65535 else 0
-          load_ok, load = 0, [0, 0, 0]
-          try:
-              values = os.getloadavg()
-              if len(values) == 3 and all(math.isfinite(v) and 0 <= v <= 1000000 for v in values):
-                  load_ok, load = 1, [int(v * 1000) for v in values]
-          except (AttributeError, OSError):
-              pass
-          memory_ok, memory = 0, [0, 0, 0, 0, 0]
-          try:
-              with open('/proc/meminfo', 'rb') as source:
-                  raw = source.read(4097)
-              fields = {}
-              if len(raw) <= 4096:
-                  for line in raw.decode('ascii').splitlines():
-                      key, _, rest = line.partition(':')
-                      if key in ('MemTotal', 'MemAvailable', 'SwapFree', 'Dirty', 'Writeback'):
-                          value, unit = rest.split()
-                          if unit != 'kB' or not value.isdecimal() or len(value) > 16:
-                              raise ValueError('invalid memory field')
-                          fields[key] = int(value)
-                  if len(fields) == 5:
-                      memory_ok = 1
-                      memory = [fields[key] for key in ('MemTotal', 'MemAvailable', 'SwapFree', 'Dirty', 'Writeback')]
-          except (OSError, UnicodeError, ValueError):
-              pass
-          disk_ok, disk = 0, [0, 0]
-          try:
-              usage = shutil.disk_usage(pathlib.Path(os.environ['RUNNER_TEMP']))
-              if 0 <= usage.free <= usage.total < 2**64:
-                  disk_ok, disk = 1, [usage.total, usage.free]
-          except (KeyError, OSError):
-              pass
-          print('b1_bootstrap_resources cpu={} load_supported={} load1_milli={} load5_milli={} load15_milli={} memory_supported={} mem_total_kib={} mem_available_kib={} swap_free_kib={} dirty_kib={} writeback_kib={} disk_supported={} disk_total_bytes={} disk_free_bytes={}'.format(cpu, load_ok, *load, memory_ok, *memory, disk_ok, *disk))
-          # Unsupported resource fields remain explicitly unavailable.
-          PYB1RESOURCE
-      - name: Check B1 Session CSRF runtime and public socket contracts
-        id: b1_csrf_runtime
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${RUNNER_OS:-}" = "Windows" ]; then
-            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
-              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
-              exit 2
-            fi
-            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
-          fi
-          python -B scripts/tests/test_csrf_deadline_mutations.py
-          cargo test --locked -p nagi-runtime --lib auth::csrf::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-core.log"
-          cargo test --locked -p nagi-runtime --lib http_server::csrf_http::deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-deadline.log"
-          cargo test --locked -p nagi-runtime --test session_csrf_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-b1-csrf-public.log"
-          python - <<'PYCODE'
-          import os, pathlib, re
-          root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-csrf-core.log":15, "sf03-b1-csrf-deadline.log":15, "sf03-b1-csrf-public.log":10}.items():
-              text=(root/name).read_text(encoding="utf-8")
-              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
-                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
-          required_csrf_capacity = {
-              "auth::csrf::tests::bytes_limit_is_independent_and_expired_cleanup_spends_one_batch",
-              "auth::csrf::tests::expired_token_reclaims_byte_capacity_without_relaxing_live_token_cap",
-              "auth::csrf::tests::same_queue_reopen_reuses_data_context_without_refreshing_token_expiry",
-              "auth::csrf::tests::reopened_context_preserves_original_token_expiry_and_rejects_after_deadline",
-          }
-          csrf_text=(root/"sf03-b1-csrf-core.log").read_text(encoding="utf-8")
-          for required in required_csrf_capacity:
-              passed=re.findall(rf"(?m)^test {re.escape(required)} \.\.\. ok$",csrf_text)
-              if len(passed)!=1:
-                  raise AssertionError("CSRF capacity oracle missing, duplicate, or unsuccessful")
-          PYCODE
-          python -B scripts/ci/csrf_deadline_mutations.py --coverage "$RUNNER_TEMP/sf03-b1-csrf-deadline.log" 0 "$RUNNER_TEMP/csrf-deadline-coverage.json"
-      - name: Observe B1 bootstrap only after original acceptance failure
-        if: failure() && steps.b1_csrf_runtime.outcome == 'failure'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PYB1RESOURCE'
-          import math, os, pathlib, shutil
-          cpu = os.cpu_count() or 0
-          cpu = cpu if 0 < cpu <= 65535 else 0
-          load_ok, load = 0, [0, 0, 0]
-          try:
-              values = os.getloadavg()
-              if len(values) == 3 and all(math.isfinite(v) and 0 <= v <= 1000000 for v in values):
-                  load_ok, load = 1, [int(v * 1000) for v in values]
-          except (AttributeError, OSError):
-              pass
-          memory_ok, memory = 0, [0, 0, 0, 0, 0]
-          try:
-              with open('/proc/meminfo', 'rb') as source:
-                  raw = source.read(4097)
-              fields = {}
-              if len(raw) <= 4096:
-                  for line in raw.decode('ascii').splitlines():
-                      key, _, rest = line.partition(':')
-                      if key in ('MemTotal', 'MemAvailable', 'SwapFree', 'Dirty', 'Writeback'):
-                          value, unit = rest.split()
-                          if unit != 'kB' or not value.isdecimal() or len(value) > 16:
-                              raise ValueError('invalid memory field')
-                          fields[key] = int(value)
-                  if len(fields) == 5:
-                      memory_ok = 1
-                      memory = [fields[key] for key in ('MemTotal', 'MemAvailable', 'SwapFree', 'Dirty', 'Writeback')]
-          except (OSError, UnicodeError, ValueError):
-              pass
-          disk_ok, disk = 0, [0, 0]
-          try:
-              usage = shutil.disk_usage(pathlib.Path(os.environ['RUNNER_TEMP']))
-              if 0 <= usage.free <= usage.total < 2**64:
-                  disk_ok, disk = 1, [usage.total, usage.free]
-          except (KeyError, OSError):
-              pass
-          print('b1_supplement_resources cpu={} load_supported={} load1_milli={} load5_milli={} load15_milli={} memory_supported={} mem_total_kib={} mem_available_kib={} swap_free_kib={} dirty_kib={} writeback_kib={} disk_supported={} disk_total_bytes={} disk_free_bytes={}'.format(cpu, load_ok, *load, memory_ok, *memory, disk_ok, *disk))
-          # Unsupported resource fields remain explicitly unavailable.
-          PYB1RESOURCE
-          set +e
-          CARGO_TERM_COLOR=never RUSTFLAGS='--cfg nagi_auth_stage_diag' cargo test --locked -p nagi-runtime --lib worker2_ -- --show-output 2>&1 | python -c 'import sys
-          remaining=256*1024+1
-          while True:
-           chunk=sys.stdin.buffer.read(8192)
-           if not chunk:
-            break
-           if remaining:
-            sys.stdout.buffer.write(chunk[:remaining])
-            remaining-=min(remaining,len(chunk))
-          sys.stdout.buffer.flush()' > "$RUNNER_TEMP/b1-bootstrap-supplement.raw"
-          b1_diag_status=("${PIPESTATUS[@]}")
-          set -e
-          B1_DIAGNOSTIC_CARGO_RC="${b1_diag_status[0]}" B1_DIAGNOSTIC_CAPTURE_RC="${b1_diag_status[1]}" python - <<'PYB1LOG'
-          import os, pathlib, re
-          path = pathlib.Path(os.environ['RUNNER_TEMP']) / 'b1-bootstrap-supplement.raw'
-          raw, read_ok = b'', 0
-          try:
-              with path.open('rb') as source:
-                  raw = source.read(256 * 1024 + 1)
-              read_ok = 1
-          except OSError:
-              pass
-          finally:
-              try:
-                  path.unlink(missing_ok=True)
-              except OSError:
-                  read_ok = 0
-          def code(name):
-              value = os.environ.get(name, '')
-              return int(value) if re.fullmatch(r'[0-9]{1,3}', value) and int(value) <= 255 else 255
-          cargo_rc = code('B1_DIAGNOSTIC_CARGO_RC')
-          capture_rc = code('B1_DIAGNOSTIC_CAPTURE_RC')
-          fields = {
-              'session_deadline_diag': 'status phase event db exit polls begins commands commits budget_ms entry_remaining_ms phase_remaining_ms exit_remaining_ms',
-              'session_private_deadline_diag': 'status phase event db polls begins commands commits budget_ms entry_remaining_ms phase_remaining_ms exit_remaining_ms terminal',
-              'csrf_token_deadline_diag': 'status phase event db exit polls begins commands commits budget_ms entry_remaining_ms phase_remaining_ms exit_remaining_ms terminal',
-              'csrf_guarded_deadline_diag': 'status phase event db exit polls begins commands commits budget_ms entry_remaining_ms phase_remaining_ms exit_remaining_ms selected_deadline_passed terminal',
-              'session_native_finish_diag': 'status origin terminal diagnostic_valid native_state commit_result cleanup_result cleanup_reason commit_enter_us commit_return_us cleanup_enter_us cleanup_return_us settled_us begins commits selected_deadline_passed',
-              'session_native_call_diag': 'status origin terminal diagnostic_valid native_call_state generation call_enter_us call_return_us native_state commit_result settled_us begins commits selected_deadline_passed',
-              'b1_startup_bootstrap': 'stage status created idle elapsed_us',
-              'b1_startup_bootstrap_gate': 'stage created idle elapsed_us',
-          }
-          patterns = {prefix: re.compile(prefix + ''.join(' ' + key + '=' + (r'(?:issue|csrf)' if key == 'stage' else r'[0-9]{1,20}') for key in keys.split())) for prefix, keys in fields.items()}
-          case_root = 'http_server::csrf_http::deadline_tests::pool_readiness_tests::'
-          cases = ('cold_worker2_startup_spends_original_guarded_http_budget', 'ready_worker2_setup_preserves_same_guarded_http_budget')
-          inventory = re.compile(r'^test ' + re.escape(case_root) + '(' + '|'.join(cases) + r') \.\.\. (ok|FAILED)$')
-          summary = re.compile(r'^test result: (ok|FAILED)\. ([0-9]+) passed; ([0-9]+) failed; ([0-9]+) ignored; ([0-9]+) measured; ([0-9]+) filtered out; finished in [0-9]+(?:\.[0-9]+)?s$')
-          heading = re.compile(r'^---- ' + re.escape(case_root) + '(' + '|'.join(re.escape(name) for name in cases) + r') stdout ----$')
-          arm = 0
-          rows, seen, summaries, malformed = [], [], [], 0
-          for line in raw.decode('utf-8', errors='replace').splitlines():
-              if line.startswith('---- ') and line.endswith(' stdout ----'):
-                  match = heading.fullmatch(line)
-                  arm = cases.index(match.group(1)) + 1 if match else 0
-              elif line.startswith(('test result:', 'successes:', 'failures:')):
-                  arm = 0
-              prefix = line.split(' ', 1)[0]
-              if prefix in patterns:
-                  if len(line) <= 1024 and patterns[prefix].fullmatch(line) and len(rows) < 64:
-                      rows.append((arm, line))
-                  else:
-                      malformed = 1
-              found = inventory.fullmatch(line)
-              if found:
-                  seen.append(found.groups())
-              found = summary.fullmatch(line)
-              if found:
-                  summaries.append(found.groups())
-          overflow = int(len(raw) > 256 * 1024)
-          inventory_ok = int(len(seen) == 2 and sorted(name for name, _ in seen) == sorted(cases))
-          summary_ok = 0
-          if inventory_ok and len(summaries) == 1:
-              kind, passed, failed, ignored, measured, _ = summaries[0]
-              passed, failed = int(passed), int(failed)
-              expected_passed = sum(state == 'ok' for _, state in seen)
-              summary_ok = int(passed == expected_passed and passed + failed == 2 and ignored == '0' and measured == '0' and ((cargo_rc == 0 and kind == 'ok' and failed == 0) or (cargo_rc != 0 and kind == 'FAILED' and failed > 0)))
-          bootstrap = [row for _, row in rows if row.startswith('b1_startup_bootstrap')]
-          bootstrap_ok = int(bool(bootstrap))
-          if cargo_rc == 0:
-              bootstrap_ok = int(len(bootstrap) == 4 and sum(row.startswith('b1_startup_bootstrap stage=issue status=200 ') for row in bootstrap) == 2 and sum(row.startswith('b1_startup_bootstrap stage=csrf status=200 ') for row in bootstrap) == 2)
-          available = int(read_ok and not capture_rc and not overflow and not malformed and inventory_ok and summary_ok and bootstrap_ok)
-          if not overflow and not malformed:
-              for arm, row in rows:
-                  print('b1_supplement_record arm={} {}'.format(arm, row))
-          print('b1_supplement_result cargo_rc={} capture_rc={} captured_bytes={} overflow={} malformed={} records={} inventory_ok={} summary_ok={} bootstrap_ok={} diagnostic_available={}'.format(cargo_rc, capture_rc, len(raw), overflow, malformed, len(rows), inventory_ok, summary_ok, bootstrap_ok, available))
-          raise SystemExit(cargo_rc if available else 1)
-          PYB1LOG
-      - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
-        shell: bash
-        run: |
-          set -euo pipefail
-          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-b1-compiler-evidence"
-          cargo test --locked -p nagic --lib stdlib::csrf_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-b1-metadata.log"
-          cargo test --locked -p nagic --test security_sf03_b1 2>&1 | tee "$RUNNER_TEMP/sf03-b1-compiler.log"
-          python - <<'PYCODE'
-          import os, pathlib, re
-          root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf03-b1-metadata.log":2, "sf03-b1-compiler.log":5}.items():
-              text=(root/name).read_text(encoding="utf-8")
-              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
-                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
-          generated=list((root/'sf03-b1-compiler-evidence').glob('*sf03-b1-guarded*-generated.rs'))
-          if len(generated)!=3 or any(not p.read_bytes() for p in generated):
-              raise AssertionError(f"expected three unmodified generated Rust artifacts, found {generated}")
-          PYCODE
-      - name: Check SF03 CORS runtime metadata socket and native compiler contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf03-cors-evidence"
-          cargo test --locked -p nagi-runtime --lib http_server::cors::tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-runtime.log"
-          cargo test --locked -p nagi-runtime --test cors_public_api 2>&1 | tee "$RUNNER_TEMP/sf03-cors-socket.log"
-          cargo test --locked -p nagic --lib stdlib::cors_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf03-cors-metadata.log"
-          cargo test --locked -p nagic --test security_sf03_cors 2>&1 | tee "$RUNNER_TEMP/sf03-cors-compiler.log"
-          python - <<'PYCODE'
-          import os, pathlib, re
-          root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name,count in {'sf03-cors-runtime.log': 6, 'sf03-cors-socket.log': 7, 'sf03-cors-metadata.log': 2, 'sf03-cors-compiler.log': 5}.items():
-              text=(root/name).read_text(encoding="utf-8")
-              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
-                  raise AssertionError(f"{name}: positive exact selected cases required")
-          generated=list((root/'sf03-cors-evidence').glob('*sf03-cors-*-generated.rs'))
-          if len(generated)!=6 or any(not path.read_bytes() for path in generated):
-              raise AssertionError("expected six unmodified generated Rust artifacts")
-          PYCODE
-      - name: Capture current compiler resource goldens with assertions enabled
-        shell: bash
-        run: |
-          set -euo pipefail
-          NAGI_GOLDEN_CAPTURE_DIR="$RUNNER_TEMP/sf03-cors-goldens" cargo test --locked -p nagic --lib resource_contract_goldens::
-      - name: Retain CORS native and actual golden capture evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
-        with:
-          retention-days: 7 # ci-retention
-          name: sf03-cors-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}
-          path: |
-            ${{ runner.temp }}/sf03-cors-*.log
-            ${{ runner.temp }}/sf03-cors-evidence/
-            ${{ runner.temp }}/sf03-cors-goldens/
-          if-no-files-found: ignore
-      - name: Check canonical Session metadata and High Low native contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -c 'import os; print("ICU4X_DATA_DIR present:", "ICU4X_DATA_DIR" in os.environ)'
-          unset ICU4X_DATA_DIR
-          export NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf02-compiler-evidence"
-          cargo test --locked -p nagic --lib stdlib::session_contract_tests:: 2>&1 | tee "$RUNNER_TEMP/sf02-session-metadata.log"
-          cargo test --locked -p nagic --test security_sf02 2>&1 | tee "$RUNNER_TEMP/sf02-session-compiler.log"
-          python - <<'PYCODE'
-          import os, pathlib, re
-          root=pathlib.Path(os.environ["RUNNER_TEMP"])
-          for name, count in {"sf02-session-metadata.log":3, "sf02-session-compiler.log":4}.items():
-              text=(root/name).read_text(encoding="utf-8")
-              if not re.search(rf"test result: ok\. {count} passed; 0 failed; 0 ignored;",text):
-                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
-          PYCODE
-      - name: Check test-only SF07 indexed core and frozen reference inventory
-        shell: bash
-        run: |
-          set -euo pipefail
-          CARGO_TERM_COLOR=never cargo test --locked -p nagi-runtime --lib security_sf07_private:: 2>&1 | tee "$RUNNER_TEMP/sf07-private-core.log"
-          python scripts/check_sf07_private_tests.py "$RUNNER_TEMP/sf07-private-core.log"
-      - run: cargo build --release --locked -p nagic
-      - name: Check HTTP registry emission before the platform regression
-        run: cargo test --locked -p nagic --test http_codegen --test resource_contract_characterization --test security_sf05_native
-      - name: Check editor behavior on the target platform
-        shell: bash
-        run: node --test editors/vscode-nagi/test/*.test.js scripts/test_graph_html_viewport.mjs
       - name: Check bounded SF01 diagnostic observer
-        if: runner.os != 'Windows'
         env:
           RUSTFLAGS: --cfg nagi_sf01_diagnostic --cfg nagi_sf01_diag_oracle --check-cfg=cfg(nagi_sf01_diagnostic) --check-cfg=cfg(nagi_sf01_diag_oracle)
         run: cargo test --locked -p nagic --test security_sf01 sf01_diagnostic_observer_oracle -- --exact
       - name: Check SF01 High, saved Low, handwritten Low and native policy contracts
-        if: runner.os != 'Windows'
         env:
           RUSTFLAGS: --cfg nagi_sf01_diagnostic --check-cfg=cfg(nagi_sf01_diagnostic) --check-cfg=cfg(nagi_sf01_diag_oracle)
         run: cargo test --locked -p nagic --test security_sf01 --test security_sf01_native
       - name: Check SF01 request lease and permit lifecycle through the public runtime
-        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -o pipefail
@@ -2464,7 +2840,6 @@ jobs:
           cargo test --locked -p nagi-runtime --lib http_server::tests::security_tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-http.log"
           python -c 'import pathlib,re,os; root=pathlib.Path(os.environ["RUNNER_TEMP"]); counts={"sf01-auth.log":9,"sf01-http.log":11}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
       - name: Check Host authority and HTTP entrypoint contracts on the target platform
-        if: runner.os != 'Windows'
         shell: bash
         run: |
           set -o pipefail
@@ -2482,239 +2857,6 @@ jobs:
               if not re.search(pattern, text):
                   raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
           PY
-      - name: Check SF05 Query migration and protected native SQL on the target platform
-        shell: bash
-        env:
-          NAGI_TEST_ARTIFACT_DIR: ${{ github.workspace }}/build/security-sf05/native
-          SF05_PLATFORM: ${{ matrix.platform }}
-        run: |
-          set -o pipefail
-          mkdir -p build/security-sf05
-          cargo test --locked -p nagic --test security_sf05 2>&1 | tee "build/security-sf05/sf05-checker.log"
-          cargo test --locked -p nagic --test security_sf05_native 2>&1 | tee "build/security-sf05/sf05-native.log"
-          cargo test --locked -p nagi-runtime --lib sqlite::security_sf05_tests:: 2>&1 | tee "build/security-sf05/sf05-admission.log"
-          python -c 'import pathlib,re,os; root=pathlib.Path("build/security-sf05"); counts={"sf05-checker.log":13,"sf05-native.log":1,"sf05-admission.log":6}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
-          python benchmarks/security-sf05/ci_provenance.py build/security-sf05
-      - name: Preserve SF05 source identity and native evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
-        with:
-          retention-days: 7 # ci-retention
-          name: security-sf05-${{ matrix.platform }}
-          path: build/security-sf05/
-          if-no-files-found: warn
-      - name: Check SQLite High and handwritten Low contract registration
-        run: cargo test --locked -p nagic --test sqlite_contract_inputs
-      - name: Verify bilingual first-app tutorial in High and saved Low
-        run: python scripts/verify_onboarding_examples.py
-      - name: Check planned SQLite runner stage and source-location oracles
-        run: cargo test --locked -p nagic --example sqlite-contract-check
-      - name: Check SQLite contracts and native High, saved Low and handwritten Low
-        shell: bash
-        run: |
-          cargo run --locked -p nagic --example sqlite-contract-check -- --report "$RUNNER_TEMP/sqlite-contracts.json"
-          cargo test --locked -p nagic --test sqlite_public
-      - name: Check public Task bridge lifecycle on the target platform
-        shell: bash
-        run: |
-          set -o pipefail
-          cargo test --locked -p nagi-runtime --lib task::tests:: 2>&1 | tee "$RUNNER_TEMP/task-runtime.log"
-          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"task-runtime.log").read_text(); assert re.search(r"test result: ok\. 17 passed; 0 failed; 0 ignored;",text),text'
-          cargo test --locked -p nagi-runtime --test task_handles
-          cargo test --locked -p nagi-runtime --doc
-
-      - name: Check Task checker contracts on the target platform
-        shell: bash
-        run: cargo run --locked -p nagic --example task-contract-red -- --report "$RUNNER_TEMP/task-contracts.json"
-      - name: Check Task examples in High, saved Low and handwritten Low
-        run: python scripts/verify_library_examples.py --only task-results
-      - name: Check typed monitor and HTTP service in all three forms
-        run: python scripts/verify_library_examples.py --only supervised-service
-      - name: Check successful application artifact selection
-        run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
-      - name: Check Axum native test execution and result validation
-        run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
-      - name: Check oversized HTTP bodies and connection recovery on the target platform
-        run: cargo test --locked -p nagi-runtime oversized_body_ -- --test-threads=1 --nocapture
-      - name: Check HTTP panic recovery on the target platform
-        run: cargo test --locked -p nagi-runtime panic_ -- --test-threads=1
-      - name: Check HTTP handler deadlines on the target platform
-        run: cargo test --locked -p nagi-runtime handler_timeout_ -- --test-threads=1
-      - name: Check native buffered send deadline and idle Keep-Alive on the target platform
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PYSOURCE'
-          import hashlib, pathlib
-          expected = {
-              'runtime/src/http_server.rs': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
-              'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
-              'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
-              'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
-              'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
-          }
-          for name, digest in expected.items():
-              source = pathlib.Path(name).read_bytes()
-              if b"\r" in source.replace(b"\r\n", b"\n"):
-                  raise AssertionError("unexpected lone CR in native fixture source")
-              actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
-              if actual != digest:
-                  raise AssertionError("reviewed native send fixture source differs: " + name)
-              print("native send fixture sha256=" + actual + " file=" + name)
-          PYSOURCE
-          cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
-          python - <<'PYCODE'
-          import os, pathlib, re
-          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-send-deadline.log").read_text(encoding="utf-8")
-          required={
-              "header_flush_before_buffered_frame_keeps_original_send_end",
-              "empty_response_completion_does_not_expire_idle_keep_alive",
-              "buffered_response_completion_does_not_expire_idle_keep_alive",
-          }
-          summaries=re.findall(r"(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;.*$",text)
-          if len(summaries)!=1:
-              raise AssertionError("three actual native send-deadline cases required")
-          for name in required:
-              pattern=rf"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \.\.\. ok$"
-              if len(re.findall(pattern,text))!=1:
-                  raise AssertionError("native send-deadline case missing, duplicate or failed")
-          PYCODE
-      - name: Check demo packaging with Windows PowerShell
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          ./scripts/build_windows_demo.ps1 -Source examples/hello.nagi -Offline
-          $output = & ./build/distribution/nagi-hello.exe
-          if ($LASTEXITCODE -ne 0 -or $output -notcontains 'Hello, Nagi!') { throw 'Packaged Hello failed.' }
-      - name: Check demo packaging with PowerShell 7
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          ./scripts/build_windows_demo.ps1 -Source examples/hello.nagi -Offline
-          $output = & ./build/distribution/nagi-hello.exe
-          if ($LASTEXITCODE -ne 0 -or $output -notcontains 'Hello, Nagi!') { throw 'Packaged Hello failed.' }
-          ./test-nagi-code/build_fractal_exe.ps1 -Offline
-          $output = 'q' | & ./build/distribution/nagi-fractal.exe
-          if ($LASTEXITCODE -ne 0 -or -not ($output -match 'Goodbye!')) { throw 'Packaged fractal failed.' }
-      - name: Package tracked source and the compiler
-        env:
-          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
-          RELEASE_PLATFORM: ${{ matrix.platform }}
-          RELEASE_EXECUTABLE: ${{ matrix.executable }}
-        shell: bash
-        run: python scripts/releases/package.py --binary "target/release/$RELEASE_EXECUTABLE" --version "$RELEASE_VERSION" --platform "$RELEASE_PLATFORM"
-      - name: Verify an extracted distribution outside the checkout
-        env:
-          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
-          RELEASE_PLATFORM: ${{ matrix.platform }}
-          RELEASE_EXECUTABLE: ${{ matrix.executable }}
-        shell: bash
-        run: |
-          python - <<'PY'
-          import os, sys
-          from pathlib import Path
-          sys.path.insert(0, 'scripts/releases')
-          from verify import verify
-          version, platform = os.environ['RELEASE_VERSION'], os.environ['RELEASE_PLATFORM']
-          suffix = '.zip' if os.name == 'nt' else '.tar.gz'
-          verify(Path('build/distribution') / f'nagi-{version}-{platform}{suffix}', version, platform, Path('native-target'))
-          PY
-      - name: Check HTTP route parameters on the target platform
-        run: python tests/route_integration.py
-      - name: Check standard HTTP High and saved Low on the target platform
-        run: python tests/http_stdlib_integration.py
-      - name: Check scoped task captures on the target platform
-        run: cargo test --locked -p nagic --test scoped_tasks
-      - name: Check actor lifecycle and supervisor cancellation on the target platform
-        run: |
-          cargo test --locked -p nagi-runtime actor::
-          cargo test --locked -p nagi-runtime supervisor_drop
-      - name: Check SQLite row counts on the target platform
-        run: cargo test --locked -p nagi-runtime database::tests
-      - name: Check public SQLite session cleanup, cancellation and close on the target platform
-        shell: bash
-        run: |
-          set -o pipefail
-          cargo test --locked -p nagi-runtime --lib sqlite:: 2>&1 | tee "$RUNNER_TEMP/sqlite-runtime.log"
-          python scripts/ci/assert_sqlite_test_summary.py "$RUNNER_TEMP/sqlite-runtime.log"
-          cargo test --locked -p nagi-runtime --test sqlite_public_api
-      - name: Check SF04 HTML core, finalizer, and public runtime API on the target platform
-        shell: bash
-        run: |
-          set -o pipefail
-          if [[ ${ICU4X_DATA_DIR+x} ]]; then
-            echo "ICU4X_DATA_DIR_PRESENT=true"
-          else
-            echo "ICU4X_DATA_DIR_PRESENT=false"
-          fi
-          unset ICU4X_DATA_DIR
-          cargo test --locked -p nagi-runtime --lib html::tests:: 2>&1 | tee "$RUNNER_TEMP/sf04-html-core.log"
-          cargo test --locked -p nagi-runtime --lib http_server::finalizer_ 2>&1 | tee "$RUNNER_TEMP/sf04-html-finalizer.log"
-          cargo test --locked -p nagi-runtime --test html_core_api 2>&1 | tee "$RUNNER_TEMP/sf04-html-api.log"
-          NAGI_TEST_ARTIFACT_DIR="$RUNNER_TEMP/sf04-native-artifacts" cargo test --locked -p nagic --test security_sf04 2>&1 | tee "$RUNNER_TEMP/sf04-native-contracts.log"
-          python - <<'PY'
-          import os, re
-          from pathlib import Path
-          root = Path(os.environ["RUNNER_TEMP"])
-          expected = {
-              "sf04-html-core.log": 20,
-              "sf04-html-finalizer.log": 9,
-              "sf04-html-api.log": 1,
-              "sf04-native-contracts.log": 4,
-          }
-          for filename, count in expected.items():
-              text = (root / filename).read_text(encoding="utf-8")
-              pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out;"
-              assert re.search(pattern, text), f"expected exactly {count} passing tests in {filename}; got:\n{text}"
-          PY
-      - name: Verify bilingual SQLite tutorial through High and independent saved Low
-        run: python scripts/verify_sqlite_example.py
-      - name: Verify High, saved Low, and standalone Low applications
-        run: python scripts/verify_application_examples.py
-      - name: Verify the PowerShell installer and User PATH
-        if: matrix.platform == 'windows-x86_64'
-        env:
-          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
-        shell: pwsh
-        run: ./scripts/releases/test_install.ps1 -Archive "build/distribution/nagi-$env:RELEASE_VERSION-windows-x86_64.zip" -Version $env:RELEASE_VERSION -TestUserPath
-      - name: Verify Windows PowerShell 5.1 installation and upgrades
-        if: matrix.platform == 'windows-x86_64'
-        env:
-          RELEASE_VERSION: ${{ needs.release-plan.outputs.nagi_version }}
-        shell: powershell
-        run: ./scripts/releases/test_install.ps1 -Archive "build/distribution/nagi-$env:RELEASE_VERSION-windows-x86_64.zip" -Version $env:RELEASE_VERSION -TestUserPath
-      - name: Verify uninstallation with PowerShell 7
-        if: matrix.platform == 'windows-x86_64'
-        shell: pwsh
-        run: ./scripts/releases/test_uninstall.ps1
-      - name: Verify uninstallation with Windows PowerShell 5.1
-        if: matrix.platform == 'windows-x86_64'
-        shell: powershell
-        run: ./scripts/releases/test_uninstall.ps1
-      - name: Verify the shell installer
-        if: matrix.platform != 'windows-x86_64'
-        run: python -m unittest discover -s scripts/releases -p 'test_install.py'
-      - name: Verify the shell uninstaller
-        if: matrix.platform != 'windows-x86_64'
-        run: python -m unittest discover -s scripts/releases -p 'test_uninstall.py'
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
-        with:
-          retention-days: 14 # ci-retention
-          name: release-${{ matrix.platform }}
-          path: |
-            build/distribution/nagi-*.zip
-            build/distribution/nagi-*.tar.gz
-            build/distribution/nagi-*.sha256
-          if-no-files-found: error
-      - name: Preserve target-platform HTTP receipt observation
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
-        with:
-          retention-days: 7 # ci-retention
-          name: http413-observation-${{ matrix.platform }}
-          path: build/compiler-failures/http413-nodelay-*.json
-          if-no-files-found: ignore
       - name: Enforce Session auth-stage supplement after normal checks
         if: always() && steps.auth_stage_diag.outcome != 'skipped'
         shell: bash
@@ -2723,32 +2865,12 @@ jobs:
         if: always() && steps.session_deadline_diag.outcome != 'skipped'
         shell: bash
         run: test '${{ steps.session_deadline_diag.outcome }}' = success
-      - name: Measure bounded SF07 response and rate profile
-        env:
-          CARGO_TERM_COLOR: never
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -B scripts/tests/test_sf07_profile_summary.py
-          cargo test --locked -p nagi-runtime --test sf07_small_profile --no-run
-          cargo test --locked -p nagi-runtime --test sf07_small_profile -- --list > "$RUNNER_TEMP/sf07-profile-list.log"
-          python - <<'PYSF07LIST'
-          import os,pathlib,re
-          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"sf07-profile-list.log").read_text()
-          if re.findall(r"(?m)^([a-z0-9_]+): test$",text) != ["response_profile_reports_closed_measurements"]:
-              raise SystemExit("sf07_profile_inventory=invalid")
-          PYSF07LIST
-          set +e
-          cargo test --locked -p nagi-runtime --test sf07_small_profile response_profile_reports_closed_measurements -- --exact --show-output > "$RUNNER_TEMP/sf07-profile-native.log" 2>&1
-          profile_rc=$?
-          set -e
-          python -B scripts/ci/sf07_profile_summary.py --cargo-exit-code "$profile_rc" < "$RUNNER_TEMP/sf07-profile-native.log"
-      - name: Preserve target-platform compiler, application, and HTTP observation evidence
+      - name: Preserve platform contract failure evidence
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
           retention-days: 7 # ci-retention
-          name: compiler-failures-${{ matrix.platform }}
+          name: compiler-failures-platform-contracts-${{ matrix.platform }}
           path: build/compiler-failures/
           if-no-files-found: ignore
 
@@ -2762,156 +2884,6 @@ jobs:
             target
             native-target
           key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
-  windows-contracts:
-    name: Compiler and runtime contracts (Windows)
-    needs: [changes, release-plan, ci-plan]
-    if: >-
-      always() && !cancelled() && needs.changes.result == 'success' && needs.release-plan.result == 'success' &&
-      needs.ci-plan.result == 'success' && needs.ci-plan.outputs.package_checks == 'true'
-    runs-on: windows-latest
-    env:
-      NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
-      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
-        with:
-          persist-credentials: false # ci-isolation
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
-        id: rust
-      - name: Cache Windows contract builds
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
-        id: nagi_rust_cache
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-            native-target
-          key: nagi-rust-v1-package-windows-x86_64-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
-          restore-keys: |
-            nagi-rust-v1-package-windows-x86_64-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
-            nagi-rust-v1-package-windows-x86_64-${{ steps.rust.outputs.cachekey }}-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
-        with:
-          python-version: '3.12'
-      - name: Verify the compiler host architecture
-        env:
-          RELEASE_RUST_HOST: x86_64-pc-windows-msvc
-        shell: bash
-        run: |
-          python - <<'PYHOST'
-          import os, subprocess
-          lines = subprocess.check_output(['rustc', '-vV'], text=True).splitlines()
-          host = next(line.removeprefix('host: ') for line in lines if line.startswith('host: '))
-          assert host == os.environ['RELEASE_RUST_HOST'], host
-          PYHOST
-      - name: Fetch locked runtime dependencies before offline tests
-        env:
-          RELEASE_RUST_HOST: x86_64-pc-windows-msvc
-        shell: bash
-        run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
-      - name: Check native buffered send deadline and idle Keep-Alive early on Windows
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PYSOURCE'
-          import hashlib, pathlib
-          expected = {
-              'runtime/src/http_server.rs': '397652b0f412e012c207c39288e2bda8771c486ea24f6d1f3e76da69e9204d54',
-              'runtime/src/http_server/tests.rs': '25ebad5039d20ec7109e40b44ac87a85a72bc4bd8c9c85f78fd97164c5b29de8',
-              'runtime/src/http_server/send_deadline_tests.rs': '2abec513bff123840274641e6a84e4dd29989fafd686af2f10fc46fab42893ea',
-              'runtime/src/http_server/windows_native_fixture.rs': '74701a0501fb4a080defc0fe299276a8c949881c210b2576881880c75cbbb282',
-              'runtime/src/http_server/transport_lifecycle_tests.rs': 'bb45b069b1bd8584ad19c80ce29b622759df4e2a91e28848e330ee4fba86581b',
-          }
-          for name, digest in expected.items():
-              source = pathlib.Path(name).read_bytes()
-              if b"\r" in source.replace(b"\r\n", b"\n"):
-                  raise AssertionError("unexpected lone CR in native fixture source")
-              actual = hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest()
-              if actual != digest:
-                  raise AssertionError("reviewed native send fixture source differs: " + name)
-              print("native send fixture sha256=" + actual + " file=" + name)
-          PYSOURCE
-          cargo test --locked -p nagi-runtime --lib http_server::tests::send_deadline_tests:: 2>&1 | tee "$RUNNER_TEMP/http-send-deadline.log"
-          python - <<'PYCODE'
-          import os, pathlib, re
-          text=(pathlib.Path(os.environ["RUNNER_TEMP"])/"http-send-deadline.log").read_text(encoding="utf-8")
-          required={
-              "header_flush_before_buffered_frame_keeps_original_send_end",
-              "empty_response_completion_does_not_expire_idle_keep_alive",
-              "buffered_response_completion_does_not_expire_idle_keep_alive",
-          }
-          summaries=re.findall(r"(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;.*$",text)
-          if len(summaries)!=1:
-              raise AssertionError("three actual native send-deadline cases required")
-          for name in required:
-              pattern=rf"(?m)^test http_server::tests::send_deadline_tests::{re.escape(name)} \.\.\. ok$"
-              if len(re.findall(pattern,text))!=1:
-                  raise AssertionError("native send-deadline case missing, duplicate or failed")
-          PYCODE
-      - name: Diagnose private Session phase deadlines on Windows
-        if: always() && runner.os == 'Windows'
-        timeout-minutes: 30
-        shell: bash
-        run: |
-          set +e
-          if [ "${RUNNER_OS:-}" = "Windows" ]; then
-            if [ -z "${RUNNER_TEMP:-}" ] || [ ! -d "${RUNNER_TEMP:-}" ]; then
-              echo "RUNNER_TEMP must be a nonempty existing directory on Windows" >&2
-              exit 2
-            fi
-            export TMP="$RUNNER_TEMP" TEMP="$RUNNER_TEMP"
-          fi
-          python -B scripts/tests/test_session_private_deadline_diagnostic.py
-          fake_rc=$?
-          python -B scripts/ci/session_private_deadline_diagnostic.py --run
-          native_rc=$?
-          if [ "$fake_rc" -ne 0 ] || [ "$native_rc" -ne 0 ]; then exit 1; fi
-      - name: Check bounded SF01 diagnostic observer
-        env:
-          RUSTFLAGS: --cfg nagi_sf01_diagnostic --cfg nagi_sf01_diag_oracle --check-cfg=cfg(nagi_sf01_diagnostic) --check-cfg=cfg(nagi_sf01_diag_oracle)
-        run: cargo test --locked -p nagic --test security_sf01 sf01_diagnostic_observer_oracle -- --exact
-      - name: Check SF01 High, saved Low, handwritten Low and native policy contracts
-        env:
-          RUSTFLAGS: --cfg nagi_sf01_diagnostic --check-cfg=cfg(nagi_sf01_diagnostic) --check-cfg=cfg(nagi_sf01_diag_oracle)
-        run: cargo test --locked -p nagic --test security_sf01 --test security_sf01_native
-      - name: Check SF01 request lease and permit lifecycle through the public runtime
-        shell: bash
-        run: |
-          set -o pipefail
-          cargo test --locked -p nagi-runtime --test security_sf01
-          cargo test --locked -p nagi-runtime --lib auth::tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-auth.log"
-          cargo test --locked -p nagi-runtime --lib http_server::tests::security_tests:: 2>&1 | tee "$RUNNER_TEMP/sf01-http.log"
-          python -c 'import pathlib,re,os; root=pathlib.Path(os.environ["RUNNER_TEMP"]); counts={"sf01-auth.log":9,"sf01-http.log":11}; [(None if re.search(r"test result: ok\. %d passed; 0 failed; 0 ignored;"%n,(root/f).read_text()) else (_ for _ in ()).throw(AssertionError(f))) for f,n in counts.items()]'
-      - name: Check Host authority and HTTP entrypoint contracts on the target platform
-        shell: bash
-        run: |
-          set -o pipefail
-          cargo test --locked -p nagi-runtime --lib http_server::tests::authority_tests:: 2>&1 | tee "$RUNNER_TEMP/host-authority.log"
-          cargo test --locked -p nagic --test http_entrypoint 2>&1 | tee "$RUNNER_TEMP/host-http-entrypoint.log"
-          python - <<'PY'
-          import os
-          import pathlib
-          import re
-          root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          expected = {"host-authority.log": 5, "host-http-entrypoint.log": 4}
-          for name, count in expected.items():
-              text = (root / name).read_text(encoding="utf-8")
-              pattern = rf"test result: ok\. {count} passed; 0 failed; 0 ignored;"
-              if not re.search(pattern, text):
-                  raise AssertionError(f"{name}: expected {count} passed, 0 failed, 0 ignored")
-          PY
-      - name: Preserve Windows contract failure evidence
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
-        with:
-          retention-days: 7 # ci-retention
-          name: compiler-failures-windows-contracts
-          path: build/compiler-failures/
-          if-no-files-found: ignore
-
   nagi-regression:
     needs: [changes, release-plan, ci-plan]
     if: >-
@@ -2992,7 +2964,7 @@ jobs:
   ready:
     name: Ready to merge
     if: always() && !cancelled()
-    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]
+    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, platform-contracts]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
@@ -3007,7 +2979,7 @@ jobs:
         run: python scripts/ci/gate.py
 
   publish-release:
-    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]
+    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, platform-contracts, ready]
     if: >-
       always() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       needs.ready.result == 'success' && needs.ci-plan.result == 'success' &&

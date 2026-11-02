@@ -77,3 +77,27 @@ PR #218のLinuxは26分55秒で、CSRF semantic mutantsが6分29秒、samplesが
 `graph_render`は同じtest binaryを`current_exe --exact image_child --nocapture`で起動し、native childのstdoutを継承する。外側にも同じ名前のcaseがあるため、stdout全体の`test ... ok`を数える方法では正常な子実行を外側の重複と誤判定した。Cargoのselector、workspace features、cwd、Nagi用environmentは維持し、実行時だけCargoのhost runnerで外側binaryごとの独立したstable libtest `--logfile`を指定する。runnerは実binaryへexecする前に自分が加えたrunner設定をenvironmentから外し、nested Cargoやself subprocessへ引き継がない。排他的な開始fileとbinary別boundaryで本当の外側の再実行を拒否し、独立event fileの全case・ignored・状態と外側の最終count summaryを照合する。native childの出力とsummaryは診断として残し、外側caseのauthorityには使わない。filterや直列化は追加しない。
 
 `--logfile`はstableで利用できるがdeprecatedである。将来のtoolchainが拒否した場合はCargoの非0 exitで失敗し、stdoutだけの弱い検証へfallbackしない。orchestration logは成功したCargoのraw outputも保存し、parser例外時には該当実行の出力をjob logへ戻す。compiler failure artifactが空でも、shardのraw log・boundary・event fileをfailure artifactへ保存する。この修正の小さなnative fixtureとPython検査は、全workspaceのActions実行成功や性能改善を証明しない。
+
+## Platform contractsへの独立検証の移動（2026-11-02、ローカル実装）
+
+main `2cb7c33aff2ccc3763fa80e6d0f07240ad09570f`（PR #219）のworkflowを基準に、既存`windows-contracts`を`platform-contracts`へ置換する。`ci-plan.outputs.matrix`をそのまま使う1個のjob matrixで、通常の3 OSとL3のmacOS Intelを含む4 OSを維持する。level/matrix producer、`nagi-regression`の二つの広いCargo検査、release/packageの出力契約は変更しない。
+
+| 移す単位 | 同一runner内の依存と保持する境界 |
+| --- | --- |
+| SF06 signature fake検査、public HTTP client、native artifact、signature分類とartifact（5 step） | fake検査→public client→同じ`RUNNER_TEMP`のlog/native evidence→分類。`steps.sf06_public_client.outputs.closed_failure_diagnostic`を使うartifactも一緒に移動。Cargoが自分のtest binaryと`CARGO_BIN_EXE`をbuildするためrelease binaryを要しない |
+| Windows stalled-send/join（1 step） | locked Cargoと2件ちょうどの成功照合。Windows条件、case名、summary、logを維持 |
+| Session runtime、auth-stage capture/artifact、deadline capture/artifact、末尾の強制判定2件（7 step） | runner内のraw/sanitized logsと`auth_stage_diag`/`session_deadline_diag` outcomeを同じjobに維持。`continue-on-error`、`always()`、TMP/TEMP検査、bounded capture、cleanup、cfgと強制失敗を変更しない |
+| SF01 observer/policy/leaseとHost authority（4 step） | Cargo自身のtest/native compiler。packageの非Windowsコピーを除き、既存Windows側の同一bodyを全platform各1回にする |
+| 既存Windows native-send/private Session（2 step、移動元は既存Windows job） | Windows条件、30分budget、source SHA、3件照合、TMP/TEMP、private diagnosticをそのまま維持 |
+
+SF07 checkpoint/prelogin observer/artifact、B1 observer/acceptance、BrowserLogin business witnessはpackageに残す。release compiler build、archive/distribution検証、PowerShell 5.1/7 demo、High/Low applications、installer/upgrade/uninstallerとUser PATHは実際のrelease成果物を使うため同じpackage runnerに残す。移動する単位には`GITHUB_ENV`の隠れた前段依存はなく、SF06 step outputとSession outcomeはjob境界を越えない。
+
+新cacheは`nagi-platform-contracts-v1`専用で、platform/OS/architecture、toolchain、Cargo lock、workflow/diagnostic source、manifest/compiler/runtime/runtime-core source、およびdefault/auth/browser/SF01 oracle/SF06 debug無効設定のversion付きconfig setをkeyへ含める。`target`と`native-target`を保持し、package/regression cacheへのfallbackを設けない。全job成功後のmain pushだけ保存する。元のinline/step `RUSTFLAGS`を維持し、空の`CARGO_ENCODED_RUSTFLAGS`によるdiagnostic cfgの上書きを追加しない。
+
+Readyと公開前の独立gateは新job IDを要求する。選択時は`success`だけ、非選択時は`skipped`だけを許可し、欠落、失敗、取消、未知/partial result、縮小・重複・不正matrixを拒否する。GitHubのmatrix集約resultと固定した全matrixに依存しており、各platform独自の実行receiptを新設したわけではない。元々の検証群の件数・名前照合とfailure artifactsを保持する。
+
+新しい最外周inverseは基準workflow SHA256 `127de03b03d887ea04265454409568f39d3ab8a754c1a511db293bd0388b62f0`へbyte単位で戻る。歴史hash/action pin/Windows/cache proofを更新せず合成する。移動漏れ・重複・順序・body/OS条件/cfg/count/source pin/cache/failure artifact/matrix/required-jobのmutationを拒否する。新規テストを含む`python -B -m unittest discover -s scripts/ci -p 'test_*.py'`は254件成功。移動対象の診断fake/harness 8本も計201件成功（Cargo/native起動なし）。YAML parse、全明示bash stepの`bash -n`、inline Python heredoc 34件parseも成功した。Rust/Go/native/実4 OS runnersは実行しておらず、独立最終reviewとexact-source CIは次のgateである。Session 504の未知の原因を直した変更ではない。
+
+基準#219（run `41449198678`、exact source `7a05a1d`、merge後上記baseと同tree）は全選択検査とReadyが成功し、Readyは13:42:20、全体は42分28秒、Windows packageは39分15秒だった。Session auth 4分52秒、SF06 client 4分35秒、stalled-send/join 2分30秒の観測合計は11分57秒で、package laneから移る観測step時間であり短縮予測ではない。部分観測のSession runtime 1分28秒を完了時間として加えない。distribution 3分26秒、High/Low apps 2分53秒、HTTP registry 2分35秒、PowerShell demo各約2分、release build 1分39秒等はpackageに残る。Linux集約26分34秒後の待ちと全Linux shard cache missも記録されている。
+
+期待wallは`max(package残り, platform-contracts, regression, 他の必須job)`に支配される。warm cacheで移動分の重なりが増える場合、cold compile/setupが相殺する場合、regression/I/Oが次のtailになる場合の三つを区別する。job数は通常+2、L3は+3 runnerになり、compile/setupの重複によりrunner-minutesが増える可能性がある。基準#219は279.47 runner-minutes、旧#217は250.42だが、source/cache/失敗refが違うため性能差の証明にはしない。変更後は同source/選択matrixでcold/warmを分け、queue/依存待ち、setup、cache hit/keyとrestore/save、compile、test、artifact、package、Readyと全体wall、runner-minutesを別々に測る。今回のローカル配線検査を速度改善の実測として扱わない。

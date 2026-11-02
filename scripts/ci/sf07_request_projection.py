@@ -475,6 +475,7 @@ def inverse_prelogin_owner_diagnostic(source):
 
 
 def inverse_workflow(source):
+    source = _LEVELS._sibling('platform_contract_projection').inverse_workflow(source)
     source = _STREAM.inverse(source)
     # Validate the new pinned artifact step before the infrastructure inverse
     # restores historical action spellings and retention fields.

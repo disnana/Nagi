@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 import linux_critical_path as policy
 import linux_critical_path_projection as projection
+import platform_contract_projection
 import gate
 import test_levels
 import test_publication_gate
@@ -273,7 +274,8 @@ class WorkspaceInventoryTests(unittest.TestCase):
 
 class CriticalPathWiringTests(unittest.TestCase):
     def setUp(self):
-        self.source = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.source = platform_contract_projection.inverse_workflow(
+            (ROOT / '.github/workflows/ci.yml').read_text())
 
     def test_exact_outer_inverse_preserves_all_predecessor_commands_and_gates(self):
         restored = projection.inverse_workflow(self.source)

@@ -210,14 +210,14 @@ class WindowsContractGateTests(unittest.TestCase):
             self.assertEqual(gate.errors(needs), [])
             for status in ('success', 'skipped', 'failure', 'cancelled', 'queued', '', None):
                 changed = copy.deepcopy(needs)
-                changed['windows-contracts']['result'] = status
+                changed['platform-contracts']['result'] = status
                 self.assertEqual(gate.errors(changed) == [], status == expected, (level, full, package, status))
-            del needs['windows-contracts']
+            del needs['platform-contracts']
             self.assertTrue(gate.errors(needs))
 
     def test_package_failure_and_invalid_four_os_plan_never_pass(self):
         needs = test_levels.needs('3')
-        self.assertEqual(needs['windows-contracts']['result'], 'success')
+        self.assertEqual(needs['platform-contracts']['result'], 'success')
         for name in ('nagi-package', 'changes', 'ci-plan', 'release-plan'):
             for status in ('failure', 'cancelled', 'skipped', None):
                 changed = copy.deepcopy(needs)
@@ -231,7 +231,7 @@ class WindowsContractGateTests(unittest.TestCase):
             self.assertTrue(gate.errors(changed))
 
     def test_actual_job_selector_rejects_failed_dependencies_and_cancellation(self):
-        condition = test_publish_conditions.job_expression('windows-contracts')
+        condition = test_publish_conditions.job_expression('platform-contracts', current=True)
         for name in ('changes', 'release-plan', 'ci-plan'):
             for status in ('success', 'failure', 'cancelled', 'skipped'):
                 for selected in ('true', 'false'):
@@ -248,11 +248,11 @@ class WindowsContractGateTests(unittest.TestCase):
             original = test_publication_gate.valid(component)
             for status in ('success', 'skipped', 'failure', 'cancelled', '', None):
                 needs = copy.deepcopy(original)
-                needs['windows-contracts']['result'] = status
+                needs['platform-contracts']['result'] = status
                 self.assertEqual(needs['ready']['result'], 'success')
                 result = publication_gate.errors(needs, 'push', 'refs/heads/main', test_publication_gate.SHA)
                 self.assertEqual(result == [], status == ('success' if component == 'nagi' else 'skipped'))
-            del original['windows-contracts']
+            del original['platform-contracts']
             self.assertTrue(publication_gate.errors(original, 'push', 'refs/heads/main', test_publication_gate.SHA))
 
 
