@@ -737,7 +737,7 @@ func TestTaskScopeBodyErrorPrecedesObservedFaultAndDrains(t *testing.T) {
 	cleanupStarted := make(chan struct{})
 	cleanupRelease := make(chan struct{})
 	cleanupScope(t, scope, cleanupRelease)
-	sibling, err := Spawn(scope, func(ctx context.Context) int {
+	_, err := Spawn(scope, func(ctx context.Context) int {
 		close(siblingStarted)
 		<-ctx.Done()
 		close(siblingCancelled)
@@ -761,12 +761,6 @@ func TestTaskScopeBodyErrorPrecedesObservedFaultAndDrains(t *testing.T) {
 	}
 	if !errors.Is(scope.primary, ErrTaskPanicked) {
 		t.Fatalf("recorded primary = %v", scope.primary)
-	}
-	if err := Discard(scope, fault); err != nil {
-		t.Fatal(err)
-	}
-	if err := Discard(scope, sibling); err != nil {
-		t.Fatal(err)
 	}
 	signal(t, siblingCancelled)
 	signal(t, cleanupStarted)
@@ -797,6 +791,223 @@ func TestTaskScopeBodyErrorPrecedesObservedFaultAndDrains(t *testing.T) {
 	}
 	if len(scope.entries) != 0 {
 		t.Fatalf("body error retained %d child entries", len(scope.entries))
+	}
+}
+
+func TestTaskScopeBodyErrorAbandonsOutputsBeforeCancelAndDrain(t *testing.T) {
+	type bodyFailure struct{ message string }
+	type abandonmentSnapshot struct {
+		recordedRetired bool
+		readyDiscarded  bool
+		liveDiscarded   bool
+	}
+
+	scope := New()
+	cleanupRelease := make(chan struct{})
+	cleanupStarted := make(chan struct{})
+	cancelObserved := make(chan abandonmentSnapshot, 1)
+	cleanupScope(t, scope, cleanupRelease)
+
+	recorded, err := Spawn(scope, task(func() int { return 1 }), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signal(t, recorded.receipt.done)
+	waitEntryReady(t, scope, recorded.ticket)
+	if !scope.recordReady() {
+		t.Fatal("completed output was not recorded")
+	}
+
+	ready, err := Spawn(scope, task(func() int { return 2 }), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signal(t, ready.receipt.done)
+	waitEntryReady(t, scope, ready.ticket)
+
+	live, err := Spawn(scope, func(ctx context.Context) int {
+		<-ctx.Done()
+		return 3
+	}, func() {
+		close(cleanupStarted)
+		<-cleanupRelease
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope.mu.Lock()
+	liveEntry := scope.entries[live.ticket]
+	if liveEntry == nil || liveEntry.cancel == nil {
+		scope.mu.Unlock()
+		t.Fatal("live child has no cancellation owner")
+	}
+	originalCancel := liveEntry.cancel
+	liveEntry.cancel = func() {
+		scope.mu.Lock()
+		_, recordedPresent := scope.entries[recorded.ticket]
+		scope.mu.Unlock()
+		ready.receipt.mu.Lock()
+		readyDiscarded := ready.receipt.state == receiptDiscarded && ready.receipt.value == nil
+		ready.receipt.mu.Unlock()
+		live.receipt.mu.Lock()
+		liveDiscarded := live.receipt.state == receiptDiscarded && live.receipt.value == nil
+		live.receipt.mu.Unlock()
+		cancelObserved <- abandonmentSnapshot{
+			recordedRetired: !recordedPresent,
+			readyDiscarded:  readyDiscarded,
+			liveDiscarded:   liveDiscarded,
+		}
+		originalCancel()
+	}
+	scope.mu.Unlock()
+
+	body := &bodyFailure{message: "original body error"}
+	exited := make(chan *bodyFailure, 1)
+	go func() { exited <- FinishBodyError(scope, body) }()
+	var snapshot abandonmentSnapshot
+	select {
+	case snapshot = <-cancelObserved:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancellation was not invoked")
+	}
+	if !snapshot.recordedRetired || !snapshot.readyDiscarded || !snapshot.liveDiscarded {
+		t.Fatalf("abandonment at cancellation = %+v", snapshot)
+	}
+	signal(t, cleanupStarted)
+	select {
+	case problem := <-exited:
+		t.Fatalf("body error returned before cleanup: %p", problem)
+	default:
+	}
+	close(cleanupRelease)
+	select {
+	case problem := <-exited:
+		if problem != body {
+			t.Fatalf("body error identity changed: got %p want %p", problem, body)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("body error drain deadline exceeded")
+	}
+	for name, receipt := range map[string]*receipt[int]{"recorded": recorded.receipt, "ready": ready.receipt, "live": live.receipt} {
+		receipt.mu.Lock()
+		state, value := receipt.state, receipt.value
+		receipt.mu.Unlock()
+		if state != receiptDiscarded || value != nil {
+			t.Fatalf("%s output state=%d value=%v", name, state, value)
+		}
+	}
+	if len(scope.entries) != 0 {
+		t.Fatalf("body error retained %d child entries", len(scope.entries))
+	}
+
+	blockedScope := New()
+	blockedRelease := make(chan struct{})
+	cleanupScope(t, blockedScope, blockedRelease)
+	blocked, err := Spawn(blockedScope, func(context.Context) int {
+		<-blockedRelease
+		return 4
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocked.receipt.mu.Lock()
+	abandoned := make(chan struct{})
+	go func() {
+		blockedScope.sealAndAbandonBodyOutputs()
+		close(abandoned)
+	}()
+	deadline := time.Now().Add(2 * time.Second)
+	for blockedScope.mu.TryLock() {
+		blockedScope.mu.Unlock()
+		if time.Now().After(deadline) {
+			blocked.receipt.mu.Unlock()
+			t.Fatal("abandonment did not acquire the scope lock")
+		}
+		runtime.Gosched()
+	}
+	spawned := make(chan error, 1)
+	go func() {
+		_, problem := Spawn(blockedScope, task(func() int { return 5 }), nil)
+		spawned <- problem
+	}()
+	blocked.receipt.mu.Unlock()
+	signal(t, abandoned)
+	if problem := <-spawned; problem != ErrClosed {
+		t.Fatalf("spawn racing abandonment = %v", problem)
+	}
+	close(blockedRelease)
+	if problem := blockedScope.Cancel(); problem != nil {
+		t.Fatalf("sealed scope drain = %v", problem)
+	}
+	if len(blockedScope.entries) != 0 {
+		t.Fatalf("sealed scope retained %d child entries", len(blockedScope.entries))
+	}
+}
+
+func TestTaskScopeBodyErrorKeepsReceiveOwnership(t *testing.T) {
+	type bodyFailure struct{ message string }
+
+	claimedScope := New()
+	claimedRelease := make(chan struct{})
+	cleanupScope(t, claimedScope, claimedRelease)
+	claimed, err := Spawn(claimedScope, func(context.Context) int {
+		<-claimedRelease
+		return 7
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	received := make(chan struct {
+		value   int
+		problem error
+	}, 1)
+	go func() {
+		value, problem := Receive(claimedScope, claimed)
+		received <- struct {
+			value   int
+			problem error
+		}{value: value, problem: problem}
+	}()
+	waitReceiptState(t, claimed.receipt, receiptReceiving)
+	claimedBody := &bodyFailure{message: "claimed"}
+	claimedExit := make(chan *bodyFailure, 1)
+	go func() { claimedExit <- FinishBodyError(claimedScope, claimedBody) }()
+	waitScopeClosed(t, claimedScope)
+	close(claimedRelease)
+	result := <-received
+	if result.problem != nil || result.value != 7 {
+		t.Fatalf("claimed receive = (%d, %v)", result.value, result.problem)
+	}
+	if problem := <-claimedExit; problem != claimedBody {
+		t.Fatalf("claimed body identity changed: got %p want %p", problem, claimedBody)
+	}
+	if claimedScope.primary != nil || len(claimedScope.entries) != 0 {
+		t.Fatalf("claimed receive primary=%v entries=%d", claimedScope.primary, len(claimedScope.entries))
+	}
+
+	abandonedScope := New()
+	abandonedRelease := make(chan struct{})
+	cleanupScope(t, abandonedScope, abandonedRelease)
+	abandoned, err := Spawn(abandonedScope, func(context.Context) int {
+		<-abandonedRelease
+		return 8
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	abandonedBody := &bodyFailure{message: "abandoned"}
+	abandonedExit := make(chan *bodyFailure, 1)
+	go func() { abandonedExit <- FinishBodyError(abandonedScope, abandonedBody) }()
+	waitReceiptState(t, abandoned.receipt, receiptDiscarded)
+	if _, problem := Receive(abandonedScope, abandoned); problem != ErrConsumed {
+		t.Fatalf("receive after body abandonment = %v", problem)
+	}
+	close(abandonedRelease)
+	if problem := <-abandonedExit; problem != abandonedBody {
+		t.Fatalf("abandoned body identity changed: got %p want %p", problem, abandonedBody)
+	}
+	if abandonedScope.primary != nil || len(abandonedScope.entries) != 0 {
+		t.Fatalf("abandoned receive primary=%v entries=%d", abandonedScope.primary, len(abandonedScope.entries))
 	}
 }
 

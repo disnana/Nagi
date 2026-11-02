@@ -15,12 +15,16 @@ cancellation, and is returned only after every registered child is drained.
 Business values are never flattened or reclassified as task faults. Go has no
 physical goroutine join primitive: the closed completion channel proves the
 callback, its defers, and cleanup returned, not that the runtime destroyed the
-goroutine. The private body-error exit preserves the exact generic body error
-while cancellation and actual cleanup drain complete. Synchronous owner teardown
-only seals and requests cancellation; it never reports join completion. Parent
-deadlines, automatic body-local handle retirement, legacy task-fault bridging,
-and public lowering remain intentionally unconnected. Public Nagi Task/scope
-syntax remains rejected before the Go toolchain.
+goroutine. The private body-error exit first abandons unclaimed body-local
+outputs, then preserves the exact generic body error while cancellation and
+actual cleanup drain complete. A Receive that already claimed an output keeps
+ownership. Abandonment ends only the kernel's reference retention; it does not
+promise Close, finalizer execution, GC, or physical memory reclamation for an
+arbitrary value. Synchronous owner teardown only seals and requests
+cancellation; it never reports join completion. Parent deadlines, general
+resource release, legacy task-fault bridging, and public lowering remain
+intentionally unconnected. Public Nagi Task/scope syntax remains rejected before
+the Go toolchain.
 
 `internal/lifecycle` runs one manager and at most one active goroutine per child.
 Registration is cold. Each generation invokes `Factory(context.Context) error`

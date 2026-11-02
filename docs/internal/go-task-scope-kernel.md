@@ -1,7 +1,8 @@
 # Go private Task scope: completion and cooperative-drain kernel
 
-状態: **内部実装・公開未接続**。completion/fault/cancel/drain境界はmain
-`c16478d5`までに統合済みで、このbody error/owner teardown拡張はローカル検証中。
+状態: **内部実装・公開未接続**。completion/fault/cancel/drainとbody error/owner
+teardown境界はmain `ca848078`までに統合済みで、このbody-local output放棄拡張は
+ローカル検証中。
 Nagi 0.3.0の
 公開Go Task/scopeを部分的に成功扱いせず、採用済み
 [`Task`契約](adr/012-task-result-handles.md)のうち設計判断を増やさない
@@ -32,8 +33,13 @@ completion/fault/cancel/drain境界を`compiler/go-runtime/internal/taskscope`�
   faultをprimary、cleanup faultをrelated causeとして保持する。既にprimaryがあれば
   両方をrelated causeへ追加する。任意のpanic payloadはformat・保持しない。
 - `FinishBodyError`は任意型`E`の元body errorをTask fault stateへ格納・formatせず保持する。
-  owner teardownのcancel要求後、全callback/defer/cleanupをdrainしてから同じ値を返す。
+  未claimのbody-local Task出力を先に放棄し、owner teardownのcancel要求後、
+  全callback/defer/cleanupをdrainしてから同じ値を返す。
   先に観測済みのchild faultやdrain中のchild faultは元body errorを置換しない。
+- body-local出力の放棄は`receiptLive`だけを対象とする。先に`Receive`がclaimした出力を
+  奪わず、完了済み値と後から完了する値のkernel参照を保持しない。scope封印と放棄を
+  同じlock区間で行い、その間の新規Spawnを許さない。これは任意`T`の`Close`、
+  finalizer、GCや物理memory回収を保証しない。
 - `RequestOwnerTeardown`は新規Spawnを封印し、live childの`CancelFunc`を一度だけ取り出して
   lock外で実行する。同期呼出しはcleanup/joinを待たず、完了を報告しない。後続の
   `Cancel`/`FinishBodyError`が同じobligationをdrainできる。
@@ -41,7 +47,7 @@ completion/fault/cancel/drain境界を`compiler/go-runtime/internal/taskscope`�
 ## まだ実装しないこと
 
 private faultは公開`TaskFailure`ではない。legacy task faultとの統合、親cancel/deadline、
-body error時のTask output自動放棄と一般owner/resource release、rollbackは未接続である。
+一般owner/resource release、rollbackは未接続である。
 今回のprivate関数は`ScopeExitPlan`の退出順序だけを検証し、公開loweringを有効化しない。
 公開High/LowのScope/SpawnBind/Task、Go生成applicationへのruntime組込みは引き続き
 toolchain起動前に拒否する。
@@ -52,7 +58,9 @@ barrier付きnative Go testで、並行開始、対象childだけの受取、cle
 discard前後、全child Finish、handle copy競合、wrong scope/forged handle、panic/cleanup
 panic/Goexit、fault観測順、兄弟cancel、cancel後panic、非協調childのdrain、
 Receive/Discard競合、Cancel/Finish競合に加え、先に観測したchild faultよりbody errorを
-優先すること、owner teardownがcancel要求後もcleanup完了を偽装しないことを確認する。
+優先すること、完了前後の未claim出力をcancel要求前に放棄すること、claim済みReceiveを
+奪わないこと、放棄と並行するSpawnを拒否すること、owner teardownがcancel要求後も
+cleanup完了を偽装しないことを確認する。
 sleep、GC/finalizer、goroutine countをcleanup証拠に使わない。
 既存Rust integrationの1入口はGo JSON testのpackage/test完全在庫を照合し、skip、fail、
 zero、重複、欠落を成功にしない。公開scope拒否のHigh/手書きLow回帰を維持する。
