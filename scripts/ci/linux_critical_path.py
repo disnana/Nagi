@@ -183,20 +183,34 @@ def check_execution(output, events, cases, ignored, item):
         raise ValueError('ignored tests outside listed inventory')
     if not cases and item['id'] not in EMPTY_TEST_TARGETS:
         raise ValueError('unexpected zero-case test target')
-    seen = {}
+    seen, ignored_reasons = {}, {}
     # Stable libtest's --logfile is written by this outer harness only. Native
     # subprocess stdout can contain the same test names and complete summaries;
     # it is diagnostic output, never an outer case event.
     if len(events.encode()) > MAX_EVENT_BYTES:
         raise ValueError('outer libtest event log is too large')
     for line in events.splitlines():
-        match = re.fullmatch(r'(ok|ignored|failed) (.+)', line)
-        if match is None:
-            raise ValueError('unrecognized outer libtest event')
-        status, name = match.groups()
+        if line.startswith('ignored: '):
+            # libtest appends the exact test name after the optional ignore
+            # reason. Resolve only against the independently listed ignored
+            # subset, with an explicit space delimiter and a unique suffix.
+            matches = [name for name in ignored if line.endswith(' ' + name)
+                       and len(line) >= len('ignored: ') + len(name) + 1]
+            if len(matches) != 1:
+                raise ValueError('unknown or ambiguous reasoned ignored event')
+            status, name = 'ignored', matches[0]
+            reason = line[len('ignored: '):-len(name) - 1]
+        else:
+            match = re.fullmatch(r'(ok|ignored|failed) (.+)', line)
+            if match is None:
+                raise ValueError('unrecognized outer libtest event')
+            status, name = match.groups()
+            reason = None
         if name in seen:
             raise ValueError('duplicate executed case')
         seen[name] = status
+        if status == 'ignored':
+            ignored_reasons[name] = reason
     wanted = {name: ('ignored' if name in ignored else 'ok') for name in cases}
     # Cargo waits for the harness. Its final summary follows all joined native
     # children; earlier summaries may legitimately belong to nested harnesses.
@@ -204,7 +218,8 @@ def check_execution(output, events, cases, ignored, item):
     final = SUMMARY.fullmatch(summaries[-1]) if summaries else None
     if seen != wanted or final is None or final.groups() != (str(len(cases - ignored)), str(len(ignored))):
         raise ValueError('missing, filtered, unsuccessful or unexpected executed cases')
-    return dict(cases=sorted(cases), ignored=sorted(ignored), passed=len(cases - ignored))
+    return dict(cases=sorted(cases), ignored=sorted(ignored), ignored_reasons=ignored_reasons,
+                passed=len(cases - ignored))
 
 
 def run(args, merge=False, extra_env=None):
@@ -403,6 +418,9 @@ def reconcile(receipts, items, identity):
                         raise ValueError('missing named test inventory')
                     if len(cases) != len(set(cases)) or len(ignored) != len(set(ignored)) or not set(ignored) <= set(cases):
                         raise ValueError('duplicate cases or invalid ignored state')
+                    reasons = binary.get('ignored_reasons')
+                    if not isinstance(reasons, dict) or set(reasons) != set(ignored) or any(reason is not None and not isinstance(reason, str) for reason in reasons.values()):
+                        raise ValueError('missing or invalid ignored reasons')
                     if not cases and member['id'] not in EMPTY_TEST_TARGETS:
                         raise ValueError('zero-case receipt')
                     if type(binary.get('passed')) is not int or binary['passed'] != len(cases) - len(ignored):

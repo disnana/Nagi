@@ -42,7 +42,7 @@ def receipts(items, identity):
         for target in group:
             row = dict(target=target, passed=0, command=policy.command(target), exit=0)
             if target['mode'] == 'test':
-                row['binaries'] = [dict(member=member, cases=['case', 'ignored_case'], ignored=['ignored_case'], passed=1) for member in target['members']]
+                row['binaries'] = [dict(member=member, cases=['case', 'ignored_case'], ignored=['ignored_case'], ignored_reasons={'ignored_case': None}, passed=1) for member in target['members']]
                 row['passed'] = len(row['binaries'])
             elif target['mode'] == 'doc':
                 row.update(summaries=[['1', '0']], ignored_total=0, failed_total=0, passed=1)
@@ -109,7 +109,7 @@ class WorkspaceInventoryTests(unittest.TestCase):
                 replacements = [('passed', True), ('exit', 1), ('exit', True), ('exit', None), ('command', ['true']), ('command', None)]
                 if row['target']['mode'] == 'test':
                     replacements += [('passed', 0), ('binaries', []), ('binaries', row['binaries'] * 2)]
-                    for key, value in [('cases', []), ('cases', ['case', 'case']), ('ignored', ['unlisted']), ('ignored', ['ignored_case', 'ignored_case']), ('passed', True)]:
+                    for key, value in [('cases', []), ('cases', ['case', 'case']), ('ignored', ['unlisted']), ('ignored', ['ignored_case', 'ignored_case']), ('ignored_reasons', None), ('ignored_reasons', {}), ('ignored_reasons', {'unlisted': 'reason'}), ('ignored_reasons', {'ignored_case': True}), ('passed', True)]:
                         changed = copy.deepcopy(self.receipts); changed[index]['targets'][row_index]['binaries'][0][key] = value; mutants.append(changed)
                 elif row['target']['mode'] == 'doc':
                     replacements += [('passed', 0), ('summaries', []), ('summaries', [['0', '0']]), ('failed_total', 1), ('ignored_total', 99)]
@@ -134,7 +134,8 @@ class WorkspaceInventoryTests(unittest.TestCase):
         output = f'running 3 tests\ntest {normal} ... ok\ntest {panic} - should panic ... ok\ntest {ignored} - should panic ... ignored, fixture reason\ntest result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s\n'
         cases = {normal, panic, ignored}
         events = f'ok {normal}\nok {panic}\nignored {ignored}\n'
-        policy.check_execution(output, events, cases, {ignored}, member)
+        checked = policy.check_execution(output, events, cases, {ignored}, member)
+        self.assertEqual(checked['ignored_reasons'], {ignored: None})
         for changed in (output.replace('2 passed', '0 passed'), output.replace('0 filtered out', '1 filtered out'), output + 'test result: FAILED.\n'):
             with self.assertRaises(ValueError): policy.check_execution(changed, events, cases, {ignored}, member)
         for changed in (events.replace(f'ok {normal}\n', ''), events + f'ok {normal}\n', events + 'ok unknown\n', events.replace(f'ok {panic}', f'failed {panic}'), events.replace(f'ignored {ignored}', f'ok {ignored}'), events + 'unexpected output\n'):
@@ -159,6 +160,48 @@ class WorkspaceInventoryTests(unittest.TestCase):
             with self.assertRaises(ValueError): policy.check_execution(output, changed, names, set(), member)
         with patch.object(policy, 'MAX_EVENT_BYTES', 2), self.assertRaises(ValueError):
             policy.check_execution(output, events, names, set(), member)
+
+    def test_reasoned_ignored_events_require_a_unique_known_ignored_suffix(self):
+        ignored = 'task::cost_tests::native_task_handle_costs'
+        normal, panic = 'normal', 'expected_panic'
+        reason = 'native cost measurement; run explicitly with --ignored --nocapture'
+        line = f'ignored: {reason} {ignored}\n'
+        events = f'ok {normal}\nok {panic}\n' + line
+        output = 'test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s\n'
+        cases = {normal, panic, ignored}
+        member = dict(id='nagi-runtime/lib/nagi_runtime')
+        checked = policy.check_execution(output, events, cases, {ignored}, member)
+        self.assertEqual(checked['ignored_reasons'], {ignored: reason})
+        for changed in (events + line, events.replace(line, ''), events.replace(ignored, 'unknown'),
+                        events.replace(line, f'ignored: {reason} {normal}\n'),
+                        events.replace(line, f'ignored: {ignored}\n'),
+                        events.replace(line, f'ignored: {reason}{ignored}\n'),
+                        events.replace(f'ok {panic}', f'failed {panic}'),
+                        events.replace(f'ok {panic}', f'failed: test did not panic as expected at fixture.rs:1:1 {panic}'),
+                        events.replace(f'ok {panic}', f'failed: panic did not contain expected string\n      panic message: "wrong"\n expected substring: "required" {panic}'),
+                        events.replace(f'ok {panic}', f'ignored {panic}')):
+            with self.subTest(events=changed), self.assertRaises(ValueError):
+                policy.check_execution(output, changed, cases, {ignored}, member)
+        # A generated test name can itself contain spaces. Never guess which
+        # listed ignored suffix belongs to a reasoned event.
+        with self.assertRaises(ValueError):
+            policy.check_execution(output, 'ignored: reason long short\n',
+                                   {'long short', 'short'}, {'long short', 'short'}, member)
+
+    def test_ignored_only_target_preserves_plain_empty_and_unicode_reasons(self):
+        names = {'plain', 'empty', 'unicode'}
+        output = 'test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s\n'
+        events = 'ignored plain\nignored:  empty\nignored: 理由: café  unicode\n'
+        checked = policy.check_execution(output, events, names, names, dict(id='probe/test/ignored'))
+        self.assertEqual(checked['passed'], 0)
+        self.assertEqual(checked['ignored_reasons'], {'plain': None, 'empty': '', 'unicode': '理由: café '})
+        # An ignored-only binary is valid inside a nonzero shard; its reason
+        # metadata remains mandatory in aggregation without becoming passes.
+        changed = copy.deepcopy(self.receipts)
+        target = next(row for receipt in changed for row in receipt['targets'] if row['target']['mode'] == 'test')
+        target['binaries'][0].update(checked)
+        target['passed'] -= 1
+        policy.reconcile(changed, self.items, self.identity)
 
     def test_cargo_runner_exec_preserves_arguments_cwd_and_original_environment(self):
         with tempfile.TemporaryDirectory() as temporary:
