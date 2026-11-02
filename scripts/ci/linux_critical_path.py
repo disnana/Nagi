@@ -10,9 +10,11 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import time
+import traceback
 
 import levels
 from nextest_evaluation import parse_libtest_listing
@@ -24,6 +26,10 @@ WEIGHTS = {"build_generations": 179.11, "security_sf01_native": 101.55,
 # Cargo includes the CLI harness even though main.rs contains no unit tests.
 EMPTY_TEST_TARGETS = {"nagic/bin/nagic"}
 SUMMARY = re.compile(r"(?m)^test result: ok\. (\d+) passed; 0 failed; (\d+) ignored; 0 measured; 0 filtered out; finished in .+$")
+EXECUTION_ENV = 'NAGI_CI_WORKSPACE_EXECUTION'
+EXECUTION_PROTOCOL = 'stable-libtest-logfile-v1'
+MAX_EVENT_BYTES = 16 * 1024 * 1024
+TRANSCRIPT = None
 
 
 def digest(value):
@@ -155,51 +161,128 @@ def compiled_binaries(output, item):
     return found
 
 
-def execution_blocks(output, binaries):
-    markers = list(re.finditer(r'(?m)^\s*Running .+ \(([^)\r\n]+)\)\r?$', output))
-    expected = {str(Path(path).resolve()): name for name, path in binaries.items()}
+def execution_blocks(output, markers):
+    if any(line.startswith('NAGI_CI_OUTER_EXECUTION ') and not re.fullmatch(r'NAGI_CI_OUTER_EXECUTION [0-9a-f]{64}', line)
+           for line in output.splitlines()):
+        raise ValueError('malformed outer execution boundary')
+    starts = list(re.finditer(r'(?m)^NAGI_CI_OUTER_EXECUTION ([0-9a-f]{64})\r?$', output))
+    expected = {marker: name for name, marker in markers.items()}
     blocks = {}
-    for index, marker in enumerate(markers):
-        path = str(Path(marker[1]).resolve())
-        if path not in expected or expected[path] in blocks:
+    for index, marker in enumerate(starts):
+        if marker[1] not in expected or expected[marker[1]] in blocks:
             raise ValueError('unexpected or duplicate executed binary')
-        end = markers[index + 1].start() if index + 1 < len(markers) else len(output)
-        blocks[expected[path]] = output[marker.end():end]
-    if set(blocks) != set(binaries):
+        end = starts[index + 1].start() if index + 1 < len(starts) else len(output)
+        blocks[expected[marker[1]]] = output[marker.end():end]
+    if set(blocks) != set(markers):
         raise ValueError('missing executed binary')
     return blocks
 
 
-def check_execution(output, cases, ignored, item):
+def check_execution(output, events, cases, ignored, item):
     if not ignored <= cases:
         raise ValueError('ignored tests outside listed inventory')
     if not cases and item['id'] not in EMPTY_TEST_TARGETS:
         raise ValueError('unexpected zero-case test target')
     seen = {}
-    for match in re.finditer(r'(?m)^test (.+) \.\.\. (ok|ignored(?:, [^\n]*)?|FAILED)$', output):
-        name, status = match.groups()
-        if name.endswith(' - should panic'):
-            name = name.removesuffix(' - should panic')
+    # Stable libtest's --logfile is written by this outer harness only. Native
+    # subprocess stdout can contain the same test names and complete summaries;
+    # it is diagnostic output, never an outer case event.
+    if len(events.encode()) > MAX_EVENT_BYTES:
+        raise ValueError('outer libtest event log is too large')
+    for line in events.splitlines():
+        match = re.fullmatch(r'(ok|ignored|failed) (.+)', line)
+        if match is None:
+            raise ValueError('unrecognized outer libtest event')
+        status, name = match.groups()
         if name in seen:
             raise ValueError('duplicate executed case')
         seen[name] = status
     wanted = {name: ('ignored' if name in ignored else 'ok') for name in cases}
-    actual = {name: ('ignored' if state.startswith('ignored') else state) for name, state in seen.items()}
-    summaries = SUMMARY.findall(output)
-    if actual != wanted or summaries != [(str(len(cases - ignored)), str(len(ignored)))]:
+    # Cargo waits for the harness. Its final summary follows all joined native
+    # children; earlier summaries may legitimately belong to nested harnesses.
+    summaries = [line for line in output.splitlines() if line.startswith('test result:')]
+    final = SUMMARY.fullmatch(summaries[-1]) if summaries else None
+    if seen != wanted or final is None or final.groups() != (str(len(cases - ignored)), str(len(ignored))):
         raise ValueError('missing, filtered, unsuccessful or unexpected executed cases')
     return dict(cases=sorted(cases), ignored=sorted(ignored), passed=len(cases - ignored))
 
 
-def run(args, merge=False):
+def run(args, merge=False, extra_env=None):
     result = subprocess.run(args, text=True, stdout=subprocess.PIPE,
-                            stderr=subprocess.STDOUT if merge else None,
-                            env={**os.environ, 'CARGO_TERM_COLOR': 'never'})
+                            stderr=subprocess.STDOUT if merge else subprocess.PIPE,
+                            env={**os.environ, 'CARGO_TERM_COLOR': 'never', **(extra_env or {})})
+    if TRANSCRIPT is not None:
+        with TRANSCRIPT.open('a') as stream:
+            stream.write('\nCOMMAND ' + json.dumps(args) + '\n')
+            if extra_env:
+                stream.write('SCOPED_RUNNER ' + json.dumps(extra_env, sort_keys=True) + '\n')
+            stream.write(result.stdout)
+            if result.stderr:
+                stream.write('\nSTDERR\n' + result.stderr)
+            stream.write('\nEXIT ' + str(result.returncode) + '\n')
+    if result.stderr:
+        print(result.stderr, file=sys.stderr, end='')
     if result.returncode:
         # Preserve Cargo/libtest failure diagnostics in the ordinary job log.
         print(result.stdout, file=sys.stderr, end='')
         result.check_returncode()
     return result.stdout
+
+
+def execution_plan(binaries, directory, toolchain):
+    hosts = re.findall(r'(?m)^host: ([a-zA-Z0-9_-]+)$', toolchain)
+    if len(hosts) != 1:
+        raise ValueError('missing exact Rust host for Cargo execution runner')
+    runner_env = 'CARGO_TARGET_' + hosts[0].upper().replace('-', '_') + '_RUNNER'
+    if runner_env in os.environ or EXECUTION_ENV in os.environ:
+        raise ValueError('workspace execution runner environment is already configured')
+    directory.mkdir(parents=True, exist_ok=False)
+    members = {}
+    for member, executable in binaries.items():
+        marker = digest(dict(member=member, executable=str(Path(executable).resolve())))
+        members[member] = dict(executable=str(Path(executable).resolve()), marker=marker,
+                               events=str((directory / (marker + '.events')).resolve()))
+    runner = shlex.join([sys.executable, '-B', str(Path(__file__).resolve()), '--record-binary'])
+    plan = dict(protocol=EXECUTION_PROTOCOL, runner_env=runner_env, runner_command=runner,
+                requested_harness_arguments=['--format=pretty'], members=members)
+    manifest = directory / 'execution.json'
+    manifest.write_text(json.dumps(plan) + '\n')
+    return plan, {runner_env: runner, EXECUTION_ENV: str(manifest.resolve())}
+
+
+def record_binary(arguments):
+    """Cargo's runner preserves its cwd/environment, then execs the real binary.
+
+    Remove only our scoped runner settings before exec: a nested Cargo or
+    current_exe subprocess must neither record nor inherit outer log arguments.
+    The exclusive start file rejects a genuine second outer invocation.
+    """
+    manifest = Path(os.environ[EXECUTION_ENV])
+    if manifest.stat().st_size > 64 * 1024:
+        raise ValueError('oversized workspace execution plan')
+    plan = json.loads(manifest.read_text())
+    if plan['protocol'] != EXECUTION_PROTOCOL or plan['requested_harness_arguments'] != ['--format=pretty']:
+        raise ValueError('unexpected outer execution protocol')
+    if len(arguments) != 2 or arguments[1:] != plan['requested_harness_arguments']:
+        raise ValueError('unexpected outer harness arguments')
+    executable = str(Path(arguments[0]).resolve())
+    matches = [row for row in plan['members'].values() if row['executable'] == executable]
+    if len(matches) != 1:
+        raise ValueError('unexpected outer test executable')
+    row = matches[0]
+    events = Path(row['events'])
+    if events.exists() or events.is_symlink():
+        raise ValueError('outer event log already exists')
+    actual_arguments = [*arguments[1:], '--logfile', str(events)]
+    with events.with_suffix('.started').open('x') as stream:
+        stream.write(json.dumps(dict(protocol=EXECUTION_PROTOCOL, executable=executable,
+                                     cwd=os.getcwd(), requested_arguments=arguments[1:],
+                                     actual_arguments=actual_arguments)) + '\n')
+    environment = dict(os.environ)
+    del environment[EXECUTION_ENV]
+    del environment[plan['runner_env']]
+    print('NAGI_CI_OUTER_EXECUTION ' + row['marker'], flush=True)
+    os.execve(executable, [executable, *actual_arguments], environment)
 
 
 def context():
@@ -218,7 +301,24 @@ def workspace_inventory():
     return inventory(json.loads(run(['cargo', 'metadata', '--locked', '--no-deps', '--format-version=1'])))
 
 
-def execute(index, destination):
+def execute(index, destination, logs=None):
+    global TRANSCRIPT
+    directory = (logs or Path('build/ci-evidence/linux-workspace-logs')) / f'shard-{index}'
+    directory.mkdir(parents=True, exist_ok=False)
+    previous = TRANSCRIPT
+    TRANSCRIPT = directory / 'orchestration.log'
+    TRANSCRIPT.write_text('Workspace shard ' + str(index) + '\n')
+    try:
+        _execute(index, destination, directory)
+    except BaseException:
+        with TRANSCRIPT.open('a') as stream:
+            stream.write('\nORCHESTRATION FAILURE\n' + traceback.format_exc())
+        raise
+    finally:
+        TRANSCRIPT = previous
+
+
+def _execute(index, destination, logs):
     identity = context()
     items = workspace_inventory()
     paths = levels.complete_paths(os.environ.get('CI_BASE', ''), identity['head'])
@@ -234,12 +334,21 @@ def execute(index, destination):
                 cases = parse_libtest_listing(run([executable, '--list', '--format=pretty']))
                 ignored = parse_libtest_listing(run([executable, '--list', '--ignored', '--format=pretty']))
                 inventories[member['id']] = (cases, ignored)
-            blocks = execution_blocks(run(args + ['--', '--format=pretty'], merge=True), binaries)
-            executed = []
-            for member in item['members']:
-                cases, ignored = inventories[member['id']]
-                checked = check_execution(blocks[member['id']], cases, ignored, member)
-                executed.append(dict(member=member, **checked))
+            plan, environment = execution_plan(binaries, logs / digest(item), identity['toolchain'])
+            output = run(args + ['--', '--format=pretty'], merge=True, extra_env=environment)
+            try:
+                blocks = execution_blocks(output, {name: row['marker'] for name, row in plan['members'].items()})
+                executed = []
+                for member in item['members']:
+                    cases, ignored = inventories[member['id']]
+                    event_path = Path(plan['members'][member['id']]['events'])
+                    if event_path.stat().st_size > MAX_EVENT_BYTES:
+                        raise ValueError('outer libtest event log is too large')
+                    checked = check_execution(blocks[member['id']], event_path.read_text(), cases, ignored, member)
+                    executed.append(dict(member=member, **checked))
+            except Exception:
+                print(output, file=sys.stderr, end='')
+                raise
             result = dict(binaries=executed, passed=sum(row['passed'] for row in executed), command=args, exit=0)
         else:
             # Build-only examples and Cargo doctests retain their original role.
@@ -321,8 +430,11 @@ def main():
     parser.add_argument('--shard', type=int, choices=range(SHARDS))
     parser.add_argument('--receipts', type=Path, default=Path('build/ci-evidence/linux-workspace'))
     parser.add_argument('--aggregate', action='store_true')
+    parser.add_argument('--record-binary', nargs=argparse.REMAINDER)
     args = parser.parse_args()
-    if args.aggregate:
+    if args.record_binary is not None:
+        record_binary(args.record_binary)
+    elif args.aggregate:
         files = list(args.receipts.rglob('*.json'))
         reconcile([json.loads(path.read_text()) for path in files], workspace_inventory(), context())
         print('All workspace targets and named cases reconciled.')

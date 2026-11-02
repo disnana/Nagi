@@ -70,3 +70,10 @@ PR #218のLinuxは26分55秒で、CSRF semantic mutantsが6分29秒、samplesが
 今回のCI専用branchはmain `0b21a1d`から分離し、PR #218の機能変更には依存しない。外側のinverseはこのmainのworkflowとbyte単位で一致し、新しいbase hashだけをそのsourceへ固定した。既存の歴史hashは変更していない。mainのmanifestと追跡sourceをPythonで独立照合すると、非doc targetは133件、129 selectorとdoc 1件になり、既存Goの4 platform件数は34/33/34/34のまま。これはCargo metadataやnative実行ではなく、source inventoryの検証である。selector/receipt拒否、担当targetだけを実行するmock、cache/gate mutation、Python CI policy suite全体を検査する。
 
 先行batch 29の別sourceでは実metadata 134 target/130 selector、offline `enum_parser`の8件、feature統合と小workspaceのnative照合を観測したが、今回のmain上の実行証拠として転用しない。全workspace/native実行、artifact転送、cold/warmのcritical pathは未確認。比較時は同じsource・inventoryでcold/warmを分け、各jobの依存待ち・queue・setup・cache restore/save・compile・実行・artifact転送と、Linux gate・全体終了・runner-minutesを記録する。基準#217の全体終了を支配したWindows packageは34分52秒だった。shard weight合計は配分用の推定でActions実測時間ではない。4 runnerでの依存compileとsetup/転送の重複が短縮分を相殺する可能性があり、実測短縮やReadyの報告にはexact-source CI成功と独立reviewが必要。
+
+
+### native child stdoutと外側libtestの区別
+
+`graph_render`は同じtest binaryを`current_exe --exact image_child --nocapture`で起動し、native childのstdoutを継承する。外側にも同じ名前のcaseがあるため、stdout全体の`test ... ok`を数える方法では正常な子実行を外側の重複と誤判定した。Cargoのselector、workspace features、cwd、Nagi用environmentは維持し、実行時だけCargoのhost runnerで外側binaryごとの独立したstable libtest `--logfile`を指定する。runnerは実binaryへexecする前に自分が加えたrunner設定をenvironmentから外し、nested Cargoやself subprocessへ引き継がない。排他的な開始fileとbinary別boundaryで本当の外側の再実行を拒否し、独立event fileの全case・ignored・状態と外側の最終count summaryを照合する。native childの出力とsummaryは診断として残し、外側caseのauthorityには使わない。filterや直列化は追加しない。
+
+`--logfile`はstableで利用できるがdeprecatedである。将来のtoolchainが拒否した場合はCargoの非0 exitで失敗し、stdoutだけの弱い検証へfallbackしない。orchestration logは成功したCargoのraw outputも保存し、parser例外時には該当実行の出力をjob logへ戻す。compiler failure artifactが空でも、shardのraw log・boundary・event fileをfailure artifactへ保存する。この修正の小さなnative fixtureとPython検査は、全workspaceのActions実行成功や性能改善を証明しない。

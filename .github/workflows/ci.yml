@@ -1070,8 +1070,10 @@ jobs:
         with:
           retention-days: 7 # ci-retention
           name: compiler-failures-linux-workspace-${{ matrix.shard }}
-          path: build/compiler-failures/
-          if-no-files-found: ignore
+          path: |
+            build/compiler-failures/
+            build/ci-evidence/linux-workspace-logs/
+          if-no-files-found: error
 
       - name: Save validated Rust cache (main only) # ci-cache-save
         if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''

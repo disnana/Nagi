@@ -4,10 +4,12 @@ import contextlib
 import io
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import unittest
 import tempfile
+import subprocess
 from unittest.mock import patch
 
 import linux_critical_path as policy
@@ -56,7 +58,7 @@ def artifact(member):
 class WorkspaceInventoryTests(unittest.TestCase):
     def setUp(self):
         self.items = policy.inventory(metadata())
-        self.identity = dict(head='a' * 40, toolchain='rustc stable exact', flags='default', lock='lock', workflow='workflow')
+        self.identity = dict(head='a' * 40, toolchain='rustc stable exact\nhost: x86_64-unknown-linux-gnu\n', flags='default', lock='lock', workflow='workflow')
         self.receipts = receipts(self.items, self.identity)
 
     def test_complete_stable_balancing_and_change_order_never_remove_targets(self):
@@ -131,20 +133,58 @@ class WorkspaceInventoryTests(unittest.TestCase):
         self.assertIn('fn legacy_views_borrow_the_registered_descriptor()', source)
         output = f'running 3 tests\ntest {normal} ... ok\ntest {panic} - should panic ... ok\ntest {ignored} - should panic ... ignored, fixture reason\ntest result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s\n'
         cases = {normal, panic, ignored}
-        policy.check_execution(output, cases, {ignored}, member)
-        for changed in (output.replace(f'test {normal} ... ok\n', ''), output.replace('2 passed', '0 passed'), output.replace('0 filtered out', '1 filtered out'), output.replace('should panic ... ok', 'should panic ... FAILED'), output + output):
-            with self.assertRaises(ValueError): policy.check_execution(changed, cases, {ignored}, member)
-        with self.assertRaises(ValueError): policy.check_execution('test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n', set(), set(), member)
-        binary = '/tmp/test-binary'
-        blocks = policy.execution_blocks(f'     Running unittests src/lib.rs ({binary})\n' + output, {member['id']: binary})
+        events = f'ok {normal}\nok {panic}\nignored {ignored}\n'
+        policy.check_execution(output, events, cases, {ignored}, member)
+        for changed in (output.replace('2 passed', '0 passed'), output.replace('0 filtered out', '1 filtered out'), output + 'test result: FAILED.\n'):
+            with self.assertRaises(ValueError): policy.check_execution(changed, events, cases, {ignored}, member)
+        for changed in (events.replace(f'ok {normal}\n', ''), events + f'ok {normal}\n', events + 'ok unknown\n', events.replace(f'ok {panic}', f'failed {panic}'), events.replace(f'ignored {ignored}', f'ok {ignored}'), events + 'unexpected output\n'):
+            with self.assertRaises(ValueError): policy.check_execution(output, changed, cases, {ignored}, member)
+        with self.assertRaises(ValueError): policy.check_execution('test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n', '', set(), set(), member)
+        marker = 'a' * 64
+        blocks = policy.execution_blocks(f'NAGI_CI_OUTER_EXECUTION {marker}\n' + output, {member['id']: marker})
         self.assertEqual(blocks[member['id']].strip(), output.strip())
-        for changed in (output, f'     Running unittests src/lib.rs (/tmp/unknown)\n' + output, f'     Running unittests src/lib.rs ({binary})\n' * 2 + output):
-            with self.assertRaises(ValueError): policy.execution_blocks(changed, {member['id']: binary})
+        for changed in (output, f'NAGI_CI_OUTER_EXECUTION {"b" * 64}\n' + output, f'NAGI_CI_OUTER_EXECUTION {marker}\n' * 2 + output):
+            with self.assertRaises(ValueError): policy.execution_blocks(changed, {member['id']: marker})
+
+    def test_nested_self_harness_names_and_summaries_are_not_outer_events(self):
+        # graph_render's three process tests call current_exe --exact image_child
+        # with inherited stdout. image_child is also a listed outer test.
+        member = dict(id='nagic/test/graph_render')
+        names = {'process_tests::image_child', 'process_tests::export', 'process_tests::missing'}
+        nested = 'running 1 test\ntest process_tests::image_child ... ok\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n'
+        output = 'running 3 tests\n' + nested * 2 + '\n'.join('test ' + name + ' ... ok' for name in sorted(names)) + '\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n'
+        events = ''.join('ok ' + name + '\n' for name in sorted(names))
+        policy.check_execution(output, events, names, set(), member)
+        for changed in (events + 'ok process_tests::image_child\n', events.replace('ok process_tests::image_child\n', ''), events + 'ok extra\n'):
+            with self.assertRaises(ValueError): policy.check_execution(output, changed, names, set(), member)
+        with patch.object(policy, 'MAX_EVENT_BYTES', 2), self.assertRaises(ValueError):
+            policy.check_execution(output, events, names, set(), member)
+
+    def test_cargo_runner_exec_preserves_arguments_cwd_and_original_environment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binaries = {'package/lib/one': '/tmp/binary-one', 'other/lib/two': '/tmp/binary-two'}
+            plan, environment = policy.execution_plan(binaries, root / 'execution', self.identity['toolchain'])
+            self.assertEqual(len(set(row['events'] for row in plan['members'].values())), 2)
+            cwd = os.getcwd()
+            with patch.dict(os.environ, {**environment, 'NAGI_FAILURE_DIR': 'preserved'}), patch.object(policy.os, 'execve') as execute, contextlib.redirect_stdout(io.StringIO()):
+                for member in binaries:
+                    row = plan['members'][member]
+                    policy.record_binary([row['executable'], '--format=pretty'])
+                    args = execute.call_args.args
+                    self.assertEqual(args[:2], (row['executable'], [row['executable'], '--format=pretty', '--logfile', row['events']]))
+                    self.assertNotIn(policy.EXECUTION_ENV, args[2])
+                    self.assertNotIn(plan['runner_env'], args[2])
+                    self.assertEqual(args[2]['NAGI_FAILURE_DIR'], 'preserved')
+                    with self.assertRaises(FileExistsError): policy.record_binary([row['executable'], '--format=pretty'])
+                with self.assertRaises(ValueError): policy.record_binary(['/tmp/unknown', '--format=pretty'])
+                with self.assertRaises(ValueError): policy.record_binary(['/tmp/binary-one', '--exact', 'one'])
+            self.assertEqual(os.getcwd(), cwd)
 
     def test_assigned_only_runner_writes_complete_receipts_after_real_case_checks(self):
         seen = []
         summary = 'test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s\n'
-        def fake_run(args, merge=False):
+        def fake_run(args, merge=False, extra_env=None):
             seen.append(args)
             if '--no-run' in args:
                 item = next(row for row in self.items if policy.command(row) == args[:-2])
@@ -155,10 +195,12 @@ class WorkspaceInventoryTests(unittest.TestCase):
             if args[1] == 'build': return ''
             self.assertTrue(merge)
             item = next(row for row in self.items if policy.command(row) == args[:-2])
-            return ''.join(f"     Running tests/fixture.rs (/tmp/{member['package']}-{member['name']})\ntest case ... ok\ntest ignored_case ... ignored\n" + summary for member in item['members'])
+            plan = json.loads(Path(extra_env[policy.EXECUTION_ENV]).read_text())
+            for row in plan['members'].values(): Path(row['events']).write_text('ok case\nignored ignored_case\n')
+            return ''.join(f"NAGI_CI_OUTER_EXECUTION {plan['members'][member['id']]['marker']}\ntest case ... ok\ntest ignored_case ... ignored\n" + summary for member in item['members'])
         with tempfile.TemporaryDirectory() as directory, patch.object(policy, 'context', return_value=self.identity), patch.object(policy, 'workspace_inventory', return_value=self.items), patch.object(policy.levels, 'complete_paths', return_value=None), patch.object(policy, 'run', side_effect=fake_run), contextlib.redirect_stdout(io.StringIO()):
             destination = Path(directory)
-            for index in range(policy.SHARDS): policy.execute(index, destination)
+            for index in range(policy.SHARDS): policy.execute(index, destination, destination / 'raw')
             result = [json.loads(path.read_text()) for path in destination.glob('*.json')]
             policy.reconcile(result, self.items, self.identity)
         builds = [args for args in seen if '--no-run' in args]
@@ -169,6 +211,21 @@ class WorkspaceInventoryTests(unittest.TestCase):
     def test_compiler_flag_variants_cannot_reuse_workspace_context(self):
         for flag in ('RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUSTDOCFLAGS', 'CARGO_ENCODED_RUSTDOCFLAGS'):
             with patch.dict('os.environ', {flag: '--cfg other'}), self.assertRaises(ValueError): policy.context()
+
+    def test_orchestration_log_keeps_successful_command_output_when_parser_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            completed = subprocess.CompletedProcess(['cargo', 'test'], 0, 'nested output retained\n', 'compiler stderr retained\n')
+            def broken(*unused):
+                policy.run(['cargo', 'test'])
+                raise ValueError('deliberate parser failure')
+            with patch.object(policy, '_execute', side_effect=broken), patch.object(policy.subprocess, 'run', return_value=completed), contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaisesRegex(ValueError, 'deliberate parser failure'):
+                    policy.execute(0, root / 'receipts', root / 'logs')
+            raw = (root / 'logs/shard-0/orchestration.log').read_text()
+            for text in ('nested output retained', 'compiler stderr retained', 'EXIT 0', 'deliberate parser failure'):
+                self.assertIn(text, raw)
+            self.assertFalse((root / 'receipts/shard-0.json').exists())
 
 
 class CriticalPathWiringTests(unittest.TestCase):
@@ -200,6 +257,14 @@ class CriticalPathWiringTests(unittest.TestCase):
         self.assertIn('pip install -r tests/requirements.txt', restored_linux)
         self.assertNotIn('  linux-samples:\n', restored)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(), BASE_SHA256)
+
+    def test_workspace_failure_upload_keeps_orchestration_evidence_without_compiler_failures(self):
+        shards = self.source.split('  linux-workspace-shards:\n', 1)[1].split('  linux-workspace:\n', 1)[0]
+        step = shards.split('      - name: Preserve workspace compiler and application failure evidence\n', 1)[1].split('      - name:', 1)[0]
+        self.assertIn('if: failure()', step)
+        self.assertIn('build/compiler-failures/', step)
+        self.assertIn('build/ci-evidence/linux-workspace-logs/', step)
+        self.assertIn('if-no-files-found: error', step)
 
     def test_real_new_jobs_are_required_and_the_aggregate_refuses_failed_shards(self):
         aggregate = self.source.split('  linux-workspace:\n', 1)[1].split('  linux-csrf-mutants:\n', 1)[0]
