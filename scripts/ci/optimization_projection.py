@@ -84,6 +84,19 @@ def save_step(path, critical=False):
 
 
 def cache_edit(job, inverse=False):
+    # The workspace aggregate has no cache. Its exact current source is
+    # protected by the outer projection, including this infrastructure roundtrip.
+    if job.startswith('  linux-workspace:\n') and 'linux-workspace-shards' in job:
+        spec = importlib.util.spec_from_file_location(
+            'linux_critical_path_projection', Path(__file__).with_name('linux_critical_path_projection.py'))
+        policy = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(policy)
+        expected = re.search(r'(?ms)^  linux-workspace:\n.*?(?=^  linux-csrf-mutants:)', policy.NEW_WORKSPACE).group()
+        plain = unpin(expected).replace('          persist-credentials: false # ci-isolation\n', '')
+        plain = re.sub(r'^        with:\n(?=^\S|^ {0,8}\S|\Z)', '', plain, flags=re.M)
+        if job not in (expected, plain):
+            raise ValueError('changed Linux workspace aggregate')
+        return job
     if job.split(':', 1)[0].strip() in ('linux-workspace', 'windows-contracts'):
         spec = importlib.util.spec_from_file_location(
             'parallel_cache_projection', Path(__file__).with_name('parallel_cache_projection.py'))

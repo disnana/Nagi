@@ -1,4 +1,5 @@
 """One independent runner; unchanged coverage, strict aggregate and historical proof."""
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import copy
 import hashlib
 from pathlib import Path
@@ -31,7 +32,7 @@ def prove(source):
 
 class LinuxWorkspaceSourceTests(unittest.TestCase):
     def setUp(self):
-        self.current_source = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.current_source = inherited_workflow((ROOT / '.github/workflows/ci.yml').read_text())
         self.source = parallel_cache_projection.inverse_workflow(self.current_source)
         self.linux_source = windows_contract_projection.inverse_workflow(
             go_backend_projection.inverse_workflow(self.source))

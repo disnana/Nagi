@@ -1,4 +1,5 @@
 """Current policy, fail-closed selectors, and unchanged comprehensive command proof."""
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import copy
 import json
 import re
@@ -31,6 +32,8 @@ def needs(level='1', full='true', plan=None, go=None):
             'critical': yes(selected['critical_checks'] == 'true'),
             'linux': yes(selected['comprehensive_checks'] == 'true'),
             'linux-workspace': yes(selected['comprehensive_checks'] == 'true'),
+            'linux-csrf-mutants': yes(selected['comprehensive_checks'] == 'true'),
+            'linux-samples': yes(selected['comprehensive_checks'] == 'true'),
             'rust-1-88': yes(selected['comprehensive_checks'] == 'true'),
             'go-backend': yes(selected['go_checks'] == 'true'),
             'nagi-package': yes(selected['package_checks'] == 'true'),
@@ -175,7 +178,7 @@ class LevelsTests(unittest.TestCase):
             self.assertIsNone(levels.complete_paths('b'*40, 'a'*40))
 
     def test_critical_cache_binds_key_and_restore_prefix_to_rust_toolchain(self):
-        source=(ROOT/'.github/workflows/ci.yml').read_text()
+        source=inherited_workflow((ROOT/'.github/workflows/ci.yml').read_text())
         critical=unpin(re.search(r'^  critical:\n.*?(?=^  [a-z][a-z0-9-]*:)', source, re.M | re.S).group())
         self.assertIn('      - uses: dtolnay/rust-toolchain@stable\n        id: rust\n', critical)
         prefix = "nagi-critical-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}"
@@ -193,7 +196,7 @@ class LevelsTests(unittest.TestCase):
             with self.assertRaises(ValueError):critical_inventory.cases(value)
 
     def test_policy_inverse_preserves_original_commands_and_rejects_mutants(self):
-        source=(ROOT/'.github/workflows/ci.yml').read_text()
+        source=inherited_workflow((ROOT/'.github/workflows/ci.yml').read_text())
         restored=levels_projection.inverse_workflow(source)
         self.assertNotIn('\n  ci-plan:\n', restored)
         self.assertEqual(restored.count('          - os: macos-15-intel\n'),2)

@@ -1,3 +1,4 @@
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import re
 import unittest
 from pathlib import Path
@@ -15,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class OptimizationTests(unittest.TestCase):
     def source(self):
-        return (ROOT / '.github/workflows/ci.yml').read_text()
+        return inherited_workflow((ROOT / '.github/workflows/ci.yml').read_text())
 
     def test_checked_in_workflows_have_pinned_actions_and_owned_caches(self):
         for path in sorted((ROOT / '.github/workflows').glob('*.yml')):

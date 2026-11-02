@@ -1,4 +1,5 @@
 """Fail-closed coverage for the two whole four-platform regression steps."""
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import copy
 import hashlib
 from pathlib import Path
@@ -28,7 +29,7 @@ def historical_digest(workflow):
 class ParallelWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.actual_workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        cls.actual_workflow = inherited_workflow((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
         cls.workflow = levels_projection.inverse_workflow(cls.actual_workflow)
 
     def test_exact_job_and_ordered_reassembly_keep_historical_identity(self):
@@ -124,7 +125,7 @@ class RegressionGateTests(unittest.TestCase):
                 comprehensive_checks=comprehensive, package_checks=comprehensive,
                 go_checks='true',
                 matrix=json.dumps({'include':rows[:count]}, separators=(',', ':')))
-            for job in ['linux','linux-workspace','rust-1-88','nagi-package','nagi-regression','windows-contracts']:
+            for job in ['linux','linux-workspace','linux-csrf-mutants','linux-samples','rust-1-88','nagi-package','nagi-regression','windows-contracts']:
                 needs[job]['result'] = expected
             needs['critical']['result'] = 'success' if critical == 'true' else 'skipped'
             self.assertEqual(gate.errors(needs), [], level)

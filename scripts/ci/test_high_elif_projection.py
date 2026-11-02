@@ -1,4 +1,5 @@
 """The new harness is required; all inherited workflow bytes remain pinned."""
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import hashlib
 from pathlib import Path
 import unittest
@@ -19,7 +20,7 @@ BEFORE_ELIF_WORKFLOW_SHA256 = "40b466fddb09bcc72d58c73e96b5dcecdb4d1e2a353efe41d
 
 class HighElifProjectionTests(unittest.TestCase):
     def setUp(self):
-        self.source = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.source = inherited_workflow((ROOT / ".github/workflows/ci.yml").read_text())
 
     def test_exact_command_inverse_retains_raw_and_frozen_history(self):
         restored = projection.inverse_workflow(self.source)

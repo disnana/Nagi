@@ -867,17 +867,6 @@ jobs:
           print('b1_supplement_result cargo_rc={} capture_rc={} captured_bytes={} overflow={} malformed={} records={} inventory_ok={} summary_ok={} bootstrap_ok={} diagnostic_available={}'.format(cargo_rc, capture_rc, len(raw), overflow, malformed, len(rows), inventory_ok, summary_ok, bootstrap_ok, available))
           raise SystemExit(cargo_rc if available else 1)
           PYB1LOG
-      - name: Compile and run CSRF deadline semantic mutants
-        shell: bash
-        run: python -B scripts/ci/csrf_deadline_mutations.py . "$RUNNER_TEMP/csrf-deadline-mutations.json"
-      - name: Preserve closed CSRF deadline mutation evidence
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
-        with:
-          retention-days: 7 # ci-retention
-          name: csrf-deadline-compiled-mutations-linux
-          path: ${{ runner.temp }}/csrf-deadline-mutations.json
-          if-no-files-found: ignore
       - name: Check B1 CSRF compiler metadata and High saved Low handwritten Low native
         shell: bash
         run: |
@@ -975,21 +964,6 @@ jobs:
         run: |
           cargo build --locked -p nagic --no-default-features
           cargo test --locked -p nagic --no-default-features --test cli --test sql_check
-      - run: cargo build --release --examples --bins --locked
-      - name: Verify bilingual SQLite tutorial through High and independent saved Low
-        run: python scripts/verify_sqlite_example.py
-      - run: node --test editors/vscode-nagi/test/*.test.js
-      - run: node --test scripts/test_graph_html_viewport.mjs
-      - run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
-      - run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
-      - run: python scripts/build_examples.py
-      - name: Verify bilingual first-app tutorial in High and saved Low
-        run: python scripts/verify_onboarding_examples.py
-      - run: pip install -r tests/requirements.txt
-      - run: python tests/http_integration.py
-      - run: python tests/route_integration.py
-      - run: python tests/http_stdlib_integration.py
-      - run: ./target/release/examples/fuzz-smoke
       - name: Enforce Session auth-stage supplement after normal checks
         if: always() && steps.auth_stage_diag.outcome != 'skipped'
         shell: bash
@@ -1043,21 +1017,33 @@ jobs:
             target
             native-target
           key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
-  linux-workspace:
-    name: Workspace regression (Linux)
+  linux-workspace-shards:
+    name: Workspace binary shard ${{ matrix.shard }} (Linux)
     needs: [changes, ci-plan]
     if: needs.changes.result == 'success' && needs.ci-plan.result == 'success' && needs.ci-plan.outputs.comprehensive_checks == 'true'
     runs-on: ubuntu-latest
     env:
       NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
       NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
+      RUSTFLAGS: ''
+      CARGO_ENCODED_RUSTFLAGS: ''
+      RUSTDOCFLAGS: ''
+      CARGO_ENCODED_RUSTDOCFLAGS: ''
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
         with:
           persist-credentials: false # ci-isolation
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
         id: rust
-      - name: Cache Linux workspace regression builds
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - name: Restore compatible Linux builds
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
         id: nagi_rust_cache
         with:
@@ -1066,23 +1052,186 @@ jobs:
             ~/.cargo/git
             target
             native-target
-          key: nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**') }}
-          restore-keys: |
-            nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
-            nagi-rust-v1-checks-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+          key: nagi-linux-v2-workspace-${{ matrix.shard }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-flags-default-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/ci/linux_critical_path*') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**', 'runtime-core/**') }}
+          restore-keys: nagi-linux-v2-workspace-${{ matrix.shard }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-flags-default-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/ci/linux_critical_path*') }}-
+      - name: Execute every assigned workspace target and reconcile named cases
+        env:
+          CI_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          SHARD: ${{ matrix.shard }}
+        run: python -B scripts/ci/linux_critical_path.py --shard "$SHARD"
+      - name: Preserve exact-head workspace execution receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
-          python-version: '3.12'
-      - run: cargo test --locked
+          retention-days: 7 # ci-retention
+          name: linux-workspace-shard-${{ matrix.shard }}
+          path: build/ci-evidence/linux-workspace/shard-${{ matrix.shard }}.json
+          if-no-files-found: error
       - name: Preserve workspace compiler and application failure evidence
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
           retention-days: 7 # ci-retention
-          name: compiler-failures-linux-workspace
+          name: compiler-failures-linux-workspace-${{ matrix.shard }}
           path: build/compiler-failures/
           if-no-files-found: ignore
 
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
+  linux-workspace:
+    name: Workspace regression (Linux)
+    needs: [changes, ci-plan, linux-workspace-shards]
+    if: always() && !cancelled() && needs.changes.result == 'success' && needs.ci-plan.result == 'success' && needs.ci-plan.outputs.comprehensive_checks == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - name: Require every binary shard to succeed
+        env:
+          SHARD_RESULT: ${{ needs.linux-workspace-shards.result }}
+        run: test "$SHARD_RESULT" = success
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ci-pin:v4
+        with:
+          pattern: linux-workspace-shard-*
+          path: build/ci-evidence/linux-workspace
+      - name: Reject missing, duplicate, zero-case or partial workspace execution
+        run: python -B scripts/ci/linux_critical_path.py --aggregate
+
+  linux-csrf-mutants:
+    needs: [changes, ci-plan]
+    if: needs.changes.result == 'success' && needs.ci-plan.result == 'success' && needs.ci-plan.outputs.comprehensive_checks == 'true'
+    runs-on: ubuntu-latest
+    env:
+      NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
+      RUSTFLAGS: ''
+      CARGO_ENCODED_RUSTFLAGS: ''
+      RUSTDOCFLAGS: ''
+      CARGO_ENCODED_RUSTDOCFLAGS: ''
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+        id: rust
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - name: Restore compatible Linux builds
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        id: nagi_rust_cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: nagi-linux-v2-csrf-mutants-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-flags-default-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/ci/linux_critical_path*') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**', 'runtime-core/**') }}
+          restore-keys: nagi-linux-v2-csrf-mutants-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-flags-default-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/ci/linux_critical_path*') }}-
+      - name: Compile and run CSRF deadline semantic mutants
+        shell: bash
+        run: python -B scripts/ci/csrf_deadline_mutations.py . "$RUNNER_TEMP/csrf-deadline-mutations.json"
+      - name: Preserve closed CSRF deadline mutation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: csrf-deadline-compiled-mutations-linux
+          path: ${{ runner.temp }}/csrf-deadline-mutations.json
+          if-no-files-found: ignore
+
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
+  linux-samples:
+    needs: [changes, ci-plan]
+    if: needs.changes.result == 'success' && needs.ci-plan.result == 'success' && needs.ci-plan.outputs.comprehensive_checks == 'true'
+    runs-on: ubuntu-latest
+    env:
+      NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
+      RUSTFLAGS: ''
+      CARGO_ENCODED_RUSTFLAGS: ''
+      RUSTDOCFLAGS: ''
+      CARGO_ENCODED_RUSTDOCFLAGS: ''
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+        id: rust
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - name: Restore compatible Linux builds
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        id: nagi_rust_cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: nagi-linux-v2-samples-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-flags-default-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/ci/linux_critical_path*') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**', 'runtime-core/**') }}
+          restore-keys: nagi-linux-v2-samples-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-flags-default-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/ci/linux_critical_path*') }}-
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ci-pin:v4
+        with:
+          node-version: '22'
+      - run: cargo build --release --examples --bins --locked
+      - name: Verify bilingual SQLite tutorial through High and independent saved Low
+        run: python scripts/verify_sqlite_example.py
+      - run: node --test editors/vscode-nagi/test/*.test.js
+      - run: node --test scripts/test_graph_html_viewport.mjs
+      - run: python -m unittest discover -s scripts -p 'test_native_artifacts.py'
+      - run: python -m unittest discover -s scripts -p 'test_application_native_tests.py'
+      - run: python scripts/build_examples.py
+      - name: Verify bilingual first-app tutorial in High and saved Low
+        run: python scripts/verify_onboarding_examples.py
+      - run: pip install -r tests/requirements.txt
+      - run: python tests/http_integration.py
+      - run: python tests/route_integration.py
+      - run: python tests/http_stdlib_integration.py
+      - run: ./target/release/examples/fuzz-smoke
+      - name: Preserve sample compiler and application failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: compiler-failures-linux-samples
+          path: build/compiler-failures/
+          if-no-files-found: ignore
+
+      - name: Save validated Rust cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
   rust-1-88:
     name: SF02 runtime Ed25519 profile on Rust 1.88.0 (Linux x86_64)
     timeout-minutes: 45
@@ -2841,7 +2990,7 @@ jobs:
   ready:
     name: Ready to merge
     if: always() && !cancelled()
-    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]
+    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
@@ -2856,7 +3005,7 @@ jobs:
         run: python scripts/ci/gate.py
 
   publish-release:
-    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]
+    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]
     if: >-
       always() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       needs.ready.result == 'success' && needs.ci-plan.result == 'success' &&
