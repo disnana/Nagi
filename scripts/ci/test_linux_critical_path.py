@@ -184,6 +184,23 @@ class CriticalPathWiringTests(unittest.TestCase):
         for marker in ('steps.auth_stage_diag.outcome', 'steps.session_deadline_diag.outcome', 'steps.browser_counter_comparison.outcome'):
             self.assertIn(marker, self.source.split('  linux-workspace-shards:')[0])
 
+    def test_pip_cache_follows_requirements_install_and_inverse_restores_main(self):
+        linux = self.source.split('  linux:\n', 1)[1].split('  linux-workspace-shards:\n', 1)[0]
+        samples = self.source.split('  linux-samples:\n', 1)[1].split('  rust-1-88:\n', 1)[0]
+        self.assertNotIn('cache: pip', linux)
+        self.assertNotIn('cache-dependency-path: tests/requirements.txt', linux)
+        self.assertEqual(self.source.count('cache: pip'), 1)
+        self.assertEqual(samples.count('cache-dependency-path: tests/requirements.txt'), 1)
+        self.assertIn('pip install -r tests/requirements.txt', samples)
+        self.assertIn('nagi-linux-v2-samples-', samples)
+
+        restored = projection.inverse_workflow(self.source)
+        restored_linux = restored.split('  linux:\n', 1)[1].split('  linux-workspace:\n', 1)[0]
+        self.assertIn(projection.LINUX_PYTHON_PIP_CACHE, restored_linux)
+        self.assertIn('pip install -r tests/requirements.txt', restored_linux)
+        self.assertNotIn('  linux-samples:\n', restored)
+        self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(), BASE_SHA256)
+
     def test_real_new_jobs_are_required_and_the_aggregate_refuses_failed_shards(self):
         aggregate = self.source.split('  linux-workspace:\n', 1)[1].split('  linux-csrf-mutants:\n', 1)[0]
         self.assertIn("always() && !cancelled()", aggregate)
