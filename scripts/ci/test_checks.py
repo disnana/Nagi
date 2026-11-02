@@ -1,4 +1,5 @@
 """Exercise complete Git ranges and the required-check result contract."""
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import copy
 import hashlib
 import importlib.util
@@ -573,7 +574,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
 
 class ResourceCharacterizationWorkflowTests(unittest.TestCase):
     def test_four_platform_job_runs_registry_and_native_resource_oracles(self):
-        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow = inherited_workflow((Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
         workflow = baseline_ci_workflow(workflow)
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         self.assertIsNotNone(package, "four-platform package job missing")
@@ -596,7 +597,7 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
         self.assertFalse(required - targets, f"missing four-platform resource oracles: {sorted(required - targets)}")
 
     def test_four_platform_job_uses_platform_exact_sqlite_count_guard(self):
-        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow = inherited_workflow((Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
         workflow = baseline_ci_workflow(workflow)
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         self.assertIsNotNone(package, "four-platform package job missing")
@@ -613,7 +614,7 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
         self.assertNotIn("80 passed", step)
 
     def test_member_call_recovery_is_target_first_on_linux_and_four_platform_jobs(self):
-        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow = inherited_workflow((Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
         workflow = baseline_ci_workflow(workflow)
         linux = re.search(r"(?ms)^  linux:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
@@ -639,7 +640,7 @@ class ResourceCharacterizationWorkflowTests(unittest.TestCase):
         self.assertEqual(workflow.count(summary_guard), 2)
 
     def test_four_platform_job_registers_sf04_runtime_suites_with_exact_count_guards(self):
-        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        workflow = inherited_workflow((Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
         workflow = baseline_ci_workflow(workflow)
         package = re.search(r"(?ms)^  nagi-package:\n.*?(?=^  [a-zA-Z0-9_-]+:|\Z)", workflow)
         self.assertIsNotNone(package, "four-platform package job missing")
@@ -694,6 +695,8 @@ class GateTests(unittest.TestCase):
             "go-backend": {"result": "success" if selected["go_checks"] == "true" else "skipped"},
             "linux": {"result": "success" if full == "true" else "skipped"},
             "linux-workspace": {"result": "success" if full == "true" else "skipped"},
+            "linux-csrf-mutants": {"result": "success" if full == "true" else "skipped"},
+            "linux-samples": {"result": "success" if full == "true" else "skipped"},
             "rust-1-88": {"result": "success" if full == "true" else "skipped"},
             "sf08-browser": {"result": "success" if full == "true" or package_nagi == "true" else "skipped"},
             "jetbrains": {"result": "success" if jetbrains == "true" or package_jetbrains == "true" else "skipped"},
@@ -917,7 +920,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
     workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/ci.yml"
 
     def test_rust_1_88_job_is_linux_only_focused_and_rejects_zero_execution(self):
-        text = self.workflow_path.read_text(encoding="utf-8")
+        text = inherited_workflow(self.workflow_path.read_text(encoding="utf-8"))
         text = baseline_ci_workflow(text)
         job = re.search(r"(?ms)^  rust-1-88:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
         self.assertIsNotNone(job, "focused Rust 1.88.0 job missing")
@@ -944,7 +947,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
         self.assertIn("if summaries != [(\"ok\", str(count), \"0\", \"0\")]:", block)
 
     def test_ready_and_main_publish_require_the_focused_job_with_plugin_only_skip(self):
-        text = self.workflow_path.read_text(encoding="utf-8")
+        text = inherited_workflow(self.workflow_path.read_text(encoding="utf-8"))
         text = baseline_ci_workflow(text)
         ready = re.search(r"(?ms)^  ready:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
         publish = re.search(r"(?ms)^  publish-release:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", text)
@@ -969,7 +972,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
         self.assertIn("needs.release-plan.outputs.release_vscode != 'true'", publish_block)
 
     def test_sf08_browser_job_selector_and_standalone_triggers_are_exact(self):
-        workflow = self.workflow_path.read_text(encoding="utf-8")
+        workflow = inherited_workflow(self.workflow_path.read_text(encoding="utf-8"))
         workflow = baseline_ci_workflow(workflow)
         job = re.search(r"(?ms)^  sf08-browser:\n(?P<body>.*?)(?=^  [a-zA-Z0-9_-]+:\n|\Z)", workflow)
         self.assertIsNotNone(job, "SF08 reusable job missing")
@@ -998,7 +1001,7 @@ class ScopedRustProfileWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(spec.loader)
         projection = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(projection)
-        workflow = self.workflow_path.read_text(encoding="utf-8")
+        workflow = inherited_workflow(self.workflow_path.read_text(encoding="utf-8"))
         workflow = baseline_ci_workflow(workflow)
         inherited = projection.inverse_workflow(workflow)
         self.assertEqual(

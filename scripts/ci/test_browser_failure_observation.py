@@ -1,4 +1,5 @@
 """Control-flow proof using the actual primary shell and inherited sanitizer."""
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import hashlib
 import itertools
 import json
@@ -26,7 +27,7 @@ def step(source, title, job="linux"):
 
 class BrowserFailureObservationTests(unittest.TestCase):
     def setUp(self):
-        self.source = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.source = inherited_workflow((ROOT / ".github/workflows/ci.yml").read_text())
         self.primary = step(self.source, "Compare BrowserLogin failure cases alone and with the parallel public suite")
         self.capture = step(self.source, "Capture bounded Session deadline public tests")
 

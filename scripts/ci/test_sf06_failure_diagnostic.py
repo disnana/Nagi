@@ -1,4 +1,5 @@
 """Execute the real unchanged SF06 guard and observation wrapper with owned logs."""
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import ast
 import hashlib
 import json
@@ -53,7 +54,7 @@ class DiagnosticTests(unittest.TestCase):
                 self.assertNotIn("/private/", json.dumps(record))
 
     def test_inventory_is_closed_and_preserves_the_existing_guard(self):
-        source = WORKFLOW.read_text()
+        source = inherited_workflow(WORKFLOW.read_text())
         tree = ast.parse(guard_source(source))
         namespace = {}
         assignments = [node for node in tree.body if isinstance(node, ast.Assign)
@@ -164,7 +165,7 @@ class DiagnosticTests(unittest.TestCase):
 
 class WorkflowTests(unittest.TestCase):
     def invoke(self, text, cargo_exit, *, remove=False, diagnostic_missing=False, guard_status=1):
-        source = WORKFLOW.read_text()
+        source = inherited_workflow(WORKFLOW.read_text())
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             guard = guard_source(source)
@@ -241,7 +242,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(record["parse_state"], "incomplete")
 
     def test_full_frozen_inverse_and_rejection_of_weakened_hooks(self):
-        source = WORKFLOW.read_text()
+        source = inherited_workflow(WORKFLOW.read_text())
         self.assertEqual(hashlib.sha256(history.inverse_workflow(source).encode()).hexdigest(), BASE_WORKFLOW_SHA256)
         for old, new in [(projection.OBSERVED, projection.ORIGINAL),
                          (projection.OBSERVED, projection.OBSERVED + projection.OBSERVED),

@@ -1,4 +1,5 @@
 """Only the two parallel jobs restore shared caches; existing writers stay exact."""
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import hashlib
 from pathlib import Path
 import re
@@ -52,7 +53,7 @@ def prove(source):
 
 class ParallelCacheTests(unittest.TestCase):
     def setUp(self):
-        self.source = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.source = inherited_workflow((ROOT / '.github/workflows/ci.yml').read_text())
 
     def test_two_restore_only_jobs_use_the_existing_writer_keys_and_paths(self):
         self.assertEqual(set(policy.NEW_JOBS), {'linux-workspace', 'windows-contracts'})

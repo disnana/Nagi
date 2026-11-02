@@ -54,3 +54,26 @@ repository rootで `python -B -m unittest discover -s scripts/ci -p 'test_*.py'`
 4 OSの[nextest実測](nextest-evaluation.md#2026-10-20の実測)では、この軽い2対象は従来Cargoより約1.6〜2.0倍長くかかり、必須runnerは置換しない。最終HEADのL2結果・wall/job・cache観測はPRの検証欄で同一HEADを明記する。新しいL3配線の手動4 OS実行と、実プラットフォームでの取消は未確認であり、ローカルの厳格なmatrix/拒否条件検証とは区別する。L3の公開前必須ゲートは維持し、未完了から公開しない。総課金削減額や一般的な性能保証は示さない。
 
 参照（2026-10-20確認）: [GitHub cache境界](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching)、[cache restore/save](https://github.com/actions/cache/tree/0057852bfaa89a56745cba8c7296529d2fc39830)、[rust-cache](https://github.com/Swatinem/rust-cache)、[sccache](https://github.com/mozilla/sccache)、[uvのGitHub案内](https://docs.astral.sh/uv/guides/integration/github/)、[nextest文書](https://nexte.st/docs/)。
+
+## Linux critical pathの分割（batch 29）
+
+PR #218のLinuxは26分55秒で、CSRF semantic mutantsが6分29秒、samplesが4分51秒、Session diagnosticsが3分16秒、release compileが2分18秒、HTTP registryが2分04秒だった。#217はLinuxが22分43秒、workspace runnerが約23分。workspace commandの22分51秒の内訳はcompile約2分03秒、実行約20分48秒で、重いbinaryは`build_generations` 179.11秒、`security_sf01_native` 101.55秒、`http_stdlib` 95.35秒、`error_routes` 94.32秒、`go_backend` 88.54秒、`auth_boundaries` 83.43秒だった。cache missを含む各runの観測値であり、変更後の予測値ではない。全体ではWindows packageが長く、CI全体の半減を主張しない。
+
+`linux-workspace-shards`は4 runnerを使い、lockedな`cargo metadata --no-deps`でdefault workspace memberの全targetを列挙する。観測した重いbinaryと明示したfallback推定値を使い、重い順に決定的に分配する。完全なsource差分を確認できた場合だけ、担当shard内で変更したintegration targetまたはsource packageを先に実行する。未知・欠落した対応は全inventoryを優先する。変更パスによるtarget除外はなく、既存L1/L2/L3 selectorとreleaseの4 platform契約を維持する。
+
+各shardは担当selectorだけをlocked Cargoと`--workspace`でcompileし、workspace feature unificationを維持する。全libraryは1個の`--lib` selectorにまとめ、他のselectorもmetadata上の完全なtarget集合を保持する。既存の同名`security_sf01`/`task_handles`は両packageの実行ファイルを残す。build/test mode混在、identity重複、default memberと`--workspace`対象の不一致は拒否する。kind/name/source pathで全実行ファイルを照合し、count summaryが残るpretty形式で全caseとignoredをlistする。Cargoの実行blockごとに全名前・状態・summaryを照合し、libtest固有の` - should panic`注記は正規化する。実行自体はCargoを使い、packageのcwdとbinary環境を維持する。既存CLIの0件harnessだけを明示許可し、未知の0件targetと実行0件のshardは失敗する。既定ではbuildだけ行うexampleは`cargo build --locked --workspace --profile test --example NAME`で1回compileし、集約はexact commandと成功exitも要求する。shard 0では既存の`cargo test --locked --doc`を1回実行し、exact command、成功exit、passed/ignored/failed合計、summary、metadataのdoctest対象library集合を記録する。summary数はlibrary集合と一致し、既存の非0件doctest実行を要求する。個々のdoctest名は観測の限界として残し、名前単位で照合したとは報告しない。
+
+`linux-workspace`集約はmetadataを独立に再取得し、4件ちょうどのreceipt、各targetの担当集合、ignored整合、非0件実行、HEAD・rustc全identity・既定flags・lock・workflow hash一致を確認する。失敗、skip、欠落、重複、未知、部分実行はReadyを通らない。Readyと公開前の独立gateは`linux-csrf-mutants`と`linux-samples`も要求する。mutantのcommandとartifact stepは同じまま一緒に移し、自己完結したrelease build・tutorial・sample・socket・fuzzのblockも内部順序を維持して移す。Session diagnosticsは他stepの失敗条件と強制検査を保つためLinuxに残す。
+
+新Linux cache keyにはrole/shard、OS、architecture、toolchain、既定compiler/doc flags、Cargo lock、workflowとrunner sourceを含める。診断flagsを含む既存namespaceへのfallbackは設けない。保存は成功したmain pushだけで、hit時も全担当実行を要求する。version計画、main/tag公開条件、platform契約は維持する。新しい外側の厳密なinverseで変更前workflow hashへ戻し、既存command-body証明と歴史hashは変更しない。
+
+今回のCI専用branchはmain `0b21a1d`から分離し、PR #218の機能変更には依存しない。外側のinverseはこのmainのworkflowとbyte単位で一致し、新しいbase hashだけをそのsourceへ固定した。既存の歴史hashは変更していない。mainのmanifestと追跡sourceをPythonで独立照合すると、非doc targetは133件、129 selectorとdoc 1件になり、既存Goの4 platform件数は34/33/34/34のまま。これはCargo metadataやnative実行ではなく、source inventoryの検証である。selector/receipt拒否、担当targetだけを実行するmock、cache/gate mutation、Python CI policy suite全体を検査する。
+
+先行batch 29の別sourceでは実metadata 134 target/130 selector、offline `enum_parser`の8件、feature統合と小workspaceのnative照合を観測したが、今回のmain上の実行証拠として転用しない。全workspace/native実行、artifact転送、cold/warmのcritical pathは未確認。比較時は同じsource・inventoryでcold/warmを分け、各jobの依存待ち・queue・setup・cache restore/save・compile・実行・artifact転送と、Linux gate・全体終了・runner-minutesを記録する。基準#217の全体終了を支配したWindows packageは34分52秒だった。shard weight合計は配分用の推定でActions実測時間ではない。4 runnerでの依存compileとsetup/転送の重複が短縮分を相殺する可能性があり、実測短縮やReadyの報告にはexact-source CI成功と独立reviewが必要。
+
+
+### native child stdoutと外側libtestの区別
+
+`graph_render`は同じtest binaryを`current_exe --exact image_child --nocapture`で起動し、native childのstdoutを継承する。外側にも同じ名前のcaseがあるため、stdout全体の`test ... ok`を数える方法では正常な子実行を外側の重複と誤判定した。Cargoのselector、workspace features、cwd、Nagi用environmentは維持し、実行時だけCargoのhost runnerで外側binaryごとの独立したstable libtest `--logfile`を指定する。runnerは実binaryへexecする前に自分が加えたrunner設定をenvironmentから外し、nested Cargoやself subprocessへ引き継がない。排他的な開始fileとbinary別boundaryで本当の外側の再実行を拒否し、独立event fileの全case・ignored・状態と外側の最終count summaryを照合する。native childの出力とsummaryは診断として残し、外側caseのauthorityには使わない。filterや直列化は追加しない。
+
+`--logfile`はstableで利用できるがdeprecatedである。将来のtoolchainが拒否した場合はCargoの非0 exitで失敗し、stdoutだけの弱い検証へfallbackしない。orchestration logは成功したCargoのraw outputも保存し、parser例外時には該当実行の出力をjob logへ戻す。compiler failure artifactが空でも、shardのraw log・boundary・event fileをfailure artifactへ保存する。この修正の小さなnative fixtureとPython検査は、全workspaceのActions実行成功や性能改善を証明しない。

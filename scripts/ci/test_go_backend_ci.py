@@ -1,3 +1,4 @@
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 import copy
 import json
 import unittest
@@ -13,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class GoBackendCIContractTests(unittest.TestCase):
     def source(self):
-        return (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        return inherited_workflow((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
 
     def test_job_is_three_platform_by_default_and_four_for_release(self):
         for level, count in (("2", 3), ("3", 4)):
@@ -64,6 +65,7 @@ class GoBackendCIContractTests(unittest.TestCase):
                 "release-plan": {"result": "success", "outputs": release},
                 "critical": {"result": "skipped"}, "go-backend": {"result": result},
                 "linux": {"result": "skipped"}, "linux-workspace": {"result": "skipped"},
+                "linux-csrf-mutants": {"result": "skipped"}, "linux-samples": {"result": "skipped"},
                 "rust-1-88": {"result": "skipped"}, "jetbrains": {"result": "skipped"},
                 "sf08-browser": {"result": "skipped"}, "vscode-package": {"result": "skipped"},
                 "nagi-package": {"result": "skipped"}, "nagi-regression": {"result": "skipped"},

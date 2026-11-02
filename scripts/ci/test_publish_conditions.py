@@ -1,5 +1,6 @@
 """Evaluate the real publish-release condition with a small, safe GitHub-expression subset."""
 from __future__ import annotations
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 
 import copy
 import json
@@ -14,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MAIN_REF = "refs/heads/main"
 COMPONENTS = ("nagi", "vscode", "jetbrains")
 SHA = "a" * 40
-JOBS = ("ready", "ci-plan", "critical", "go-backend", "changes", "linux", "linux-workspace", "rust-1-88", "sf08-browser", "release-plan",
+JOBS = ("ready", "ci-plan", "critical", "go-backend", "changes", "linux", "linux-workspace", "linux-csrf-mutants", "linux-samples", "rust-1-88", "sf08-browser", "release-plan",
         "jetbrains", "vscode-package", "nagi-package", "nagi-regression", "windows-contracts")
 ALLOWED_NAMES = {
     "github.event_name", "github.ref", "needs.changes.result",
@@ -38,7 +39,7 @@ TOKEN = re.compile(
 
 def job_expression(name: str) -> str:
     """Read only a job's if scalar; do not evaluate YAML or code."""
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    workflow = inherited_workflow((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
     job = re.search(
         r"(?ms)^  " + re.escape(name) + r":\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)", workflow
     )
@@ -208,6 +209,8 @@ def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None, cancelled=
     needs['rust-1-88'] = {'result':results.get('rust-1-88', results.get('linux','success'))}
     needs['go-backend'] = {'result':results.get('go-backend', 'success' if full or package else 'skipped')}
     needs['linux-workspace'] = {'result':results.get('linux-workspace', results.get('linux','success'))}
+    for job in ('linux-csrf-mutants', 'linux-samples'):
+        needs[job] = {'result':results.get(job, results.get('linux', 'success'))}
     needs['nagi-regression'] = {'result':results.get('nagi-regression',
         'skipped' if results.get('nagi-package') == 'skipped' else 'success')}
     needs['windows-contracts'] = {'result':results.get('windows-contracts',

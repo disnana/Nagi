@@ -1,4 +1,5 @@
 """Windows-only relocation keeps per-platform native evidence and strict gates."""
+from linux_critical_path_projection import inverse_workflow as inherited_workflow
 from collections import Counter
 import copy
 import hashlib
@@ -90,7 +91,7 @@ def prove(source):
 
 class WindowsContractSourceTests(unittest.TestCase):
     def setUp(self):
-        self.current_source = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.current_source = inherited_workflow((ROOT / '.github/workflows/ci.yml').read_text())
         self.source = parallel_cache_projection.inverse_workflow(self.current_source)
 
     def test_effective_inventory_is_once_on_all_four_release_platforms(self):
