@@ -1422,19 +1422,36 @@ test('owned request timeout labels deadline even before a rounded clock tick', {
   }
 });
 
-test('one-shot R1 real EOF reset and idle are never certificate alerts', { timeout: 10000 }, async () => {
+test('one-shot R1 real EOF reset and idle are never certificate alerts', { timeout: 10000 }, async t => {
   hostAPI(); const files = hostCertificateFiles();
   for (const mode of ['eof', 'reset', 'idle']) {
-    const until = performance.now() + 150;
-    const endpoint = await hostProof.createWebkitWrongHostEndpoint(
-      hostProof.readWebkitWrongHostCredentials(files.work, files.caPath, files.ca), until);
-    const port = Number(new URL(endpoint.url).port);
-    const socket = net.connect({ host: '127.0.0.1', port }); socket.on('error', () => {});
-    await new Promise(resolve => socket.once('connect', resolve));
-    if (mode === 'reset') socket.resetAndDestroy();
-    else if (mode === 'eof') socket.end();
-    assert.equal(await endpoint.finish(), false);
-    socket.destroy(); await endpoint.close();
+    const started = performance.now(), until = started + 150;
+    const diagnostics = [];
+    let phase = 'credentials', endpoint, socket;
+    try {
+      const credentials = hostProof.readWebkitWrongHostCredentials(files.work, files.caPath, files.ca);
+      phase = 'endpoint';
+      endpoint = await hostProof.createWebkitWrongHostEndpoint(
+        credentials, until, tls, kind => diagnostics.push(kind));
+      phase = 'connect';
+      const port = Number(new URL(endpoint.url).port);
+      socket = net.connect({ host: '127.0.0.1', port }); socket.on('error', () => {});
+      await new Promise(resolve => socket.once('connect', resolve));
+      if (mode === 'reset') socket.resetAndDestroy();
+      else if (mode === 'eof') socket.end();
+      phase = 'finish';
+      assert.equal(await endpoint.finish(), false, mode);
+    } catch (error) {
+      // Fixed mode/stage and bounded diagnostic labels only; never credentials.
+      t.diagnostic(JSON.stringify({ mode, phase,
+        elapsed_ms: Math.ceil(performance.now() - started),
+        remaining_ms: Math.floor(until - performance.now()),
+        diagnostics: diagnostics.slice(0, 1) }));
+      throw error;
+    } finally {
+      socket?.destroy();
+      if (endpoint) await endpoint.close();
+    }
   }
 });
 test('one-shot R2 peer alert cannot replace bound main navigation or socket identity', async () => {
