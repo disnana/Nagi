@@ -40,6 +40,15 @@ def test_context(root: Path, workspace: str | None = None, package_id: str = "na
     inventory_hash = policy.digest({"selected": policy.expected_members(),
                                     "all_test_targets": sorted(policy.KNOWN_PACKAGE_TESTS),
                                     "binary": {policy.PACKAGE: "compiler/src/main.rs"}})
+    python_root = policy.python_executable_parent(python_executable)
+    native_environment = ({"VCPKG_INSTALLATION_ROOT": vcpkg_root} if vcpkg_root else {})
+    native_environment.update({
+        "PKG_CONFIG_PATH": policy.python_pkg_config_path(python_executable),
+        "pythonLocation": python_root,
+        "Python_ROOT_DIR": python_root,
+        "Python2_ROOT_DIR": python_root,
+        "Python3_ROOT_DIR": python_root,
+    })
     return dict(
         identity=dict(schema=policy.SCHEMA, protocol=policy.PROTOCOL, run_id="99112233", attempt="2",
                       head="a" * 40, tree="b" * 40, package=policy.PACKAGE,
@@ -49,7 +58,7 @@ def test_context(root: Path, workspace: str | None = None, package_id: str = "na
                       config=({"CARGO_INCREMENTAL": cargo_incremental} if cargo_incremental is not None else {}),
                       profile_environment={},
                       target_environment={}, build_environment={}, rustc_environment={},
-                      native_environment=({"VCPKG_INSTALLATION_ROOT": vcpkg_root} if vcpkg_root else {}),
+                      native_environment=native_environment,
                       cargo_lock_sha256="c" * 64, package_manifest_sha256="d" * 64,
                       inventory_sha256=inventory_hash, inputs={"Cargo.lock": "e" * 64}),
         producer=dict(workspace=workspace, test_cwd=policy.workspace_file(workspace, "compiler"),
@@ -232,11 +241,28 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
         self.assertEqual(config["CARGO_HOME"], "default")
         self.assertEqual(config["CARGO_INCREMENTAL"], "")
         self.assertEqual((profile, target, build, rustc, native), ({}, {}, {}, {}, {}))
-        stock_dtolnay = policy.checked_build_environment({
-            "CARGO_INCREMENTAL": "0", "VCPKG_INSTALLATION_ROOT": r"C:\vcpkg",
-        })
+        python_root = r"C:\hostedtoolcache\windows\Python\3.12.10\x64"
+        python_executable = python_root + r"\python.exe"
+        post_setup_environment = {
+            "CARGO_INCREMENTAL": "0",
+            "VCPKG_INSTALLATION_ROOT": r"C:\vcpkg",
+            "pythonLocation": python_root,
+            "Python_ROOT_DIR": python_root,
+            "Python2_ROOT_DIR": python_root,
+            "Python3_ROOT_DIR": python_root,
+            "PKG_CONFIG_PATH": python_root + "/lib/pkgconfig",
+        }
+        stock_dtolnay = policy.checked_build_environment(
+            post_setup_environment, python_executable=python_executable)
         self.assertEqual(stock_dtolnay[0]["CARGO_INCREMENTAL"], "0")
-        self.assertEqual(stock_dtolnay[5], {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
+        self.assertEqual(stock_dtolnay[5], {
+            "VCPKG_INSTALLATION_ROOT": r"C:\vcpkg",
+            "PKG_CONFIG_PATH": python_root + "/lib/pkgconfig",
+            "pythonLocation": python_root,
+            "Python_ROOT_DIR": python_root,
+            "Python2_ROOT_DIR": python_root,
+            "Python3_ROOT_DIR": python_root,
+        })
         accepted = policy.checked_build_environment({"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
         self.assertEqual(accepted[5], {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
         normalized_name = policy.checked_build_environment({"vcpkg_installation_root": r"C:\vcpkg"})
@@ -245,6 +271,16 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
         def assert_rejected_environment(environment, expected_names):
             with self.assertRaises(policy.RegressionError) as caught:
                 policy.checked_build_environment(environment)
+            diagnostic = str(caught.exception)
+            for name in expected_names:
+                self.assertIn(name, diagnostic)
+            for value in environment.values():
+                if value:
+                    self.assertNotIn(value, diagnostic)
+
+        def assert_rejected_python_environment(environment, expected_names, executable):
+            with self.assertRaises(policy.RegressionError) as caught:
+                policy.checked_build_environment(environment, python_executable=executable)
             diagnostic = str(caught.exception)
             for name in expected_names:
                 self.assertIn(name, diagnostic)
@@ -262,6 +298,27 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
         for value in ("1", "false"):
             with self.subTest(cargo_incremental=value):
                 assert_rejected_environment({"CARGO_INCREMENTAL": value}, ["CARGO_INCREMENTAL"])
+        for path, expected_names in (
+            (python_root + "/lib/pkgconfig;D:\\unexpected\\pkgconfig", ["PKG_CONFIG_PATH"]),
+            (r"D:\other-python\lib/pkgconfig", ["PKG_CONFIG_PATH"]),
+            ("", ["PKG_CONFIG_PATH"]),
+        ):
+            bad_python_environment = dict(post_setup_environment, PKG_CONFIG_PATH=path)
+            with self.subTest(pkg_config_path=path):
+                assert_rejected_python_environment(bad_python_environment, expected_names, python_executable)
+        wrong_python_root = dict(post_setup_environment, Python_ROOT_DIR=r"D:\other-python")
+        assert_rejected_python_environment(wrong_python_root, ["Python_ROOT_DIR"], python_executable)
+        empty_python_root = dict(post_setup_environment, Python_ROOT_DIR="")
+        assert_rejected_python_environment(empty_python_root, ["Python_ROOT_DIR"], python_executable)
+        wrong_interpreter = r"D:\other-python\python.exe"
+        assert_rejected_python_environment(post_setup_environment, ["pythonLocation"], wrong_interpreter)
+        other_pkg_config_override = dict(post_setup_environment, PKG_CONFIG_LIBDIR=r"C:\secret\pkgconfig")
+        assert_rejected_python_environment(other_pkg_config_override, ["PKG_CONFIG_LIBDIR"], python_executable)
+        empty_pkg_config_override = dict(post_setup_environment, PKG_CONFIG_LIBDIR="")
+        assert_rejected_python_environment(empty_pkg_config_override, ["PKG_CONFIG_LIBDIR"], python_executable)
+        duplicate_pkg_config_path = dict(post_setup_environment,
+                                         pkg_config_path=post_setup_environment["PKG_CONFIG_PATH"])
+        assert_rejected_python_environment(duplicate_pkg_config_path, ["PKG_CONFIG_PATH"], python_executable)
         self.assertEqual(policy.checked_build_environment(
             {"CARGO_HOME": str(Path.home() / ".cargo")})[0]["CARGO_HOME"], "default")
         assert_rejected_environment({"CARGO_HOME": "/secret/unrelated/cargo"}, ["CARGO_HOME"])
@@ -289,11 +346,22 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
             ]
             aggregate_context = test_context(root, r"E:\aggregate\_work\nagi", "nagic aggregate package-id",
                                              r"C:\vcpkg")
+            self.assertNotEqual(
+                shard_contexts[0]["identity"]["native_environment"]["PKG_CONFIG_PATH"],
+                aggregate_context["identity"]["native_environment"]["PKG_CONFIG_PATH"])
             write_shard_artifact(artifacts, 0, shard_contexts[0], root)
             write_shard_artifact(artifacts, 1, shard_contexts[1], root)
             policy.reconcile(artifacts, aggregate_context)
             receipt_root = artifacts / "nagi-regression-windows-shard-0"
             receipt = policy.load_json(receipt_root / "receipt.json")
+            self.assertEqual(
+                receipt["context"]["identity"]["native_environment"]["PKG_CONFIG_PATH"],
+                policy.python_pkg_config_path(receipt["context"]["producer"]["python_executable"]))
+            tampered_python_path = copy.deepcopy(receipt)
+            tampered_python_path["context"]["identity"]["native_environment"]["PKG_CONFIG_PATH"] += \
+                ";D:\\untrusted\\pkgconfig"
+            with self.assertRaises(policy.RegressionError):
+                policy._validate_receipt(receipt_root, tampered_python_path, 0, aggregate_context)
             missing_vcpkg_context = test_context(root, r"E:\aggregate\_work\nagi",
                                                  "nagic aggregate package-id")
             with self.assertRaises(policy.RegressionError):

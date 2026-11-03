@@ -132,12 +132,21 @@ CONFIG_ENV = (
     "RUSTCFLAGS", "RUSTUP_TOOLCHAIN",
 )
 EMPTY_CONFIG_ENV = frozenset(CONFIG_ENV) - {"CARGO_HOME"}
-# Source: https://github.com/actions/runner-images/blob/win25-vs2026/20261030.294/images/windows/Windows2025-VS2026-Readme.md
+# Source:
+# https://github.com/actions/runner-images/blob/win25-vs2026/20261030.294/images/windows/Windows2025-VS2026-Readme.md
 # Its Windows Server 2025 image README (image version 20261030.294.1) documents
 # VCPKG_INSTALLATION_ROOT=C:\vcpkg; archived at
 # /workspace/evidence/nagi-ci221-measurement/windows2025-vs2026-20261030.294-readme.md.
 # Keep this stock path in the producer identity; reject every other VCPKG override.
 STOCK_VCPKG_INSTALLATION_ROOT = r"C:\vcpkg"
+# actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 exports these roots and the pkg-config hint.
+# Baseline run 125728517430 (steps 491/519/551) shows PKG_CONFIG_PATH equal to
+# pythonLocation + "/lib/pkgconfig"; the raw paths remain producer-local.
+PYTHON_PATH_ENVIRONMENT = (
+    "PKG_CONFIG_PATH", "pythonLocation", "Python_ROOT_DIR", "Python2_ROOT_DIR", "Python3_ROOT_DIR",
+)
+PYTHON_ROOT_ENVIRONMENT = ("pythonLocation", "Python_ROOT_DIR", "Python2_ROOT_DIR", "Python3_ROOT_DIR")
+PYTHON_PATH_ENV_BY_CASEFOLD = {key.casefold(): key for key in PYTHON_PATH_ENVIRONMENT}
 OPTIONAL_HASHED_FILES = (".cargo/config", ".cargo/config.toml", "compiler/.cargo/config",
                          "compiler/.cargo/config.toml")
 HASHED_FILES = (
@@ -293,7 +302,33 @@ def run_command(
     return result
 
 
-def checked_build_environment(environment: dict[str, str]) -> tuple[dict[str, str], ...]:
+def python_executable_parent(python_executable: str) -> str:
+    windows_executable = PureWindowsPath(python_executable)
+    if windows_executable.is_absolute():
+        return str(windows_executable.parent)
+    native_executable = Path(python_executable)
+    if native_executable.is_absolute():
+        return str(native_executable.parent)
+    raise RegressionError("Python executable path is not absolute")
+
+
+def same_installation_path(value: str, expected: str) -> bool:
+    windows_value = PureWindowsPath(value)
+    windows_expected = PureWindowsPath(expected)
+    if windows_value.is_absolute() or windows_expected.is_absolute():
+        return windows_value.is_absolute() and windows_expected.is_absolute() and windows_value == windows_expected
+    native_value = Path(value)
+    native_expected = Path(expected)
+    return (native_value.is_absolute() and native_expected.is_absolute() and
+            os.path.normcase(os.path.normpath(value)) == os.path.normcase(os.path.normpath(expected)))
+
+
+def python_pkg_config_path(python_executable: str) -> str:
+    return python_executable_parent(python_executable) + "/lib/pkgconfig"
+
+
+def checked_build_environment(environment: dict[str, str], *,
+                             python_executable: str | None = None) -> tuple[dict[str, str], ...]:
     """Validate build overrides and retain supported stock settings in the producer identity."""
     def reject(message: str, names: list[str] | set[str]) -> None:
         raise RegressionError(f"{message}: {', '.join(sorted(set(names)))}")
@@ -335,12 +370,45 @@ def checked_build_environment(environment: dict[str, str]) -> tuple[dict[str, st
     if any(key != "VCPKG_INSTALLATION_ROOT" for key in vcpkg_environment):
         reject("unexpected VCPKG build environment override",
                [key for key in vcpkg_environment if key != "VCPKG_INSTALLATION_ROOT"])
+
+    python_environment_items = []
+    for key, value in environment.items():
+        canonical = PYTHON_PATH_ENV_BY_CASEFOLD.get(key.casefold())
+        if canonical:
+            python_environment_items.append((canonical, value))
+    if len({key for key, _ in python_environment_items}) != len(python_environment_items):
+        reject("duplicate case-insensitive Python build environment override",
+               [key for key, _ in python_environment_items])
+    python_environment = dict(python_environment_items)
+    other_pkg_config = [key for key in environment
+                        if key.upper() == "PKG_CONFIG" or
+                        (key.upper().startswith("PKG_CONFIG_") and key.casefold() != "pkg_config_path")]
+    if other_pkg_config:
+        reject("unexpected native-child pkg-config override", other_pkg_config)
+    interpreter = python_executable or str(Path(sys.executable).resolve(strict=True))
+    interpreter_root = python_executable_parent(interpreter)
+    for key in PYTHON_ROOT_ENVIRONMENT:
+        if key in python_environment and not same_installation_path(
+                python_environment[key], interpreter_root):
+            reject("Python environment root differs from the selected interpreter", [key])
+    pkg_config_path = python_environment.get("PKG_CONFIG_PATH", "")
+    if "PKG_CONFIG_PATH" in python_environment:
+        if not pkg_config_path:
+            reject("PKG_CONFIG_PATH must identify the selected interpreter's managed directory",
+                   ["PKG_CONFIG_PATH"])
+        if not python_environment.get("pythonLocation"):
+            reject("PKG_CONFIG_PATH has no setup-python location binding",
+                   ["PKG_CONFIG_PATH", "pythonLocation"])
+        if pkg_config_path != python_environment["pythonLocation"] + "/lib/pkgconfig":
+            reject("PKG_CONFIG_PATH differs from the selected interpreter's managed directory",
+                   ["PKG_CONFIG_PATH"])
+
     native = {key: value for key, value in sorted(environment.items())
               if key in {"CC", "CXX", "AR", "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS",
-                         "ASFLAGS", "ARFLAGS", "PKG_CONFIG", "LIBCLANG_PATH",
+                         "ASFLAGS", "ARFLAGS", "LIBCLANG_PATH",
                          "BINDGEN_EXTRA_CLANG_ARGS", "LIB", "LIBPATH", "INCLUDE"} or
               key.startswith(("CC_", "CXX_", "AR_", "CFLAGS_", "CXXFLAGS_", "CPPFLAGS_",
-                              "LDFLAGS_", "ASFLAGS_", "ARFLAGS_", "PKG_CONFIG_", "CMAKE_",
+                              "LDFLAGS_", "ASFLAGS_", "ARFLAGS_", "CMAKE_",
                               "BINDGEN_EXTRA_CLANG_ARGS", "OPENSSL_", "SQLITE3_",
                               "LIBSQLITE3_SYS_")) or
               (key.startswith(("HOST_", "TARGET_")) and
@@ -351,6 +419,7 @@ def checked_build_environment(environment: dict[str, str]) -> tuple[dict[str, st
                [key for key, value in native.items() if value])
     if vcpkg_root:
         native["VCPKG_INSTALLATION_ROOT"] = vcpkg_root
+    native.update(python_environment)
     cargo_home = config["CARGO_HOME"]
     if cargo_home and os.path.normcase(os.path.realpath(cargo_home)) != os.path.normcase(
             os.path.realpath(str(Path.home() / ".cargo"))):
@@ -554,8 +623,10 @@ def _current_context(metadata: dict[str, Any] | None = None) -> tuple[dict[str, 
     host_rows = re.findall(r"(?m)^host: ([A-Za-z0-9_-]+)$", rust.stdout)
     if host_rows != ["x86_64-pc-windows-msvc"]:
         raise RegressionError("Windows regression requires x86_64-pc-windows-msvc")
+    python_executable = str(Path(sys.executable).resolve(strict=True))
     (config, profile_environment, target_environment, build_environment,
-     rustc_environment, native_environment) = checked_build_environment(dict(os.environ))
+     rustc_environment, native_environment) = checked_build_environment(
+         dict(os.environ), python_executable=python_executable)
     if metadata is None:
         meta = run_command(["cargo", "metadata", "--locked", "--no-deps", "--format-version=1"])
         try:
@@ -585,7 +656,6 @@ def _current_context(metadata: dict[str, Any] | None = None) -> tuple[dict[str, 
                                  "binary": {PACKAGE: binary_targets[PACKAGE]}}),
         inputs=_hash_inputs(),
     )
-    python_executable = str(Path(sys.executable).resolve(strict=True))
     context = dict(identity=identity,
                    producer=dict(workspace=str(ROOT.resolve()), test_cwd=test_cwd,
                                  package_id=package_id, python_executable=python_executable,
@@ -899,6 +969,51 @@ def _run_shard(shard: int, destination: Path) -> None:
         raise
 
 
+def _validate_python_environment_binding(context: dict[str, Any]) -> None:
+    if not isinstance(context, dict) or not isinstance(context.get("identity"), dict) or \
+            not isinstance(context.get("producer"), dict):
+        raise RegressionError("Python environment has no producer identity")
+    producer = context["producer"]
+    executable = producer.get("python_executable")
+    identity = context["identity"]
+    native = identity.get("native_environment")
+    if not isinstance(executable, str) or not absolute_workspace(executable) or not isinstance(native, dict):
+        raise RegressionError("Python environment producer identity is malformed")
+    root = python_executable_parent(executable)
+    for key, value in native.items():
+        canonical = PYTHON_PATH_ENV_BY_CASEFOLD.get(key.casefold()) if isinstance(key, str) else None
+        if canonical and (key != canonical or not isinstance(value, str)):
+            raise RegressionError(f"Python environment variable identity is malformed: {canonical}")
+        if (isinstance(key, str) and key.upper().startswith("PKG_CONFIG") and
+                key.casefold() != "pkg_config_path"):
+            raise RegressionError(f"unexpected native-child build environment override: {key}")
+    for key in PYTHON_ROOT_ENVIRONMENT:
+        if key in native and not same_installation_path(native[key], root):
+            raise RegressionError(f"Python environment root differs from its producer interpreter: {key}")
+    pkg_config_path = native.get("PKG_CONFIG_PATH", "")
+    if "PKG_CONFIG_PATH" in native:
+        if not pkg_config_path:
+            raise RegressionError("PKG_CONFIG_PATH must identify the producer interpreter: PKG_CONFIG_PATH")
+        if not native.get("pythonLocation"):
+            raise RegressionError(
+                "PKG_CONFIG_PATH has no setup-python location binding: PKG_CONFIG_PATH, pythonLocation")
+        if pkg_config_path != native["pythonLocation"] + "/lib/pkgconfig":
+            raise RegressionError("PKG_CONFIG_PATH differs from its producer interpreter: PKG_CONFIG_PATH")
+
+
+def _normalized_identity(context: dict[str, Any]) -> dict[str, Any]:
+    """Compare per-producer Python paths by their validated binding, retaining raw paths in receipts."""
+    identity = dict(context["identity"])
+    native = dict(identity["native_environment"])
+    for key in PYTHON_ROOT_ENVIRONMENT:
+        if key in native and native[key]:
+            native[key] = "<selected-python-root>"
+    if native.get("PKG_CONFIG_PATH"):
+        native["PKG_CONFIG_PATH"] = "<selected-python-root>/lib/pkgconfig"
+    identity["native_environment"] = native
+    return identity
+
+
 def _validate_receipt(root: Path, receipt: dict[str, Any], shard: int,
                       context: dict[str, Any]) -> int:
     selectors = SHARD_SELECTORS[shard]
@@ -908,8 +1023,7 @@ def _validate_receipt(root: Path, receipt: dict[str, Any], shard: int,
     if receipt.get("schema") != SCHEMA or receipt.get("shard") != shard:
         raise RegressionError("missing, wrong-schema or wrong-numbered shard receipt")
     producer_context = receipt.get("context")
-    if (not isinstance(producer_context, dict) or set(producer_context) != {"identity", "producer"} or
-            producer_context.get("identity") != context.get("identity")):
+    if not isinstance(producer_context, dict) or set(producer_context) != {"identity", "producer"}:
         raise RegressionError("shard receipt source, run, toolchain, config or inventory mismatch")
     producer = producer_context.get("producer")
     if (not isinstance(producer, dict) or set(producer) != {
@@ -924,6 +1038,10 @@ def _validate_receipt(root: Path, receipt: dict[str, Any], shard: int,
             not isinstance(producer.get("python_sha256"), str) or
             not HEX64.fullmatch(producer["python_sha256"])):
         raise RegressionError("shard producer workspace or Cargo package identity is malformed")
+    _validate_python_environment_binding(producer_context)
+    _validate_python_environment_binding(context)
+    if _normalized_identity(producer_context) != _normalized_identity(context):
+        raise RegressionError("shard receipt source, run, toolchain, config or inventory mismatch")
     workspace_name = producer["workspace"]
     package_id = producer["package_id"]
     inventory_sha256 = producer_context["identity"]["inventory_sha256"]
@@ -1145,6 +1263,7 @@ def _validate_runner_plan(plan: dict[str, Any], *, manifest_path: str | None = N
             not isinstance(producer.get("python_sha256"), str) or
             not HEX64.fullmatch(producer["python_sha256"])):
         raise RegressionError("Cargo runner plan source or workspace identity is malformed")
+    _validate_python_environment_binding(context)
     workspace = producer["workspace"]
     test_cwd = producer["test_cwd"]
     shard = plan.get("shard")
