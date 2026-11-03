@@ -31,7 +31,8 @@ def artifact_row(package_id: str, selector: str, executable: str, workspace: str
                 executable=executable)
 
 
-def test_context(root: Path, workspace: str | None = None, package_id: str = "nagic local package id") -> dict:
+def test_context(root: Path, workspace: str | None = None, package_id: str = "nagic local package id",
+                 vcpkg_root: str | None = None) -> dict:
     workspace = workspace or str(ROOT)
     python_executable = (policy.workspace_file(workspace, ".toolchain/Python with spaces/python.exe")
                          if PureWindowsPath(workspace).is_absolute() else
@@ -45,7 +46,8 @@ def test_context(root: Path, workspace: str | None = None, package_id: str = "na
                       platform="windows-x86_64", runner_os="Windows", runner_arch="X64",
                       host="x86_64-pc-windows-msvc", rustc="rustc 1.99.1\n", rustc_cfg="debug_assertions\n",
                       cargo="cargo 1.99.1\n", python="3.12.7\n", config={}, profile_environment={},
-                      target_environment={}, build_environment={}, rustc_environment={}, native_environment={},
+                      target_environment={}, build_environment={}, rustc_environment={},
+                      native_environment=({"VCPKG_INSTALLATION_ROOT": vcpkg_root} if vcpkg_root else {}),
                       cargo_lock_sha256="c" * 64, package_manifest_sha256="d" * 64,
                       inventory_sha256=inventory_hash, inputs={"Cargo.lock": "e" * 64}),
         producer=dict(workspace=workspace, test_cwd=policy.workspace_file(workspace, "compiler"),
@@ -227,6 +229,10 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
         config, profile, target, build, rustc, native = policy.checked_build_environment({})
         self.assertEqual(config["CARGO_HOME"], "default")
         self.assertEqual((profile, target, build, rustc, native), ({}, {}, {}, {}, {}))
+        accepted = policy.checked_build_environment({"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
+        self.assertEqual(accepted[5], {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
+        normalized_name = policy.checked_build_environment({"vcpkg_installation_root": r"C:\vcpkg"})
+        self.assertEqual(normalized_name[5], {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
         for key in (
             "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS", "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS",
             "CARGO_BUILD_BUILD_DIR", "RUSTC_WORKSPACE_WRAPPER", "RUSTFLAGS",
@@ -238,6 +244,16 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
             {"CARGO_HOME": str(Path.home() / ".cargo")})[0]["CARGO_HOME"], "default")
         with self.assertRaises(policy.RegressionError):
             policy.checked_build_environment({"CARGO_HOME": "/unrelated/cargo"})
+        for environment in (
+            {"VCPKG_INSTALLATION_ROOT": r"D:\vcpkg"},
+            {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg\other"},
+            {"VCPKG_FEATURE_FLAGS": "manifests"},
+            {"VCPKG_FEATURE_FLAGS": ""},
+            {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg", "VCPKG_FEATURE_FLAGS": "manifests"},
+            {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg", "vcpkg_installation_root": r"C:\vcpkg"},
+        ):
+            with self.subTest(vcpkg_environment=environment), self.assertRaises(policy.RegressionError):
+                policy.checked_build_environment(environment)
 
     def test_two_attempt_bound_receipts_reconcile_exact_all_target_and_case_unions(self):
         with tempfile.TemporaryDirectory(prefix="windows regression fixture with spaces ") as temporary:
@@ -245,13 +261,20 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
             artifacts = root / "artifacts"
             artifacts.mkdir()
             shard_contexts = [
-                test_context(root, r"C:\runner-one\_work\nagi", "nagic package-id runner-one"),
-                test_context(root, r"D:\runner two\_work\nagi", "nagic package-id runner-two"),
+                test_context(root, r"C:\runner-one\_work\nagi", "nagic package-id runner-one", r"C:\vcpkg"),
+                test_context(root, r"D:\runner two\_work\nagi", "nagic package-id runner-two", r"C:\vcpkg"),
             ]
-            aggregate_context = test_context(root, r"E:\aggregate\_work\nagi", "nagic aggregate package-id")
+            aggregate_context = test_context(root, r"E:\aggregate\_work\nagi", "nagic aggregate package-id",
+                                             r"C:\vcpkg")
             write_shard_artifact(artifacts, 0, shard_contexts[0], root)
             write_shard_artifact(artifacts, 1, shard_contexts[1], root)
             policy.reconcile(artifacts, aggregate_context)
+            receipt_root = artifacts / "nagi-regression-windows-shard-0"
+            receipt = policy.load_json(receipt_root / "receipt.json")
+            missing_vcpkg_context = test_context(root, r"E:\aggregate\_work\nagi",
+                                                 "nagic aggregate package-id")
+            with self.assertRaises(policy.RegressionError):
+                policy._validate_receipt(receipt_root, receipt, 0, missing_vcpkg_context)
 
             stale = root / "stale"
             stale.mkdir()

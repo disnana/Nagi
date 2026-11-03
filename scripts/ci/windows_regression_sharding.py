@@ -132,6 +132,12 @@ CONFIG_ENV = (
     "RUSTCFLAGS", "RUSTUP_TOOLCHAIN",
 )
 EMPTY_CONFIG_ENV = frozenset(CONFIG_ENV) - {"CARGO_HOME"}
+# Source: https://github.com/actions/runner-images/blob/win25-vs2026/20261030.294/images/windows/Windows2025-Readme.md
+# Its Windows Server 2025 image README (image version 20261030.294.1) documents
+# VCPKG_INSTALLATION_ROOT=C:\vcpkg; archived at
+# /workspace/evidence/nagi-ci221-measurement/windows2025-vs2026-20261030.294-readme.md.
+# Keep this stock path in the producer identity; reject every other VCPKG override.
+STOCK_VCPKG_INSTALLATION_ROOT = r"C:\vcpkg"
 OPTIONAL_HASHED_FILES = (".cargo/config", ".cargo/config.toml", "compiler/.cargo/config",
                          "compiler/.cargo/config.toml")
 HASHED_FILES = (
@@ -308,6 +314,16 @@ def checked_build_environment(environment: dict[str, str]) -> tuple[dict[str, st
              if key.startswith("RUSTC_")}
     if any(rustc.values()):
         raise RegressionError("unexpected Rust compiler environment override")
+    vcpkg_items = [(key.upper(), value) for key, value in environment.items()
+                   if key.upper().startswith("VCPKG_")]
+    if len({key for key, _ in vcpkg_items}) != len(vcpkg_items):
+        raise RegressionError("duplicate case-insensitive VCPKG environment override")
+    vcpkg_environment = dict(vcpkg_items)
+    vcpkg_root = vcpkg_environment.get("VCPKG_INSTALLATION_ROOT", "")
+    if vcpkg_root and vcpkg_root != STOCK_VCPKG_INSTALLATION_ROOT:
+        raise RegressionError("VCPKG_INSTALLATION_ROOT differs from the documented stock Windows image")
+    if any(key != "VCPKG_INSTALLATION_ROOT" for key in vcpkg_environment):
+        raise RegressionError("unexpected VCPKG build environment override")
     native = {key: value for key, value in sorted(environment.items())
               if key in {"CC", "CXX", "AR", "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS",
                          "ASFLAGS", "ARFLAGS", "PKG_CONFIG", "LIBCLANG_PATH",
@@ -315,12 +331,14 @@ def checked_build_environment(environment: dict[str, str]) -> tuple[dict[str, st
               key.startswith(("CC_", "CXX_", "AR_", "CFLAGS_", "CXXFLAGS_", "CPPFLAGS_",
                               "LDFLAGS_", "ASFLAGS_", "ARFLAGS_", "PKG_CONFIG_", "CMAKE_",
                               "BINDGEN_EXTRA_CLANG_ARGS", "OPENSSL_", "SQLITE3_",
-                              "LIBSQLITE3_SYS_", "VCPKG_")) or
+                              "LIBSQLITE3_SYS_")) or
               (key.startswith(("HOST_", "TARGET_")) and
                key.endswith(("_CC", "_CXX", "_AR", "_CFLAGS", "_CXXFLAGS", "_CPPFLAGS",
                              "_LDFLAGS", "_ASFLAGS", "_ARFLAGS")))}
     if any(native.values()):
         raise RegressionError("unexpected native-child build environment override")
+    if vcpkg_root:
+        native["VCPKG_INSTALLATION_ROOT"] = vcpkg_root
     cargo_home = config["CARGO_HOME"]
     if cargo_home and os.path.normcase(os.path.realpath(cargo_home)) != os.path.normcase(
             os.path.realpath(str(Path.home() / ".cargo"))):
