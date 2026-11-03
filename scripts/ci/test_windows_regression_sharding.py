@@ -32,7 +32,7 @@ def artifact_row(package_id: str, selector: str, executable: str, workspace: str
 
 
 def test_context(root: Path, workspace: str | None = None, package_id: str = "nagic local package id",
-                 vcpkg_root: str | None = None) -> dict:
+                 vcpkg_root: str | None = None, cargo_incremental: str | None = None) -> dict:
     workspace = workspace or str(ROOT)
     python_executable = (policy.workspace_file(workspace, ".toolchain/Python with spaces/python.exe")
                          if PureWindowsPath(workspace).is_absolute() else
@@ -45,7 +45,9 @@ def test_context(root: Path, workspace: str | None = None, package_id: str = "na
                       head="a" * 40, tree="b" * 40, package=policy.PACKAGE,
                       platform="windows-x86_64", runner_os="Windows", runner_arch="X64",
                       host="x86_64-pc-windows-msvc", rustc="rustc 1.99.1\n", rustc_cfg="debug_assertions\n",
-                      cargo="cargo 1.99.1\n", python="3.12.7\n", config={}, profile_environment={},
+                      cargo="cargo 1.99.1\n", python="3.12.7\n",
+                      config=({"CARGO_INCREMENTAL": cargo_incremental} if cargo_incremental is not None else {}),
+                      profile_environment={},
                       target_environment={}, build_environment={}, rustc_environment={},
                       native_environment=({"VCPKG_INSTALLATION_ROOT": vcpkg_root} if vcpkg_root else {}),
                       cargo_lock_sha256="c" * 64, package_manifest_sha256="d" * 64,
@@ -228,32 +230,53 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
     def test_profile_toolchain_target_and_native_overrides_fail_closed(self):
         config, profile, target, build, rustc, native = policy.checked_build_environment({})
         self.assertEqual(config["CARGO_HOME"], "default")
+        self.assertEqual(config["CARGO_INCREMENTAL"], "")
         self.assertEqual((profile, target, build, rustc, native), ({}, {}, {}, {}, {}))
+        stock_dtolnay = policy.checked_build_environment({
+            "CARGO_INCREMENTAL": "0", "VCPKG_INSTALLATION_ROOT": r"C:\vcpkg",
+        })
+        self.assertEqual(stock_dtolnay[0]["CARGO_INCREMENTAL"], "0")
+        self.assertEqual(stock_dtolnay[5], {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
         accepted = policy.checked_build_environment({"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
         self.assertEqual(accepted[5], {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
         normalized_name = policy.checked_build_environment({"vcpkg_installation_root": r"C:\vcpkg"})
         self.assertEqual(normalized_name[5], {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg"})
+
+        def assert_rejected_environment(environment, expected_names):
+            with self.assertRaises(policy.RegressionError) as caught:
+                policy.checked_build_environment(environment)
+            diagnostic = str(caught.exception)
+            for name in expected_names:
+                self.assertIn(name, diagnostic)
+            for value in environment.values():
+                if value:
+                    self.assertNotIn(value, diagnostic)
+
         for key in (
             "CARGO_PROFILE_TEST_DEBUG_ASSERTIONS", "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS",
             "CARGO_BUILD_BUILD_DIR", "RUSTC_WORKSPACE_WRAPPER", "RUSTFLAGS",
             "CFLAGS_x86_64_pc_windows_msvc", "PKG_CONFIG_PATH", "LIB",
         ):
-            with self.subTest(variable=key), self.assertRaises(policy.RegressionError):
-                policy.checked_build_environment({key: "override"})
+            with self.subTest(variable=key):
+                assert_rejected_environment({key: "secret-path-or-flag"}, [key])
+        for value in ("1", "false"):
+            with self.subTest(cargo_incremental=value):
+                assert_rejected_environment({"CARGO_INCREMENTAL": value}, ["CARGO_INCREMENTAL"])
         self.assertEqual(policy.checked_build_environment(
             {"CARGO_HOME": str(Path.home() / ".cargo")})[0]["CARGO_HOME"], "default")
-        with self.assertRaises(policy.RegressionError):
-            policy.checked_build_environment({"CARGO_HOME": "/unrelated/cargo"})
-        for environment in (
-            {"VCPKG_INSTALLATION_ROOT": r"D:\vcpkg"},
-            {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg\other"},
-            {"VCPKG_FEATURE_FLAGS": "manifests"},
-            {"VCPKG_FEATURE_FLAGS": ""},
-            {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg", "VCPKG_FEATURE_FLAGS": "manifests"},
-            {"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg", "vcpkg_installation_root": r"C:\vcpkg"},
+        assert_rejected_environment({"CARGO_HOME": "/secret/unrelated/cargo"}, ["CARGO_HOME"])
+        for environment, expected_names in (
+            ({"VCPKG_INSTALLATION_ROOT": r"D:\vcpkg"}, ["VCPKG_INSTALLATION_ROOT"]),
+            ({"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg\other"}, ["VCPKG_INSTALLATION_ROOT"]),
+            ({"VCPKG_FEATURE_FLAGS": "manifests"}, ["VCPKG_FEATURE_FLAGS"]),
+            ({"VCPKG_FEATURE_FLAGS": ""}, ["VCPKG_FEATURE_FLAGS"]),
+            ({"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg", "VCPKG_FEATURE_FLAGS": "manifests"},
+             ["VCPKG_FEATURE_FLAGS"]),
+            ({"VCPKG_INSTALLATION_ROOT": r"C:\vcpkg", "vcpkg_installation_root": r"C:\vcpkg"},
+             ["VCPKG_INSTALLATION_ROOT"]),
         ):
-            with self.subTest(vcpkg_environment=environment), self.assertRaises(policy.RegressionError):
-                policy.checked_build_environment(environment)
+            with self.subTest(vcpkg_environment=environment):
+                assert_rejected_environment(environment, expected_names)
 
     def test_two_attempt_bound_receipts_reconcile_exact_all_target_and_case_unions(self):
         with tempfile.TemporaryDirectory(prefix="windows regression fixture with spaces ") as temporary:
@@ -275,6 +298,10 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
                                                  "nagic aggregate package-id")
             with self.assertRaises(policy.RegressionError):
                 policy._validate_receipt(receipt_root, receipt, 0, missing_vcpkg_context)
+            changed_incremental_context = test_context(root, r"E:\aggregate\_work\nagi",
+                                                       "nagic aggregate package-id", cargo_incremental="0")
+            with self.assertRaises(policy.RegressionError):
+                policy._validate_receipt(receipt_root, receipt, 0, changed_incremental_context)
 
             stale = root / "stale"
             stale.mkdir()

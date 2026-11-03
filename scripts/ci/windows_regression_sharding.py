@@ -132,7 +132,7 @@ CONFIG_ENV = (
     "RUSTCFLAGS", "RUSTUP_TOOLCHAIN",
 )
 EMPTY_CONFIG_ENV = frozenset(CONFIG_ENV) - {"CARGO_HOME"}
-# Source: https://github.com/actions/runner-images/blob/win25-vs2026/20261030.294/images/windows/Windows2025-Readme.md
+# Source: https://github.com/actions/runner-images/blob/win25-vs2026/20261030.294/images/windows/Windows2025-VS2026-Readme.md
 # Its Windows Server 2025 image README (image version 20261030.294.1) documents
 # VCPKG_INSTALLATION_ROOT=C:\vcpkg; archived at
 # /workspace/evidence/nagi-ci221-measurement/windows2025-vs2026-20261030.294-readme.md.
@@ -294,36 +294,47 @@ def run_command(
 
 
 def checked_build_environment(environment: dict[str, str]) -> tuple[dict[str, str], ...]:
-    """Reject ambient profile/compiler overrides and keep only the default Cargo home identity."""
+    """Validate build overrides and retain supported stock settings in the producer identity."""
+    def reject(message: str, names: list[str] | set[str]) -> None:
+        raise RegressionError(f"{message}: {', '.join(sorted(set(names)))}")
+
     config = {key: environment.get(key, "") for key in CONFIG_ENV}
-    if any(config[key] for key in EMPTY_CONFIG_ENV):
-        raise RegressionError("unexpected Cargo profile, target or Rust flag override")
+    invalid_config = [key for key in EMPTY_CONFIG_ENV if config[key] and not
+                      (key == "CARGO_INCREMENTAL" and config[key] == "0")]
+    if invalid_config:
+        reject("unexpected Cargo profile, target or Rust flag override", invalid_config)
     profile = {key: value for key, value in sorted(environment.items())
                if key.startswith("CARGO_PROFILE_")}
     if any(profile.values()):
-        raise RegressionError("unexpected Cargo profile environment override")
+        reject("unexpected Cargo profile environment override",
+               [key for key, value in profile.items() if value])
     target = {key: value for key, value in sorted(environment.items())
               if key.startswith("CARGO_TARGET_")}
     if any(target.values()):
-        raise RegressionError("unexpected Cargo target-specific build override")
+        reject("unexpected Cargo target-specific build override",
+               [key for key, value in target.items() if value])
     build = {key: value for key, value in sorted(environment.items())
              if key.startswith("CARGO_BUILD_")}
     if any(build.values()):
-        raise RegressionError("unexpected Cargo build environment override")
+        reject("unexpected Cargo build environment override",
+               [key for key, value in build.items() if value])
     rustc = {key: value for key, value in sorted(environment.items())
              if key.startswith("RUSTC_")}
     if any(rustc.values()):
-        raise RegressionError("unexpected Rust compiler environment override")
+        reject("unexpected Rust compiler environment override",
+               [key for key, value in rustc.items() if value])
     vcpkg_items = [(key.upper(), value) for key, value in environment.items()
                    if key.upper().startswith("VCPKG_")]
     if len({key for key, _ in vcpkg_items}) != len(vcpkg_items):
-        raise RegressionError("duplicate case-insensitive VCPKG environment override")
+        reject("duplicate case-insensitive VCPKG environment override", [key for key, _ in vcpkg_items])
     vcpkg_environment = dict(vcpkg_items)
     vcpkg_root = vcpkg_environment.get("VCPKG_INSTALLATION_ROOT", "")
     if vcpkg_root and vcpkg_root != STOCK_VCPKG_INSTALLATION_ROOT:
-        raise RegressionError("VCPKG_INSTALLATION_ROOT differs from the documented stock Windows image")
+        reject("VCPKG_INSTALLATION_ROOT differs from the documented stock Windows image",
+               ["VCPKG_INSTALLATION_ROOT"])
     if any(key != "VCPKG_INSTALLATION_ROOT" for key in vcpkg_environment):
-        raise RegressionError("unexpected VCPKG build environment override")
+        reject("unexpected VCPKG build environment override",
+               [key for key in vcpkg_environment if key != "VCPKG_INSTALLATION_ROOT"])
     native = {key: value for key, value in sorted(environment.items())
               if key in {"CC", "CXX", "AR", "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LDFLAGS",
                          "ASFLAGS", "ARFLAGS", "PKG_CONFIG", "LIBCLANG_PATH",
@@ -336,13 +347,14 @@ def checked_build_environment(environment: dict[str, str]) -> tuple[dict[str, st
                key.endswith(("_CC", "_CXX", "_AR", "_CFLAGS", "_CXXFLAGS", "_CPPFLAGS",
                              "_LDFLAGS", "_ASFLAGS", "_ARFLAGS")))}
     if any(native.values()):
-        raise RegressionError("unexpected native-child build environment override")
+        reject("unexpected native-child build environment override",
+               [key for key, value in native.items() if value])
     if vcpkg_root:
         native["VCPKG_INSTALLATION_ROOT"] = vcpkg_root
     cargo_home = config["CARGO_HOME"]
     if cargo_home and os.path.normcase(os.path.realpath(cargo_home)) != os.path.normcase(
             os.path.realpath(str(Path.home() / ".cargo"))):
-        raise RegressionError("CARGO_HOME differs from the cached default Cargo home")
+        reject("CARGO_HOME differs from the cached default Cargo home", ["CARGO_HOME"])
     config["CARGO_HOME"] = "default"
     return config, profile, target, build, rustc, native
 
