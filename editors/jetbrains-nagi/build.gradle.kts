@@ -1,10 +1,13 @@
-import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformDependencyConfiguration
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 
 plugins {
     java
@@ -23,10 +26,23 @@ dependencies {
     intellijPlatform {
         val localPath = providers.gradleProperty("localPlatformPath").orNull
         if (localPath != null) local(localPath)
-        else create(
-            providers.gradleProperty("platformType").getOrElse("IC"),
-            providers.gradleProperty("platformVersion").getOrElse("2025.1.1"),
-        ) { useInstaller.set(false) }
+        else {
+            val platformType = providers.gradleProperty("platformType").getOrElse("IC")
+            val platformVersion = providers.gradleProperty("platformVersion").getOrElse("2025.1.1")
+            if (platformType == "IU" && platformVersion == "LATEST-EAP-SNAPSHOT") {
+                // Plugin 2.19 classifies the non-numeric EAP alias as legacy IU.
+                // The alias is published under the unified IDEA Maven coordinate.
+                create(object : Action<IntelliJPlatformDependencyConfiguration> {
+                    override fun execute(configuration: IntelliJPlatformDependencyConfiguration) {
+                        configuration.type.set(IntelliJPlatformType.IntellijIdea)
+                        configuration.version.set(platformVersion)
+                        configuration.useInstaller.set(false)
+                    }
+                })
+            } else {
+                create(platformType, platformVersion) { useInstaller.set(false) }
+            }
+        }
         testFramework(TestFrameworkType.Platform)
         pluginVerifier()
     }
@@ -137,7 +153,15 @@ intellijPlatform {
             else {
                 val type = providers.gradleProperty("platformType").getOrElse("IC")
                 val version = providers.gradleProperty("platformVersion").getOrElse("2025.1.1")
-                create(type, version) { useInstaller.set(false) }
+                if (type == "IU" && version == "LATEST-EAP-SNAPSHOT") {
+                    create {
+                        this.type.set(IntelliJPlatformType.IntellijIdea)
+                        this.version.set(version)
+                        this.useInstaller.set(false)
+                    }
+                } else {
+                    create(type, version) { useInstaller.set(false) }
+                }
                 val minimum = providers.gradleProperty("minimumPlatformVersion").orNull
                 if (minimum != null && minimum != version) {
                     create(type, minimum) { useInstaller.set(false) }

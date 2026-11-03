@@ -482,6 +482,43 @@ class JetBrainsBuildContractTests(unittest.TestCase):
         self.assertIn('"javaRuntimeMajor": runtime_java_major', workflow)
         self.assertIn("editors/jetbrains-nagi/build/verification-metadata/", workflow)
 
+    def test_unified_intellij_eap_alias_uses_typed_configuration_for_dependency_and_verifier(self):
+        build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
+        dependency_block = build.split("dependencies {", 1)[1].split("\njava {", 1)[0]
+        verification_start = build.index("pluginVerification {")
+        verification_end = build.index('providers.gradleProperty("verificationArchive")', verification_start)
+        verification_block = build[verification_start:verification_end]
+
+        self.assertIn("import org.gradle.api.Action", build)
+        self.assertIn("import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType", build)
+        self.assertIn(
+            "import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformDependencyConfiguration",
+            build,
+        )
+        self.assertIn("if (localPath != null) local(localPath)\n        else {", dependency_block)
+        self.assertIn(
+            'if (platformType == "IU" && platformVersion == "LATEST-EAP-SNAPSHOT")',
+            dependency_block,
+        )
+        self.assertIn(
+            "create(object : Action<IntelliJPlatformDependencyConfiguration> {",
+            dependency_block,
+        )
+        self.assertIn("configuration.type.set(IntelliJPlatformType.IntellijIdea)", dependency_block)
+        self.assertIn("configuration.version.set(platformVersion)", dependency_block)
+        self.assertIn("configuration.useInstaller.set(false)", dependency_block)
+        self.assertIn("create(platformType, platformVersion) { useInstaller.set(false) }", dependency_block)
+        self.assertNotIn("create(IntelliJPlatformType.IntellijIdea, platformVersion)", dependency_block)
+
+        self.assertIn("if (localPath != null) local(localPath)\n            else {", verification_block)
+        self.assertIn('if (type == "IU" && version == "LATEST-EAP-SNAPSHOT")', verification_block)
+        self.assertIn("this.type.set(IntelliJPlatformType.IntellijIdea)", verification_block)
+        self.assertIn("this.version.set(version)", verification_block)
+        self.assertIn("this.useInstaller.set(false)", verification_block)
+        self.assertIn("create(type, version) { useInstaller.set(false) }", verification_block)
+        self.assertIn("create(type, minimum) { useInstaller.set(false) }", verification_block)
+        self.assertEqual(build.count("if (localPath != null) local(localPath)"), 2)
+
     def test_untrusted_project_fixture_disables_headless_trust_shortcut(self):
         build = (self.repo / "editors/jetbrains-nagi/build.gradle.kts").read_text(encoding="utf-8")
         test_source = (self.repo / "editors/jetbrains-nagi/src/test/java/com/disnana/nagi/NagiRunLineMarkerTest.java").read_text(encoding="utf-8")
@@ -707,7 +744,7 @@ class GateTests(unittest.TestCase):
             }},
             "nagi-package": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
             "nagi-regression": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
-            "windows-contracts": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
+            "platform-contracts": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
             "vscode-package": {"result": "success" if package_vscode == "true" else "skipped"},
         }
 
@@ -1085,7 +1122,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         for target in (
             "product_code: IC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1.1'\n            java_version: '21'",
             "product_code: PC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1.1'\n            java_version: '21'",
-            "product_code: IC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
+            "product_code: IU\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
             "product_code: PC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
         ):
             self.assertIn(target, verify_body)
@@ -1100,6 +1137,8 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertIn("if: ${{ !cancelled() }}", verify_body)
         self.assertIn("verifyPlugin", verify_body)
         self.assertIn("-PverificationArchive=$PWD/build/release-assets/nagi-jetbrains-$RELEASE_VERSION.zip", verify_body)
+        self.assertIn('"IC": "ideaIC",', verify_body)
+        self.assertIn('"IU": "idea",', verify_body)
         self.assertIn('tasks.named<VerifyPluginTask>("verifyPlugin")', build)
         self.assertIn("archiveFile.set(file(archivePath))", build)
 

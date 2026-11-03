@@ -16,7 +16,7 @@ MAIN_REF = "refs/heads/main"
 COMPONENTS = ("nagi", "vscode", "jetbrains")
 SHA = "a" * 40
 JOBS = ("ready", "ci-plan", "critical", "go-backend", "changes", "linux", "linux-workspace", "linux-csrf-mutants", "linux-samples", "rust-1-88", "sf08-browser", "release-plan",
-        "jetbrains", "vscode-package", "nagi-package", "nagi-regression", "windows-contracts")
+        "jetbrains", "vscode-package", "nagi-package", "nagi-regression", "platform-contracts")
 ALLOWED_NAMES = {
     "github.event_name", "github.ref", "needs.changes.result",
     "needs.ready.result", "needs.ci-plan.result", "needs.ci-plan.outputs.level",
@@ -37,9 +37,11 @@ TOKEN = re.compile(
 )
 
 
-def job_expression(name: str) -> str:
+def job_expression(name: str, *, current=False) -> str:
     """Read only a job's if scalar; do not evaluate YAML or code."""
-    workflow = inherited_workflow((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    if not current:
+        workflow = inherited_workflow(workflow)
     job = re.search(
         r"(?ms)^  " + re.escape(name) + r":\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)", workflow
     )
@@ -213,7 +215,7 @@ def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None, cancelled=
         needs[job] = {'result':results.get(job, results.get('linux', 'success'))}
     needs['nagi-regression'] = {'result':results.get('nagi-regression',
         'skipped' if results.get('nagi-package') == 'skipped' else 'success')}
-    needs['windows-contracts'] = {'result':results.get('windows-contracts',
+    needs['platform-contracts'] = {'result':results.get('platform-contracts',
         'skipped' if results.get('nagi-package') == 'skipped' else 'success')}
     return {'github': {'event_name':event, 'ref':ref}, 'needs':needs, 'cancelled':cancelled}
 

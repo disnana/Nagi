@@ -18,6 +18,14 @@ SAMPLES = "      - run: cargo build --release --examples --bins --locked\n      
 NEEDS = [('    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]\n', '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]\n'), ('    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]\n', '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]\n')]
 
 def inverse_workflow(source):
+    # Direct source guards load this module by file path without sys.path edits.
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location(
+        "platform_contract_projection", Path(__file__).with_name("platform_contract_projection.py"))
+    platform_contract_projection = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(platform_contract_projection)
+    source = platform_contract_projection.inverse_workflow(source)
     # Historical component callers may already have consumed this outer layer.
     if '  linux-workspace-shards:\n' not in source:
         if any(marker in source for marker in ('  linux-csrf-mutants:\n', '  linux-samples:\n')) or ('linux-workspace' in source and '  linux-workspace:\n' not in source):

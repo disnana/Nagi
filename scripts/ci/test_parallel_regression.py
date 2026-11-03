@@ -125,7 +125,7 @@ class RegressionGateTests(unittest.TestCase):
                 comprehensive_checks=comprehensive, package_checks=comprehensive,
                 go_checks='true',
                 matrix=json.dumps({'include':rows[:count]}, separators=(',', ':')))
-            for job in ['linux','linux-workspace','linux-csrf-mutants','linux-samples','rust-1-88','nagi-package','nagi-regression','windows-contracts']:
+            for job in ['linux','linux-workspace','linux-csrf-mutants','linux-samples','rust-1-88','nagi-package','nagi-regression','platform-contracts']:
                 needs[job]['result'] = expected
             needs['critical']['result'] = 'success' if critical == 'true' else 'skipped'
             self.assertEqual(gate.errors(needs), [], level)

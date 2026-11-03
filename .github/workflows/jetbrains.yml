@@ -133,7 +133,7 @@ jobs:
             minimum_platform_version: '2025.1.1'
             java_version: '21'
           - product: IntelliJ IDEA
-            product_code: IC
+            product_code: IU
             channel: EAP
             platform_version: LATEST-EAP-SNAPSHOT
             minimum_platform_version: ''
@@ -283,6 +283,7 @@ jobs:
                   raise SystemExit(f"a JavaCompile task selected an unexpected compiler or release: {compile_task}")
           distribution = {
               "IC": "ideaIC",
+              "IU": "idea",
               "PC": "pycharmPC",
           }.get(platform_type)
           if distribution is None:
