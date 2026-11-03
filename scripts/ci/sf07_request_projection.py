@@ -379,6 +379,7 @@ CI_BROWSER_STEP_RESTORED = """      - name: Check owned BrowserLogin business st
 
 
 def inverse_source_guard_dedup(source):
+    source = _LEVELS._sibling('platform_contract_projection').inverse_workflow(source)
     source = _STREAM.inverse(source)
     return _inverse_source_guard_dedup_base(inverse_prelogin_owner_diagnostic(source))
 

@@ -59,6 +59,30 @@ class PlatformContractWiringTests(unittest.TestCase):
         cls.source = (ROOT / '.github/workflows/ci.yml').read_text()
         cls.base = projection.inverse_workflow(cls.source)
 
+    def test_projection_loaded_by_path_without_ci_on_python_path(self):
+        import subprocess
+        import sys
+        code = """import importlib.util, pathlib, hashlib
+root=pathlib.Path.cwd()
+p=root/'scripts/ci/linux_critical_path_projection.py'
+s=importlib.util.spec_from_file_location('path_loaded',p)
+m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+restored=m.inverse_workflow((root/'.github/workflows/ci.yml').read_text())
+assert 'platform-contracts' not in restored
+"""
+        subprocess.run([sys.executable, '-I', '-c', code], cwd=ROOT, check=True,
+                       capture_output=True, text=True, timeout=15)
+
+    def test_direct_source_guard_entry_restores_historical_registration(self):
+        restored = historical.inverse_source_guard_dedup(self.source)
+        for script in ('test_sf07_transport_source.py', 'test_sf07_rate_source.py',
+                       'test_sf07_request_source.py', 'test_sf07_owned_state_summary.py',
+                       'test_sf07_checkpoint_summary.py'):
+            self.assertEqual(restored.count('python -B scripts/tests/' + script), 2)
+        with self.assertRaises(ValueError):
+            historical.inverse_source_guard_dedup(self.source.replace(
+                '  platform-contracts:', '  platform-contracts-broken:', 1))
+
     def test_exact_base_inverse_and_frozen_historical_proofs_compose(self):
         self.assertEqual(hashlib.sha256(self.base.encode()).hexdigest(), projection.BASE_WORKFLOW_SHA256)
         self.assertEqual(projection.apply_workflow(self.base), self.source)
