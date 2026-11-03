@@ -22,6 +22,11 @@ def inverse_workflow(source):
     import importlib.util
     from pathlib import Path
     spec = importlib.util.spec_from_file_location(
+        "platform_contract_profile_projection", Path(__file__).with_name("platform_contract_profile_projection.py"))
+    platform_contract_profile_projection = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(platform_contract_profile_projection)
+    source = platform_contract_profile_projection.inverse_workflow(source)
+    spec = importlib.util.spec_from_file_location(
         "platform_contract_projection", Path(__file__).with_name("platform_contract_projection.py"))
     platform_contract_projection = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(platform_contract_projection)

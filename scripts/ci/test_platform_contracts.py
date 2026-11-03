@@ -11,6 +11,7 @@ import gate
 import levels
 import levels_projection
 import platform_contract_projection as projection
+import platform_contract_profile_projection as profile_projection
 import publication_gate
 import sf07_request_projection as historical
 from sf07_projection_contract import BASE_WORKFLOW_SHA256
@@ -56,7 +57,8 @@ def selected_steps(source, os_name, current):
 class PlatformContractWiringTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.source = (ROOT / '.github/workflows/ci.yml').read_text()
+        cls.current_source = (ROOT / '.github/workflows/ci.yml').read_text()
+        cls.source = profile_projection.inverse_workflow(cls.current_source)
         cls.base = projection.inverse_workflow(cls.source)
 
     def test_projection_loaded_by_path_without_ci_on_python_path(self):
@@ -74,22 +76,22 @@ assert 'platform-contracts' not in restored
                        capture_output=True, text=True, timeout=15)
 
     def test_direct_source_guard_entry_restores_historical_registration(self):
-        restored = historical.inverse_source_guard_dedup(self.source)
+        restored = historical.inverse_source_guard_dedup(self.current_source)
         for script in ('test_sf07_transport_source.py', 'test_sf07_rate_source.py',
                        'test_sf07_request_source.py', 'test_sf07_owned_state_summary.py',
                        'test_sf07_checkpoint_summary.py'):
             self.assertEqual(restored.count('python -B scripts/tests/' + script), 2)
         with self.assertRaises(ValueError):
-            historical.inverse_source_guard_dedup(self.source.replace(
+            historical.inverse_source_guard_dedup(self.current_source.replace(
                 '  platform-contracts:', '  platform-contracts-broken:', 1))
 
     def test_exact_base_inverse_and_frozen_historical_proofs_compose(self):
         self.assertEqual(hashlib.sha256(self.base.encode()).hexdigest(), projection.BASE_WORKFLOW_SHA256)
         self.assertEqual(projection.apply_workflow(self.base), self.source)
         self.assertEqual(projection.inverse_workflow(self.base), self.base)
-        self.assertEqual(hashlib.sha256(historical.inverse_workflow(self.source).encode()).hexdigest(),
+        self.assertEqual(hashlib.sha256(historical.inverse_workflow(self.current_source).encode()).hexdigest(),
                          BASE_WORKFLOW_SHA256)
-        self.assertEqual(levels_projection.inverse_workflow(self.source),
+        self.assertEqual(levels_projection.inverse_workflow(self.current_source),
                          levels_projection.inverse_workflow(self.base))
 
     def test_full_step_inventory_and_commands_are_identical_on_all_four_platforms(self):
