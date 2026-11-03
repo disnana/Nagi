@@ -135,6 +135,13 @@ def write_shard_artifact(receipt_root: Path, shard: int, context: dict, temporar
                                       started_file=started_rel, finished_file=finished_rel)
 
         event_text = f"ok {active}\nignored: fixture reason {ignored}\n"
+        test_output = (
+            "running 2 tests\n"
+            "test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; "
+            "0 filtered out; finished in 0.00s\n"
+        )
+        checked = policy.libtest_protocol.check_execution(
+            test_output, event_text, cases, ignored_cases, dict(id=selector))
         (shard_root / event_rel).write_text(event_text, encoding="utf-8")
         started = dict(schema=policy.SCHEMA, protocol=policy.PROTOCOL, selector=selector,
                        executable=policy.canonical_executable(executable), sha256=exe_sha,
@@ -147,16 +154,19 @@ def write_shard_artifact(receipt_root: Path, shard: int, context: dict, temporar
         files[event_rel] = policy.sha256_file(shard_root / event_rel)
         files[started_rel] = policy.sha256_file(shard_root / started_rel)
         files[finished_rel] = policy.sha256_file(shard_root / finished_rel)
-        orchestration_lines.append(f"NAGI_CI_OUTER_EXECUTION {marker}\nrunning 2 tests\n")
-        orchestration_lines.append(
-            "test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; "
-            "0 filtered out; finished in 0.00s\n")
-        targets.append(dict(target=members[selector], executable=dict(path=policy.canonical_executable(executable), sha256=exe_sha),
-                            cases=sorted(cases), ignored=sorted(ignored_cases),
-                            ignored_reasons={ignored: "fixture reason"},
-                            list_files={all_rel: files[all_rel], ignored_rel: files[ignored_rel]},
-                            marker=marker, event_file=event_rel, started_file=started_rel,
-                            finished_file=finished_rel, passed=1))
+        orchestration_lines.append(f"NAGI_CI_OUTER_EXECUTION {marker}\n" + test_output)
+        target_row = dict(
+            target=members[selector],
+            executable=dict(path=policy.canonical_executable(executable), sha256=exe_sha),
+            cases=sorted(cases),
+            ignored=sorted(ignored_cases),
+            list_files={all_rel: files[all_rel], ignored_rel: files[ignored_rel]},
+            marker=marker,
+            event_file=event_rel,
+            started_file=started_rel,
+            finished_file=finished_rel,
+        )
+        targets.append(policy.compose_target_result(target_row, checked))
 
     compile_text = "\n".join(json.dumps(row) for row in compile_rows) + "\n"
     (shard_root / "compile.jsonl").write_text(compile_text, encoding="utf-8")
@@ -526,6 +536,57 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
                     policy._validate_receipt(root, changed, 0, aggregate_context)
             finally:
                 event_path.write_text(original_event, encoding="utf-8")
+
+    def test_target_result_composition_is_explicit_and_fails_closed(self):
+        workspace = r"C:\runner with spaces\_work\nagi"
+        selector = "test:cli"
+        marker = "a" * 64
+        active = "cli::active"
+        ignored = "cli::ignored"
+        all_path = f"lists/{policy.digest(selector)}.all.txt"
+        ignored_path = f"lists/{policy.digest(selector)}.ignored.txt"
+        row = dict(
+            target=policy.expected_members()[selector],
+            executable=dict(
+                path=policy.canonical_executable(policy.workspace_file(
+                    workspace, "target/debug/deps/cli.exe")),
+                sha256="b" * 64,
+            ),
+            cases=[active, ignored],
+            ignored=[ignored],
+            list_files={all_path: "c" * 64, ignored_path: "d" * 64},
+            marker=marker,
+            event_file=f"events/{marker}.events",
+            started_file=f"runner/{marker}.started.json",
+            finished_file=f"runner/{marker}.finished.json",
+        )
+        checked = dict(cases=[active, ignored], ignored=[ignored],
+                       ignored_reasons={ignored: "fixture reason"}, passed=1)
+        result = policy.compose_target_result(row, checked)
+        self.assertEqual(result, dict(
+            target=row["target"], executable=row["executable"], cases=[active, ignored],
+            ignored=[ignored], ignored_reasons={ignored: "fixture reason"},
+            list_files=row["list_files"], marker=marker, event_file=f"events/{marker}.events",
+            started_file=f"runner/{marker}.started.json", finished_file=f"runner/{marker}.finished.json",
+            passed=1))
+
+        mutations = (
+            ("duplicate producer case", lambda source, outcome: source["cases"].append(active)),
+            ("producer and validated cases differ", lambda source, outcome: outcome["cases"].pop()),
+            ("producer and validated ignored cases differ", lambda source, outcome: outcome["ignored"].clear()),
+            ("missing ignored reason", lambda source, outcome: outcome["ignored_reasons"].clear()),
+            ("wrong passed count", lambda source, outcome: outcome.update(passed=2)),
+            ("boolean passed count", lambda source, outcome: outcome.update(passed=True)),
+            ("missing checked count", lambda source, outcome: outcome.pop("passed")),
+            ("unexpected checked field", lambda source, outcome: outcome.update(extra=0)),
+            ("unexpected source field", lambda source, outcome: source.update(ignored_reasons={})),
+        )
+        for name, mutate in mutations:
+            changed_row = copy.deepcopy(row)
+            changed_checked = copy.deepcopy(checked)
+            mutate(changed_row, changed_checked)
+            with self.subTest(composition=name), self.assertRaises(policy.RegressionError):
+                policy.compose_target_result(changed_row, changed_checked)
 
     def test_generated_runtime_prefetch_covers_empty_cache_without_build_commands(self):
         with tempfile.TemporaryDirectory(prefix="Windows cold prefetch workspace with spaces ") as temporary:

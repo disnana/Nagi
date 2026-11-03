@@ -552,6 +552,79 @@ def cargo_test_command(shard: int, *, no_run: bool = False, harness: bool = Fals
     return args
 
 
+def compose_target_result(row: dict[str, Any], checked: dict[str, Any]) -> dict[str, Any]:
+    """Join the independent inventory row with validated outer execution results."""
+    row_fields = {"target", "executable", "cases", "ignored", "list_files", "marker",
+                  "event_file", "started_file", "finished_file"}
+    if not isinstance(row, dict) or set(row) != row_fields:
+        raise RegressionError("target receipt source row has missing or unexpected fields")
+    checked_fields = {"cases", "ignored", "ignored_reasons", "passed"}
+    if not isinstance(checked, dict) or set(checked) != checked_fields:
+        raise RegressionError("validated execution result has missing or unexpected fields")
+
+    target = row["target"]
+    if not isinstance(target, dict):
+        raise RegressionError("target receipt source identity is malformed")
+    if target == expected_members().get("lib:nagic"):
+        selector = "lib:nagic"
+    elif (isinstance(target.get("kind"), str) and target["kind"] == "test" and
+          isinstance(target.get("name"), str)):
+        selector = "test:" + target["name"]
+    else:
+        raise RegressionError("target receipt source identity is unknown")
+    if target != expected_members().get(selector):
+        raise RegressionError("target receipt source identity differs from the reviewed inventory")
+
+    cases, ignored = row["cases"], row["ignored"]
+    if (not isinstance(cases, list) or any(not isinstance(name, str) or not name for name in cases) or
+            cases != sorted(set(cases)) or not isinstance(ignored, list) or
+            any(not isinstance(name, str) or not name for name in ignored) or
+            ignored != sorted(set(ignored)) or not set(ignored) <= set(cases)):
+        raise RegressionError("target receipt source case inventory is malformed")
+    if checked["cases"] != cases or checked["ignored"] != ignored:
+        raise RegressionError("validated execution cases differ from the independent target inventory")
+    reasons = checked["ignored_reasons"]
+    if (not isinstance(reasons, dict) or set(reasons) != set(ignored) or
+            any(reason is not None and not isinstance(reason, str) for reason in reasons.values())):
+        raise RegressionError("validated ignored-case reasons differ from the target inventory")
+    passed = checked["passed"]
+    if type(passed) is not int or passed != len(cases) - len(ignored):
+        raise RegressionError("validated execution count differs from the target inventory")
+
+    executable = row["executable"]
+    if (not isinstance(executable, dict) or set(executable) != {"path", "sha256"} or
+            not isinstance(executable.get("path"), str) or
+            canonical_executable(executable["path"]) != executable["path"] or
+            not isinstance(executable.get("sha256"), str) or not HEX64.fullmatch(executable["sha256"])):
+        raise RegressionError("target receipt executable identity is malformed")
+    list_files = row["list_files"]
+    list_paths = {f"lists/{digest(selector)}.all.txt", f"lists/{digest(selector)}.ignored.txt"}
+    if (not isinstance(list_files, dict) or set(list_files) != list_paths or
+            any(not isinstance(value, str) or not HEX64.fullmatch(value) for value in list_files.values())):
+        raise RegressionError("target receipt listing identity is malformed")
+    marker = row["marker"]
+    if not isinstance(marker, str) or not HEX64.fullmatch(marker):
+        raise RegressionError("target receipt event marker is malformed")
+    if (row["event_file"] != f"events/{marker}.events" or
+            row["started_file"] != f"runner/{marker}.started.json" or
+            row["finished_file"] != f"runner/{marker}.finished.json"):
+        raise RegressionError("target receipt event paths differ from its marker")
+
+    return {
+        "target": target,
+        "executable": executable,
+        "cases": cases,
+        "ignored": ignored,
+        "ignored_reasons": reasons,
+        "list_files": list_files,
+        "marker": marker,
+        "event_file": row["event_file"],
+        "started_file": row["started_file"],
+        "finished_file": row["finished_file"],
+        "passed": passed,
+    }
+
+
 def package_inventory(metadata: dict[str, Any]) -> tuple[str, dict[str, dict[str, str]], dict[str, str], str]:
     """Require exact package/test target identity, including known non-shard tests."""
     try:
@@ -1221,7 +1294,7 @@ def _run_shard(shard: int, destination: Path) -> None:
             files[row["event_file"]] = sha256_file(event)
             files[row["started_file"]] = sha256_file(directory / row["started_file"])
             files[row["finished_file"]] = sha256_file(directory / row["finished_file"])
-            results.append(dict(**row, **checked))
+            results.append(compose_target_result(row, checked))
         if sha256_file(Path(compiler_binary)) != binary_identity["sha256"]:
             raise RegressionError("nagic CLI binary changed while tests were running")
         passed = sum(row["passed"] for row in results)
