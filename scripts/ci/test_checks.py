@@ -1085,7 +1085,7 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         for target in (
             "product_code: IC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1.1'\n            java_version: '21'",
             "product_code: PC\n            channel: stable\n            platform_version: '2025.1.1'\n            minimum_platform_version: '2025.1.1'\n            java_version: '21'",
-            "product_code: IC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
+            "product_code: IU\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
             "product_code: PC\n            channel: EAP\n            platform_version: LATEST-EAP-SNAPSHOT\n            minimum_platform_version: ''\n            java_version: '25'",
         ):
             self.assertIn(target, verify_body)
@@ -1100,6 +1100,8 @@ class JetBrainsWorkflowTests(unittest.TestCase):
         self.assertIn("if: ${{ !cancelled() }}", verify_body)
         self.assertIn("verifyPlugin", verify_body)
         self.assertIn("-PverificationArchive=$PWD/build/release-assets/nagi-jetbrains-$RELEASE_VERSION.zip", verify_body)
+        self.assertIn('"IC": "ideaIC",', verify_body)
+        self.assertIn('"IU": "idea",', verify_body)
         self.assertIn('tasks.named<VerifyPluginTask>("verifyPlugin")', build)
         self.assertIn("archiveFile.set(file(archivePath))", build)
 
