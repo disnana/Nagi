@@ -125,13 +125,16 @@ class RegressionGateTests(unittest.TestCase):
                 comprehensive_checks=comprehensive, package_checks=comprehensive,
                 go_checks='true',
                 matrix=json.dumps({'include':rows[:count]}, separators=(',', ':')))
-            for job in ['linux','linux-workspace','linux-csrf-mutants','linux-samples','rust-1-88','nagi-package','nagi-regression','platform-contracts']:
+            for job in ['linux','linux-workspace','linux-csrf-mutants','linux-samples','rust-1-88','nagi-package','nagi-regression','nagi-regression-windows-shards','nagi-regression-windows-aggregate','platform-contracts']:
                 needs[job]['result'] = expected
             needs['critical']['result'] = 'success' if critical == 'true' else 'skipped'
             self.assertEqual(gate.errors(needs), [], level)
             for result in ['success','skipped','failure','cancelled','',None]:
                 changed=copy.deepcopy(needs);changed['nagi-regression']['result']=result
                 self.assertEqual(gate.errors(changed) == [], result == expected, (level,result))
+                for windows_job in ('nagi-regression-windows-shards','nagi-regression-windows-aggregate'):
+                    changed=copy.deepcopy(needs);changed[windows_job]['result']=result
+                    self.assertEqual(gate.errors(changed) == [], result == expected, (level,windows_job,result))
             for bad in [[], rows[:2], rows[:3] if level == '3' else rows]:
                 changed=copy.deepcopy(needs)
                 changed['ci-plan']['outputs']['matrix']=json.dumps({'include':bad}, separators=(',', ':'))

@@ -5,6 +5,7 @@ import unittest
 
 import platform_contract_profile_projection as projection
 import platform_contract_projection as historical
+import windows_regression_sharding_projection as regression_sharding
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -14,7 +15,8 @@ STEP = re.compile(r'(?ms)^      - .*?(?=^      - |\Z)')
 class PlatformContractProfileTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.current = (ROOT / '.github/workflows/ci.yml').read_text()
+        cls.current = regression_sharding.inverse_workflow(
+            (ROOT / '.github/workflows/ci.yml').read_text())
         cls.base = projection.inverse_workflow(cls.current)
         cls.current_job = re.search(
             r'(?ms)^  platform-contracts:\n.*?(?=^  [a-z][a-z0-9-]*:|\Z)', cls.current).group()

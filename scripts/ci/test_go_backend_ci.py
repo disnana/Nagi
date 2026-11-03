@@ -69,6 +69,8 @@ class GoBackendCIContractTests(unittest.TestCase):
                 "rust-1-88": {"result": "skipped"}, "jetbrains": {"result": "skipped"},
                 "sf08-browser": {"result": "skipped"}, "vscode-package": {"result": "skipped"},
                 "nagi-package": {"result": "skipped"}, "nagi-regression": {"result": "skipped"},
+                "nagi-regression-windows-shards": {"result": "skipped"},
+                "nagi-regression-windows-aggregate": {"result": "skipped"},
                 "platform-contracts": {"result": "skipped"},
             }
             self.assertEqual(gate.errors(needs), [])

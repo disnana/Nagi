@@ -16,7 +16,8 @@ MAIN_REF = "refs/heads/main"
 COMPONENTS = ("nagi", "vscode", "jetbrains")
 SHA = "a" * 40
 JOBS = ("ready", "ci-plan", "critical", "go-backend", "changes", "linux", "linux-workspace", "linux-csrf-mutants", "linux-samples", "rust-1-88", "sf08-browser", "release-plan",
-        "jetbrains", "vscode-package", "nagi-package", "nagi-regression", "platform-contracts")
+        "jetbrains", "vscode-package", "nagi-package", "nagi-regression",
+        "nagi-regression-windows-shards", "nagi-regression-windows-aggregate", "platform-contracts")
 ALLOWED_NAMES = {
     "github.event_name", "github.ref", "needs.changes.result",
     "needs.ready.result", "needs.ci-plan.result", "needs.ci-plan.outputs.level",
@@ -215,6 +216,9 @@ def fixture(*, event="push", ref=MAIN_REF, releases=(), results=None, cancelled=
         needs[job] = {'result':results.get(job, results.get('linux', 'success'))}
     needs['nagi-regression'] = {'result':results.get('nagi-regression',
         'skipped' if results.get('nagi-package') == 'skipped' else 'success')}
+    for job in ('nagi-regression-windows-shards', 'nagi-regression-windows-aggregate'):
+        needs[job] = {'result':results.get(job,
+            'skipped' if results.get('nagi-package') == 'skipped' else 'success')}
     needs['platform-contracts'] = {'result':results.get('platform-contracts',
         'skipped' if results.get('nagi-package') == 'skipped' else 'success')}
     return {'github': {'event_name':event, 'ref':ref}, 'needs':needs, 'cancelled':cancelled}

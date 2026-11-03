@@ -77,6 +77,8 @@ def apply_workflow(source):
 
 def inverse_workflow(source):
     """Restore the complete verified #220 workflow byte-for-byte."""
+    windows_sharding = _sibling('windows_regression_sharding_projection')
+    source = windows_sharding.inverse_workflow(source)
     found = list(JOB_RE.finditer(source))
     if not found:
         if 'platform-contracts' in source or 'nagi-platform-contracts-v2-' in source:

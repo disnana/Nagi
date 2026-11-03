@@ -17,7 +17,7 @@ def valid(component="nagi"):
     needs["changes"]["outputs"] = {"full_checks": str(nagi).lower(), "jetbrains_checks": str(nagi or component == "jetbrains").lower(), "go_checks": str(nagi).lower()}
     needs["release-plan"]["outputs"] = plan
     needs["ci-plan"]["outputs"] = levels.expected("3", str(nagi).lower(), plan["package_nagi"], str(nagi).lower())
-    for name in ("linux", "linux-workspace", "linux-csrf-mutants", "linux-samples", "rust-1-88", "sf08-browser", "nagi-package", "nagi-regression", "platform-contracts"):
+    for name in ("linux", "linux-workspace", "linux-csrf-mutants", "linux-samples", "rust-1-88", "sf08-browser", "nagi-package", "nagi-regression", "nagi-regression-windows-shards", "nagi-regression-windows-aggregate", "platform-contracts"):
         needs[name] = {"result": "success" if nagi else "skipped"}
     needs["critical"] = {"result": "skipped"}
     needs["go-backend"] = {"result": "success" if nagi else "skipped"}

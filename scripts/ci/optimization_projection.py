@@ -75,6 +75,14 @@ def unpin(source):
     return USES.sub(replace, source)
 
 
+def _windows_sharding_projection():
+    spec = importlib.util.spec_from_file_location(
+        "windows_regression_sharding_projection", Path(__file__).with_name("windows_regression_sharding_projection.py"))
+    policy = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(policy)
+    return policy
+
+
 def save_step(path, critical=False):
     return (f"      - name: Save validated Rust cache ({'PR-local' if critical else 'main only'}) # ci-cache-save\n"
             f"        if: {CRITICAL_SAVE_IF if critical else SAVE_IF}\n"
@@ -163,10 +171,18 @@ def infrastructure(source):
     source = JOB.sub(lambda m: cancellation_edit(m.group()), source)
     source = JOB.sub(lambda m: cache_edit(m.group()), source)
     source = STEP.sub(lambda m: isolation_step(m.group()), source)
-    return pin(source)
+    source = pin(source)
+    projection = _windows_sharding_projection()
+    if projection._workflow_hash(source) == projection.BASE_WORKFLOW_SHA256:
+        source = projection.apply_workflow(source)
+    return source
 
 
 def inverse_infrastructure(source):
+    if ("  nagi-regression-windows-shards:\n" in source or
+            "  nagi-regression-windows-aggregate:\n" in source or
+            "matrix.platform != 'windows-x86_64'" in source):
+        source = _windows_sharding_projection().inverse_workflow(source)
     source = unpin(source)
     source = JOB.sub(lambda m: cancellation_edit(m.group(), inverse=True), source)
     for line in source.splitlines():

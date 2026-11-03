@@ -744,6 +744,8 @@ class GateTests(unittest.TestCase):
             }},
             "nagi-package": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
             "nagi-regression": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
+            "nagi-regression-windows-shards": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
+            "nagi-regression-windows-aggregate": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
             "platform-contracts": {"result": "success" if selected["package_checks"] == "true" else "skipped"},
             "vscode-package": {"result": "success" if package_vscode == "true" else "skipped"},
         }
@@ -908,7 +910,8 @@ class GateTests(unittest.TestCase):
         self.assertTrue(gate.errors(needs))
 
     def test_required_packages_cannot_fail_be_canceled_or_skipped(self):
-        for job in ("nagi-package", "nagi-regression", "vscode-package"):
+        for job in ("nagi-package", "nagi-regression", "nagi-regression-windows-shards",
+                    "nagi-regression-windows-aggregate", "vscode-package"):
             for result in ("failure", "cancelled", "skipped"):
                 with self.subTest(job=job, result=result):
                     needs = self.needs(package_nagi="true", package_vscode="true")
@@ -926,7 +929,8 @@ class GateTests(unittest.TestCase):
         self.assertEqual(gate.errors(needs), ["jetbrains: success, expected skipped"])
 
     def test_unplanned_packages_must_be_skipped(self):
-        for job in ("nagi-package", "nagi-regression", "vscode-package"):
+        for job in ("nagi-package", "nagi-regression", "nagi-regression-windows-shards",
+                    "nagi-regression-windows-aggregate", "vscode-package"):
             needs = self.needs("false")
             needs[job]["result"] = "success"
             self.assertTrue(gate.errors(needs))

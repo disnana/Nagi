@@ -2901,12 +2901,15 @@ jobs:
       NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        if: matrix.platform != 'windows-x86_64'
         with:
           persist-credentials: false # ci-isolation
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+        if: matrix.platform != 'windows-x86_64'
         id: rust
       - name: Cache the regression platform's Rust build
+        if: matrix.platform != 'windows-x86_64'
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
         id: nagi_rust_cache
         with:
@@ -2920,12 +2923,15 @@ jobs:
             nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-${{ hashFiles('Cargo.lock') }}-
             nagi-rust-v1-package-${{ matrix.platform }}-${{ steps.rust.outputs.cachekey }}-
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        if: matrix.platform != 'windows-x86_64'
         with:
           python-version: '3.12'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ci-pin:v4
+        if: matrix.platform != 'windows-x86_64'
         with:
           node-version: '22'
       - name: Verify the compiler host architecture
+        if: matrix.platform != 'windows-x86_64'
         env:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
@@ -2937,16 +2943,19 @@ jobs:
           assert host == os.environ['RELEASE_RUST_HOST'], host
           PY
       - name: Fetch locked runtime dependencies before offline tests
+        if: matrix.platform != 'windows-x86_64'
         env:
           RELEASE_RUST_HOST: ${{ matrix.rust_host }}
         shell: bash
         run: cargo fetch --locked --target "$RELEASE_RUST_HOST"
       - name: Check CLI, installation, ownership, and diagnostics on the target platform
+        if: matrix.platform != 'windows-x86_64'
         run: cargo test --locked -p nagic --lib --test cli --test installation --test codegen --test loop_ownership --test ownership_calls --test ownership_boundaries --test comparison_ownership --test owned_copy_codegen --test build_diagnostics --test rust_dependencies --test expression_contracts --test high_elif --test frontend_contracts --test source_read_retention --test literal_contracts --test http_route_conflicts --test symbols --test editor_assistance --test modules --test module_parser --test module_emission --test module_symbols --test enum_parser --test enum_modules --test enum_emission --test enum_patterns --test nullable_database --test nullable_roundtrip --test owned_database --test borrow_free_returns --test static_callback_views --test view_iteration --test view_parameter_rebinding --test sql_check --test typed_errors --test error_routes --test class_field_types --test resource_contract_characterization --test stdlib_imports --test option_match --test http_stdlib --test http_codegen --test actor_stdlib --test actor_codegen --test graph_types --test graph_relations --test graph_render --test graph_html --test map_cli --test low_multiline --test list_ownership_inference --test list_borrow_iteration --test result_stdlib
       - name: Check generated output protection and native expression behavior
+        if: matrix.platform != 'windows-x86_64'
         run: cargo test --locked -p nagic --test output_safety --test integer_arithmetic --test integer_zero_division --test constant_validation --test auth_boundaries --test view_branch_rebinding --test view_container_rebinding --test view_container_drop --test view_flow_foundation --test view_flow_completion --test explicit_moves --test task_handles --test conformance --test scope_runtime_contract --test copy_capabilities --test shared_field_moves --test asset_calls --test shared_target --test build_generations --test project
       - name: Preserve regression compiler and application failure evidence
-        if: failure()
+        if: failure() && matrix.platform != 'windows-x86_64'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
         with:
           retention-days: 7 # ci-retention
@@ -2955,7 +2964,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Save validated Rust cache (main only) # ci-cache-save
-        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != ''
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_rust_cache.outputs.cache-hit != 'true' && steps.nagi_rust_cache.outputs.cache-primary-key != '' && matrix.platform != 'windows-x86_64'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
         with:
           path: |
@@ -2964,10 +2973,130 @@ jobs:
             target
             native-target
           key: ${{ steps.nagi_rust_cache.outputs.cache-primary-key }}
+      - name: Delegate Windows regression targets to strict shard aggregate
+        if: matrix.platform == 'windows-x86_64'
+        shell: pwsh
+        run: Write-Output 'The mandatory two-shard Windows regression and aggregate run in the dedicated Windows jobs.'
+  nagi-regression-windows-shards:
+    name: Windows compiler regression shard ${{ matrix.shard }}
+    needs: [changes, ci-plan]
+    if: needs.changes.result == 'success' && needs.ci-plan.result == 'success' && needs.ci-plan.outputs.package_checks == 'true'
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
+    env:
+      NAGI_FAILURE_DIR: ${{ github.workspace }}/build/compiler-failures
+      NAGI_GOLDEN_CAPTURE_DIR: ${{ github.workspace }}/build/compiler-failures/goldens
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+        id: rust
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # ci-pin:v4
+        with:
+          node-version: '22'
+      - name: Restore only this Windows regression shard's default-profile cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        id: nagi_windows_regression_cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: nagi-rust-v2-windows-regression-${{ matrix.shard }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.rust.outputs.cachekey }}-profile-default-incr-default-rustflags-default-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('.cargo/config', '.cargo/config.toml', 'compiler/.cargo/config', 'compiler/.cargo/config.toml') }}-${{ hashFiles('.github/workflows/ci.yml', 'scripts/ci/windows_regression_sharding.py', 'scripts/ci/windows_regression_sharding_projection.py', 'scripts/ci/linux_critical_path.py', 'scripts/ci/nextest_evaluation.py') }}-${{ hashFiles('Cargo.toml', 'compiler/**', 'runtime/**', 'runtime-core/**') }}
+      - name: Execute the complete reviewed Windows target shard
+        env:
+          NAGI_REGRESSION_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          SHARD: ${{ matrix.shard }}
+        shell: pwsh
+        run: python -B scripts/ci/windows_regression_sharding.py --shard "$env:SHARD"
+      - name: Preserve this Windows regression shard receipt and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: nagi-regression-windows-shard-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: build/ci-evidence/windows-regression/shard-${{ matrix.shard }}/
+          if-no-files-found: error
+      - name: Preserve Windows regression compiler and application failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: compiler-failures-windows-regression-shard-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: |
+            build/compiler-failures/
+            build/ci-evidence/windows-regression/shard-${{ matrix.shard }}/
+          if-no-files-found: error
+      - name: Save validated Windows regression shard cache (main only) # ci-cache-save
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nagi_windows_regression_cache.outputs.cache-hit != 'true' && steps.nagi_windows_regression_cache.outputs.cache-primary-key != ''
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # ci-pin:v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            native-target
+          key: ${{ steps.nagi_windows_regression_cache.outputs.cache-primary-key }}
+  nagi-regression-windows-aggregate:
+    name: Reconcile Windows compiler regression shards
+    needs: [changes, ci-plan, nagi-regression-windows-shards]
+    if: >-
+      always() && needs.changes.result == 'success' && needs.ci-plan.result == 'success' &&
+      needs.ci-plan.outputs.package_checks == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
+        with:
+          persist-credentials: false # ci-isolation
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # ci-pin:stable
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5
+        with:
+          python-version: '3.12'
+      - name: Download shard 0 from this exact run attempt
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ci-pin:v4
+        with:
+          name: nagi-regression-windows-shard-0-attempt-${{ github.run_attempt }}
+          path: build/ci-evidence/windows-regression/artifacts/nagi-regression-windows-shard-0
+      - name: Download shard 1 from this exact run attempt
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # ci-pin:v4
+        with:
+          name: nagi-regression-windows-shard-1-attempt-${{ github.run_attempt }}
+          path: build/ci-evidence/windows-regression/artifacts/nagi-regression-windows-shard-1
+      - name: Reconcile the two complete Windows regression executions
+        if: always()
+        env:
+          NAGI_REGRESSION_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          NAGI_REGRESSION_SHARDS_RESULT: ${{ needs.nagi-regression-windows-shards.result }}
+        shell: pwsh
+        run: python -B scripts/ci/windows_regression_sharding.py --aggregate --receipts build/ci-evidence/windows-regression/artifacts
+      - name: Preserve Windows regression aggregate diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # ci-pin:v4
+        with:
+          retention-days: 7 # ci-retention
+          name: nagi-regression-windows-aggregate-attempt-${{ github.run_attempt }}
+          path: build/ci-evidence/windows-regression/aggregate/
+          if-no-files-found: ignore
   ready:
     name: Ready to merge
     if: always() && !cancelled()
-    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, platform-contracts]
+    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, nagi-regression-windows-shards, nagi-regression-windows-aggregate, platform-contracts]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # ci-pin:v4
@@ -2982,7 +3111,7 @@ jobs:
         run: python scripts/ci/gate.py
 
   publish-release:
-    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, platform-contracts, ready]
+    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, nagi-regression-windows-shards, nagi-regression-windows-aggregate, platform-contracts, ready]
     if: >-
       always() && !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
       needs.ready.result == 'success' && needs.ci-plan.result == 'success' &&

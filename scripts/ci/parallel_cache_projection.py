@@ -56,6 +56,7 @@ def apply_workflow(source):
 
 
 def inverse_workflow(source):
+    source = _sibling('windows_regression_sharding_projection').inverse_workflow(source)
     return _replace(source, NEW_JOBS, OLD_JOBS)
 
 

@@ -1,5 +1,7 @@
 """Exact inverse of the Linux critical-path wiring; inherited guards stay frozen."""
 import re
+import importlib.util
+from pathlib import Path
 
 LINUX_PYTHON_NO_CACHE = "      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # ci-pin:v5\n        with:\n          python-version: '3.12'\n"
 LINUX_PYTHON_PIP_CACHE = LINUX_PYTHON_NO_CACHE.replace(
@@ -19,8 +21,11 @@ NEEDS = [('    needs: [changes, ci-plan, critical, go-backend, linux, linux-work
 
 def inverse_workflow(source):
     # Direct source guards load this module by file path without sys.path edits.
-    import importlib.util
-    from pathlib import Path
+    spec = importlib.util.spec_from_file_location(
+        "windows_regression_sharding_projection", Path(__file__).with_name("windows_regression_sharding_projection.py"))
+    windows_regression_sharding_projection = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(windows_regression_sharding_projection)
+    source = windows_regression_sharding_projection.inverse_workflow(source)
     spec = importlib.util.spec_from_file_location(
         "platform_contract_profile_projection", Path(__file__).with_name("platform_contract_profile_projection.py"))
     platform_contract_profile_projection = importlib.util.module_from_spec(spec)
