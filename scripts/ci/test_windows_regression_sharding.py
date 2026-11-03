@@ -79,6 +79,8 @@ def write_shard_artifact(receipt_root: Path, shard: int, context: dict, temporar
     (shard_root / "events").mkdir()
     (shard_root / "runner").mkdir()
     (shard_root / "execution").mkdir()
+    for profile in policy.PREFETCH_PROFILES:
+        (shard_root / "prefetch" / profile / "src").mkdir(parents=True)
 
     inventory = dict(context=context, shard=shard, selector_set=sorted(selectors),
                      targets={selector: members[selector] for selector in selectors},
@@ -173,9 +175,64 @@ def write_shard_artifact(receipt_root: Path, shard: int, context: dict, temporar
                 nagic_binary=dict(path=policy.canonical_executable(cli_path), sha256=cli_sha),
                 members=plan_members)
     (shard_root / "execution/execution.json").write_text(json.dumps(plan), encoding="utf-8")
+    prefetch_profiles = {}
+    for profile, (package, runtime_package, _) in policy.PREFETCH_PROFILES.items():
+        manifest_rel = f"prefetch/{profile}/Cargo.toml"
+        source_rel = f"prefetch/{profile}/src/main.rs"
+        lock_rel = f"prefetch/{profile}/Cargo.lock"
+        profile_cwd, manifest_arg, _ = policy._prefetch_profile_paths(workspace, artifact_root, profile)
+        packages = [
+            f'[[package]]\nname = "{package}"\nversion = "0.1.0"\n',
+            f'[[package]]\nname = "{runtime_package}"\nversion = "0.2.2"\n',
+            '[[package]]\nname = "bumpalo"\nversion = "3.20.3"\n'
+            'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
+            'checksum = "' + "1" * 64 + '"\n',
+        ]
+        if profile == "full":
+            packages.extend((
+                '[[package]]\nname = "serde"\nversion = "1.0.228"\n',
+                '[[package]]\nname = "serde_json"\nversion = "1.0.145"\n',
+                '[[package]]\nname = "tokio"\nversion = "1.54.1"\n',
+            ))
+            packages.append(
+                '[[package]]\nname = "async-trait"\nversion = "0.1.92"\n'
+                'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
+                'checksum = "' + "2" * 64 + '"\n')
+        lock_text = "version = 4\n\n" + "\n".join(packages)
+        manifest_file = shard_root / manifest_rel
+        source_file = shard_root / source_rel
+        lock_file = shard_root / lock_rel
+        manifest_file.write_text(policy._prefetch_manifest(profile, workspace), encoding="utf-8", newline="\n")
+        source_file.write_text("fn main() {}\n", encoding="utf-8", newline="\n")
+        lock_file.write_text(lock_text, encoding="utf-8", newline="\n")
+        prefetch_profiles[profile] = dict(
+            cwd=profile_cwd,
+            command_environment={"CARGO_NET_OFFLINE": "false"},
+            manifest=manifest_rel,
+            manifest_sha256=policy.sha256_file(manifest_file),
+            source=source_rel,
+            source_sha256=policy.sha256_file(source_file),
+            lock=lock_rel,
+            lock_sha256=policy.sha256_file(lock_file),
+            package_count=len(packages),
+            generate_command=["cargo", "generate-lockfile", "--manifest-path", manifest_arg],
+            fetch_command=["cargo", "fetch", "--locked", "--manifest-path", manifest_arg,
+                           "--target", context["identity"]["host"]],
+        )
+    (shard_root / "prefetch/report.json").write_text(json.dumps(dict(
+        schema=policy.PREFETCH_SCHEMA,
+        protocol=policy.PREFETCH_PROTOCOL,
+        host=context["identity"]["host"],
+        workspace_fetch=dict(cwd=workspace,
+                             command=["cargo", "fetch", "--locked", "--target",
+                                      context["identity"]["host"]],
+                             command_environment={"CARGO_NET_OFFLINE": "false"},
+                             cargo_lock_sha256=context["identity"]["cargo_lock_sha256"]),
+        profiles=prefetch_profiles,
+    )), encoding="utf-8")
     files.update({relative: policy.sha256_file(shard_root / relative) for relative in (
         "compile.jsonl", "compile.stderr.log", "cargo-test.log", "inventory.json",
-        "execution/execution.json", "orchestration.log")})
+        "execution/execution.json", "orchestration.log", *sorted(policy.PREFETCH_FILE_PATHS))})
     receipt = dict(schema=policy.SCHEMA, shard=shard, context=context,
                    inventory_sha256=context["identity"]["inventory_sha256"],
                    selector_ids=list(selectors), command=policy.cargo_test_command(
@@ -386,6 +443,26 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
             with self.assertRaises(policy.RegressionError):
                 policy.reconcile(stale, aggregate_context)
 
+            drift = root / "drift"
+            drift.mkdir()
+            write_shard_artifact(drift, 0, shard_contexts[0], root)
+            write_shard_artifact(drift, 1, shard_contexts[1], root)
+            shard_one = drift / "nagi-regression-windows-shard-1"
+            changed_lock = shard_one / "prefetch/core/Cargo.lock"
+            changed_lock.write_text(changed_lock.read_text(encoding="utf-8").replace(
+                "3.20.3", "3.20.4"), encoding="utf-8")
+            changed_report_path = shard_one / "prefetch/report.json"
+            changed_report = json.loads(changed_report_path.read_text(encoding="utf-8"))
+            changed_report["profiles"]["core"]["lock_sha256"] = policy.sha256_file(changed_lock)
+            changed_report_path.write_text(json.dumps(changed_report), encoding="utf-8")
+            changed_receipt_path = shard_one / "receipt.json"
+            changed_receipt = policy.load_json(changed_receipt_path)
+            changed_receipt["files"]["prefetch/core/Cargo.lock"] = policy.sha256_file(changed_lock)
+            changed_receipt["files"]["prefetch/report.json"] = policy.sha256_file(changed_report_path)
+            changed_receipt_path.write_text(json.dumps(changed_receipt), encoding="utf-8")
+            with self.assertRaises(policy.RegressionError):
+                policy.reconcile(drift, aggregate_context)
+
     def test_receipt_rejects_malformed_commands_targets_cases_hashes_and_paths(self):
         with tempfile.TemporaryDirectory(prefix="windows malformed receipt fixture ") as temporary:
             temporary = Path(temporary)
@@ -449,6 +526,111 @@ class WindowsRegressionPolicyTests(unittest.TestCase):
                     policy._validate_receipt(root, changed, 0, aggregate_context)
             finally:
                 event_path.write_text(original_event, encoding="utf-8")
+
+    def test_generated_runtime_prefetch_covers_empty_cache_without_build_commands(self):
+        with tempfile.TemporaryDirectory(prefix="Windows cold prefetch workspace with spaces ") as temporary:
+            base = Path(temporary)
+            workspace = (base / "checkout path with spaces").resolve()
+            workspace.mkdir()
+            (workspace / "Cargo.lock").write_text("version = 4\n", encoding="utf-8")
+            for package in ("runtime", "runtime-core"):
+                crate = workspace / package
+                crate.mkdir()
+                (crate / "Cargo.toml").write_text("[package]\nname='fixture'\n", encoding="utf-8")
+            artifact_root = "build/ci-evidence/windows-regression/shard-0"
+            evidence = workspace / artifact_root
+            evidence.mkdir(parents=True)
+            (evidence / "orchestration.log").write_text("cold-cache fixture\n", encoding="utf-8")
+            cargo_home = workspace / "empty Cargo home"
+            cargo_home.mkdir()
+            environment = dict(os.environ)
+            environment["CARGO_HOME"] = str(cargo_home)
+            environment.pop("CARGO_TARGET_DIR", None)
+            commands = []
+
+            def fake_cargo(argv, *, cwd, env, **kwargs):
+                self.assertEqual(env["CARGO_NET_OFFLINE"], "false")
+                self.assertEqual(env["CARGO_HOME"], str(cargo_home))
+                self.assertNotIn("CARGO_TARGET_DIR", env)
+                commands.append((list(argv), Path(cwd)))
+                if argv == ["cargo", "fetch", "--locked", "--target", "x86_64-pc-windows-msvc"]:
+                    self.assertEqual(Path(cwd), workspace)
+                    return subprocess.CompletedProcess(argv, 0, "workspace dependencies fetched\n", "")
+                manifest = Path(argv[argv.index("--manifest-path") + 1])
+                profile = manifest.parent.name
+                self.assertIn(profile, policy.PREFETCH_PROFILES)
+                self.assertEqual(Path(cwd), manifest.parent)
+                self.assertTrue(manifest.is_file())
+                if argv[1] == "generate-lockfile":
+                    package, runtime_package, _ = policy.PREFETCH_PROFILES[profile]
+                    package_rows = [
+                        f'[[package]]\nname = "{package}"\nversion = "0.1.0"\n',
+                        f'[[package]]\nname = "{runtime_package}"\nversion = "0.2.2"\n',
+                        '[[package]]\nname = "bumpalo"\nversion = "3.20.3"\n'
+                        'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
+                        'checksum = "' + "1" * 64 + '"\n',
+                    ]
+                    if profile == "full":
+                        package_rows.extend((
+                            '[[package]]\nname = "serde"\nversion = "1.0.228"\n',
+                            '[[package]]\nname = "serde_json"\nversion = "1.0.145"\n',
+                            '[[package]]\nname = "tokio"\nversion = "1.54.1"\n',
+                        ))
+                        package_rows.append(
+                            '[[package]]\nname = "async-trait"\nversion = "0.1.92"\n'
+                            'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
+                            'checksum = "' + "2" * 64 + '"\n')
+                    (manifest.parent / "Cargo.lock").write_text(
+                        "version = 4\n\n" + "\n".join(package_rows), encoding="utf-8")
+                    return subprocess.CompletedProcess(argv, 0, "generated isolated lockfile\n", "")
+                self.assertEqual(argv[1], "fetch")
+                self.assertIn("--locked", argv)
+                self.assertIn("--target", argv)
+                self.assertEqual(argv[argv.index("--target") + 1], "x86_64-pc-windows-msvc")
+                return subprocess.CompletedProcess(argv, 0, "registry packages fetched\n", "")
+
+            with patch.dict(os.environ, environment, clear=True), \
+                    patch.object(policy, "run_command", side_effect=fake_cargo):
+                hashes = policy._prefetch_generated_runtime_dependencies(
+                    evidence, str(workspace), artifact_root, "x86_64-pc-windows-msvc",
+                    policy.sha256_file(workspace / "Cargo.lock"))
+            self.assertEqual(len(commands), 5)
+            self.assertEqual(
+                [argv[1] for argv, _ in commands],
+                ["fetch", "generate-lockfile", "fetch", "generate-lockfile", "fetch"])
+            self.assertTrue(all(argv[1] not in {"build", "check", "run", "test"}
+                                for argv, _ in commands))
+            self.assertEqual(set(hashes), set(policy.PREFETCH_FILE_PATHS))
+            report = policy.load_json(evidence / "prefetch/report.json")
+            self.assertIn("async-trait", policy._prefetch_lock_packages(
+                evidence / "prefetch/full/Cargo.lock")[1])
+            full_packages = policy._prefetch_lock_packages(evidence / "prefetch/full/Cargo.lock")[1]
+            self.assertTrue({"serde", "serde_json", "tokio"} <= full_packages)
+            self.assertIn("bumpalo", policy._prefetch_lock_packages(
+                evidence / "prefetch/core/Cargo.lock")[1])
+            self.assertEqual(
+                policy._validate_prefetch_evidence(
+                    evidence, hashes, str(workspace), artifact_root,
+                    "x86_64-pc-windows-msvc", policy.sha256_file(workspace / "Cargo.lock")),
+                {profile: row["lock_sha256"] for profile, row in report["profiles"].items()})
+            self.assertEqual(list(cargo_home.iterdir()), [])
+            self.assertFalse((evidence / "prefetch" / "target").exists())
+
+            report_path = evidence / "prefetch/report.json"
+            original_report = report_path.read_text(encoding="utf-8")
+            changed = json.loads(original_report)
+            changed["profiles"]["full"]["fetch_command"][-1] = "x86_64-unknown-linux-gnu"
+            report_path.write_text(json.dumps(changed), encoding="utf-8")
+            with self.assertRaises(policy.RegressionError):
+                policy._validate_prefetch_evidence(
+                    evidence, hashes, str(workspace), artifact_root,
+                    "x86_64-pc-windows-msvc", policy.sha256_file(workspace / "Cargo.lock"))
+            report_path.write_text(original_report, encoding="utf-8")
+            (evidence / "prefetch/full/target").mkdir()
+            with self.assertRaises(policy.RegressionError):
+                policy._validate_prefetch_evidence(
+                    evidence, hashes, str(workspace), artifact_root,
+                    "x86_64-pc-windows-msvc", policy.sha256_file(workspace / "Cargo.lock"))
 
     def test_cargo_runner_uses_argv_list_and_preserves_paths_with_spaces(self):
         with tempfile.TemporaryDirectory(prefix="Windows runner path with spaces ") as temporary:

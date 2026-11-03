@@ -16,6 +16,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tomllib
 import traceback
 from typing import Any
 
@@ -31,6 +32,21 @@ PROTOCOL = "windows-stable-libtest-logfile-v2"
 MAX_PLAN_BYTES = 8 * 1024 * 1024
 MAX_EVENT_BYTES = 16 * 1024 * 1024
 MAX_COMMAND_OUTPUT_BYTES = 64 * 1024 * 1024
+PREFETCH_SCHEMA = 1
+PREFETCH_PROTOCOL = "generated-runtime-offline-dependencies-v1"
+PREFETCH_PROFILES = {
+    "full": ("nagi-generated-runtime-prefetch-full", "nagi-runtime", "runtime"),
+    "core": ("nagi-generated-runtime-prefetch-core", "nagi-runtime-core", "runtime-core"),
+}
+PREFETCH_FILE_PATHS = frozenset(
+    ["prefetch/report.json"] +
+    [f"prefetch/{profile}/{name}" for profile in PREFETCH_PROFILES
+     for name in ("Cargo.toml", "Cargo.lock", "src/main.rs")]
+)
+PREFETCH_DIR_PATHS = frozenset(
+    [f"prefetch/{profile}" for profile in PREFETCH_PROFILES] +
+    [f"prefetch/{profile}/src" for profile in PREFETCH_PROFILES]
+)
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 
@@ -800,6 +816,256 @@ def _write_json_exclusive(path: Path, value: Any) -> None:
         stream.write("\n")
 
 
+def _prefetch_manifest(profile: str, workspace: str) -> str:
+    if profile not in PREFETCH_PROFILES:
+        raise RegressionError("unknown generated runtime prefetch profile")
+    package, dependency, path = PREFETCH_PROFILES[profile]
+    runtime_path = workspace_file(workspace, f"{path}")
+    lines = [
+        "[package]",
+        f'name = "{package}"',
+        'version = "0.1.0"',
+        'edition = "2021"',
+        "autobins = false",
+        "",
+        "[[bin]]",
+        f'name = "{package}"',
+        'path = "src/main.rs"',
+        "",
+        "[workspace]",
+        "",
+        "[dependencies.nagi-runtime]",
+        f'path = {json.dumps(runtime_path, ensure_ascii=False)}',
+    ]
+    if profile == "core":
+        lines.extend((
+            f'package = "{dependency}"',
+            "default-features = false",
+            'features = ["core"]',
+        ))
+    else:
+        # Match selected offline app roots in project.rs, build_generations.rs,
+        # http_codegen.rs, http_stdlib.rs, and error_routes.rs. Tokio's io-util
+        # feature can activate extra edges beyond the base runtime manifest.
+        lines.extend((
+            "",
+            "[dependencies.serde]",
+            'version = "1.0"',
+            "",
+            "[dependencies.serde_json]",
+            'version = "1.0"',
+            "",
+            "[dependencies.tokio]",
+            'version = "1.48"',
+            'features = ["net", "io-util", "sync", "time", "rt"]',
+        ))
+    return "\n".join(lines) + "\n"
+
+
+def _prefetch_lock_packages(lock_path: Path) -> tuple[int, set[str]]:
+    try:
+        parsed = tomllib.loads(lock_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as error:
+        raise RegressionError("generated runtime prefetch lockfile is missing or malformed") from error
+    if not isinstance(parsed, dict) or set(parsed) - {"version", "package", "metadata"}:
+        raise RegressionError("generated runtime prefetch lockfile has unexpected fields")
+    packages = parsed.get("package")
+    if (type(parsed.get("version")) is not int or parsed["version"] not in (1, 2, 3, 4) or
+            not isinstance(packages, list) or not packages):
+        raise RegressionError("generated runtime prefetch lockfile inventory is malformed")
+    names: set[str] = set()
+    identities: set[tuple[str, str, str]] = set()
+    for package in packages:
+        if not isinstance(package, dict) or set(package) - {
+                "name", "version", "source", "checksum", "dependencies"}:
+            raise RegressionError("generated runtime prefetch lock package is malformed")
+        name, version, source = package.get("name"), package.get("version"), package.get("source", "")
+        if not isinstance(name, str) or not name or not isinstance(version, str) or not version or not isinstance(source, str):
+            raise RegressionError("generated runtime prefetch lock package identity is malformed")
+        identity = (name, version, source)
+        if identity in identities:
+            raise RegressionError("generated runtime prefetch lock has duplicate package identities")
+        identities.add(identity)
+        names.add(name)
+    return len(packages), names
+
+
+def _prefetch_profile_paths(workspace: str, artifact_root: str, profile: str) -> tuple[str, str, str]:
+    base = f"{artifact_root}/prefetch/{profile}"
+    return (workspace_file(workspace, base), workspace_file(workspace, f"{base}/Cargo.toml"),
+            workspace_file(workspace, f"{base}/Cargo.lock"))
+
+
+def _prefetch_generated_runtime_dependencies(directory: Path, workspace: str, artifact_root: str,
+                                             host: str, workspace_lock_sha256: str) -> dict[str, str]:
+    """Fetch the exact full/core unlocked app graphs before their offline tests."""
+    if host != "x86_64-pc-windows-msvc":
+        raise RegressionError("generated runtime prefetch is restricted to the Windows host")
+    if not absolute_workspace(workspace):
+        raise RegressionError("generated runtime prefetch workspace is not absolute")
+    prefetch_root = directory / "prefetch"
+    prefetch_root.mkdir(parents=False, exist_ok=False)
+    source = "fn main() {}\n"
+    cargo_env = os.environ.copy()
+    cargo_env["CARGO_NET_OFFLINE"] = "false"
+    workspace_lock = Path(workspace) / "Cargo.lock"
+    if (workspace_lock.is_symlink() or not workspace_lock.is_file() or
+            sha256_file(workspace_lock) != workspace_lock_sha256):
+        raise RegressionError("workspace Cargo.lock differs from the recorded regression source")
+    workspace_fetch = ["cargo", "fetch", "--locked", "--target", host]
+    fetched_workspace = run_command(workspace_fetch, cwd=Path(workspace), env=cargo_env)
+    _log_command(directory, workspace_fetch, "fetch original locked Windows workspace graph",
+                 fetched_workspace, environment={"CARGO_NET_OFFLINE": "false"})
+    if fetched_workspace.returncode:
+        raise CommandError(workspace_fetch, fetched_workspace.returncode,
+                           fetched_workspace.stdout + (fetched_workspace.stderr or ""))
+    if sha256_file(workspace_lock) != workspace_lock_sha256:
+        raise RegressionError("locked workspace fetch changed Cargo.lock")
+    profile_rows: dict[str, dict[str, Any]] = {}
+    for profile, (package, runtime_package, _) in PREFETCH_PROFILES.items():
+        profile_dir = prefetch_root / profile
+        (profile_dir / "src").mkdir(parents=True, exist_ok=False)
+        manifest = _prefetch_manifest(profile, workspace)
+        manifest_path = profile_dir / "Cargo.toml"
+        source_path = profile_dir / "src" / "main.rs"
+        manifest_path.write_text(manifest, encoding="utf-8", newline="\n")
+        source_path.write_text(source, encoding="utf-8", newline="\n")
+        profile_cwd, manifest_arg, _ = _prefetch_profile_paths(workspace, artifact_root, profile)
+        generate_argv = ["cargo", "generate-lockfile", "--manifest-path", manifest_arg]
+        generated = run_command(generate_argv, cwd=profile_dir, env=cargo_env)
+        _log_command(directory, generate_argv, f"resolve unlocked generated runtime {profile} graph",
+                     generated, environment={"CARGO_NET_OFFLINE": "false"})
+        if generated.returncode:
+            raise CommandError(generate_argv, generated.returncode, generated.stdout + (generated.stderr or ""))
+        lock_path = profile_dir / "Cargo.lock"
+        if lock_path.is_symlink() or not lock_path.is_file():
+            raise RegressionError(f"Cargo did not create the generated runtime {profile} lockfile")
+        package_count, package_names = _prefetch_lock_packages(lock_path)
+        if package not in package_names or runtime_package not in package_names or "bumpalo" not in package_names:
+            raise RegressionError(f"generated runtime {profile} lockfile omits its expected package graph")
+        lock_sha = sha256_file(lock_path)
+        fetch_argv = ["cargo", "fetch", "--locked", "--manifest-path", manifest_arg,
+                      "--target", host]
+        fetched = run_command(fetch_argv, cwd=profile_dir, env=cargo_env)
+        _log_command(directory, fetch_argv, f"fetch locked generated runtime {profile} graph",
+                     fetched, environment={"CARGO_NET_OFFLINE": "false"})
+        if fetched.returncode:
+            raise CommandError(fetch_argv, fetched.returncode, fetched.stdout + (fetched.stderr or ""))
+        if sha256_file(lock_path) != lock_sha:
+            raise RegressionError(f"Cargo fetch changed the generated runtime {profile} lockfile")
+        profile_rows[profile] = dict(
+            cwd=profile_cwd,
+            command_environment={"CARGO_NET_OFFLINE": "false"},
+            manifest=f"prefetch/{profile}/Cargo.toml",
+            manifest_sha256=sha256_file(manifest_path),
+            source=f"prefetch/{profile}/src/main.rs",
+            source_sha256=sha256_file(source_path),
+            lock=f"prefetch/{profile}/Cargo.lock",
+            lock_sha256=lock_sha,
+            package_count=package_count,
+            generate_command=generate_argv,
+            fetch_command=fetch_argv,
+        )
+    report = dict(schema=PREFETCH_SCHEMA, protocol=PREFETCH_PROTOCOL, host=host,
+                  workspace_fetch=dict(
+                      cwd=workspace,
+                      command=workspace_fetch,
+                      command_environment={"CARGO_NET_OFFLINE": "false"},
+                      cargo_lock_sha256=workspace_lock_sha256,
+                  ),
+                  profiles=profile_rows)
+    _write_json_exclusive(prefetch_root / "report.json", report)
+    actual_files, actual_dirs = set(), set()
+    for path in directory.joinpath("prefetch").rglob("*"):
+        if path.is_symlink():
+            raise RegressionError("generated runtime prefetch created a linked path")
+        relative = path.relative_to(directory).as_posix()
+        if path.is_file():
+            actual_files.add(relative)
+        elif path.is_dir():
+            actual_dirs.add(relative)
+        else:
+            raise RegressionError("generated runtime prefetch created a non-file path")
+    if actual_files != PREFETCH_FILE_PATHS or actual_dirs != PREFETCH_DIR_PATHS:
+        raise RegressionError("generated runtime prefetch created missing or unexpected files")
+    return {relative: sha256_file(directory / relative) for relative in sorted(PREFETCH_FILE_PATHS)}
+
+
+def _validate_prefetch_evidence(root: Path, files: dict[str, str], workspace: str,
+                                artifact_root: str, host: str,
+                                workspace_lock_sha256: str) -> dict[str, str]:
+    report = load_json(relative_file(root, "prefetch/report.json"))
+    if (not isinstance(report, dict) or
+            set(report) != {"schema", "protocol", "host", "workspace_fetch", "profiles"} or
+            report.get("schema") != PREFETCH_SCHEMA or report.get("protocol") != PREFETCH_PROTOCOL or
+            report.get("host") != host or host != "x86_64-pc-windows-msvc" or
+            not isinstance(report.get("profiles"), dict) or set(report["profiles"]) != set(PREFETCH_PROFILES)):
+        raise RegressionError("generated runtime prefetch report identity is malformed")
+    workspace_fetch = report["workspace_fetch"]
+    if (not isinstance(workspace_fetch, dict) or set(workspace_fetch) != {
+                "cwd", "command", "command_environment", "cargo_lock_sha256"} or
+            workspace_fetch.get("cwd") != workspace or
+            workspace_fetch.get("command") != ["cargo", "fetch", "--locked", "--target", host] or
+            workspace_fetch.get("command_environment") != {"CARGO_NET_OFFLINE": "false"} or
+            workspace_fetch.get("cargo_lock_sha256") != workspace_lock_sha256 or
+            not HEX64.fullmatch(str(workspace_lock_sha256))):
+        raise RegressionError("original locked workspace dependency fetch evidence is malformed")
+    graph_hashes: dict[str, str] = {}
+    for profile, (package, runtime_package, _) in PREFETCH_PROFILES.items():
+        row = report["profiles"][profile]
+        required = {"cwd", "command_environment", "manifest", "manifest_sha256", "source", "source_sha256", "lock",
+                    "lock_sha256", "package_count", "generate_command", "fetch_command"}
+        if not isinstance(row, dict) or set(row) != required:
+            raise RegressionError(f"generated runtime {profile} prefetch report is malformed")
+        cwd, manifest_arg, _ = _prefetch_profile_paths(workspace, artifact_root, profile)
+        manifest_rel = f"prefetch/{profile}/Cargo.toml"
+        source_rel = f"prefetch/{profile}/src/main.rs"
+        lock_rel = f"prefetch/{profile}/Cargo.lock"
+        expected_generate = ["cargo", "generate-lockfile", "--manifest-path", manifest_arg]
+        expected_fetch = ["cargo", "fetch", "--locked", "--manifest-path", manifest_arg,
+                          "--target", host]
+        if (row.get("cwd") != cwd or row.get("command_environment") != {"CARGO_NET_OFFLINE": "false"} or
+                row.get("manifest") != manifest_rel or
+                row.get("source") != source_rel or row.get("lock") != lock_rel or
+                row.get("generate_command") != expected_generate or row.get("fetch_command") != expected_fetch or
+                not isinstance(row.get("manifest_sha256"), str) or not HEX64.fullmatch(row["manifest_sha256"]) or
+                not isinstance(row.get("source_sha256"), str) or not HEX64.fullmatch(row["source_sha256"]) or
+                not isinstance(row.get("lock_sha256"), str) or not HEX64.fullmatch(row["lock_sha256"]) or
+                type(row.get("package_count")) is not int or row["package_count"] <= 0):
+            raise RegressionError(f"generated runtime {profile} prefetch command or file identity changed")
+        if (row["manifest_sha256"] != files.get(manifest_rel) or
+                row["source_sha256"] != files.get(source_rel) or
+                row["lock_sha256"] != files.get(lock_rel)):
+            raise RegressionError(f"generated runtime {profile} prefetch digests differ from receipt")
+        expected_manifest = _prefetch_manifest(profile, workspace).encode("utf-8")
+        manifest_file = relative_file(root, manifest_rel)
+        source_file = relative_file(root, source_rel)
+        lock_file = relative_file(root, lock_rel, limit=MAX_PLAN_BYTES)
+        if manifest_file.read_bytes() != expected_manifest or source_file.read_bytes() != b"fn main() {}\n":
+            raise RegressionError(f"generated runtime {profile} prefetch inputs differ from the reviewed graph")
+        package_count, package_names = _prefetch_lock_packages(lock_file)
+        if (package_count != row["package_count"] or package not in package_names or
+                runtime_package not in package_names or "bumpalo" not in package_names):
+            raise RegressionError(f"generated runtime {profile} prefetch lock does not cover its runtime graph")
+        graph_hashes[profile] = row["lock_sha256"]
+    expected_subtree = PREFETCH_FILE_PATHS
+    actual_subtree, actual_dirs = set(), set()
+    prefetch_root = root / "prefetch"
+    for path in prefetch_root.rglob("*"):
+        if path.is_symlink():
+            raise RegressionError("generated runtime prefetch evidence contains a linked path")
+        relative = path.relative_to(root).as_posix()
+        if path.is_file():
+            actual_subtree.add(relative)
+        elif path.is_dir():
+            actual_dirs.add(relative)
+        else:
+            raise RegressionError("generated runtime prefetch evidence contains a non-file path")
+    if actual_subtree != expected_subtree or actual_dirs != PREFETCH_DIR_PATHS:
+        raise RegressionError("generated runtime prefetch evidence has missing or unexpected files")
+    return graph_hashes
+
+
 def _log_command(directory: Path, argv: list[str], label: str, result: subprocess.CompletedProcess[str],
                  *, environment: dict[str, str] | None = None, merged: bool = False) -> None:
     log = directory / "orchestration.log"
@@ -841,6 +1107,10 @@ def _run_shard(shard: int, destination: Path) -> None:
         _write_json(directory / "inventory.json", dict(context=context, shard=shard,
                    selector_set=sorted(selectors), targets=selected,
                    inventory_sha256=context["identity"]["inventory_sha256"]))
+
+        prefetch_files = _prefetch_generated_runtime_dependencies(
+            directory, context["producer"]["workspace"], artifact_root,
+            context["identity"]["host"], context["identity"]["cargo_lock_sha256"])
 
         compile_command = cargo_test_command(shard, no_run=True)
         compile_env = os.environ.copy()
@@ -925,6 +1195,7 @@ def _run_shard(shard: int, destination: Path) -> None:
                  "inventory.json": sha256_file(directory / "inventory.json"),
                  "execution/execution.json": sha256_file(plan_path),
                  "orchestration.log": sha256_file(directory / "orchestration.log")}
+        files.update(prefetch_files)
         files.update(list_files)
         for selector in selectors:
             row = rows_by_selector[selector]
@@ -1112,6 +1383,7 @@ def _validate_receipt(root: Path, receipt: dict[str, Any], shard: int,
     ignored_by_selector: dict[str, set[str]] = {}
     expected_file_paths = {"compile.jsonl", "compile.stderr.log", "cargo-test.log", "inventory.json",
                            "execution/execution.json", "orchestration.log"}
+    expected_file_paths.update(PREFETCH_FILE_PATHS)
     test_cwd = producer["test_cwd"]
     for selector in selectors:
         row = by_selector[selector]
@@ -1181,6 +1453,9 @@ def _validate_receipt(root: Path, receipt: dict[str, Any], shard: int,
         path = relative_file(root, relative)
         if not isinstance(sha, str) or not HEX64.fullmatch(sha) or sha256_file(path) != sha:
             raise RegressionError(f"artifact digest mismatch for {relative}")
+    _validate_prefetch_evidence(
+        root, files, workspace_name, artifact_root, producer_context["identity"]["host"],
+        producer_context["identity"]["cargo_lock_sha256"])
     blocks = libtest_protocol.execution_blocks(cargo_output, markers)
     total = 0
     for selector in selectors:
@@ -1210,12 +1485,22 @@ def reconcile(receipt_root: Path, context: dict[str, Any]) -> None:
     receipts = []
     total = 0
     all_selectors: list[str] = []
+    prefetch_graphs: dict[str, str] | None = None
     for shard in range(SHARD_COUNT):
         root = receipt_root / f"nagi-regression-windows-shard-{shard}"
         receipt = load_json(relative_file(root, "receipt.json"))
         if not isinstance(receipt, dict):
             raise RegressionError("shard receipt must be a JSON object")
         total += _validate_receipt(root, receipt, shard, context)
+        prefetch_report = load_json(relative_file(root, "prefetch/report.json"))
+        current_prefetch_graphs = {
+            profile: row["lock_sha256"]
+            for profile, row in prefetch_report["profiles"].items()
+        }
+        if prefetch_graphs is None:
+            prefetch_graphs = current_prefetch_graphs
+        elif current_prefetch_graphs != prefetch_graphs:
+            raise RegressionError("Windows shards resolved different generated runtime dependency graphs")
         receipts.append(receipt)
         all_selectors.extend(receipt["selector_ids"])
     if len(all_selectors) != 74 or len(set(all_selectors)) != 74 or set(all_selectors) != set(ORIGINAL_SELECTORS):
