@@ -501,7 +501,7 @@ class JetBrainsBuildContractTests(unittest.TestCase):
             dependency_block,
         )
         self.assertIn(
-            "create(Action<IntelliJPlatformDependencyConfiguration> { configuration ->",
+            "create(object : Action<IntelliJPlatformDependencyConfiguration> {",
             dependency_block,
         )
         self.assertIn("configuration.type.set(IntelliJPlatformType.IntellijIdea)", dependency_block)

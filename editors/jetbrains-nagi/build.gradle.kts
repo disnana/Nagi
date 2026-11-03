@@ -32,10 +32,12 @@ dependencies {
             if (platformType == "IU" && platformVersion == "LATEST-EAP-SNAPSHOT") {
                 // Plugin 2.19 classifies the non-numeric EAP alias as legacy IU.
                 // The alias is published under the unified IDEA Maven coordinate.
-                create(Action<IntelliJPlatformDependencyConfiguration> { configuration ->
-                    configuration.type.set(IntelliJPlatformType.IntellijIdea)
-                    configuration.version.set(platformVersion)
-                    configuration.useInstaller.set(false)
+                create(object : Action<IntelliJPlatformDependencyConfiguration> {
+                    override fun execute(configuration: IntelliJPlatformDependencyConfiguration) {
+                        configuration.type.set(IntelliJPlatformType.IntellijIdea)
+                        configuration.version.set(platformVersion)
+                        configuration.useInstaller.set(false)
+                    }
                 })
             } else {
                 create(platformType, platformVersion) { useInstaller.set(false) }
