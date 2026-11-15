@@ -41,6 +41,12 @@ Rust backendで`[go].files`を宣言した場合と、Go backendでRust adapter/
 - 算術・比較・論理演算（Nagiの評価順序と`and`/`or`の短絡を維持）
 - `print`、`write`、`assert_true`、`parse_i64`、`error_message`、`i64`とResult/Option constructor
 - Highと保存済みLowの`check`、`lower`、`build`、`run`
+- ユーザー定義の`async def` / `async fn`の直接`await`、async `main`、`try await`。Futureは引数を作成時に受け取り、`await`まで本文を開始しない（[cold asyncの最小段階](go-cold-async.md)）
+- ユーザー定義async関数を保持するローカルcallbackの呼出し（[callback identity段階](go-async-callback-identity.md)）
+- builtin `sleep`の直接`await`。標準Futureとして扱い、task・scopeを有効化しない
+- 直接のread-only `view[str]`入力を持つ同期関数、cold async、local callback。`view[bytes]`等の他のborrowとowner cleanupは対象外（[string borrow契約](go-async-string-borrow.md)）
+
+上記の限定asyncは、Task・scope・spawnの公開CLI接続を意味しない。これらは未接続のままであり、限定asyncと混ぜて扱わない。
 
 Nagiの名前はUTF-8 byte列をGo identifierへ一意に符号化する。Go keyword、module修飾、Unicode、生成temporaryとの衝突で別のNagi名を同じGo名へ潰さない。関数引数や式はNagiの左から右の評価順を保持し、`try`の前処理が左operandより先に走らない。論理右辺の`try`も短絡時には実行しない。
 
@@ -53,7 +59,7 @@ payloadなしenumは、共有checkerが封印したconstructorとmatch armのide
 次は未対応で、Go起動前にsource位置付きで失敗する。
 
 - payload付きenum、enumのconsole表示、非Copy要素のList index/反復、Listのslice・field/index代入
-- 標準operationのasync/await、task、scope、actor。ユーザー定義async関数の直接awaitは
+- sleep以外の標準operationのasync/await、task、scope、actor。ユーザー定義async関数の直接awaitは
   [cold asyncの最小段階](go-cold-async.md)、同じasync関数を保持するローカルcallbackは
   [callback identity段階](go-async-callback-identity.md)で対応する
 - HTTP、DB、auth/session、WebSocketなどRust runtimeの標準操作
@@ -128,7 +134,7 @@ generationには次を保存する。
 
 frontend/backend拒否後のlast-good維持は検査した。成功generation後に外部Go process自体を意図的に失敗させるportableな注入test、output lockの並行競合、power-loss耐性はこの段階では未検査であり、last-good保証をその範囲まで一般化しない。
 
-`cargo test --locked`がこのtest binaryを含むため、compiler/runtime変更に対する既存のcomprehensive Linux gateでも実行される。専用3 OS jobと差分routingはDraft PR #179で追加し、Go jobのmissing/skip/0件実行を`Ready to merge`で拒否する。shared frontend変更は両backend、target固有変更はそのbackendとshared invariant、未知pathとselector/gate変更は広いcoverageへfail safeする。#179は未マージであり、この文書の実装branchはそのHEADをbaseにしている。
+`cargo test --locked`がこのtest binaryを含むため、compiler/runtime変更に対する既存のcomprehensive Linux gateでも実行される。3 OSの専用`go-backend` jobはPR #196で統合済みで、`.github/workflows/ci.yml`にある。Go 1.27.3を`setup-go`で導入し、`GOTOOLCHAIN=local`と`go version`を確認してから実Go build/runのtestを実行する。出力件数は`scripts/ci/assert_go_backend_summary.py`で`scripts/ci/levels.py`の期待値と照合し、missing/skip/0件実行を失敗にする。CIの集約jobも`go-backend`をneedsに含める。実行の選択は`scripts/ci/changes.py`の`go_checks`による。#179はDraftのままCLOSEDになり（2026-10-28、未マージ）、この文書は#179をbaseとして前提にしない。
 
 ## 2026-10-26の小規模build実測
 

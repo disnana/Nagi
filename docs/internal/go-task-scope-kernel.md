@@ -1,8 +1,9 @@
 # Go private Task scope: completion and cooperative-drain kernel
 
 状態: **内部実装・公開未接続**。completion/fault/cancel/drainとbody error/owner
-teardown境界はmain `ca848078`までに統合済みで、このbody-local output放棄拡張は
-ローカル検証中。
+teardown境界はmain `ca848078`までに統合済みで、body-local output放棄を含むbody error出力の退役は
+#218（merge commit `a66646c4`、2026-11-02）でmainへ反映済み。一般owner/resource release・rollbackは
+未接続のまま（下の「一般owner/resource release、rollbackは未接続」を参照）。
 Nagi 0.3.0の
 公開Go Task/scopeを部分的に成功扱いせず、採用済み
 [`Task`契約](adr/012-task-result-handles.md)のうち設計判断を増やさない
