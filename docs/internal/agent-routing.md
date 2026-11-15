@@ -9,8 +9,8 @@ Choose the lowest-cost route likely to meet required correctness and audit evide
 | Work | Default | Move up when |
 |---|---|---|
 | Few-line change | Parent does it directly | An independent deliverable appears |
-| Bounded docs, rename, read-only question | Luna Medium / Light Worker | Scope or contract decision expands |
-| Clear feature, fixture, ordinary test, obvious CI cause | Luna Max / Fast Worker | Same-cause targeted fix fails twice or code/contract boundary is unclear |
+| Bounded docs, rename, read-only question | Terra Medium / Light Worker | Scope or contract decision expands |
+| Clear feature, fixture, ordinary test, obvious CI cause | Terra Medium / Fast Worker | Same-cause targeted fix fails twice or code/contract boundary is unclear |
 | Clear multi-file implementation or investigation where Luna rework may dominate | GPT-6.1 Sol High / Balanced Engineer | Unknown cause or important semantics need xHigh design review; final important-code audit uses a separate Sol 6.1 High agent |
 | Important or difficult code; multi-module investigation | Sol 6.1 High / Deep Engineer | Unresolved semantics, compatibility, race, or lifecycle design needs Architect |
 | Auth, authorization, secrets, integrity, concurrency, destructive change | Sol 6.1 High confirms approved design before implementation; xHigh only for unresolved semantics/race/alternatives; Sol 6.1 High implements | Independent Sol 6.1 High audit after checks; fix, rerun affected regressions, and re-review |
@@ -18,6 +18,8 @@ Choose the lowest-cost route likely to meet required correctness and audit evide
 | Exceptional unresolved high-cost issue | Sol 6.1 Max; Astra Max only if Sol Max is insufficient | Do not escalate without a concrete question |
 
 For high-risk work, Sol 6.1 confirms the approved design and failure/regression cases first; xHigh Architect is reserved for unresolved design. The independent reviewer then compares final diff, specification, results, and relevant regressions. Fixes require targeted reruns and a final re-review. Source-only review is not a substitute for execution.
+
+2026-11-15 JST: At the user’s direction, Light Worker and Fast Worker move to `gpt-6.1-terra` Medium for routine work; important or difficult work stays on GPT-6.1 Sol High (Balanced/Deep/Independent Reviewer). Reason: the user judges Terra more efficient; no efficiency measurement, price, or billing terms were verified, and the Luna/Sol 6.1 joint reassessment was not run. Both Terra roles share one model/effort slot and run one at a time. Record time, rework, and escalations for the first tasks, then reassess.
 
 2026-10-13 JST: At the user’s direction, remove GPT-6 Sol from routine or planned assignments and move ongoing/planned GPT-6 Sol work to GPT-6.1 Sol. Balanced Engineer is GPT-6.1 Sol High; Light/Fast remain Luna Medium/Max. High is the routine ceiling; xHigh is for unresolved important design, Max/Astra exceptional. No GPT-6 Sol Fast or routine GPT-6.1 Sol Max. Current prices/speed remain unknown.
 
@@ -55,7 +57,7 @@ Luna Medium → Luna Max → GPT-6.1 Sol High → GPT-6.1 Sol xHigh → GPT-6.1 
 
 ## Active catalog and service tiers
 
-The session tool catalog lists `gpt-6-luna` Medium/Max, `gpt-6-sol` Max, `gpt-6.1-sol` High/xHigh/Max, and `gpt-6-astra` Max. No role routes to `gpt-6-sol`. Role TOML stores model/effort; the invocation interface has no speed-tier option. “Fast Worker” is a role name. Only Luna Max Fast is explicitly approved when offered; other Fast tiers, new purchases/plans or charges beyond approval require confirmation. Ordinary model/effort selection and Sol 6.1 escalation proceed without approval if they add no charge. Do not add unsupported tier keys. Fast’s displayed multiplier and `max` effort do not promise speed.
+The Codex model cache on 2026-11-15 also lists `gpt-6.1-terra` (effort levels not verified here; confirm the active ID/effort before first use). The session tool catalog lists `gpt-6-luna` Medium/Max, `gpt-6-sol` Max, `gpt-6.1-sol` High/xHigh/Max, and `gpt-6-astra` Max. No role routes to `gpt-6-sol`. Role TOML stores model/effort; the invocation interface has no speed-tier option. “Fast Worker” is a role name. Only Luna Max Fast is explicitly approved when offered; other Fast tiers, new purchases/plans or charges beyond approval require confirmation. Ordinary model/effort selection and Sol 6.1 escalation proceed without approval if they add no charge. Do not add unsupported tier keys. Fast’s displayed multiplier and `max` effort do not promise speed.
 
 ## Historical usage-credit evidence and limits
 

@@ -18,8 +18,8 @@ sub-agentは担当を独立して切り出せる場合だけ起動する。親ag
 
 | role | model ID / reasoning effort | 用途 |
 |---|---|---|
-| Light Worker | `gpt-6-luna` / `medium` | 範囲が狭く、contract判断を含まないDocs、機械的rename、読み取り調査。曖昧な仕様や重要なcode correctnessが出たら親へ事実を返す |
-| Fast / Worker | `gpt-6-luna` / `max` | 仕様が明確なroutine実装、feature/test fixture、明確なCI修正、単純bug fix、小規模refactor。既存契約に沿い、対象に必要な検証を最後まで行う |
+| Light Worker | `gpt-6.1-terra` / `medium` | 範囲が狭く、contract判断を含まないDocs、機械的rename、読み取り調査。曖昧な仕様や重要なcode correctnessが出たら親へ事実を返す |
+| Fast / Worker | `gpt-6.1-terra` / `medium` | 仕様が明確なroutine実装、feature/test fixture、明確なCI修正、単純bug fix、小規模refactor。既存契約に沿い、対象に必要な検証を最後まで行う |
 | Balanced Engineer | `gpt-6.1-sol` / `high` | 契約が明確な通常実装・複数fileの修正・調査で、Lunaの手戻りが見込まれる場合。重要な設計判断と最終監査は別のSol 6.1へ渡す |
 | Deep / Engineer | `gpt-6.1-sol` / `high` | 重要・難度の高いcode、複数moduleやcompiler/runtime境界、原因不明bug、async/concurrency/ownership/lifecycle、API contract、重要なDB/storage/security変更 |
 | Independent Reviewer | `gpt-6.1-sol` / `high` | 実装・必要な実行検証後の独立した最終audit。contract、回帰、ownership/lifecycle、error、concurrency、security、compatibility、test evidenceを確認し、編集しない |
@@ -29,15 +29,17 @@ sub-agentは担当を独立して切り出せる場合だけ起動する。親ag
 
 taskの種類ごとに、正しさと必要なaudit証拠を満たす完了までの見込み費用が最小のroleを選ぶ。contractが明確な実装/fixtureはFast / Worker、通常実装の範囲・手戻り見込みによってはBalanced Engineer（GPT-6.1 Sol High）を選び、重要・難度の高い実装はDeep Engineer（GPT-6.1 Sol High）、狭いDocs/rename/read-onlyはLight Workerを使う。数行の作業は親が行う。実際のmodel時間、test/CI実行時間、queue/wait、手戻りは測れた場合に別々に記録し、体感を測定値として扱わない。下位roleの失敗や見込み時間・品質・総費用の改善が見られないなら、同じ試行を繰り返さず具体的根拠で方針を見直す。
 
-昇格は `Luna Medium → Luna Max → GPT-6.1 Sol High → GPT-6.1 Sol xHigh → GPT-6.1 Sol Max → Astra` を目安とするが、順番に試す必要はない。通常の上限はHighとし、未解決の重要設計だけxHighへ、High/xHighで解けない例外的な課題だけMaxまたはAstraへ渡す。具体的に未解決のcontract、再現、diagnostic、ownership、race境界が見つかったとき、または同じ原因の対象試行が2回続けて失敗したときに止め、証拠と未解決点を適切なroleへ渡す。既に得た調査を次のroleに渡し、同じ探索や全suiteを繰り返さない。失敗原因をAI modelだけに帰属させず、実際に通したstage、未実施の検査、fixture/sourceの不備を分けて記録する。
+昇格は `Terra Medium → GPT-6.1 Sol High → GPT-6.1 Sol xHigh → GPT-6.1 Sol Max → Astra` を目安とするが、順番に試す必要はない。通常の上限はHighとし、未解決の重要設計だけxHighへ、High/xHighで解けない例外的な課題だけMaxまたはAstraへ渡す。具体的に未解決のcontract、再現、diagnostic、ownership、race境界が見つかったとき、または同じ原因の対象試行が2回続けて失敗したときに止め、証拠と未解決点を適切なroleへ渡す。既に得た調査を次のroleに渡し、同じ探索や全suiteを繰り返さない。失敗原因をAI modelだけに帰属させず、実際に通したstage、未実施の検査、fixture/sourceの不備を分けて記録する。
 
-同時に進行するagentは親を含め最大3体とする。Codexの`agents.max_concurrent_threads_per_session`はspawnした子threadを数えるため2に設定する。同一model IDとreasoning effortの組合せは同時に1体とする。Balanced Engineer、Deep Engineer、Independent ReviewerはすべてGPT-6.1 Sol Highなので、互いに順番に実行する。重要なcodeの独立reviewは必要な実装検証後に行う。親+2子は互いに依存しない成果物が明確な場合だけ使う。GPT-6.1 Sol Maxは例外用途に限り、Astraはeffortに関係なく全体で1体までとする。同じ課題を複数agentに競わせない。モデル選定方針の再評価では、下記の限定した独立意見と相互検討を行える。
+同時に進行するagentは親を含め最大3体とする。Codexの`agents.max_concurrent_threads_per_session`はspawnした子threadを数えるため2に設定する。同一model IDとreasoning effortの組合せは同時に1体とする。Light WorkerとFast / Workerは同じTerra Mediumなので、互いに順番に実行する。Balanced Engineer、Deep Engineer、Independent ReviewerはすべてGPT-6.1 Sol Highなので、互いに順番に実行する。重要なcodeの独立reviewは必要な実装検証後に行う。親+2子は互いに依存しない成果物が明確な場合だけ使う。GPT-6.1 Sol Maxは例外用途に限り、Astraはeffortに関係なく全体で1体までとする。同じ課題を複数agentに競わせない。モデル選定方針の再評価では、下記の限定した独立意見と相互検討を行える。
 
 認証/認可、秘密、整合性、concurrency、破壊的変更では、実装前にSol 6.1 Highで承認済みdesignと必須failure/regression casesを確認する。未決の意味論・代替案・race/lifecycle設計がある場合だけSol 6.1 xHigh Architectへ上げる。実装・必要検証後は別のSol 6.1 High Independent Reviewerが最終auditし、最終diffを仕様・実行結果へ直接照合して関連regressionを確認する。指摘修正後は対象testを再実行し、更新diffと結果を再reviewしてから完了する。その他のsecurity/public contract/migration/ownership/lifecycle/correctness重要変更も、実装者の自己reviewだけで完了にせずIndependent Reviewerを使う。source-only reviewをparse/check/build/native/CIの代わりとして扱わない。Sol Highを使う実装者や親agentの同tier作業が終わるまでHigh Reviewerを並行起動しない。
 
 `Fast Worker`はrole名で、pricing画面のservice tier `Fast`とは別である。`.codex/agents/*.toml`はmodel IDとreasoning effortだけを指定し、現在のagent実行interfaceにもservice-tier/speed指定がない。未対応の`service_tier` fieldを追加しない。既存の明示承認は`gpt-6-luna` / `max`のFast tierに限り、runtimeが明示的に提供するとき利用できる。他modelのFast、追加購入/pay-as-you-go/plan/add-on、または現在の承認を越える課金を伴う変更は事前確認する。通常taskに必要な範囲のmodel/effort選択やSolへの昇格は、追加購入を発生させない限り確認待ちにしない。表示価格のFast倍率が2倍でも速度が2倍とは推定しない。`max` reasoning effortもservice tierや速度を表さない。
 
 `.codex/agents/*.toml`はCodexがrole fileとして自動検出し、別のrole登録表は不要。各roleにtop-level `name`、`description`、`model`、`model_reasoning_effort`、`developer_instructions`を設定する。`.codex/config.toml`は子thread上限を設定する。起動前に実行環境のmodel catalogとeffortを確認し、未対応または未確認のIDは使わず、別IDへ暗黙fallbackしない。
+
+2026年11月15日、ユーザーの指示により、基本作業（Light Worker、Fast / Worker）を`gpt-6.1-terra` / `medium`へ、重要・難度の高い作業を従来どおり`gpt-6.1-sol` / `high`（Balanced/Deep/Independent Reviewer）にする。理由は作業効率がTerraのほうがよいというユーザー判断で、効率の測定値・Terraの価格・課金条件は未確認。Terra Mediumで足りない作業は手戻りを重ねずSol Highへ渡す。Luna/Sol 6.1の独立意見による再評価は未実施で、最初の数taskの実績を[agent構成の記録](docs/internal/agent-routing.md)に残してから見直す。
 
 2026年10月13日、ユーザーの指示により、GPT-6 Solを通常または予定の担当から外し、該当する作業をGPT-6.1 Solへ切り替えて続行する。これは現在の運用切替として適用する。Balanced EngineerはGPT-6.1 Sol Highとし、通常の上限はHigh、未解決の重要設計に限ってxHigh、Maxは例外用途に維持する。2026年10月11日の価格・benchmark資料と所感は当時の履歴として残し、最新の価格や速度は推測しない。GPT-6 Sol FastやGPT-6.1 Sol Maxをroutine設定にしない。
 
