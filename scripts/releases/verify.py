@@ -14,7 +14,8 @@ from pathlib import Path
 from zipfile import ZipFile
 
 
-def verify(archive: Path, version: str, platform: str, target: Path | None = None) -> None:
+def verify(archive: Path, version: str, platform: str, target: Path | None = None,
+           *, go_smoke: bool = False) -> None:
     archive = archive.resolve()
     target = target.resolve() if target is not None else None
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
@@ -52,6 +53,8 @@ def verify(archive: Path, version: str, platform: str, target: Path | None = Non
                 assert "--version" in result.stdout and "--project" in result.stdout, result.stdout
             else:
                 assert result.stdout.strip() == f"nagic {version}", result.stdout
+        if go_smoke:
+            verify_go_smoke(exe, folder, environment, platform)
         project = folder / "outside project 凪"
         project.mkdir()
         (project / "nagi.toml").write_text("entry='main.nagi'\n", encoding="utf-8")
@@ -146,6 +149,42 @@ def main():
         verify_development_builds(exe, folder, environment)
         verify_function_units(exe, folder, environment)
         verify_lock_seed(exe, folder, environment)
+
+
+def verify_go_smoke(exe: Path, folder: Path, environment: dict, platform: str) -> None:
+    """Build and run a portable program with the extracted compiler and external Go."""
+    system, arch = platform.split("-", 1)
+    goos = {"linux": "linux", "windows": "windows", "macos": "darwin"}[system]
+    goarch = {"x86_64": "amd64", "arm64": "arm64"}[arch]
+    project = folder / "Go project 凪"
+    project.mkdir()
+    source = project / "main.nagi"
+    source.write_text('def main():\n    print("Nagi Go smoke")\n    print(40 + 2)\n', encoding="utf-8")
+    output = project / "out"
+    built = subprocess.run(
+        [str(exe), "build", str(source), "--no-project", "--backend", "go",
+         "--profile", "dev", "--out", str(output)],
+        cwd=project, env=environment, capture_output=True, timeout=180,
+    )
+    latest_paths = list((output / ".nagi" / "apps").glob("*/latest.json"))
+    if built.returncode != 0:
+        diagnostic = built.stderr.decode("utf-8", errors="replace")
+        assert not latest_paths, f"Failed Go build published latest.json:\n{diagnostic}"
+        raise AssertionError(f"Go distribution smoke build failed:\n{diagnostic}")
+
+    assert len(latest_paths) == 1, "Expected one published Go generation"
+    latest_path = latest_paths[0]
+    latest = json.loads(latest_path.read_text(encoding="utf-8"))
+    assert latest["backend"] == "go", latest
+    receipt = json.loads((latest_path.parent / latest["receipt"]).read_text(encoding="utf-8"))
+    assert receipt["backend"] == "go", receipt
+    target = receipt["environment"]
+    assert (target["GOOS"], target["GOARCH"]) == (goos, goarch), target
+    program = latest_path.parent / latest["executable"]
+    result = subprocess.run([str(program)], cwd=project, env=environment,
+                            capture_output=True, timeout=15)
+    assert (result.returncode, result.stdout, result.stderr) == (0, b"Nagi Go smoke\n42\n", b""), result
+    print(f"Verified Go distribution smoke: {goos}/{goarch}, native exit 0, exact output")
 
 
 def verify_lock_seed(exe: Path, folder: Path, environment: dict) -> None:
@@ -746,5 +785,6 @@ if __name__ == "__main__":
     parser.add_argument("--version", required=True)
     parser.add_argument("--platform", required=True)
     parser.add_argument("--target", type=Path, help="Reuse native dependencies in this build directory")
+    parser.add_argument("--go-smoke", action="store_true", help="Also verify an opt-in build with external Go")
     args = parser.parse_args()
-    verify(args.archive, args.version, args.platform, args.target)
+    verify(args.archive, args.version, args.platform, args.target, go_smoke=args.go_smoke)

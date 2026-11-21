@@ -90,6 +90,16 @@ ActionsまたはGitHub Releasesから取得した場合は、そのVSIXの保存
 
 ## 手元の検証
 
+Go backend を含むローカル候補では、既存の配布検証に `--go-smoke` を追加できます。
+以下は Linux x86_64 の例です。`PATH` または `NAGI_GO` で利用できる外部 Go toolchain を使用します。
+
+```bash
+python scripts/releases/verify.py --archive "$archive" --version "$version" --platform linux-x86_64 --go-smoke
+```
+
+展開済み `nagic` が生成した実行ファイルの終了コード・出力と、ビルド記録の Go target を確認します。
+Go が見つからない場合は診断を出して失敗します。このオプションはローカル検証用です。
+
 ```bash
 python -m unittest discover -s scripts/releases -p 'test_*.py'
 ```

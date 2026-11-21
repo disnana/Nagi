@@ -588,6 +588,104 @@ class StandardVerifierEnvironmentTests(unittest.TestCase):
                 if override:
                     self.assertNotIn(override, output.getvalue())
 
+    def test_go_smoke_is_opt_in_and_uses_extracted_compiler(self):
+        class StopBeforeRustProjects(Exception):
+            pass
+
+        def standard_child(command, **kwargs):
+            if command[1] == "check":
+                raise StopBeforeRustProjects
+            if command[-1] == "--help":
+                stdout = "--version --project"
+            else:
+                stdout = "nagic 0.1.11"
+            return subprocess.CompletedProcess(command, 0, stdout, "")
+
+        for enabled in (False, True):
+            with (
+                self.subTest(enabled=enabled),
+                contextlib.redirect_stdout(io.StringIO()),
+                patch.dict(os.environ, {"NAGI_ROOT": str(self.root)}),
+                patch.object(verify.subprocess, "run", side_effect=standard_child),
+                patch.object(verify, "verify_go_smoke") as smoke,
+            ):
+                with self.assertRaises(StopBeforeRustProjects):
+                    if enabled:
+                        verify.verify(self.archive, "0.1.11", "linux-x86_64", go_smoke=True)
+                    else:
+                        verify.verify(self.archive, "0.1.11", "linux-x86_64")
+                if enabled:
+                    smoke.assert_called_once()
+                    compiler, folder, environment, platform = smoke.call_args.args
+                    self.assertEqual(compiler.parent, folder / "nagi-0.1.11-linux-x86_64")
+                    self.assertNotIn("NAGI_ROOT", environment)
+                    self.assertEqual(platform, "linux-x86_64")
+                else:
+                    smoke.assert_not_called()
+
+
+class GoDistributionSmokeTests(unittest.TestCase):
+    def exercise(self, *, goarch="amd64", executable_status=0, missing=False, publish_latest=True):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            compiler = folder / "extracted" / "nagic"
+            environment = {"NAGI_GO": str(folder / "external go")}
+
+            def run(command, **kwargs):
+                self.assertEqual(kwargs["env"], environment)
+                project = kwargs["cwd"]
+                self.assertEqual(project.parent, folder)
+                app = project / "out/.nagi/apps/example"
+                executable = app / "generations/one/native"
+                receipt = executable.with_name("build-receipt.json")
+                if command[0] == str(compiler):
+                    self.assertEqual(command[1:], [
+                        "build", str(project / "main.nagi"), "--no-project", "--backend", "go", "--profile",
+                        "dev", "--out", str(project / "out"),
+                    ])
+                    if publish_latest:
+                        receipt.parent.mkdir(parents=True)
+                        receipt.write_text(json.dumps({
+                            "backend": "go", "environment": {"GOOS": "linux", "GOARCH": goarch},
+                        }), encoding="utf-8")
+                        (app / "latest.json").write_text(json.dumps({
+                            "backend": "go", "receipt": receipt.relative_to(app).as_posix(),
+                            "executable": executable.relative_to(app).as_posix(),
+                        }), encoding="utf-8")
+                    if missing:
+                        return subprocess.CompletedProcess(command, 1, b"", b"Go toolchain was not found.")
+                    return subprocess.CompletedProcess(command, 0, b"", b"")
+                self.assertFalse(missing)
+                self.assertEqual(command, [str(executable)])
+                return subprocess.CompletedProcess(command, executable_status, b"Nagi Go smoke\n42\n", b"")
+
+            with patch.object(verify.subprocess, "run", side_effect=run):
+                verify.verify_go_smoke(compiler, folder, environment, "linux-x86_64")
+
+    def test_go_smoke_runs_published_native_executable(self):
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            self.exercise()
+        self.assertIn("Verified Go distribution smoke: linux/amd64", output.getvalue())
+
+    def test_bad_target_or_native_exit_cannot_pass(self):
+        for options in ({"goarch": "arm64"}, {"executable_status": 1}):
+            with self.subTest(**options), contextlib.redirect_stdout(io.StringIO()) as output:
+                with self.assertRaises(AssertionError):
+                    self.exercise(**options)
+                self.assertEqual(output.getvalue(), "")
+
+    def test_missing_go_reports_diagnostic_without_success_marker(self):
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            with self.assertRaisesRegex(AssertionError, "Go toolchain was not found"):
+                self.exercise(missing=True, publish_latest=False)
+        self.assertEqual(output.getvalue(), "")
+
+    def test_failed_build_must_not_publish_latest(self):
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            with self.assertRaisesRegex(AssertionError, "Failed Go build published latest.json"):
+                self.exercise(missing=True)
+        self.assertEqual(output.getvalue(), "")
+
 
 if __name__ == "__main__":
     unittest.main()
