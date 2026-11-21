@@ -62,11 +62,11 @@ fn header<'a>(response: &'a str, name: &str) -> Option<&'a str> {
     })
 }
 
-fn health(socket: TcpStream, address: SocketAddr) {
-    let head = format!("GET /health HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n");
+fn get(socket: TcpStream, address: SocketAddr, path: &str, expected: &[u8]) {
+    let head = format!("GET {path} HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n");
     let (response, body) = exchange(socket, &head, b"");
     assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
-    assert_eq!(body, b"ready");
+    assert_eq!(body, expected);
 }
 
 fn check_binary(socket: TcpStream, address: SocketAddr, payload: &[u8]) {
@@ -88,7 +88,11 @@ fn check_binary(socket: TcpStream, address: SocketAddr, payload: &[u8]) {
     assert!(body == payload, "binary response differs from request");
 }
 
-fn verify(executable: &Path, stderr: &Path, body_limit: Option<usize>) {
+fn start_server(
+    executable: &Path,
+    stderr: &Path,
+    body_limit: Option<usize>,
+) -> (Server, SocketAddr, TcpStream) {
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
     let address = listener.local_addr().unwrap();
     let mut command = Command::new(executable);
@@ -115,7 +119,12 @@ fn verify(executable: &Path, stderr: &Path, body_limit: Option<usize>) {
             }
         }
     };
-    health(socket, address);
+    (server, address, socket)
+}
+
+fn verify(executable: &Path, stderr: &Path, body_limit: Option<usize>) {
+    let (_server, address, socket) = start_server(executable, stderr, body_limit);
+    get(socket, address, "/health", b"ready");
     let limit = body_limit.unwrap_or(1024 * 1024);
     let octets = (0..=u8::MAX).collect::<Vec<_>>();
     check_binary(TcpStream::connect(address).unwrap(), address, &octets);
@@ -129,14 +138,17 @@ fn verify(executable: &Path, stderr: &Path, body_limit: Option<usize>) {
     let (response, _) = exchange(TcpStream::connect(address).unwrap(), &head, b"");
     assert!(response.starts_with("HTTP/1.1 413 "), "{response}");
     assert_eq!(header(&response, "Connection"), Some("close"));
-    health(TcpStream::connect(address).unwrap(), address);
+    get(
+        TcpStream::connect(address).unwrap(),
+        address,
+        "/health",
+        b"ready",
+    );
 }
 
-#[test]
-fn go_http_m21_fixed_length_binary_echo_and_body_limits_in_three_forms() {
-    let fixture = Fixture::new();
-    fixture.write("main.nagi", HIGH);
-    fixture.write("manual/entry.low", LOW);
+fn prepare(fixture: &Fixture, high: &str, low: &str) {
+    fixture.write("main.nagi", high);
+    fixture.write("manual/entry.low", low);
     success(fixture.command(&["lower", "main.nagi", "--no-project", "--out", "lowered"]));
     let stored = fixture.0.join("saved");
     fs::create_dir(&stored).unwrap();
@@ -145,6 +157,12 @@ fn go_http_m21_fixed_length_binary_echo_and_body_limits_in_three_forms() {
         stored.join("entry.low"),
     )
     .unwrap();
+}
+
+#[test]
+fn go_http_m21_fixed_length_binary_echo_and_body_limits_in_three_forms() {
+    let fixture = Fixture::new();
+    prepare(&fixture, HIGH, LOW);
 
     for (source, out) in [
         ("main.nagi", "high"),
@@ -200,4 +218,91 @@ fn go_http_m21_fixed_length_binary_echo_and_body_limits_in_three_forms() {
         );
         assert!(!fixture.0.join("denied/.nagi/apps").exists());
     }
+}
+
+#[test]
+fn go_http_m39_direct_serve_shares_read_only_state_in_three_forms() {
+    let fixture = Fixture::new();
+    let high = include_str!("../fixtures/go-http/state.nagi");
+    let low = include_str!("../fixtures/go-http/state.low");
+    prepare(&fixture, high, low);
+
+    for (source, out) in [
+        ("main.nagi", "high"),
+        ("saved/entry.low", "saved-low"),
+        ("manual/entry.low", "manual-low"),
+    ] {
+        success(fixture.go("build", source, out));
+        let (app, receipt) = fixture.latest(out);
+        let executable = app.join(receipt["executable"].as_str().unwrap());
+        let generated = fs::read_to_string(app.join(receipt["go"].as_str().unwrap())).unwrap();
+        let stderr = fixture.0.join(format!("{out}.stderr"));
+        let (_server, address, socket) = start_server(&executable, &stderr, None);
+        get(socket, address, "/health", b"ready");
+        get(
+            TcpStream::connect(address).unwrap(),
+            address,
+            "/other",
+            b"shared state",
+        );
+        get(
+            TcpStream::connect(address).unwrap(),
+            address,
+            "/health",
+            b"ready",
+        );
+
+        // The payload can give the same text even if it is copied per request.
+        // Check the generated ABI and that dispatch passes the app's owner.
+        assert!(
+            generated.contains("state: &state"),
+            "{source}: App must hold a shared state reference"
+        );
+        assert!(
+            generated
+                .lines()
+                .any(|line| line.starts_with("func nagiFn_")
+                    && line.contains("nagiHTTPRequest")
+                    && line.contains("*nagiType_")),
+            "{source}: generated handler must accept a state reference"
+        );
+        assert!(
+            generated.contains("context: responseContext}, app.state)"),
+            "{source}: dispatch must pass App's reference"
+        );
+        eprintln!("{out}: both immediate handlers and the shared State ABI passed");
+    }
+
+    let invalid = high.replace(
+        "greeting = view(state.labels.ready)",
+        "greeting = state.labels.ready",
+    );
+    let expected_line = invalid
+        .lines()
+        .position(|line| line.contains("greeting = state.labels.ready"))
+        .unwrap()
+        + 1;
+    fixture.write("move-state.nagi", &invalid);
+    let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+        .current_dir(&fixture.0)
+        .args([
+            "build",
+            "move-state.nagi",
+            "--no-project",
+            "--backend",
+            "go",
+            "--out",
+            "denied-state",
+        ])
+        .env("NAGI_GO", fixture.0.join("missing-go"))
+        .output()
+        .unwrap();
+    let diagnostic = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{diagnostic}");
+    assert!(
+        diagnostic.contains("sharedまたは借用resourceの非Copy fieldはmoveできません")
+            && diagnostic.contains(&format!("move-state.nagi:{expected_line}")),
+        "{diagnostic}"
+    );
+    assert!(!fixture.0.join("denied-state/.nagi/apps").exists());
 }

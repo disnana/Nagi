@@ -88,6 +88,20 @@ Rust runtime全体の予算やエラー処理の同等性は未検証。
 `cargo test --locked -p nagic --test go_backend go_http_m21_fixed_length_binary_echo_and_body_limits_in_three_forms -- --nocapture`。
 Linuxでの実行結果は [進捗](progress.md) に記録する。
 
+## M39の即時handlerと共有State
+
+M21の直接 `serve` 経路で、Goの `app_default` がState本体を一度保持し、各handlerに
+同じStateへの参照を渡す。公開契約どおり、リクエストごとのState本体の値コピーを省く。
+対象は既存のスカラー・文字列で構成するrecord（入れ子も可）と、 `await` を含まない
+名前付きhandler。共有の型・binding・非Copyフィールドのmove禁止は既存checkerに従う。
+共有可変State、native resourceを含むState、一般のscope／wrapper、停止・再開するhandlerの
+対応範囲は広げていない。
+
+通常CLIによる3形式の回帰は
+`cargo test --locked -p nagic --test go_backend go_http_m39_direct_serve_shares_read_only_state_in_three_forms -- --nocapture`。
+2つのhandlerが同じrecordを読み、別々の応答を返すことを実TCPで検査する。
+生成GoではAppの保持とhandler引数が参照でつながることも照合する。
+
 ## Buildと失敗時の保護
 
 Go buildはapplication IDとgeneration namespaceをRustから分離し、選択した実行ファイルが実Go toolchainであることを`go version`で先に確認してから、staging directoryで`CGO_ENABLED=0 GOWORK=off GOTOOLCHAIN=local go build -trimpath -buildvcs=false -mod=readonly`を実行する。Goによる暗黙のtoolchain downloadは許可しない。成功後にimmutable generationを公開し、最後に`latest.json`を更新する。失敗したstagingは削除し、以前の`latest.json`と実行ファイルを維持する。

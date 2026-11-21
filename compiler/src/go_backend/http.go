@@ -319,22 +319,22 @@ type nagiHTTPRouteKey struct {
 }
 
 type nagiHTTPRouteEntry[S any] struct {
-	handler func(nagiHTTPRequest, S, nagiUnit) *nagiFuture[nagiResult[nagiHTTPResponse, nagiError]]
+	handler func(nagiHTTPRequest, *S, nagiUnit) *nagiFuture[nagiResult[nagiHTTPResponse, nagiError]]
 	bucket  nagiHTTPBucket
 }
 
 type nagiHTTPApp[S any] struct {
-	state  S
+	state  *S
 	routes map[nagiHTTPRouteKey]*nagiHTTPRouteEntry[S]
 }
 
 func nagiHTTPPublicPolicy[S any]() nagiHTTPPolicy[S] { return nagiHTTPPolicy[S]{} }
 
 func nagiHTTPAppDefault[S any](state S) nagiHTTPApp[S] {
-	return nagiHTTPApp[S]{state: state, routes: make(map[nagiHTTPRouteKey]*nagiHTTPRouteEntry[S])}
+	return nagiHTTPApp[S]{state: &state, routes: make(map[nagiHTTPRouteKey]*nagiHTTPRouteEntry[S])}
 }
 
-func nagiHTTPRoute[S any](app nagiHTTPApp[S], method nagiHTTPMethod, path string, _ nagiHTTPPolicy[S], handler func(nagiHTTPRequest, S, nagiUnit) *nagiFuture[nagiResult[nagiHTTPResponse, nagiError]]) nagiResult[nagiHTTPApp[S], nagiError] {
+func nagiHTTPRoute[S any](app nagiHTTPApp[S], method nagiHTTPMethod, path string, _ nagiHTTPPolicy[S], handler func(nagiHTTPRequest, *S, nagiUnit) *nagiFuture[nagiResult[nagiHTTPResponse, nagiError]]) nagiResult[nagiHTTPApp[S], nagiError] {
 	if !strings.HasPrefix(path, "/") || strings.ContainsAny(path, "{}?#\r\n") {
 		return nagiHTTPFail[nagiHTTPApp[S]]("Go HTTP routing requires an exact path")
 	}
@@ -595,7 +595,7 @@ func nagiHTTPDispatch[S any](app nagiHTTPApp[S], options nagiHTTPOptions) http.H
 	})
 }
 
-func nagiHTTPInvoke[S any](route *nagiHTTPRouteEntry[S], request nagiHTTPRequest, state S) (result nagiResult[nagiHTTPResponse, nagiError], panicked bool) {
+func nagiHTTPInvoke[S any](route *nagiHTTPRouteEntry[S], request nagiHTTPRequest, state *S) (result nagiResult[nagiHTTPResponse, nagiError], panicked bool) {
 	defer func() {
 		if recover() != nil {
 			panicked = true

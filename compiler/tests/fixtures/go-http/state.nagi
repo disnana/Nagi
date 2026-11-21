@@ -1,0 +1,41 @@
+import std.http.server as http
+
+class Labels:
+    ready: str
+    other: str
+
+class State:
+    labels: Labels
+    count: i64
+
+async def health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    assert_true(len(request.body) == 0)
+    assert_true(state.count == 7)
+    greeting = view(state.labels.ready)
+    return http.text(http.response_context(view(request)), http.Status.OK, greeting)
+
+async def other(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error]:
+    count = state.count
+    assert_true(count == 7)
+    return http.text(http.response_context(view(request)), http.Status.OK, view(state.labels.other))
+
+async def main() -> Result[unit, Error]:
+    app = http.app_default[State](State(labels=Labels(ready="ready", other="shared state"), count=7))
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
+    health_rate = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/health", health_rate)
+    app = try http.route(app, http.Method.GET, "/other", http.public_policy[State](), other)
+    other_rate = try http.rate_policy(1000, 1000)
+    app = try http.rate_route(app, http.Method.GET, "/other", other_rate)
+    port = try parse_i64(env("NAGI_SAMPLE_PORT", "8096"))
+    wire_authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8096")
+    body_limit = try parse_i64(env("NAGI_HTTP_BODY_LIMIT", "0"))
+    limits = http.default_options()
+    if body_limit > 0:
+        limits = try http.options(body_limit, 5000, 2000, 1000)
+    limits = try http.authority(limits, "https://localhost", [wire_authority], 1, 256)
+    response_budget = try http.response_limits(1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32)
+    limits = try http.with_response_limits(limits, response_budget)
+    rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536)
+    limits = try http.with_rate_limits(limits, rate_budget)
+    return await http.serve(app, port, limits)

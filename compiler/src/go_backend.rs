@@ -211,7 +211,9 @@ fn go_borrow_input_type(
     }
     if let ("shared", [state]) = (ty.0.as_str(), ty.1.as_slice()) {
         if classes.contains(&state.0) && state.1.is_empty() {
-            return go_type(state, classes, enums, line);
+            // The HTTP app owns this record. Handler arguments share its
+            // address while the checker governs field borrows and moves.
+            return go_type(state, classes, enums, line).map(|record| format!("*{record}"));
         }
     }
     go_type(ty, classes, enums, line)

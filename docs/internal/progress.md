@@ -1,5 +1,19 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-11-21: Go M39の即時handlerと共有State（ローカル・未公開）
+
+基点はM21 `293479f3345ba697f328e99d75fb989ce014f74e`。M21は既に限定Stateを読み取れたが、
+Go生成ではState本体をhandlerへ値渡ししていた。既存の公開HTTP契約に合わせ、
+`app_default` がStateを一度保持し、直接 `serve` の名前付き即時handlerには同じ
+参照を渡す。状態型の境界、共有checkerのownership、Rust既定経路は維持する。
+[範囲と再実行コマンド](go-backend-0.3-minimum.md#m39の即時handlerと共有state)
+
+Linux x86_64でHigh・生成して保存したLow・手書きLowの2つのhandlerを、通常CLIで生成した
+Goと既定Rustの実行ファイルから実TCPで確認した。Go生成の共有参照ABIと、
+共有recordの非Copyフィールドをmoveするソースのchecker拒否も確認した。
+M21の3形式の本文上限とバイナリ往復が再度合格した。
+全workspace、他OS、CI、独立監査は未実行。
+
 ## 2026-11-21: Go M21のループバックHTTP（ローカル・未公開）
 
 基点はmain `2cb7c33aff2ccc3763fa80e6d0f07240ad09570f`。共有checkerが封印した
