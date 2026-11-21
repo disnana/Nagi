@@ -835,6 +835,57 @@ mod tests {
         assert_eq!(legacy.stats().joined, 1);
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn explicit_discard_keeps_single_child_work_cleanup_and_fault() {
+        for panics in [false, true] {
+            let mut scope = TaskScope::new();
+            let gate = Arc::new(DropGate::default());
+            let _release = Release(Arc::clone(&gate));
+            let started = Arc::new(Signal::default());
+            let child_started = Arc::clone(&started);
+            let worked = Arc::new(AtomicBool::new(false));
+            let child_worked = Arc::clone(&worked);
+            let (release_work, wait_for_work) = oneshot::channel();
+            let task = scope.spawn_with_cleanup(
+                async move {
+                    child_started.set();
+                    wait_for_work.await.unwrap();
+                    child_worked.store(true, Ordering::SeqCst);
+                    assert!(!panics, "child panic after discard");
+                    17_i64
+                },
+                Cleanup(Arc::clone(&gate)),
+            );
+            watch(started.wait()).await.unwrap();
+            scope.discard(task);
+            let sent = release_work.send(());
+            watch(gate.entered.wait()).await.unwrap();
+            let mut joining = Box::pin(scope.join());
+            let pending = futures_util::poll!(&mut joining).is_pending();
+            gate.release();
+            let exit = watch(joining).await.unwrap();
+            assert!(
+                sent.is_ok() && worked.load(Ordering::SeqCst),
+                "discard stopped child work"
+            );
+            assert!(pending, "discarded child was joined before cleanup");
+            watch(gate.completed.wait()).await.unwrap();
+            if panics {
+                let error = exit.unwrap_err();
+                assert!(matches!(error.kind, crate::ErrorKind::Internal));
+                assert_eq!(error.message, "child panicked");
+                assert_eq!(
+                    scope.primary.as_ref().unwrap().kind,
+                    TaskFailureKind::Panicked
+                );
+            } else {
+                exit.unwrap();
+            }
+            assert_eq!(scope.stats().joined, 1);
+            assert_eq!(scope.stats().entries, 0);
+        }
+    }
+
     #[tokio::test]
     async fn fake_native_id_reuse_does_not_mix_unreceived_tickets_and_retire_records() {
         let mut scope = TaskScope::new();

@@ -141,14 +141,21 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
         ("panic", panic_child),
         ("body_error_before_await", panic_child),
         ("body_error_after_await", panic_child),
+        ("discard_value", "    return ok(17)\n"),
+        ("discard_panic", panic_child),
     ] {
+        let task_import = match mode {
+            "discard_value" | "discard_panic" => "from std.task import discard\n\n",
+            _ => "",
+        };
         let body = match mode {
             "body_error_before_await" => [body_error, receive].concat(),
             "body_error_after_await" => [receive, body_error].concat(),
+            "discard_value" | "discard_panic" => "        discard(handle)\n".to_owned(),
             _ => receive.to_owned(),
         };
         let high_source = format!(
-            r#"async def child() -> Result[i64, i64]:
+            r#"{task_import}async def child() -> Result[i64, i64]:
 {child}
 async def main() -> Result[unit, Error]:
     async with scope:
@@ -156,11 +163,17 @@ async def main() -> Result[unit, Error]:
 {body}    return ok(print("after scope"))
 "#
         );
-        let mut high = parser::parse(&high_source, true).unwrap();
+        let staging = probe_directory();
+        let high_path = staging.path.join("program.nagi");
+        fs::write(&high_path, &high_source).unwrap();
+        let mut high = crate::source::load(&high_path, true).unwrap().program;
         check::check(&mut high).unwrap();
         let low = emit::low(&high);
+        fs::remove_file(&high_path).unwrap();
+        let low_path = staging.path.join("generated.low");
+        fs::write(&low_path, &low).unwrap();
         let checked = check::finalize(
-            parser::parse(&low, false).unwrap(),
+            crate::source::load(&low_path, false).unwrap().program,
             Default::default(),
             SourceProvenance::user_low_unmapped(),
         )
@@ -171,7 +184,6 @@ async def main() -> Result[unit, Error]:
             "{rejected}"
         );
         let generated = super::task_lowering::source(&checked).unwrap();
-        let staging = probe_directory();
         let kernel = staging.path.join("internal/taskscope");
         fs::create_dir_all(&kernel).unwrap();
         fs::write(
@@ -221,7 +233,7 @@ async def main() -> Result[unit, Error]:
         );
         assert_eq!(
             stdout.lines().any(|line| line == "after scope"),
-            matches!(mode, "value" | "business_error"),
+            matches!(mode, "value" | "business_error" | "discard_value"),
             "{stdout}"
         );
         println!("{mode}\n{stdout}");

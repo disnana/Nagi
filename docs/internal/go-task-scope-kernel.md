@@ -121,6 +121,13 @@ Rust の `TaskScope` と同様に、子の panic を受け取った後も本体�
 受取前の試験では、子の cleanup をチャネルで保留し、取消要求を観測してから
 解放する。一般の取消や実資源の解放はこの試験の範囲外である。
 
+受取の代わりに、同じ単一子 handle を正規の `std.task.discard` に渡す形も
+検証する。本体の `try` との組合せは対象外。sealed
+`DiscardOutputKeepScopeJoin` を照合して kernel の `Discard` を呼び、通常の
+`Finish` まで進む。試験は子の処理を discard 後まで止め、取消が要求されて
+いないことを確認してから子を進める。別の cleanup gate の解放後、正常値なら
+scope は成功し、子 panic は scope の `Internal` に残る。暗黙 Drop は扱わない。
+
 ```sh
 cargo test --locked -p nagic --lib checked_single_task_lowers_scope_spawn_and_await_internally -- --ignored --nocapture
 ```

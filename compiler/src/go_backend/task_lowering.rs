@@ -7,6 +7,7 @@ use crate::{
         ScopeNormalExit, ScopeOwnerTeardown, TaskSpawnMode, TaskUseMode,
     },
     project::BuildProfile,
+    stdlib::{self, Operation},
 };
 
 #[derive(Clone, Copy)]
@@ -14,7 +15,7 @@ pub(super) struct SingleTask<'a> {
     pub(super) scope: &'a Stmt,
     pub(super) invocation: &'a Expr,
     handle: &'a str,
-    received: &'a str,
+    completion: TaskCompletion<'a>,
     body_try: Option<BodyTry<'a>>,
 }
 
@@ -22,6 +23,12 @@ pub(super) struct SingleTask<'a> {
 enum BodyTry<'a> {
     Before(&'a Stmt),
     After(&'a Stmt),
+}
+
+#[derive(Clone, Copy)]
+enum TaskCompletion<'a> {
+    Receive(&'a str),
+    Discard,
 }
 
 impl<'a> SingleTask<'a> {
@@ -53,8 +60,8 @@ impl<'a> SingleTask<'a> {
         let S::Scope(body) = &scope.kind else {
             return Err(unsupported());
         };
-        let (spawn, receive, body_try) = match body.as_slice() {
-            [spawn, receive] => (spawn, receive, None),
+        let (spawn, consume, body_try) = match body.as_slice() {
+            [spawn, consume] => (spawn, consume, None),
             [spawn, first, second] if literal_body_try(first) => {
                 (spawn, second, Some(BodyTry::Before(first)))
             }
@@ -72,17 +79,34 @@ impl<'a> SingleTask<'a> {
         else {
             return Err(unsupported());
         };
-        let S::Assign {
-            name: received,
-            value: awaiting,
-            declare: true,
-            ..
-        } = &receive.kind
-        else {
-            return Err(unsupported());
-        };
-        let E::Await(operand) = &awaiting.kind else {
-            return Err(unsupported());
+        let (completion, command, operand) = match &consume.kind {
+            S::Assign {
+                name,
+                value,
+                declare: true,
+                ..
+            } => {
+                let E::Await(operand) = &value.kind else {
+                    return Err(unsupported());
+                };
+                (TaskCompletion::Receive(name), value, operand.as_ref())
+            }
+            S::Expr(value) if body_try.is_none() => {
+                let E::Call(name, types, arguments) = &value.kind else {
+                    return Err(unsupported());
+                };
+                let [operand] = arguments.as_slice() else {
+                    return Err(unsupported());
+                };
+                if value.resolution != Some(NameResolution::Standard)
+                    || stdlib::operation(name) != Some(Operation::TaskDiscard)
+                    || !types.is_empty()
+                {
+                    return Err(unsupported());
+                }
+                (TaskCompletion::Discard, value, operand)
+            }
+            _ => return Err(unsupported()),
         };
         if !matches!(&operand.kind, E::Name(name) if name == handle)
             || operand.resolution != Some(NameResolution::Local)
@@ -142,7 +166,7 @@ impl<'a> SingleTask<'a> {
             .ok_or_else(unsupported)?;
         let take = plan
             .expressions
-            .get(&ExpressionKey::of(awaiting))
+            .get(&ExpressionKey::of(command))
             .and_then(|entry| entry.task.as_ref())
             .ok_or_else(unsupported)?;
         if exit.bridge != ScopeBridge::TaskScope
@@ -161,11 +185,17 @@ impl<'a> SingleTask<'a> {
             || start.scope != exit.scope
             || take.scope != exit.scope
             || start.invocation != ExprUseId::of(invocation)
-            || take.expression != ExprUseId::of(awaiting)
+            || take.expression != ExprUseId::of(command)
             || take.operand != ExprUseId::of(operand)
             || !matches!(&start.mode, TaskSpawnMode::ValueHandle { binding, output }
                 if Some(*binding) == spawn.task.spawn_binding && output == &result)
-            || take.mode != (TaskUseMode::ReceiveJoinedValue { output: result })
+            || take.mode
+                != match completion {
+                    TaskCompletion::Receive(_) => {
+                        TaskUseMode::ReceiveJoinedValue { output: result }
+                    }
+                    TaskCompletion::Discard => TaskUseMode::DiscardOutputKeepScopeJoin,
+                }
         {
             return Err(unsupported());
         }
@@ -173,7 +203,7 @@ impl<'a> SingleTask<'a> {
             scope,
             invocation,
             handle,
-            received,
+            completion,
             body_try,
         })
     }
@@ -196,7 +226,6 @@ impl<'a> SingleTask<'a> {
         let scope = emitter.temp("task_scope");
         let (before, future) = emitter.evaluated(self.invocation, ret)?;
         let handle = ident(self.handle);
-        let received = ident(self.received);
         Emitter::line(output, indent, "{");
         let indent = indent + 1;
         Emitter::line(output, indent, format!("{scope} := taskscope.New()"));
@@ -227,16 +256,33 @@ impl<'a> SingleTask<'a> {
             );
             emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
         }
-        Emitter::line(
-            output,
-            body_indent,
-            format!("{received} := nagiTaskReceive({scope}, {handle})"),
-        );
-        Emitter::line(
-            output,
-            body_indent,
-            format!("if nagiTaskObserve != nil {{ nagiTaskObserve({received}) }}"),
-        );
+        match self.completion {
+            TaskCompletion::Receive(name) => {
+                let received = ident(name);
+                Emitter::line(
+                    output,
+                    body_indent,
+                    format!("{received} := nagiTaskReceive({scope}, {handle})"),
+                );
+                Emitter::line(
+                    output,
+                    body_indent,
+                    format!("if nagiTaskObserve != nil {{ nagiTaskObserve({received}) }}"),
+                );
+            }
+            TaskCompletion::Discard => {
+                Emitter::line(
+                    output,
+                    body_indent,
+                    format!("if fault := taskscope.Discard({scope}, {handle}); fault != nil {{ panic(fault) }}"),
+                );
+                Emitter::line(
+                    output,
+                    body_indent,
+                    "if nagiTaskDiscarded != nil { nagiTaskDiscarded() }",
+                );
+            }
+        }
         if let Some(BodyTry::After(statement)) = self.body_try {
             emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
         }
@@ -311,6 +357,7 @@ var nagiTaskCleanup func()
 var nagiTaskObserve func(nagiResult[nagiResult[int64, int64], nagiTaskFailure])
 var nagiTaskChildDone func(<-chan struct{})
 var nagiTaskBeforeBodyTry func()
+var nagiTaskDiscarded func()
 
 func nagiTaskSpawn[T any](scope *taskscope.Scope, future *nagiFuture[T], cleanup func()) taskscope.Handle[T] {
     handle, fault := taskscope.Spawn(scope, func(ctx context.Context) T {

@@ -9,12 +9,28 @@ func TestCheckedTaskLowering(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	cleaned := make(chan struct{})
+	discarding := fixtureMode == "discard_value" || fixtureMode == "discard_panic"
+	startWork := make(chan struct{})
+	discarded := make(chan struct{})
+	if discarding {
+		nagiTaskDiscarded = func() { close(discarded) }
+	}
 	childDone := make(chan (<-chan struct{}), 1)
-	nagiTaskChildDone = func(done <-chan struct{}) { childDone <- done }
+	nagiTaskChildDone = func(done <-chan struct{}) {
+		childDone <- done
+		if discarding {
+			<-startWork
+		}
+	}
 	if fixtureMode == "body_error_before_await" {
 		nagiTaskBeforeBodyTry = func() { <-entered }
 	}
 	defer func() {
+		select {
+		case <-startWork:
+		default:
+			close(startWork)
+		}
 		select {
 		case <-release:
 		default:
@@ -55,10 +71,43 @@ func TestCheckedTaskLowering(t *testing.T) {
 		}
 		finished <- exit
 	}()
+	var discardChildDone <-chan struct{}
+	if discarding {
+		select {
+		case discardChildDone = <-childDone:
+		case <-time.After(5 * time.Second):
+			t.Fatal("child never reached the work gate")
+		}
+		select {
+		case <-discarded:
+		case early := <-finished:
+			t.Fatalf("scope exited before discard: %+v", early)
+		case <-time.After(5 * time.Second):
+			t.Fatal("discard waited for child work")
+		}
+		select {
+		case <-discardChildDone:
+			t.Fatal("discard cancelled the child before its work")
+		default:
+		}
+		close(startWork)
+	}
 	select {
 	case <-entered:
 	case <-time.After(5 * time.Second):
 		t.Fatal("child never entered cleanup")
+	}
+	if discarding {
+		select {
+		case <-discardChildDone:
+			t.Fatal("discard cancelled the child before cleanup completed")
+		default:
+		}
+		select {
+		case early := <-finished:
+			t.Fatalf("discarded task scope exited before cleanup: %+v", early)
+		default:
+		}
 	}
 	select {
 	case <-received:
@@ -95,6 +144,21 @@ func TestCheckedTaskLowering(t *testing.T) {
 		t.Fatal("scope exit preceded child cleanup")
 	}
 	exit := finishedScope.result
+	if discarding {
+		select {
+		case result := <-received:
+			t.Fatalf("discard delivered a value or a fault to the body: %+v", result)
+		default:
+		}
+		if fixtureMode == "discard_panic" {
+			if exit.ok || exit.problem != (nagiError{kind: nagiTaskInternal, message: "child panicked"}) {
+				t.Fatalf("discarded child panic scope exit=%+v", exit)
+			}
+		} else if !exit.ok {
+			t.Fatalf("discarded value became scope fault: %+v", exit)
+		}
+		return
+	}
 	if fixtureMode == "body_error_before_await" || fixtureMode == "body_error_after_await" {
 		if exit.ok || exit.problem != (nagiError{kind: nagiInvalid, message: "body sentinel"}) {
 			t.Fatalf("body error was replaced: %+v", exit)

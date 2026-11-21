@@ -513,6 +513,7 @@ func TestTaskScopeFailureNeverPublishesAValue(t *testing.T) {
 func TestTaskScopeFinishSealsRegistrationAndJoinsDiscarded(t *testing.T) {
 	scope := New()
 	release := make(chan struct{})
+	cleanupScope(t, scope, release)
 	var cleaned atomic.Bool
 	handle, err := Spawn(scope, task(func() int { <-release; return 1 }), func() { cleaned.Store(true) })
 	if err != nil {
@@ -523,6 +524,7 @@ func TestTaskScopeFinishSealsRegistrationAndJoinsDiscarded(t *testing.T) {
 	}
 	finished := make(chan error, 1)
 	go func() { finished <- scope.Finish() }()
+	waitScopeClosed(t, scope)
 	select {
 	case err := <-finished:
 		t.Fatalf("finish returned before child cleanup: %v", err)
