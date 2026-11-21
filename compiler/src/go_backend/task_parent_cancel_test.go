@@ -29,7 +29,7 @@ func TestCheckedTaskLowering(t *testing.T) {
 	case "parent_permit_cancel", "parent_permit_normal", "parent_permit_cleanup_fault":
 		testParentPermit(t)
 		return
-	case "parent_finish_pending", "parent_finish_ready_cancel", "parent_finish_normal":
+	case "parent_finish_pending", "parent_finish_deadline", "parent_finish_ready_cancel", "parent_finish_normal":
 		testParentFinish(t)
 		return
 	case "parent_receive_pending", "parent_receive_ready_cancel", "parent_receive_value":
@@ -295,7 +295,14 @@ func testParentFinish(t *testing.T) {
 		scope *taskscope.Scope
 		state func() (ready, recorded, retained bool)
 	}
-	parent, cancel := context.WithCancel(context.Background())
+	expires := fixtureMode == "parent_finish_deadline"
+	var parent context.Context
+	var cancel context.CancelFunc
+	if expires {
+		parent, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+	} else {
+		parent, cancel = context.WithCancel(context.Background())
+	}
 	defer cancel()
 	timerStarted, interrupted := make(chan struct{}), make(chan struct{})
 	cleanupEntered, releaseCleanup := make(chan struct{}), make(chan struct{})
@@ -333,13 +340,21 @@ func testParentFinish(t *testing.T) {
 	default:
 	}
 	publication := taskscope.TaskPublication(seen.scope)
-	pending := fixtureMode == "parent_finish_pending"
+	pending := fixtureMode == "parent_finish_pending" || expires
 	normal := fixtureMode == "parent_finish_normal"
 	if pending {
+		if err := parent.Err(); err != nil {
+			t.Fatalf("parent context ended before both waits started: %v", err)
+		}
 		close(releaseWait)
-		cancel()
+		if !expires {
+			cancel()
+		}
 		if !waitParentEvent(t, "owner cancellation of discarded child", cancelled) {
 			t.Fatal("discarded output was not abandoned")
+		}
+		if expires && parent.Err() != context.DeadlineExceeded {
+			t.Fatalf("parent context cause = %v, want deadline exceeded", parent.Err())
 		}
 		waitParentEvent(t, "child timer observing cancellation", interrupted)
 		waitParentEvent(t, "blocked child cleanup", cleanupEntered)
@@ -381,6 +396,9 @@ func testParentFinish(t *testing.T) {
 	}
 	if ready, recorded, retained := seen.state(); ready || !recorded || retained {
 		t.Fatalf("after finish: ready=%t recorded=%t retained=%t", ready, recorded, retained)
+	}
+	if entries, queued := taskscope.TaskOutstanding(seen.scope); entries != 0 || queued != 0 {
+		t.Fatalf("after finish: entries=%d queued=%d", entries, queued)
 	}
 }
 

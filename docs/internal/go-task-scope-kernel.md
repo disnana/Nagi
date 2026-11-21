@@ -50,7 +50,7 @@ completion/fault/cancel/drain境界を`compiler/go-runtime/internal/taskscope`�
 
 ## まだ実装しないこと
 
-private faultは公開`TaskFailure`ではない。legacy task faultとの統合、親cancel/deadline、
+private faultは公開`TaskFailure`ではない。legacy task faultとの統合、一般の親cancel/deadline、
 一般owner/resource release、rollbackは未接続である。
 今回のprivate関数は`ScopeExitPlan`の退出順序だけを検証し、公開loweringを有効化しない。
 公開High/LowのScope/SpawnBind/Task、Go生成applicationへのruntime組込みは引き続き
@@ -205,6 +205,13 @@ Drop が handle を放棄し、scope の Drop が別に abort を要求する分
 中断で既存 fault や登録を消さない。Rust では spawn と discard だけの生成本体を
 join まで poll し、子が作業を続けること、親 Future Drop 後の別の cleanup 観測を
 確認した。
+
+同じ生成経路に実際の `context.WithTimeout` を渡す回帰では、子の timer 開始と
+親の Finish 待機への到達をチャネルで確認する。親 context の期限到来後、子の
+timer が協調取消で抜け、cleanup を待たず親が退出する。cleanup を解放してから
+後続 Finish が完了を記録し、entry と完了キューを空にする。期限の原因
+`DeadlineExceeded` は親の context にあり、子に届くのは scope 所有者からの取消要求。
+Rust との比較範囲は親 Future Drop 後の取消要求と cleanup の順序。
 
 ### 論理 join として使うための条件
 

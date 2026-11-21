@@ -181,6 +181,10 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
             "    await sleep(86400000)\n    return ok(17)\n",
         ),
         (
+            "parent_finish_deadline",
+            "    await sleep(86400000)\n    return ok(17)\n",
+        ),
+        (
             "parent_finish_ready_cancel",
             "    await sleep(0)\n    return ok(17)\n",
         ),
