@@ -71,6 +71,26 @@ type nagiHTTPResponseContext struct {
 	charge  int64
 }
 
+// reserveResponse holds the request's ordinary response charge until dispatch
+// returns, including the time spent writing a fallback response.
+func (context *nagiHTTPResponseContext) reserveResponse(bodyBytes int64) bool {
+	const responseMetadata = 64
+	limits := context.limits
+	if context.charge != 0 || bodyBytes > limits.retained-responseMetadata ||
+		!context.pool.acquire(bodyBytes+responseMetadata, limits.live, limits.retained) {
+		return false
+	}
+	context.charge = bodyBytes + responseMetadata
+	return true
+}
+
+func (context *nagiHTTPResponseContext) releaseResponse() {
+	if context.charge != 0 {
+		context.pool.release(context.charge)
+		context.charge = 0
+	}
+}
+
 func nagiHTTPContext(request nagiHTTPRequest) *nagiHTTPResponseContext {
 	return request.context
 }
@@ -80,7 +100,6 @@ func nagiHTTPFail[T any](message string) nagiResult[T, nagiError] {
 }
 
 func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, media string, size int, fill func([]byte)) nagiResult[nagiHTTPResponse, nagiError] {
-	const responseMetadata = 64
 	limits := context.limits
 	bodyBytes := int64(size)
 	headerBytes := int64(len("Content-Type: \r\nContent-Length: \r\nConnection: close\r\n") + len(media) + len(strconv.Itoa(size)))
@@ -88,11 +107,9 @@ func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, me
 	if bodyBytes > limits.bodyBytes || headerBytes+extraBytes > limits.managedBytes || 3+extraCount > limits.managedCount {
 		return nagiHTTPFail[nagiHTTPResponse]("HTTP response size limit exceeded")
 	}
-	if context.charge != 0 || bodyBytes > limits.retained-responseMetadata ||
-		!context.pool.acquire(bodyBytes+responseMetadata, limits.live, limits.retained) {
+	if !context.reserveResponse(bodyBytes) {
 		return nagiErr[nagiHTTPResponse, nagiError](nagiError{message: "HTTP response budget exhausted", kind: nagiBusy})
 	}
-	context.charge = bodyBytes + responseMetadata
 	body := make([]byte, size)
 	fill(body)
 	return nagiOk[nagiHTTPResponse, nagiError](nagiHTTPResponse{status: status, media: media, body: body})
@@ -596,11 +613,7 @@ func nagiHTTPDispatch[S any](app nagiHTTPApp[S], options nagiHTTPOptions) http.H
 			return
 		}
 		responseContext := &nagiHTTPResponseContext{headers: headers, limits: limits, pool: pool}
-		defer func() {
-			if responseContext.charge != 0 {
-				pool.release(responseContext.charge)
-			}
-		}()
+		defer responseContext.releaseResponse()
 		start := time.Now()
 		result, panicked := nagiHTTPInvoke(route, nagiHTTPRequest{body: body, context: responseContext}, app.state)
 		if time.Since(start) > options.handlerTime {

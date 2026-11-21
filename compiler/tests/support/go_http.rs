@@ -159,6 +159,36 @@ fn prepare(fixture: &Fixture, high: &str, low: &str) {
     .unwrap();
 }
 
+fn verify_response_reservation(fixture: &Fixture) {
+    let emitted = fixture.0.join("high/go");
+    let probe = fixture.0.join("response-reservation");
+    fs::create_dir(&probe).unwrap();
+    for file in ["main.go", "go.mod"] {
+        fs::copy(emitted.join(file), probe.join(file)).unwrap();
+    }
+    fs::write(
+        probe.join("response_reservation_test.go"),
+        include_str!("../fixtures/go-http/response_reservation_test.go"),
+    )
+    .unwrap();
+    let go = std::env::var_os("NAGI_GO").unwrap_or_else(|| "go".into());
+    success(
+        Command::new(go)
+            .current_dir(probe)
+            .args([
+                "test",
+                "-count=1",
+                "-run",
+                "^TestNagiHTTPResponseReservation",
+                ".",
+            ])
+            .env("GOTOOLCHAIN", "local")
+            .env("GOWORK", "off")
+            .output()
+            .unwrap(),
+    );
+}
+
 #[test]
 fn go_http_m21_fixed_length_binary_echo_and_body_limits_in_three_forms() {
     let fixture = Fixture::new();
@@ -178,6 +208,8 @@ fn go_http_m21_fixed_length_binary_echo_and_body_limits_in_three_forms() {
             eprintln!("{out}: binary POST, bodyless GET and body limit {body_limit:?} passed");
         }
     }
+
+    verify_response_reservation(&fixture);
 
     let use_after_move = format!("import std.ownership as ownership\n{HIGH}").replace(
         "    return http.bytes(http.response_context(view(request)), http.Status.OK, request.body)",
