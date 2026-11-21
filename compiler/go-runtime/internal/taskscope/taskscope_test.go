@@ -316,6 +316,82 @@ func TestTaskScopePublishesAfterWorkDeferAndResourceRelease(t *testing.T) {
 	}
 }
 
+func TestTaskScopeReceiptNotificationCanPrecedeScopeRegistration(t *testing.T) {
+	scope := New()
+	release := make(chan struct{})
+	cleanupScope(t, scope, release)
+	handle, err := Spawn(scope, task(func() int {
+		<-release
+		return 17
+	}), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	func() {
+		// Let the child finish its work while scope registration is blocked.
+		// The receipt notification does not require the scope lock.
+		scope.mu.Lock()
+		defer scope.mu.Unlock()
+		close(release)
+		signal(t, handle.receipt.done)
+		entry := scope.entries[handle.ticket]
+		if entry == nil || entry.ready || entry.recorded {
+			t.Fatal("receipt notification also marked scope completion")
+		}
+	}()
+
+	waitEntryReady(t, scope, handle.ticket)
+	if value := receive(t, scope, handle); value != 17 {
+		t.Fatalf("received %d, want 17", value)
+	}
+	if err := scope.Finish(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTaskScopeProjectionInputsDistinguishValuesPanicAndGoexit(t *testing.T) {
+	type businessResult struct{ rejection error }
+	for _, fixture := range []struct {
+		name  string
+		work  func() businessResult
+		value businessResult
+		fault error
+	}{
+		{
+			name:  "business_value_with_panic_sentinel",
+			work:  func() businessResult { return businessResult{ErrTaskPanicked} },
+			value: businessResult{ErrTaskPanicked},
+		},
+		{
+			name:  "panic_with_goexit_payload",
+			work:  func() businessResult { panic(ErrTaskGoexit) },
+			fault: ErrTaskPanicked,
+		},
+		{
+			name:  "unmapped_goexit",
+			work:  func() businessResult { runtime.Goexit(); return businessResult{} },
+			fault: ErrTaskGoexit,
+		},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			scope := New()
+			cleanupScope(t, scope)
+			handle, err := Spawn(scope, task(fixture.work), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			value, fault := Receive(scope, handle)
+			if value != fixture.value || fault != fixture.fault {
+				t.Fatalf("receive = (%v, %v), want (%v, %v)", value, fault, fixture.value, fixture.fault)
+			}
+			if err := scope.Finish(); err != fixture.fault {
+				t.Fatalf("finish = %v, want %v", err, fixture.fault)
+			}
+		})
+	}
+}
+
 func TestTaskScopeDiscardKeepsJoinAndReleasesOutput(t *testing.T) {
 	type payload struct{ bytes []byte }
 	for _, discardAfterReady := range []bool{false, true} {

@@ -80,6 +80,38 @@ scope が記録した完了である。明示 cleanup が担当した資源解�
 自体の終了イベントが必要な場合は、同等の証拠を用意できるまで Go の公開拒否を維持する。
 今回の内部テストはどちらの判断も採用せず、Rust の公開契約と ADR は維持する。
 
+### 公開型へ接続する位置
+
+将来の生成コードは、`Receive` の値 `T` と fault を別々に扱う。fault が空なら
+`T` 全体を外側の `Ok` に入れる。`T` の業務 `Err` に内部 fault と同じ値が
+含まれても分類しない。受取の fault が `ErrTaskPanicked` なら、
+Rust と同じ `TaskFailureKind.Panicked`、メッセージ `child panicked` へ対応付ける。
+正常な scope 終了経路で `Finish` が同じ primary を返した場合は、同じメッセージを
+持つ `Internal` の `Error` に変換する。この二つの変換は kernel が drain を
+終えた後に行い、panic payload や Go のエラー文字列を分類に使わない。
+body `Err` の経路は `FinishBodyError` で元の値を保持する。
+
+現時点では公開 `TaskFailure` の Go 表現がなく、[Go emitter](../../compiler/src/go_backend.rs)
+が生成する `nagiError` には `Invalid` と `Busy` だけが定義されている。
+kernel と生成コードの共通変換入口はまだないため、この段階では内部の値と fault の
+識別をテストする。`ErrTaskGoexit`、cleanup 固有の fault、protocol fault の
+公開分類はこの変換から隔離する。`Goexit` は Rust の `Cancelled` へ割り当てない。
+
+### 論理 join として使うための条件
+
+`done` は scope の完了登録より先に観測できる。テストでは scope の lock を
+保持したまま子を終了させ、receipt の通知が来ても完了が未登録・未記録である
+状態を確認する。公開接続で確認すべき境界は、子の Nagi 処理と必要な cleanup が
+すべて完了し、その完了を scope が記録した時点である。単一の管理対象の子でこの
+条件を満たし、受取後に子の処理や cleanup が残らなければ、待機側から見える
+順序は Rust のテストと一致する。
+
+子が登録外の goroutine を起動した場合や、cleanup が非同期 close を開始して
+戻った場合は、同じ通知を観測しても処理や資源解放が残り得る。公開経路にその
+入力を含める根拠はない。また scope が登録を記録した時点で、wrapper goroutine の
+物理終了を証明できない。現在のテストは Go の非公開 kernel の境界を固定するもので、
+生成 Nagi コードが必要な cleanup をすべて接続したという証拠はまだない。
+
 ## 検証境界
 
 barrier付きnative Go testで、並行開始、対象childだけの受取、cleanup前の受取禁止、
