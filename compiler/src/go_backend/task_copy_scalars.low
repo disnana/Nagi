@@ -1,0 +1,20 @@
+async fn child(enabled: bool, first: i64, second: i64) -> Result[i64, i64] {
+    if enabled {
+        return ok(first * 10 + second);
+    }
+    return ok(0);
+}
+
+async fn main() -> Result[unit, Error] {
+    let left: i64 = 1;
+    let flag: bool = true;
+    let right: i64 = 7;
+    scope {
+        let handle = spawn child(flag, right, left);
+        left = 11;
+        flag = false;
+        right = 22;
+        let received = await handle;
+    }
+    return ok(print(left));
+}

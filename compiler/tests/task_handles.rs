@@ -384,3 +384,20 @@ fn native_copy_capture_keeps_the_child_value_after_parent_reassignment() {
         "#[test] fn run_contract() { let rt = tokio::runtime::Runtime::new().unwrap(); assert!(rt.block_on(__nagi_main()).is_ok()); }",
     );
 }
+
+#[test]
+fn native_copy_capture_preserves_mixed_scalar_slots() {
+    let high = include_str!("../src/go_backend/task_copy_scalars.nagi")
+        .replace("    if enabled:", "    assert_true(enabled)\n    assert_true(first == 7)\n    assert_true(second == 1)\n    if enabled:")
+        .replace("print(left)", "assert_true(left == 11 and flag == False and right == 22)");
+    let low = include_str!("../src/go_backend/task_copy_scalars.low")
+        .replace("    if enabled {", "    assert_true(enabled);\n    assert_true(first == 7);\n    assert_true(second == 1);\n    if enabled {")
+        .replace("print(left)", "assert_true(left == 11 and flag == false and right == 22)");
+    Fixture::new().run_three(
+        "task-mixed-copy-capture",
+        &high,
+        &low,
+        "",
+        "#[test] fn run_contract() { let rt = tokio::runtime::Runtime::new().unwrap(); assert!(rt.block_on(__nagi_main()).is_ok()); }",
+    );
+}

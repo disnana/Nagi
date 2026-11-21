@@ -412,22 +412,97 @@ async def main() -> Result[unit, Error]:
 #[test]
 #[ignore = "requires the external Go toolchain used by the backend integration tests"]
 fn checked_task_copy_capture_snapshots_a_local_before_spawn() {
-    let high = include_str!("task_copy_capture.nagi");
+    run_checked_copy_capture(
+        "i64",
+        include_str!("task_copy_capture.nagi"),
+        include_str!("task_copy_capture.low"),
+        "(parent)",
+        "(parent + 1)",
+        17,
+        "29",
+    );
+    run_checked_copy_capture(
+        "mixed",
+        include_str!("task_copy_scalars.nagi"),
+        include_str!("task_copy_scalars.low"),
+        "(flag, right, left)",
+        "(flag, right + 1, left)",
+        71,
+        "11",
+    );
+
+    let non_copy_high = include_str!("task_copy_capture.nagi");
+    let non_copy_low = include_str!("task_copy_capture.low");
+    let non_copy = |source: &str| {
+        source
+            .replace("value: i64", "value: str")
+            .replace("ok(value)", "ok(17)")
+            .replace("parent: i64 = 17", r#"parent: str = "before""#)
+            .replace("parent = 29", r#"parent = "after""#)
+    };
     let staging = probe_directory();
-    let high_path = staging.path.join("input.nagi");
-    fs::write(&high_path, high).unwrap();
-    let mut loaded = crate::source::load(&high_path, true).unwrap();
-    check::check(&mut loaded.program).unwrap();
-    let low = emit::low(&loaded.program);
-    let fixtures = [
-        ("high", "input.nagi", high),
-        ("saved-low", "saved.low", &low),
+    for (label, path, text) in copy_capture_inputs(
+        &staging.path,
+        &non_copy(non_copy_high),
+        &non_copy(non_copy_low),
+    ) {
+        let checked = seal_copy_capture(&path, &text);
+        assert_copy_capture_rejected(&checked, label);
+        if label == "high" {
+            fs::remove_file(&path).unwrap();
+        }
+    }
+}
+
+fn seal_copy_capture(path: &std::path::Path, source: &str) -> crate::checked::CheckedProgram {
+    fs::write(path, source).unwrap();
+    let loaded =
+        crate::source::load(path, path.extension().is_some_and(|ext| ext == "nagi")).unwrap();
+    check::finalize(
+        loaded.program,
+        Default::default(),
+        SourceProvenance::user_low_unmapped(),
+    )
+    .unwrap()
+}
+
+fn copy_capture_inputs(
+    dir: &std::path::Path,
+    high: &str,
+    handwritten: &str,
+) -> [(&'static str, PathBuf, String); 3] {
+    let high_path = dir.join("input.nagi");
+    let checked = seal_copy_capture(&high_path, high);
+    [
+        ("high", high_path, high.into()),
         (
-            "handwritten-low",
-            "input.low",
-            include_str!("task_copy_capture.low"),
+            "saved-low",
+            dir.join("saved.low"),
+            emit::low(checked.program()),
         ),
-    ];
+        ("handwritten-low", dir.join("input.low"), handwritten.into()),
+    ]
+}
+
+fn assert_copy_capture_rejected(checked: &crate::checked::CheckedProgram, label: &str) {
+    let rejected = super::task_lowering::source(checked).unwrap_err();
+    assert!(
+        rejected.contains("unsupported shape for internal Go Task lowering"),
+        "{label}: {rejected}"
+    );
+}
+
+fn run_checked_copy_capture(
+    mode: &str,
+    high: &str,
+    handwritten: &str,
+    direct: &str,
+    computed: &str,
+    expected: i64,
+    parent: &str,
+) {
+    let staging = probe_directory();
+    let fixtures = copy_capture_inputs(&staging.path, high, handwritten);
     let kernel = staging.path.join("internal/taskscope");
     fs::create_dir_all(&kernel).unwrap();
     fs::write(
@@ -442,26 +517,18 @@ fn checked_task_copy_capture_snapshots_a_local_before_spawn() {
     .unwrap();
     fs::write(
         staging.path.join("copy_capture_test.go"),
-        include_str!("task_copy_capture_test.go"),
+        format!(
+            "{}\nconst expectedCapture = {expected}\n",
+            include_str!("task_copy_capture_test.go")
+        ),
     )
     .unwrap();
-    let load = |name: &str, text: &str| {
-        let path = staging.path.join(name);
-        fs::write(&path, text).unwrap();
-        let loaded = crate::source::load(&path, name.ends_with(".nagi")).unwrap();
-        check::finalize(
-            loaded.program,
-            Default::default(),
-            SourceProvenance::user_low_unmapped(),
-        )
-        .unwrap()
-    };
-    for (label, name, text) in fixtures {
-        let checked = load(name, text);
+    for (label, path, text) in fixtures {
+        let checked = seal_copy_capture(&path, &text);
         let ordinary = source(&checked, &[], BuildProfile::Dev).unwrap_err();
         assert!(
             ordinary.contains("async task operations are not supported"),
-            "{label}: {ordinary}"
+            "{mode}/{label}: {ordinary}"
         );
         let generated = super::task_lowering::source(&checked).unwrap();
         fs::write(staging.path.join("main.go"), generated).unwrap();
@@ -473,28 +540,27 @@ fn checked_task_copy_capture_snapshots_a_local_before_spawn() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(
             output.status.success(),
-            "{label}: {stdout}\n{}",
+            "{mode}/{label}: {stdout}\n{}",
             String::from_utf8_lossy(&output.stderr)
         );
-        assert!(stdout.lines().any(|line| line == "29"), "{label}: {stdout}");
+        assert!(
+            stdout.lines().any(|line| line == parent),
+            "{mode}/{label}: {stdout}"
+        );
         assert!(
             stdout.contains("--- PASS: TestGeneratedTaskCopyCapture "),
-            "{label}: {stdout}"
+            "{mode}/{label}: {stdout}"
         );
-        println!("{label}\n{stdout}");
+        println!("{mode}/{label}\n{stdout}");
 
-        let computed = text.replacen("(parent)", "(parent + 1)", 1);
-        assert_ne!(computed, text);
-        let checked = load(name, &computed);
-        let rejected = super::task_lowering::source(&checked).unwrap_err();
-        assert!(
-            rejected.contains("unsupported shape for internal Go Task lowering"),
-            "{label}: {rejected}"
-        );
+        let invalid = text.replacen(direct, computed, 1);
+        assert_ne!(invalid, text);
+        let checked = seal_copy_capture(&path, &invalid);
+        assert_copy_capture_rejected(&checked, label);
         if let Some(root) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
-            let artifact = PathBuf::from(root).join(format!("copy-capture-{label}"));
+            let artifact = PathBuf::from(root).join(format!("copy-capture-{mode}-{label}"));
             fs::create_dir_all(artifact.join("internal/taskscope")).unwrap();
-            fs::write(artifact.join(name), text).unwrap();
+            fs::write(artifact.join(path.file_name().unwrap()), text).unwrap();
             for file in [
                 "main.go",
                 "copy_capture_test.go",
@@ -505,7 +571,7 @@ fn checked_task_copy_capture_snapshots_a_local_before_spawn() {
             }
         }
         if label == "high" {
-            fs::remove_file(&high_path).unwrap();
+            fs::remove_file(&path).unwrap();
         }
     }
 }

@@ -40,8 +40,8 @@ func TestGeneratedTaskCopyCapture(t *testing.T) {
 	close(release)
 	select {
 	case got := <-received:
-		if !got.ok || !got.value.ok || got.value.value != 17 {
-			t.Fatalf("received %+v after parent reassignment, want Ok(Ok(17))", got)
+		if !got.ok || !got.value.ok || got.value.value != expectedCapture {
+			t.Fatalf("received %+v after parent reassignment, want Ok(Ok(%d))", got, expectedCapture)
 		}
 	case <-limit.Done():
 		t.Fatal("timed out waiting for child result")

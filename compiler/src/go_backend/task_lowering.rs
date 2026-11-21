@@ -1,5 +1,5 @@
 //! Private probes of checked Task lowering. This module is test-build only.
-use super::{error, ident, Emitter};
+use super::{error, ident, statement_matches, Emitter};
 use crate::checked::{ArgumentCaptureFacts, ArgumentRelease};
 use crate::{
     ast::{
@@ -14,6 +14,7 @@ use crate::{
     project::BuildProfile,
     stdlib::{self, Operation},
 };
+use std::collections::BTreeSet;
 
 #[derive(Clone, Copy)]
 pub(super) struct TaskScopeProbe<'a> {
@@ -46,7 +47,7 @@ enum BodyStep<'a> {
     TryAfter(&'a Stmt),
     AssertBefore(&'a Stmt),
     ParentWait(&'a Stmt, i32),
-    CopyRebind(&'a Stmt),
+    CopyRebind(&'a [Stmt]),
 }
 
 #[derive(Clone, Copy)]
@@ -65,14 +66,15 @@ impl<'a> TaskScopeProbe<'a> {
             .find(|(_, function)| function.name == "main")
             .ok_or("missing checked main for internal Go Task lowering")?;
         let unsupported = || error(main.line, "unsupported shape for internal Go Task lowering");
-        let (scope, end, copy_local) = match main.body.as_slice() {
-            [scope, end] => (scope, end, None),
-            [local, scope, end] => {
-                let name = literal_i64_assignment(local, true).ok_or_else(unsupported)?;
-                (scope, end, Some((name, local)))
-            }
-            _ => return Err(unsupported()),
+        let [locals @ .., scope, end] = main.body.as_slice() else {
+            return Err(unsupported());
         };
+        if locals
+            .iter()
+            .any(|local| scalar_literal_assignment(local, true).is_none())
+        {
+            return Err(unsupported());
+        }
         let printed = match &end.kind {
             S::Return(Some(value)) => builtin_argument(value, &["ok"])
                 .and_then(|argument| builtin_argument(argument, &["print"])),
@@ -80,9 +82,12 @@ impl<'a> TaskScopeProbe<'a> {
         };
         if !main.asynchronous
             || main.ret != Type("Result".into(), vec![scalar("unit"), scalar("Error")])
-            || !printed.is_some_and(|value| match copy_local {
-                Some((name, _)) => is_local_i64(value, name),
-                None => matches!(value.kind, E::Str(_)),
+            || !printed.is_some_and(|value| {
+                if locals.is_empty() {
+                    matches!(value.kind, E::Str(_))
+                } else {
+                    capture_local(locals, value).is_some()
+                }
             })
         {
             return Err(unsupported());
@@ -92,30 +97,35 @@ impl<'a> TaskScopeProbe<'a> {
         };
         // The only two-child form discards a timer child and receives a
         // literal panic or business error from the other child.
-        let (spawn, consume, body_step, sibling_nodes) = match (copy_local, body.as_slice()) {
-            (Some((name, _)), [spawn, rebind, consume])
-                if literal_i64_assignment(rebind, false) == Some(name) =>
+        let (spawn, consume, body_step, sibling_nodes) = match (locals.is_empty(), body.as_slice())
+        {
+            (false, [spawn, rebinds @ .., consume])
+                if rebinds.len() == locals.len()
+                    && locals.iter().zip(rebinds).all(|(local, rebind)| {
+                        scalar_literal_assignment(local, true)
+                            == scalar_literal_assignment(rebind, false)
+                    }) =>
             {
-                (spawn, consume, Some(BodyStep::CopyRebind(rebind)), None)
+                (spawn, consume, Some(BodyStep::CopyRebind(rebinds)), None)
             }
-            (Some(_), _) => return Err(unsupported()),
-            (None, [sibling, primary, discard, await_primary]) => {
+            (false, _) => return Err(unsupported()),
+            (true, [sibling, primary, discard, await_primary]) => {
                 (primary, await_primary, None, Some((sibling, discard)))
             }
-            (None, [spawn, consume]) => (spawn, consume, None, None),
-            (None, [spawn, first, second]) if literal_body_try(first) => {
+            (true, [spawn, consume]) => (spawn, consume, None, None),
+            (true, [spawn, first, second]) if literal_body_try(first) => {
                 (spawn, second, Some(BodyStep::TryBefore(first)), None)
             }
-            (None, [spawn, first, second]) if literal_body_try(second) => {
+            (true, [spawn, first, second]) if literal_body_try(second) => {
                 (spawn, first, Some(BodyStep::TryAfter(second)), None)
             }
-            (None, [spawn, assertion, consume]) if literal_assertion(assertion) => (
+            (true, [spawn, assertion, consume]) if literal_assertion(assertion) => (
                 spawn,
                 consume,
                 Some(BodyStep::AssertBefore(assertion)),
                 None,
             ),
-            (None, [spawn, wait, consume]) => (
+            (true, [spawn, wait, consume]) => (
                 spawn,
                 consume,
                 Some(BodyStep::ParentWait(
@@ -128,12 +138,9 @@ impl<'a> TaskScopeProbe<'a> {
         };
         let result = Type("Result".into(), vec![scalar("i64"), scalar("i64")]);
         let (handle, invocation, child) =
-            spawned_child(program, spawn, &result, copy_local.map(|(name, _)| name))
-                .ok_or_else(unsupported)?;
-        if let Some((_, local)) = copy_local {
-            if !checked_copy_argument(checked, main, local, invocation) {
-                return Err(unsupported());
-            }
+            spawned_child(program, spawn, &result, locals).ok_or_else(unsupported)?;
+        if !locals.is_empty() && !checked_copy_arguments(checked, main, locals, invocation, child) {
+            return Err(unsupported());
         }
         let (completion, command, operand) = match &consume.kind {
             S::Assign {
@@ -158,43 +165,45 @@ impl<'a> TaskScopeProbe<'a> {
         {
             return Err(unsupported());
         }
-        // The timer variant has a single suspension point before its literal
-        // result. Post-receive body errors keep the existing shape.
-        let (child_return, sleep) = match child.body.as_slice() {
-            [last] => (last, None),
-            [first, last] if literal_assertion(first) => (last, None),
-            [first, last] if !matches!(body_step, Some(BodyStep::TryAfter(_))) => {
-                (last, Some(literal_sleep(first).ok_or_else(unsupported)?))
+        let child_sleep = if locals.is_empty() {
+            let (child_return, sleep) = match child.body.as_slice() {
+                [last] => (last, None),
+                [first, last] if literal_assertion(first) => (last, None),
+                [first, last] if !matches!(body_step, Some(BodyStep::TryAfter(_))) => {
+                    (last, Some(literal_sleep(first).ok_or_else(unsupported)?))
+                }
+                _ => return Err(unsupported()),
+            };
+            if matches!(body_step, Some(BodyStep::ParentWait(..))) && sleep.is_none() {
+                return Err(unsupported());
             }
-            _ => return Err(unsupported()),
-        };
-        if matches!(body_step, Some(BodyStep::ParentWait(..))) && sleep.is_none() {
-            return Err(unsupported());
-        }
-        let S::Return(Some(child_result)) = &child_return.kind else {
-            return Err(unsupported());
-        };
-        let supported_result = if copy_local.is_some() {
-            let [(parameter, _)] = child.params.as_slice() else {
+            let S::Return(Some(child_result)) = &child_return.kind else {
                 return Err(unsupported());
             };
-            child.body.len() == 1
-                && builtin_argument(child_result, &["ok"])
-                    .is_some_and(|value| is_local_i64(value, parameter))
-        } else {
-            literal_builtin(child_result, &["ok", "fail"], |kind| {
+            if !literal_builtin(child_result, &["ok", "fail"], |kind| {
                 matches!(kind, E::Int(_))
+            }) {
+                return Err(unsupported());
+            }
+            sleep.map(|milliseconds| ChildSleep {
+                milliseconds,
+                result: child_result,
             })
+        } else {
+            // The capture probe reuses ordinary nonsuspending child code.
+            if child.body.iter().any(|statement| {
+                statement_matches(statement, &|value| matches!(value.kind, E::Await(_)))
+            }) {
+                return Err(unsupported());
+            }
+            None
         };
-        if !supported_result {
-            return Err(unsupported());
-        }
 
         let plan = &checked.emission.functions[index];
         let scope_statement = plan
             .body
             .statements
-            .get(usize::from(copy_local.is_some()))
+            .get(locals.len())
             .ok_or_else(unsupported)?;
         let exit = scope_statement
             .scope_exit
@@ -240,7 +249,7 @@ impl<'a> TaskScopeProbe<'a> {
         }
         let sibling = if let Some((sibling_spawn, discard)) = sibling_nodes {
             let (sibling_handle, sibling_invocation, sibling_child) =
-                spawned_child(program, sibling_spawn, &result, None).ok_or_else(unsupported)?;
+                spawned_child(program, sibling_spawn, &result, &[]).ok_or_else(unsupported)?;
             let (S::Expr(discard), [wait, last]) = (&discard.kind, sibling_child.body.as_slice())
             else {
                 return Err(unsupported());
@@ -256,11 +265,12 @@ impl<'a> TaskScopeProbe<'a> {
                         && matches!(&assertion.kind, S::Expr(value)
                     if literal_builtin(value, &["assert_true"], |kind| matches!(kind, E::Bool(false))))
                 }
-                [_] => {
+                [Stmt {
+                    kind: S::Return(Some(value)),
+                    ..
+                }] => {
                     milliseconds == 0
-                        && literal_builtin(child_result, &["fail"], |kind| {
-                            matches!(kind, E::Int(_))
-                        })
+                        && literal_builtin(value, &["fail"], |kind| matches!(kind, E::Int(_)))
                 }
                 _ => false,
             };
@@ -305,10 +315,7 @@ impl<'a> TaskScopeProbe<'a> {
             body_step,
             sibling,
             connection_probe: false,
-            child_sleep: sleep.map(|milliseconds| ChildSleep {
-                milliseconds,
-                result: child_result,
-            }),
+            child_sleep,
         })
     }
 
@@ -321,11 +328,15 @@ impl<'a> TaskScopeProbe<'a> {
             BodyStep::TryBefore(statement)
             | BodyStep::TryAfter(statement)
             | BodyStep::AssertBefore(statement)
-            | BodyStep::CopyRebind(statement)
             | BodyStep::ParentWait(statement, _),
         ) = self.body_step
         {
             emitter.validate_statement(statement, ret)?;
+        }
+        if let Some(BodyStep::CopyRebind(rebinds)) = self.body_step {
+            for rebind in rebinds {
+                emitter.validate_statement(rebind, ret)?;
+            }
         }
         Ok(())
     }
@@ -459,8 +470,8 @@ impl<'a> TaskScopeProbe<'a> {
             );
         }
         match self.body_step {
-            Some(BodyStep::CopyRebind(statement)) => {
-                emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
+            Some(BodyStep::CopyRebind(rebinds)) => {
+                emitter.statements(rebinds, ret, body_indent, output)?;
                 Emitter::line(
                     output,
                     body_indent,
@@ -582,7 +593,7 @@ fn spawned_child<'a>(
     program: &'a Program,
     spawn: &'a Stmt,
     result: &Type,
-    copy_local: Option<&str>,
+    locals: &[Stmt],
 ) -> Option<(&'a str, &'a Expr, &'a Function)> {
     let S::SpawnBind {
         name,
@@ -603,12 +614,10 @@ fn spawned_child<'a>(
         .functions
         .iter()
         .find(|child| &child.name == callee)?;
-    let arguments_match = match (copy_local, arguments.as_slice(), child.params.as_slice()) {
-        (None, [], []) => true,
-        (Some(local), [argument], [(_, ty)]) => {
-            ty == &scalar("i64") && is_local_i64(argument, local)
-        }
-        _ => false,
+    let arguments_match = if locals.is_empty() {
+        arguments.is_empty() && child.params.is_empty()
+    } else {
+        !arguments.is_empty() && arguments.len() == child.params.len()
     };
     (child.asynchronous && !child.external && arguments_match && &child.ret == result).then_some((
         name.as_str(),
@@ -617,7 +626,7 @@ fn spawned_child<'a>(
     ))
 }
 
-fn literal_i64_assignment(statement: &Stmt, declaration: bool) -> Option<&str> {
+fn scalar_literal_assignment(statement: &Stmt, declaration: bool) -> Option<(&str, &Type)> {
     let S::Assign {
         name,
         value,
@@ -627,30 +636,31 @@ fn literal_i64_assignment(statement: &Stmt, declaration: bool) -> Option<&str> {
     else {
         return None;
     };
+    // The AST shape limits the probe to literal locals. The checked Copy
+    // facts, not the literal spelling or its Go representation, authorize capture.
     (*declare == declaration
-        && value.ty.as_ref() == Some(&scalar("i64"))
-        && matches!(value.kind, E::Int(_)))
-    .then_some(name)
+        && matches!(value.kind, E::Int(_) | E::Float(_) | E::Bool(_) | E::Str(_)))
+    .then_some((name, value.ty.as_ref()?))
 }
 
-fn is_local_i64(value: &Expr, name: &str) -> bool {
-    value.ty.as_ref() == Some(&scalar("i64"))
-        && value.resolution == Some(NameResolution::Local)
-        && matches!(&value.kind, E::Name(found) if found == name)
+fn capture_local<'a>(locals: &'a [Stmt], operand: &Expr) -> Option<&'a Stmt> {
+    let (Some(NameResolution::Local), E::Name(name)) = (operand.resolution, &operand.kind) else {
+        return None;
+    };
+    let ty = operand.ty.as_ref()?;
+    locals
+        .iter()
+        .find(|stmt| scalar_literal_assignment(stmt, true) == Some((name, ty)))
 }
 
-// This probe requires the checked source binding itself; a compatible Go
-// representation or a label alone cannot authorize the capture.
-fn checked_copy_argument(
+fn checked_copy_arguments(
     checked: &CheckedProgram,
     parent: &Function,
-    local: &Stmt,
+    locals: &[Stmt],
     invocation: &Expr,
+    child: &Function,
 ) -> bool {
-    let (Some(span), E::Call(callee, _, args)) = (local.binding_span, &invocation.kind) else {
-        return false;
-    };
-    let [operand] = args.as_slice() else {
+    let E::Call(callee, _, args) = &invocation.kind else {
         return false;
     };
     let call = ExprUseId::of(invocation);
@@ -662,35 +672,53 @@ fn checked_copy_argument(
     else {
         return false;
     };
-    let [argument] = capture.arguments.as_slice() else {
+    if capture.callee != *callee
+        || capture.resolution != NameResolution::Function
+        || capture.arguments.len() != args.len()
+        || child.params.len() != args.len()
+    {
         return false;
-    };
-    let ArgumentCaptureFacts::UserAsync(facts) = &argument.capture else {
-        return false;
-    };
-    let operand = ExprUseId::of(operand);
-    capture.callee == *callee
-        && capture.resolution == NameResolution::Function
-        && argument.index == 0
-        && argument.expression == operand
-        && argument.ty == scalar("i64")
-        && argument.passing == stdlib::Passing::Move
-        && argument.owners
-            == [(
-                operand,
-                BindingId {
-                    line: local.line,
-                    token: span.start,
-                },
-            )]
-        && facts.slot.call == call
-        && facts.slot.argument == 0
-        && facts.storage.call == call
-        && facts.storage.argument == 0
-        && facts.transfer == ExprUseMode::Copy
-        && facts.views_absent
-        && facts.depths.is_empty()
-        && facts.release == ArgumentRelease::NotRequired
+    }
+    let mut bindings = BTreeSet::new();
+    for (index, ((operand, argument), (_, parameter_type))) in args
+        .iter()
+        .zip(&capture.arguments)
+        .zip(&child.params)
+        .enumerate()
+    {
+        let Some(local) = capture_local(locals, operand) else {
+            return false;
+        };
+        let (Some(span), ArgumentCaptureFacts::UserAsync(facts)) =
+            (local.binding_span, &argument.capture)
+        else {
+            return false;
+        };
+        let binding = BindingId {
+            line: local.line,
+            token: span.start,
+        };
+        let operand_id = ExprUseId::of(operand);
+        if argument.index != index
+            || argument.expression != operand_id
+            || operand.ty.as_ref() != Some(parameter_type)
+            || &argument.ty != parameter_type
+            || argument.passing != stdlib::Passing::Move
+            || argument.owners != [(operand_id, binding)]
+            || facts.slot.call != call
+            || facts.slot.argument != index
+            || facts.storage.call != call
+            || facts.storage.argument != index
+            || facts.transfer != ExprUseMode::Copy
+            || !facts.views_absent
+            || !facts.depths.is_empty()
+            || facts.release != ArgumentRelease::NotRequired
+        {
+            return false;
+        }
+        bindings.insert(binding);
+    }
+    bindings.len() == locals.len()
 }
 
 fn discard_operand(value: &Expr) -> Option<&Expr> {
