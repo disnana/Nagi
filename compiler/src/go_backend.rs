@@ -461,7 +461,7 @@ struct Emitter<'a> {
     uses_builtin_env: bool,
     temporary: usize,
     #[cfg(test)]
-    single_task: Option<task_lowering::SingleTask<'a>>,
+    task_scope_probe: Option<task_lowering::TaskScopeProbe<'a>>,
 }
 
 impl<'a> Emitter<'a> {
@@ -553,7 +553,7 @@ impl<'a> Emitter<'a> {
             uses_builtin_env,
             temporary: 0,
             #[cfg(test)]
-            single_task: None,
+            task_scope_probe: None,
         })
     }
 
@@ -810,7 +810,7 @@ impl<'a> Emitter<'a> {
     fn validate_statement(&self, statement: &Stmt, ret: &Type) -> Result<(), String> {
         #[cfg(test)]
         if let Some(task) = self
-            .single_task
+            .task_scope_probe
             .filter(|task| std::ptr::eq(task.scope, statement))
         {
             return task.validate(self, ret);
@@ -1561,7 +1561,7 @@ impl<'a> Emitter<'a> {
         for statement in statements {
             #[cfg(test)]
             if let Some(task) = self
-                .single_task
+                .task_scope_probe
                 .filter(|task| std::ptr::eq(task.scope, statement))
             {
                 task.lower(self, ret, indent, output)?;
@@ -1798,7 +1798,10 @@ impl<'a> Emitter<'a> {
             self.current_function = Some(function.name.clone());
             #[cfg(test)]
             if function.name == "main" {
-                if let Some(task) = self.single_task.filter(|task| task.has_parent_context()) {
+                if let Some(task) = self
+                    .task_scope_probe
+                    .filter(|task| task.has_parent_context())
+                {
                     task.lower_parent_main(&mut self, &function.ret, &function.body[1], &mut body)?;
                     continue;
                 }
@@ -1921,7 +1924,7 @@ func nagiSleep(milliseconds int64) *nagiFuture[nagiUnit] {\n\
         };
         let http_runtime = http::runtime(self.program, &mut imports);
         #[cfg(test)]
-        let task_runtime = if self.single_task.is_some() {
+        let task_runtime = if self.task_scope_probe.is_some() {
             imports.extend([
                 "\"context\"",
                 "\"nagi.internal/go-runtime/internal/taskscope\"",

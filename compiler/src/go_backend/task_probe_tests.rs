@@ -206,11 +206,13 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
         ),
         ("discard_value", "    return ok(17)\n"),
         ("discard_panic", panic_child),
+        ("sibling_fault", panic_child),
     ] {
         let discards = mode.starts_with("parent_finish_")
             || mode.starts_with("parent_permit_")
             || mode.starts_with("discard_");
-        let task_import = if discards {
+        let probes_sibling = mode == "sibling_fault";
+        let task_import = if discards || probes_sibling {
             "from std.task import discard\n\n"
         } else {
             ""
@@ -230,13 +232,22 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
             "parent_cancel" => ["        await sleep(86400000)\n", receive].concat(),
             _ => receive.to_owned(),
         };
+        let (extra_child, extra_spawn, before_receive) = if probes_sibling {
+            (
+                "async def timer_child() -> Result[i64, i64]:\n    await sleep(86400000)\n    return ok(31)\n\n",
+                "        timer = spawn timer_child()\n",
+                "        discard(timer)\n",
+            )
+        } else {
+            ("", "", "")
+        };
         let high_source = format!(
-            r#"{task_import}async def child() -> Result[i64, i64]:
+            r#"{task_import}{extra_child}async def child() -> Result[i64, i64]:
 {child}
 async def main() -> Result[unit, Error]:
     async with scope:
-        handle = spawn child()
-{body}    return ok(print("after scope"))
+{extra_spawn}        handle = spawn child()
+{before_receive}{body}    return ok(print("after scope"))
 "#
         );
         let staging = probe_directory();
@@ -275,14 +286,16 @@ async def main() -> Result[unit, Error]:
         fs::write(staging.path.join("main.go"), generated).unwrap();
         let probes_panic = matches!(mode, "body_assert_false" | "sleep_body_panic");
         let probes_parent = mode.starts_with("parent_");
-        if probes_parent || probes_panic {
+        if probes_parent || probes_panic || probes_sibling {
             fs::write(
                 kernel.join("body_panic_probe.go"),
                 include_str!("task_body_panic_probe.go"),
             )
             .unwrap();
         }
-        let test_source = if probes_parent {
+        let test_source = if probes_sibling {
+            include_str!("task_sibling_fault_test.go")
+        } else if probes_parent {
             include_str!("task_parent_cancel_test.go")
         } else if probes_panic {
             include_str!("task_body_panic_test.go")
@@ -315,7 +328,7 @@ async def main() -> Result[unit, Error]:
             ] {
                 fs::copy(staging.path.join(file), path.join(file)).unwrap();
             }
-            if probes_parent || probes_panic {
+            if probes_parent || probes_panic || probes_sibling {
                 let file = "internal/taskscope/body_panic_probe.go";
                 fs::copy(staging.path.join(file), path.join(file)).unwrap();
             }

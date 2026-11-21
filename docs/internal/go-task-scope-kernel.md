@@ -213,6 +213,16 @@ timer が協調取消で抜け、cleanup を待たず親が退出する。cleanu
 `DeadlineExceeded` は親の context にあり、子に届くのは scope 所有者からの取消要求。
 Rust との比較範囲は親 Future Drop 後の取消要求と cleanup の順序。
 
+### 二子の fault と兄弟取消
+
+test build 専用の二子経路は、引数なしのタイマー子と literal assertion で panic する
+子を同じ scope に spawn し、タイマー子を discard、panic 子を await する形に限る。
+二組の spawn／use と scope exit を checker の plan に照合する。
+生成 await が最初の panic を記録すると、兄弟の実タイマーが取消分岐を通る。
+兄弟 cleanup を解放してから受取と scope 出口が返り、cleanup 自身の後続 panic は
+related fault に残る。受取は `Panicked`、出口は `Internal` で、どちらも最初の
+`child panicked` を保持する。一般の複数子・capture・資源・公開 lowering は別途検証する。
+
 ### 論理 join として使うための条件
 
 `done` は scope の完了登録より先に観測できる。テストでは scope の lock を

@@ -1,23 +1,32 @@
-//! Private proof of a single checked Task path. This module is test-build only.
+//! Private probes of checked Task lowering. This module is test-build only.
 use super::{error, ident, Emitter};
 use crate::{
-    ast::{Expr, ExprUseId, NameResolution, Stmt, Type, E, S},
+    ast::{Expr, ExprUseId, Function, NameResolution, Program, Stmt, Type, E, S},
     checked::{
-        CheckedProgram, ErrorDestination, ExpressionKey, ScopeBodyErrorExit, ScopeBridge,
-        ScopeNormalExit, ScopeOwnerTeardown, TaskSpawnMode, TaskUseMode,
+        CheckedProgram, ErrorDestination, ExpressionKey, FunctionPlan, ScopeBodyErrorExit,
+        ScopeBridge, ScopeExitPlan, ScopeNormalExit, ScopeOwnerTeardown, StatementPlan,
+        TaskSpawnMode, TaskUseMode,
     },
     project::BuildProfile,
     stdlib::{self, Operation},
 };
 
 #[derive(Clone, Copy)]
-pub(super) struct SingleTask<'a> {
+pub(super) struct TaskScopeProbe<'a> {
     pub(super) scope: &'a Stmt,
     pub(super) invocation: &'a Expr,
     handle: &'a str,
     completion: TaskCompletion<'a>,
     body_step: Option<BodyStep<'a>>,
     child_sleep: Option<ChildSleep<'a>>,
+    sibling: Option<TimerSibling<'a>>,
+}
+
+#[derive(Clone, Copy)]
+struct TimerSibling<'a> {
+    invocation: &'a Expr,
+    handle: &'a str,
+    sleep: ChildSleep<'a>,
 }
 
 #[derive(Clone, Copy)]
@@ -40,7 +49,7 @@ enum TaskCompletion<'a> {
     Discard,
 }
 
-impl<'a> SingleTask<'a> {
+impl<'a> TaskScopeProbe<'a> {
     fn from_checked(checked: &'a CheckedProgram) -> Result<Self, String> {
         let program = checked.program();
         let (index, main) = program
@@ -49,12 +58,7 @@ impl<'a> SingleTask<'a> {
             .enumerate()
             .find(|(_, function)| function.name == "main")
             .ok_or("missing checked main for internal Go Task lowering")?;
-        let unsupported = || {
-            error(
-                main.line,
-                "unsupported shape for internal single-child Go Task lowering",
-            )
-        };
+        let unsupported = || error(main.line, "unsupported shape for internal Go Task lowering");
         let [scope, end] = main.body.as_slice() else {
             return Err(unsupported());
         };
@@ -69,17 +73,25 @@ impl<'a> SingleTask<'a> {
         let S::Scope(body) = &scope.kind else {
             return Err(unsupported());
         };
-        let (spawn, consume, body_step) = match body.as_slice() {
-            [spawn, consume] => (spawn, consume, None),
+        // The only two-child form is a discarded timer sibling followed by
+        // reception of a child that deterministically panics.
+        let (spawn, consume, body_step, sibling_nodes) = match body.as_slice() {
+            [sibling, primary, discard, await_primary] => {
+                (primary, await_primary, None, Some((sibling, discard)))
+            }
+            [spawn, consume] => (spawn, consume, None, None),
             [spawn, first, second] if literal_body_try(first) => {
-                (spawn, second, Some(BodyStep::TryBefore(first)))
+                (spawn, second, Some(BodyStep::TryBefore(first)), None)
             }
             [spawn, first, second] if literal_body_try(second) => {
-                (spawn, first, Some(BodyStep::TryAfter(second)))
+                (spawn, first, Some(BodyStep::TryAfter(second)), None)
             }
-            [spawn, assertion, consume] if literal_assertion(assertion) => {
-                (spawn, consume, Some(BodyStep::AssertBefore(assertion)))
-            }
+            [spawn, assertion, consume] if literal_assertion(assertion) => (
+                spawn,
+                consume,
+                Some(BodyStep::AssertBefore(assertion)),
+                None,
+            ),
             [spawn, wait, consume] => (
                 spawn,
                 consume,
@@ -87,18 +99,13 @@ impl<'a> SingleTask<'a> {
                     wait,
                     literal_sleep(wait).ok_or_else(unsupported)?,
                 )),
+                None,
             ),
             _ => return Err(unsupported()),
         };
-        let S::SpawnBind {
-            name: handle,
-            value: invocation,
-            declare: true,
-            ..
-        } = &spawn.kind
-        else {
-            return Err(unsupported());
-        };
+        let result = Type("Result".into(), vec![scalar("i64"), scalar("i64")]);
+        let (handle, invocation, child) =
+            spawned_child(program, spawn, &result).ok_or_else(unsupported)?;
         let (completion, command, operand) = match &consume.kind {
             S::Assign {
                 name,
@@ -112,43 +119,13 @@ impl<'a> SingleTask<'a> {
                 (TaskCompletion::Receive(name), value, operand.as_ref())
             }
             S::Expr(value) if body_step.is_none() => {
-                let E::Call(name, types, arguments) = &value.kind else {
-                    return Err(unsupported());
-                };
-                let [operand] = arguments.as_slice() else {
-                    return Err(unsupported());
-                };
-                if value.resolution != Some(NameResolution::Standard)
-                    || stdlib::operation(name) != Some(Operation::TaskDiscard)
-                    || !types.is_empty()
-                {
-                    return Err(unsupported());
-                }
+                let operand = discard_operand(value).ok_or_else(unsupported)?;
                 (TaskCompletion::Discard, value, operand)
             }
             _ => return Err(unsupported()),
         };
         if !matches!(&operand.kind, E::Name(name) if name == handle)
             || operand.resolution != Some(NameResolution::Local)
-        {
-            return Err(unsupported());
-        }
-        let E::Call(child_name, types, arguments) = &invocation.kind else {
-            return Err(unsupported());
-        };
-        if invocation.resolution != Some(NameResolution::Function)
-            || !types.is_empty()
-            || !arguments.is_empty()
-        {
-            return Err(unsupported());
-        }
-        let result = Type("Result".into(), vec![scalar("i64"), scalar("i64")]);
-        let child = program
-            .functions
-            .iter()
-            .find(|child| &child.name == child_name)
-            .ok_or_else(unsupported)?;
-        if !child.asynchronous || child.external || !child.params.is_empty() || child.ret != result
         {
             return Err(unsupported());
         }
@@ -183,16 +160,6 @@ impl<'a> SingleTask<'a> {
         let [block] = scope_statement.children.as_slice() else {
             return Err(unsupported());
         };
-        let start = block
-            .statements
-            .first()
-            .and_then(|entry| entry.task_spawn.as_ref())
-            .ok_or_else(unsupported)?;
-        let take = plan
-            .expressions
-            .get(&ExpressionKey::of(command))
-            .and_then(|entry| entry.task.as_ref())
-            .ok_or_else(unsupported)?;
         if exit.bridge != ScopeBridge::TaskScope
             || exit.enclosing_error_destination != ErrorDestination::Function
             || exit.normal_exit != ScopeNormalExit::JoinAndPropagate
@@ -205,30 +172,87 @@ impl<'a> SingleTask<'a> {
                     nesting: 1,
                 })
             || Some(exit.scope) != scope.task.scope
-            || start.bridge != ScopeBridge::TaskScope
-            || start.scope != exit.scope
-            || take.scope != exit.scope
-            || start.invocation != ExprUseId::of(invocation)
-            || take.expression != ExprUseId::of(command)
-            || take.operand != ExprUseId::of(operand)
-            || !matches!(&start.mode, TaskSpawnMode::ValueHandle { binding, output }
-                if Some(*binding) == spawn.task.spawn_binding && output == &result)
-            || take.mode
-                != match completion {
-                    TaskCompletion::Receive(_) => {
-                        TaskUseMode::ReceiveJoinedValue { output: result }
-                    }
-                    TaskCompletion::Discard => TaskUseMode::DiscardOutputKeepScopeJoin,
-                }
         {
             return Err(unsupported());
         }
+        let primary_index = usize::from(sibling_nodes.is_some());
+        let Some(primary_plan) = block.statements.get(primary_index) else {
+            return Err(unsupported());
+        };
+        let use_mode = match completion {
+            TaskCompletion::Receive(_) => TaskUseMode::ReceiveJoinedValue {
+                output: result.clone(),
+            },
+            TaskCompletion::Discard => TaskUseMode::DiscardOutputKeepScopeJoin,
+        };
+        if !checked_task_pair(
+            plan,
+            primary_plan,
+            exit,
+            (spawn, invocation),
+            (command, operand),
+            (&result, use_mode),
+        ) {
+            return Err(unsupported());
+        }
+        let sibling = if let Some((sibling_spawn, discard)) = sibling_nodes {
+            let (sibling_handle, sibling_invocation, sibling_child) =
+                spawned_child(program, sibling_spawn, &result).ok_or_else(unsupported)?;
+            let (S::Expr(discard), [wait, last]) = (&discard.kind, sibling_child.body.as_slice())
+            else {
+                return Err(unsupported());
+            };
+            let operand = discard_operand(discard).ok_or_else(unsupported)?;
+            let milliseconds = literal_sleep(wait)
+                .filter(|value| *value > 0)
+                .ok_or_else(unsupported)?;
+            let S::Return(Some(sibling_result)) = &last.kind else {
+                return Err(unsupported());
+            };
+            let [assertion, _] = child.body.as_slice() else {
+                return Err(unsupported());
+            };
+            if !matches!(&assertion.kind, S::Expr(value)
+                if literal_builtin(value, &["assert_true"], |kind| matches!(kind, E::Bool(false))))
+                || !matches!(completion, TaskCompletion::Receive(_))
+                || sibling_handle == handle
+                || sibling_spawn.task.spawn_binding == spawn.task.spawn_binding
+                || operand.resolution != Some(NameResolution::Local)
+                || !matches!(&operand.kind, E::Name(name) if name == sibling_handle)
+                || !literal_builtin(sibling_result, &["ok", "fail"], |kind| {
+                    matches!(kind, E::Int(_))
+                })
+                || !block.statements.first().is_some_and(|sibling_plan| {
+                    checked_task_pair(
+                        plan,
+                        sibling_plan,
+                        exit,
+                        (sibling_spawn, sibling_invocation),
+                        (discard, operand),
+                        (&result, TaskUseMode::DiscardOutputKeepScopeJoin),
+                    )
+                })
+            {
+                return Err(unsupported());
+            }
+            Some(TimerSibling {
+                invocation: sibling_invocation,
+                handle: sibling_handle,
+                sleep: ChildSleep {
+                    milliseconds,
+                    result: sibling_result,
+                },
+            })
+        } else {
+            None
+        };
         Ok(Self {
             scope,
             invocation,
             handle,
             completion,
             body_step,
+            sibling,
             child_sleep: sleep.map(|milliseconds| ChildSleep {
                 milliseconds,
                 result: child_result,
@@ -238,6 +262,9 @@ impl<'a> SingleTask<'a> {
 
     pub(super) fn validate(&self, emitter: &Emitter<'a>, ret: &Type) -> Result<(), String> {
         emitter.validate_expr(self.invocation, ret)?;
+        if let Some(sibling) = self.sibling {
+            emitter.validate_expr(sibling.invocation, ret)?;
+        }
         if let Some(
             BodyStep::TryBefore(statement)
             | BodyStep::TryAfter(statement)
@@ -330,6 +357,15 @@ impl<'a> SingleTask<'a> {
             Emitter::line(output, indent, format!("nagiTaskBody({scope}, func() {{"));
         }
         let body_indent = indent + usize::from(body_result.is_some() || body_asserts);
+        let sibling_handle = if let Some(sibling) = self.sibling {
+            let name = ident(sibling.handle);
+            sibling
+                .sleep
+                .emit_spawn(emitter, &scope, &name, body_indent, output)?;
+            Some(name)
+        } else {
+            None
+        };
         if let Some(sleep) = self.child_sleep {
             sleep.emit_spawn(emitter, &scope, &handle, body_indent, output)?;
         } else {
@@ -337,10 +373,23 @@ impl<'a> SingleTask<'a> {
             for line in before {
                 Emitter::line(output, body_indent, line);
             }
+            let cleanup = if self.sibling.is_some() {
+                "nil"
+            } else {
+                "nagiTaskCleanup"
+            };
             Emitter::line(
                 output,
                 body_indent,
-                format!("{handle} := nagiTaskSpawn({scope}, {future}, nagiTaskCleanup)"),
+                format!("{handle} := nagiTaskSpawn({scope}, {future}, {cleanup})"),
+            );
+        }
+        if let Some(sibling) = sibling_handle {
+            emit_discard(&scope, &sibling, body_indent, output);
+            Emitter::line(
+                output,
+                body_indent,
+                format!("if nagiTaskSiblingScope != nil {{ nagiTaskSiblingScope({scope}) }}"),
             );
         }
         match self.body_step {
@@ -402,11 +451,7 @@ impl<'a> SingleTask<'a> {
                 );
             }
             TaskCompletion::Discard => {
-                Emitter::line(
-                    output,
-                    body_indent,
-                    format!("if fault := taskscope.Discard({scope}, {handle}); fault != nil {{ panic(fault) }}"),
-                );
+                emit_discard(&scope, &handle, body_indent, output);
                 Emitter::line(
                     output,
                     body_indent,
@@ -457,6 +502,89 @@ impl<'a> SingleTask<'a> {
         Emitter::line(output, indent - 1, "}");
         Ok(())
     }
+}
+
+fn spawned_child<'a>(
+    program: &'a Program,
+    spawn: &'a Stmt,
+    result: &Type,
+) -> Option<(&'a str, &'a Expr, &'a Function)> {
+    let S::SpawnBind {
+        name,
+        value: invocation,
+        declare: true,
+        ..
+    } = &spawn.kind
+    else {
+        return None;
+    };
+    let E::Call(callee, types, arguments) = &invocation.kind else {
+        return None;
+    };
+    if invocation.resolution != Some(NameResolution::Function)
+        || !types.is_empty()
+        || !arguments.is_empty()
+    {
+        return None;
+    }
+    let child = program
+        .functions
+        .iter()
+        .find(|child| &child.name == callee)?;
+    (child.asynchronous && !child.external && child.params.is_empty() && &child.ret == result)
+        .then_some((name.as_str(), invocation, child))
+}
+
+fn discard_operand(value: &Expr) -> Option<&Expr> {
+    let E::Call(name, types, arguments) = &value.kind else {
+        return None;
+    };
+    let [operand] = arguments.as_slice() else {
+        return None;
+    };
+    (value.resolution == Some(NameResolution::Standard)
+        && stdlib::operation(name) == Some(Operation::TaskDiscard)
+        && types.is_empty())
+    .then_some(operand)
+}
+
+fn checked_task_pair(
+    plan: &FunctionPlan,
+    statement: &StatementPlan,
+    exit: &ScopeExitPlan,
+    (spawn, invocation): (&Stmt, &Expr),
+    (command, operand): (&Expr, &Expr),
+    (result, mode): (&Type, TaskUseMode),
+) -> bool {
+    let Some(start) = &statement.task_spawn else {
+        return false;
+    };
+    let Some(take) = plan
+        .expressions
+        .get(&ExpressionKey::of(command))
+        .and_then(|entry| entry.task.as_ref())
+    else {
+        return false;
+    };
+    start.bridge == ScopeBridge::TaskScope
+        && start.scope == exit.scope
+        && take.scope == exit.scope
+        && start.invocation == ExprUseId::of(invocation)
+        && take.expression == ExprUseId::of(command)
+        && take.operand == ExprUseId::of(operand)
+        && matches!(&start.mode, TaskSpawnMode::ValueHandle { binding, output }
+            if Some(*binding) == spawn.task.spawn_binding && output == result)
+        && take.mode == mode
+}
+
+fn emit_discard(scope: &str, handle: &str, indent: usize, output: &mut String) {
+    Emitter::line(
+        output,
+        indent,
+        format!(
+            "if fault := taskscope.Discard({scope}, {handle}); fault != nil {{ panic(fault) }}"
+        ),
+    );
 }
 
 impl ChildSleep<'_> {
@@ -569,11 +697,11 @@ fn builtin_argument<'a>(value: &'a Expr, names: &[&str]) -> Option<&'a Expr> {
 
 pub(super) fn source(checked: &CheckedProgram) -> Result<String, String> {
     let mut emitter = Emitter::from_checked(checked, &[], BuildProfile::Dev)?;
-    emitter.single_task = Some(SingleTask::from_checked(checked)?);
+    emitter.task_scope_probe = Some(TaskScopeProbe::from_checked(checked)?);
     emitter.validate()?;
     let has_parent_context = emitter
-        .single_task
-        .is_some_and(SingleTask::has_parent_context);
+        .task_scope_probe
+        .is_some_and(TaskScopeProbe::has_parent_context);
     let mut output = emitter.generate()?;
     if has_parent_context {
         output.push_str(PARENT_WAIT_RUNTIME);
@@ -624,6 +752,7 @@ const nagiTaskInternal uint8 = nagiBusy + 1
 const nagiChildPanicked = "child panicked"
 
 var nagiTaskCleanup func()
+var nagiTaskSiblingScope func(*taskscope.Scope)
 var nagiTaskObserve func(nagiResult[nagiResult[int64, int64], nagiTaskFailure])
 var nagiTaskChildDone func(<-chan struct{})
 var nagiTaskBeforeBodyTry func()

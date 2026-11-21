@@ -1,4 +1,4 @@
-// Copied only into the generated body-panic test's private kernel package.
+// Copied only into generated Task tests that inspect private kernel state.
 package taskscope
 
 // ObserveTaskExit observes cancellation invocation and the actual scope
@@ -34,4 +34,11 @@ func TaskOutstanding(scope *Scope) (entries, queued int) {
 	scope.mu.Lock()
 	defer scope.mu.Unlock()
 	return len(scope.entries), len(scope.ready)
+}
+
+// TaskFaults returns a snapshot of the recorded fault order.
+func TaskFaults(scope *Scope) (primary error, related []error) {
+	scope.mu.Lock()
+	defer scope.mu.Unlock()
+	return scope.primary, append([]error(nil), scope.related...)
 }
