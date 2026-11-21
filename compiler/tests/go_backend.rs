@@ -1455,6 +1455,11 @@ fn other_standard_operations_stay_unsupported_before_the_go_toolchain() {
             "expected i64, got str",
             2,
         ),
+        (
+            "def main():\n    kind = error_kind(1)\n",
+            "expected Error, got i64",
+            2,
+        ),
     ] {
         let fixture = Fixture::new();
         fixture.write("main.nagi", source);
@@ -2035,6 +2040,9 @@ def convert(value: i64):
         case Ok(number):
             print(number)
         case Err(problem):
+            kind = error_kind(problem)
+            assert_true(kind == "invalid")
+            print(kind)
             print(error_message(problem))
 
 def main() -> Result[unit, Error]:
@@ -2054,7 +2062,12 @@ def main() -> Result[unit, Error]:
 fn convert(value: i64) -> unit {
     match i32(value) {
         case Ok(number) { print(number); }
-        case Err(problem) { print(error_message(problem)); }
+        case Err(problem) {
+            let kind = error_kind(problem);
+            assert_true(kind == "invalid");
+            print(kind);
+            print(error_message(problem));
+        }
     }
 }
 fn main() -> Result[unit, Error] {
@@ -2071,7 +2084,8 @@ fn main() -> Result[unit, Error] {
     let underflow = i32::try_from(i64::MIN).unwrap_err();
     let overflow = i32::try_from(i64::MAX).unwrap_err();
     let expected = format!(
-        "-2147483648\n2147483647\n0\nonce\n{overflow}\n{underflow}\n{underflow}\n{overflow}\ncontinued\n"
+        "-2147483648\n2147483647\n0\nonce\ninvalid\n{overflow}\ninvalid\n{underflow}\n\
+         invalid\n{underflow}\ninvalid\n{overflow}\ncontinued\n"
     );
     assert_scalar_cli_parity(HIGH, LOW, expected.as_bytes());
 }

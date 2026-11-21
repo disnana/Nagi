@@ -1100,6 +1100,7 @@ impl<'a> Emitter<'a> {
                                 | "error"
                                 | "some"
                                 | "parse_i64"
+                                | "error_kind"
                                 | "error_message"
                                 | "i64"
                                 | "i32"
@@ -1427,6 +1428,7 @@ impl<'a> Emitter<'a> {
                         "some" => format!("nagiSome({})", values[0]),
                         "parse_i64" => format!("nagiParseI64({})", values[0]),
                         "json_encode" => format!("nagiJSONEncodeScalar({})", values[0]),
+                        "error_kind" => format!("nagiErrorKind({})", values[0]),
                         "error_message" => format!("({}).message", values[0]),
                         "i64" => format!("int64({})", values[0]),
                         "i32" => format!("nagiTryI32({})", values[0]),
@@ -2013,7 +2015,15 @@ func nagiSleep(milliseconds int64) *nagiFuture[nagiUnit] {\n\
 type nagiUnit struct{{}}\n\
 type nagiError struct{{ message string; kind uint8 }}\n\
 func (problem nagiError) Error() string {{ return problem.message }}\n\
-const ( nagiInvalid uint8 = iota + 1; nagiBusy )\n\ntype nagiRange struct{{ end int64 }}\n\
+const ( nagiInvalid uint8 = iota + 1; nagiBusy; nagiInternal )\n\
+func nagiErrorKind(problem nagiError) string {{\n\
+    switch problem.kind {{\n\
+    case nagiInvalid: return \"invalid\"\n\
+    case nagiBusy: return \"busy\"\n\
+    case nagiInternal: return \"internal\"\n\
+    default: panic(\"invalid Nagi error kind\")\n\
+    }}\n\
+}}\n\ntype nagiRange struct{{ end int64 }}\n\
 type nagiOption[T any] struct{{ some bool; value T }}\n\
 func nagiSome[T any](value T) nagiOption[T] {{ return nagiOption[T]{{some: true, value: value}} }}\n\
 func nagiNone[T any]() nagiOption[T] {{ return nagiOption[T]{{}} }}\n\

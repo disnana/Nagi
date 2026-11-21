@@ -965,7 +965,7 @@ func nagiTaskReceiveParent(parent context.Context, scope *taskscope.Scope, handl
 pub(super) const RUNTIME: &str = r#"
 type nagiTaskFailure struct { kind uint8; message string }
 const nagiTaskPanicked uint8 = 1
-const nagiTaskInternal uint8 = nagiBusy + 1
+const nagiTaskInternal uint8 = nagiInternal
 const nagiChildPanicked = "child panicked"
 
 var nagiTaskCleanup func()

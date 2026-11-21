@@ -40,6 +40,7 @@ This section describes unreleased work toward 0.3.0. Published Nagi 0.2.3 does n
 | HTTP state (M39) | Verified shared read-only State made of scalars and strings in named handlers with no `await`. Shared mutable State and handlers that suspend and resume are outside this scope. |
 | CORS | Verified allowed origins and `OPTIONS` preflight on routes that opt in with `cors_policy` and `cors_route`. Routes without CORS configuration add no CORS headers. |
 | Integer conversion | `i32(i64)` checks the range and returns an `Error` for out-of-range inputs. Existing lossless widening to `i64` is also supported. |
+| Error inspection | `error_kind` reads the kind of supported Go errors without consuming them. `error_message` reads the message. |
 | JSON | Standalone `json_encode` supports `str`, `bool`, and integers. Float and aggregate encoding, `json_decode`, and HTTP JSON responses are unsupported. |
 | Unsupported standard features | Public Actor and Supervisor APIs, SQLite Pool/Tx, authentication, sessions, and CSRF are unsupported. |
 | Native adapters | Go native adapters are unsupported. The Go target rejects Rust assets. |
