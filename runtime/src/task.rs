@@ -984,6 +984,46 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn dropping_handle_keeps_child_work_and_scope_join() {
+        let mut scope = TaskScope::new();
+        let gate = Arc::new(DropGate::default());
+        let _release = Release(Arc::clone(&gate));
+        let started = Arc::new(Signal::default());
+        let child_started = Arc::clone(&started);
+        let worked = Arc::new(AtomicBool::new(false));
+        let child_worked = Arc::clone(&worked);
+        let (release_work, wait_for_work) = oneshot::channel();
+        let task = scope.spawn_with_cleanup(
+            async move {
+                child_started.set();
+                wait_for_work.await.unwrap();
+                child_worked.store(true, Ordering::SeqCst);
+                17_i64
+            },
+            Cleanup(Arc::clone(&gate)),
+        );
+
+        watch(started.wait()).await.unwrap();
+        // Exercise Task::drop without TaskScope::discard's ticket retirement.
+        drop(task);
+        let sent = release_work.send(());
+        watch(gate.entered.wait()).await.unwrap();
+        let mut joining = Box::pin(scope.join());
+        let pending = futures_util::poll!(&mut joining).is_pending();
+        gate.release();
+        watch(joining).await.unwrap().unwrap();
+
+        assert!(
+            sent.is_ok() && worked.load(Ordering::SeqCst),
+            "dropping the handle stopped child work"
+        );
+        assert!(pending, "scope joined before child cleanup");
+        assert!(gate.completed.flag.load(Ordering::SeqCst));
+        assert_eq!(scope.stats().joined, 1);
+        assert_eq!(scope.stats().entries, 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn parent_drop_requests_abort_but_does_not_report_child_destruction_complete() {
         let mut scope = TaskScope::new();
         let gate = Arc::new(DropGate::default());
