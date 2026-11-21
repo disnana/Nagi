@@ -8,21 +8,38 @@ backends: [rust, go]
 
 Start with [write Nagi code](../../writing) if you have not run the lessons. Use this matrix after the working examples to decide the adoption boundary.
 
-| Capability | Rust target 0.2.3 | Go target | Continue with |
-|---|---|---|---|
-| Basic types, functions, classes, `Option`, `Result`, `try` | Released | Partially implemented for 0.3.0; unpublished | [Result and try](../../writing/result) |
-| Ownership, `view`, and move checking | Released | Common-frontend equivalence under validation | [Functions](../../writing/functions) |
-| Native build/run | Released and default | Minimal subset under development; unpublished | [Changelog](../../changelog/unreleased) |
-| Async, scopes, and Tasks | Released | Under development; unpublished | [Async](../../concurrency/async) |
-| HTTP and JSON | Released | Unsupported | [HTTP](../../backend/http) |
-| SQLite Pool/Tx | Released | Unsupported | [SQLite](../../backend/sqlite) |
-| Actors and Supervisors | Released | Unsupported | [Actors](../../concurrency/actor) |
-| Rust crate adapter | Released | Rust assets are rejected on the Go target | [Complete Rust example](https://github.com/disnana/Nagi/tree/main/test-nagi-code/rust-library) |
-| Go native adapter | Not applicable | Design and implementation in progress; unpublished | [Unreleased](../../changelog/unreleased) |
+## Released Rust target
 
-## Main current limits
+| Capability | Rust target 0.2.3 | Continue with |
+|---|---|---|
+| Basic types, functions, classes, `Option`, `Result`, `try` | Released | [Result and try](../../writing/result) |
+| Ownership, `view`, and move checking | Released | [Functions](../../writing/functions) |
+| Native build/run | Released and default | [Changelog](../../changelog/unreleased) |
+| Async, scopes, and Tasks | Released | [Async](../../concurrency/async) |
+| HTTP and JSON | Released | [HTTP](../../backend/http) |
+| SQLite Pool/Tx | Released | [SQLite](../../backend/sqlite) |
+| Actors and Supervisors | Released | [Actors](../../concurrency/actor) |
+| Rust crate adapter | Released | [Complete Rust example](https://github.com/disnana/Nagi/tree/main/test-nagi-code/rust-library) |
+| Go native adapter | Not applicable | [Unreleased](../../changelog/unreleased) |
+
+### Main current limits
 
 - The standard HTTP API does not provide PostgreSQL, WebSocket, HTTP/2, streaming, or server-side TLS.
 - Actors are Tokio tasks in one process. They do not promise the same isolation as BEAM processes.
-- Rust-target results do not establish Go-target feature or performance support.
 - `elif` and named function arguments are Unreleased. Do not use them in source for published 0.2.3.
+
+## Go target under development
+
+This section describes unreleased work toward 0.3.0. Published Nagi 0.2.3 does not include the Go target.
+
+| Capability | Development status |
+|---|---|
+| Native builds and basic features | Select explicitly with `--backend go`. Supports a subset of basic types, functions, classes, `Option`, `Result`, `try`, and ownership. |
+| Async | Supports a limited subset including direct `await` of user-defined async functions and `sleep`. Public `Task`, `scope`, and `spawn` are unsupported. |
+| HTTP (M21) | Verified direct `serve` on IPv4 loopback with exact-match public `GET` and `POST` routes, bodyless GET, and fixed-length binary POST echo and body limits. |
+| HTTP state (M39) | Verified shared read-only State made of scalars and strings in named handlers with no `await`. Shared mutable State and handlers that suspend and resume are outside this scope. |
+| CORS | Verified allowed origins and `OPTIONS` preflight on routes that opt in with `cors_policy` and `cors_route`. Routes without CORS configuration add no CORS headers. |
+| Unsupported standard features | JSON, public Actor and Supervisor APIs, SQLite Pool/Tx, authentication, sessions, and CSRF are unsupported. |
+| Native adapters | Go native adapters are unsupported. The Go target rejects Rust assets. |
+
+The HTTP tests used the standard CLI on Linux with High, generated and saved Low, and handwritten Low. The distribution smoke check uses the explicit `--go-smoke` option and an external Go toolchain. These are Linux development checks. Other operating systems and formal distribution require separate verification.
