@@ -1529,3 +1529,178 @@ fn scope_exit_plan_rejects_duplicate_scope_identities_and_flow_mismatch() {
         .unwrap_err()
         .contains("checked scope exit"));
 }
+
+#[test]
+fn task_owned_http_options_preserve_move_identity_without_a_go_cleanup_plan() {
+    use crate::{
+        project::BuildProfile,
+        stdlib::{Operation, Passing, Resource},
+    };
+
+    // Options has real native type/operation mappings in both backends, but
+    // owns configuration rather than a live connection or admission slot.
+    const HIGH: &str = r#"import std.http.server as http
+async def take(options: http.Options) -> Result[http.Options, Error]:
+    return http.capacity(options, 1, 1)
+async def main() -> Result[unit, Error]:
+    config = http.default_options()
+    async with scope:
+        task = spawn take(config)
+        received = await task
+    return ok(print(0))
+"#;
+    const LOW: &str = r#"import std.http.server as http;
+async fn take(options: http.Options) -> Result[http.Options, Error] {
+    return http.capacity(options, 1, 1);
+}
+async fn main() -> Result[unit, Error] {
+    let config = http.default_options();
+    scope {
+        let task = spawn take(config);
+        let received = await task;
+    }
+    return ok(print(0));
+}
+"#;
+
+    let files = Files::new();
+    let finalize = |name: &str, text: &str| {
+        let path = files.write(name, text);
+        let loaded = crate::source::load(&path, name.ends_with(".nagi")).unwrap();
+        let provenance = loaded.provenance();
+        crate::check::finalize(loaded.program, Program::default(), provenance)
+    };
+    let saved = crate::emit::low(finalize("main.nagi", HIGH).unwrap().program());
+
+    for (name, text) in [
+        ("main.nagi", HIGH),
+        ("saved.low", &saved),
+        ("manual.low", LOW),
+    ] {
+        let checked = finalize(name, text).unwrap();
+        let program = checked.program();
+        let (index, main) = program
+            .functions
+            .iter()
+            .enumerate()
+            .find(|(_, f)| f.name == "main")
+            .unwrap();
+        let plan = &checked.emission.functions[index];
+        let [config, scope, _] = main.body.as_slice() else {
+            panic!("expected configuration and scope")
+        };
+        let S::Assign { value, .. } = &config.kind else {
+            panic!("expected configuration binding")
+        };
+        assert!(matches!(
+            &plan.expressions[&ExpressionKey::of(value)].operation,
+            Some(OperationPlan::NativeCall {
+                operation: Operation::DefaultOptions,
+                ..
+            })
+        ));
+        let S::Scope(body) = &scope.kind else {
+            panic!("expected scope")
+        };
+        let S::SpawnBind {
+            value: invocation, ..
+        } = &body[0].kind
+        else {
+            panic!("expected spawn")
+        };
+        let E::Call(_, _, args) = &invocation.kind else {
+            panic!("expected async call")
+        };
+        let [operand] = args.as_slice() else {
+            panic!("expected owned argument")
+        };
+        let [spawn] = collect_task_spawns(&plan.body).try_into().unwrap();
+        let [exit] = collect_scope_exits(&plan.body).try_into().unwrap();
+        let call = ExprUseId::of(invocation);
+        assert_eq!(spawn.invocation, call);
+        assert_eq!(spawn.scope, exit.scope);
+        assert_eq!(spawn.bridge, ScopeBridge::TaskScope);
+        assert!(
+            matches!(&spawn.mode, TaskSpawnMode::ValueHandle { binding, .. }
+            if Some(*binding) == body[0].task.spawn_binding)
+        );
+        let capture = &checked.final_check_facts().functions["main"][&call];
+        assert_eq!(capture.resolution, NameResolution::Function);
+        let [argument] = capture.arguments.as_slice() else {
+            panic!("expected capture")
+        };
+        assert_eq!(
+            registered_resource(&argument.ty.0, &program.modules),
+            Some(Resource::Options)
+        );
+        assert_eq!(argument.passing, Passing::Move);
+        assert_eq!(argument.expression, ExprUseId::of(operand));
+        assert_eq!(
+            argument.owners,
+            [(
+                argument.expression,
+                local_binding(program, "main", "config")
+            )]
+        );
+        let facts = user_capture(argument);
+        assert_eq!(facts.storage, CaptureStorageId { call, argument: 0 });
+        assert_eq!(facts.transfer, ExprUseMode::Move);
+        assert_eq!(facts.release, ArgumentRelease::Deferred);
+
+        assert!(crate::emit::rust(&checked)
+            .unwrap()
+            .contains(".spawn_value("));
+        let error = crate::go_backend::source(&checked, &[], BuildProfile::Dev).unwrap_err();
+        assert!(
+            error.contains("async task operations are not supported"),
+            "{name}: {error}"
+        );
+    }
+
+    for (name, source, spawn, await_task, second_spawn, parent_use) in [
+        (
+            "bad.nagi",
+            HIGH,
+            "        task = spawn take(config)",
+            "        received = await task",
+            "        second = spawn take(config)",
+            "        reused = http.capacity(config, 1, 1)",
+        ),
+        (
+            "bad.low",
+            LOW,
+            "        let task = spawn take(config);",
+            "        let received = await task;",
+            "        let second = spawn take(config);",
+            "        let reused = http.capacity(config, 1, 1);",
+        ),
+    ] {
+        for (before, inserted) in [(spawn, second_spawn), (await_task, parent_use)] {
+            let invalid = source.replacen(before, &format!("{before}\n{inserted}"), 1);
+            let line = invalid.lines().position(|text| text == inserted).unwrap() + 1;
+            let path = files.write(name, &invalid);
+            let mut program = crate::source::load(&path, name.ends_with(".nagi"))
+                .unwrap()
+                .program;
+            let error =
+                crate::check::check(&mut program).expect_err("moved configuration was reused");
+            assert!(
+                error.starts_with(&format!("line {line}:")) && error.contains("move後"),
+                "{error}"
+            );
+        }
+    }
+
+    // Isolate the capture policy from the Go Task gate; the same moved native
+    // type remains unsupported even when the caller only awaits a Future.
+    let direct = HIGH.replace(
+        "    async with scope:\n        task = spawn take(config)\n        received = await task",
+        "    received = await take(config)",
+    );
+    let checked = finalize("await-only.nagi", &direct).unwrap();
+    let error = crate::go_backend::source(&checked, &[], BuildProfile::Dev).unwrap_err();
+    assert!(
+        error.contains("deferred user Future capture release"),
+        "{error}"
+    );
+}
