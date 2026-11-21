@@ -454,13 +454,10 @@ func (scope *Scope) seal() {
 	scope.mu.Unlock()
 }
 
-// sealAndAbandonBodyOutputs atomically seals registration and retires only
-// unclaimed body-local outputs. It runs before cancellation so lexical body
-// retirement precedes child abort/drain, matching ScopeBodyErrorExit. Values
-// completing later observe receiptDiscarded and are never installed. This only
-// ends the kernel's reference retention; it does not promise Close, a Go
-// finalizer, GC, or physical memory reclamation for T.
-func (scope *Scope) sealAndAbandonBodyOutputs() {
+// RequestAbnormalExit seals registration and abandons unclaimed body-local
+// outputs before issuing its cooperative cancellation requests. It keeps
+// claimed receives and leaves completion recording to a later drain.
+func (scope *Scope) RequestAbnormalExit() {
 	if scope == nil {
 		panic(ErrInvalid)
 	}
@@ -471,7 +468,9 @@ func (scope *Scope) sealAndAbandonBodyOutputs() {
 			scope.retireLocked(ticket, entry.receipt)
 		}
 	}
+	cancels := scope.requestCancellationLocked()
 	scope.mu.Unlock()
+	runCancels(cancels)
 }
 
 // RequestOwnerTeardown seals registration and requests cooperative cancellation
@@ -495,8 +494,7 @@ func (scope *Scope) RequestOwnerTeardown() {
 // after every registered callback and cleanup boundary has completed. Public Go
 // lowering remains a separate later stage.
 func FinishBodyError[E any](scope *Scope, bodyError E) E {
-	scope.sealAndAbandonBodyOutputs()
-	scope.RequestOwnerTeardown()
+	scope.RequestAbnormalExit()
 	scope.drain()
 	return bodyError
 }

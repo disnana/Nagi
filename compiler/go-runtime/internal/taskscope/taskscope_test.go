@@ -1087,7 +1087,7 @@ func TestTaskScopeBodyErrorAbandonsOutputsBeforeCancelAndDrain(t *testing.T) {
 	blocked.receipt.mu.Lock()
 	abandoned := make(chan struct{})
 	go func() {
-		blockedScope.sealAndAbandonBodyOutputs()
+		blockedScope.RequestAbnormalExit()
 		close(abandoned)
 	}()
 	deadline := time.Now().Add(2 * time.Second)
@@ -1182,6 +1182,81 @@ func TestTaskScopeBodyErrorKeepsReceiveOwnership(t *testing.T) {
 	}
 	if abandonedScope.primary != nil || len(abandonedScope.entries) != 0 {
 		t.Fatalf("abandoned receive primary=%v entries=%d", abandonedScope.primary, len(abandonedScope.entries))
+	}
+}
+
+func TestTaskScopeAbnormalExitAbandonsAndRequestsWithoutRecording(t *testing.T) {
+	scope := New()
+	started := make(chan struct{})
+	cleanupStarted := make(chan struct{})
+	cleanupRelease := make(chan struct{})
+	cleanupScope(t, scope, cleanupRelease)
+
+	handle, err := Spawn(scope, func(ctx context.Context) int {
+		close(started)
+		<-ctx.Done()
+		return 17
+	}, func() {
+		close(cleanupStarted)
+		<-cleanupRelease
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	signal(t, started)
+	var requests atomic.Int64
+	scope.mu.Lock()
+	entry := scope.entries[handle.ticket]
+	cancel := entry.cancel
+	entry.cancel = func() {
+		requests.Add(1)
+		cancel()
+	}
+	scope.mu.Unlock()
+
+	returned := make(chan struct{}, 2)
+	for range 2 {
+		go func() {
+			scope.RequestAbnormalExit()
+			returned <- struct{}{}
+		}()
+	}
+	signal(t, returned)
+	signal(t, returned)
+	signal(t, cleanupStarted)
+	if requests.Load() != 1 {
+		t.Fatalf("cancellation requests = %d, want 1", requests.Load())
+	}
+	waitReceiptState(t, handle.receipt, receiptDiscarded)
+	if _, problem := Receive(scope, handle); problem != ErrConsumed {
+		t.Fatalf("receive after abnormal exit request = %v", problem)
+	}
+	if _, problem := Spawn(scope, task(func() int { return 99 }), nil); problem != ErrClosed {
+		t.Fatalf("spawn after abnormal exit request = %v", problem)
+	}
+	select {
+	case <-handle.receipt.done:
+		t.Fatal("abnormal exit published before cleanup")
+	default:
+	}
+	scope.mu.Lock()
+	incomplete := scope.entries[handle.ticket] == entry && !entry.ready && !entry.recorded
+	scope.mu.Unlock()
+	if !incomplete {
+		t.Fatal("abnormal exit lost or completed the pending join obligation")
+	}
+
+	close(cleanupRelease)
+	signal(t, handle.receipt.done)
+	waitEntryReady(t, scope, handle.ticket)
+	if err := scope.Finish(); err != nil {
+		t.Fatal(err)
+	}
+	if !entry.recorded || len(scope.entries) != 0 {
+		t.Fatal("finish did not record and retire the child")
+	}
+	if handle.receipt.value != nil {
+		t.Fatal("publication retained an abandoned output")
 	}
 }
 

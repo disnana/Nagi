@@ -43,6 +43,10 @@ completion/fault/cancel/drain境界を`compiler/go-runtime/internal/taskscope`�
 - `RequestOwnerTeardown`は新規Spawnを封印し、live childの`CancelFunc`を一度だけ取り出して
   lock外で実行する。同期呼出しはcleanup/joinを待たず、完了を報告しない。後続の
   `Cancel`/`FinishBodyError`が同じobligationをdrainできる。
+- `RequestAbnormalExit`はscopeの封印、未claim出力の放棄、この呼び出しが担当する
+  取消関数の取得を同じlock区間で行う。取消関数はlock外で実行し、cleanupや完了記録は
+  待たない。別の呼び出しが先に取得した取消関数の実行順は変えない。完了記録の責任は
+  残り、`FinishBodyError`はこの操作の後でdrainする。
 
 ## まだ実装しないこと
 
@@ -142,11 +146,11 @@ cleanup を別に観測できる。High・保存 Low・手書き Low の生成�
 
 たとえば、待機中の子の cleanup を止めた状態で本体が panic すると、`Cancel` や
 `FinishBodyError` を defer した Go 側は drain で止まり、呼び出し側への panic の
-伝播を遅らせる。`RequestOwnerTeardown` 単体では未受取出力が放棄されず、
-生成された `nagiFuture` の待機処理にも子の取消通知が渡らない。内部接続の候補は、
-本体の unwind にだけ出力放棄と取消要求を順に結ぶ境界と、取消通知を処理して
-cleanup へ進める子の待機点である。そこで同じ panic を呼び出し側へ伝え、
-cleanup は別に観測する。この経路は現在の Go lowering には未接続。
+伝播を遅らせる。非公開 kernel の `RequestAbnormalExit` は出力を放棄してから
+取消を要求し、cleanup や完了記録を待たずに戻る。生成 Rust と同じ順序を Go で
+扱うには、本体の unwind からこの操作を呼び、生成された `nagiFuture` に取消通知を
+処理して cleanup へ進める待機点を接続する必要がある。この経路は現在の Go lowering
+には未接続。
 
 ### 論理 join として使うための条件
 
