@@ -223,6 +223,13 @@ join まで poll し、子が作業を続けること、親 Future Drop 後の�
 
 ## 検証境界
 
+単一子の permit 試験では、Rust の `OwnedSemaphorePermit` と Go の容量1の
+試験用トークンを比較する。Go では生成子の timer 開始でトークンを取得し、既存の
+cleanup callback に置いた defer が返す。親取消後でも cleanup を止めている間は
+再取得できず、解放後に一度だけ再取得できる。scope の完了登録と後続 Finish の
+記録は、資源が再取得できることと別に観測する。通常完了と異常終了も対照にする。
+これは試験用の資源であり、Nagi の公開資源 ABI や一般の資源捕捉を追加しない。
+
 barrier付きnative Go testで、並行開始、対象childだけの受取、cleanup前の受取禁止、
 discard前後、全child Finish、handle copy競合、wrong scope/forged handle、panic/cleanup
 panic/Goexit、fault観測順、兄弟cancel、cancel後panic、非協調childのdrain、

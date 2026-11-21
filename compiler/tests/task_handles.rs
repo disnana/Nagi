@@ -6,6 +6,8 @@ mod task_body_panic;
 mod task_conditional_consumption;
 #[path = "support/task_finish_drop.rs"]
 mod task_finish_drop;
+#[path = "support/task_permit.rs"]
+mod task_permit;
 #[path = "support/task_service.rs"]
 mod task_service;
 #[path = "support/task_service_s2.rs"]

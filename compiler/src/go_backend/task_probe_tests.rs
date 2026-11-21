@@ -188,10 +188,24 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
             "parent_finish_normal",
             "    await sleep(0)\n    return fail(22)\n",
         ),
+        (
+            "parent_permit_cancel",
+            "    await sleep(86400000)\n    return ok(17)\n",
+        ),
+        (
+            "parent_permit_normal",
+            "    await sleep(0)\n    return ok(17)\n",
+        ),
+        (
+            "parent_permit_cleanup_fault",
+            "    await sleep(0)\n    return ok(17)\n",
+        ),
         ("discard_value", "    return ok(17)\n"),
         ("discard_panic", panic_child),
     ] {
-        let discards = mode.starts_with("parent_finish_") || mode.starts_with("discard_");
+        let discards = mode.starts_with("parent_finish_")
+            || mode.starts_with("parent_permit_")
+            || mode.starts_with("discard_");
         let task_import = if discards {
             "from std.task import discard\n\n"
         } else {
@@ -319,6 +333,7 @@ async def main() -> Result[unit, Error]:
                     | "parent_wait_normal"
                     | "parent_receive_value"
                     | "parent_finish_normal"
+                    | "parent_permit_normal"
             ),
             "{stdout}"
         );

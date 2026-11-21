@@ -26,6 +26,9 @@ func TestCheckedTaskLowering(t *testing.T) {
 	observedReceive := make(chan received, 1)
 	nagiTaskObserve = func(result received) { observedReceive <- result }
 	switch fixtureMode {
+	case "parent_permit_cancel", "parent_permit_normal", "parent_permit_cleanup_fault":
+		testParentPermit(t)
+		return
 	case "parent_finish_pending", "parent_finish_ready_cancel", "parent_finish_normal":
 		testParentFinish(t)
 		return
@@ -125,6 +128,129 @@ func TestCheckedTaskLowering(t *testing.T) {
 	if got := cancellations.Load(); got != 1 {
 		t.Fatalf("child cancellation invoked %d times, want one", got)
 	}
+}
+
+func testParentPermit(t *testing.T) {
+	type value = nagiResult[int64, int64]
+	type observation struct {
+		scope *taskscope.Scope
+		state func() (ready, recorded, retained bool)
+	}
+	parent, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	permit := make(chan struct{}, 1)
+	permit <- struct{}{}
+	acquired, interrupted := make(chan struct{}), make(chan struct{})
+	cleanupEntered, releaseCleanup, released := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	releaseFinish := make(chan struct{})
+	defer func() {
+		for _, gate := range []chan struct{}{releaseCleanup, releaseFinish} {
+			select {
+			case <-gate:
+			default:
+				close(gate)
+			}
+		}
+	}()
+	wantsCancel := fixtureMode == "parent_permit_cancel"
+	wantsFault := fixtureMode == "parent_permit_cleanup_fault"
+	var releases atomic.Int32
+	// The test injects a permit at the generated timer's start and returns it
+	// through the kernel's existing cleanup boundary, including on unwind.
+	nagiTaskSleepStarted = func() { <-permit; close(acquired) }
+	nagiTaskSleepInterrupted = func() { close(interrupted) }
+	nagiTaskCleanup = func() {
+		defer func() {
+			releases.Add(1)
+			select {
+			case permit <- struct{}{}:
+			default:
+				panic("capacity-one test permit released twice")
+			}
+			close(released)
+		}()
+		close(cleanupEntered)
+		<-releaseCleanup
+		if wantsFault {
+			panic("controlled cleanup fault")
+		}
+	}
+
+	waiting := make(chan observation, 1)
+	nagiTaskFinishWaiting = func(scope *taskscope.Scope, handle taskscope.Handle[value]) {
+		waiting <- observation{scope, taskscope.ObserveTaskExit(scope, handle, func(bool) {})}
+		<-releaseFinish
+	}
+	type outcome struct {
+		returned, completed, ok bool
+		fault                   any
+	}
+	caller := make(chan outcome, 1)
+	go func() {
+		var result outcome
+		defer func() { result.fault = recover(); caller <- result }()
+		value, completed := nagiTaskParent(parent)
+		result = outcome{returned: true, completed: completed, ok: value.ok}
+	}()
+	waitParentEvent(t, "permit acquisition", acquired)
+	seen := waitParentEvent(t, "first finish wait", waiting)
+	publication := taskscope.TaskPublication(seen.scope)
+
+	if wantsCancel {
+		close(releaseFinish)
+		cancel()
+		waitParentEvent(t, "timer observing cancellation", interrupted)
+	}
+	waitParentEvent(t, "cleanup entry", cleanupEntered)
+	if wantsCancel {
+		if got := waitParentEvent(t, "parent exit before permit release", caller); !got.returned || got.completed || got.fault != nil {
+			t.Fatalf("cancelled parent outcome = %+v", got)
+		}
+	}
+	select {
+	case <-permit:
+		t.Fatal("permit was available during blocked cleanup")
+	default:
+	}
+	if ready, recorded, retained := seen.state(); ready || recorded || !retained {
+		t.Fatalf("blocked cleanup: ready=%t recorded=%t retained=%t", ready, recorded, retained)
+	}
+	close(releaseCleanup)
+	waitParentEvent(t, "permit returned", released)
+	waitParentEvent(t, "scope publication", publication)
+	waitParentEvent(t, "readmission with returned permit", permit)
+	select {
+	case <-permit:
+		t.Fatal("second acquisition succeeded while the sole permit was held")
+	default:
+	}
+	if got := releases.Load(); got != 1 {
+		t.Fatalf("cleanup returned %d permits", got)
+	}
+	if ready, recorded, retained := seen.state(); !ready || recorded || !retained {
+		t.Fatalf("before finish recording: ready=%t recorded=%t retained=%t", ready, recorded, retained)
+	}
+	if !wantsCancel {
+		close(releaseFinish)
+		got := waitParentEvent(t, "uncancelled parent", caller)
+		if wantsFault {
+			if got.returned || got.fault != taskscope.ErrCleanupPanicked {
+				t.Fatalf("cleanup fault outcome = %+v", got)
+			}
+		} else if !got.returned || !got.ok || !got.completed || got.fault != nil {
+			t.Fatalf("normal outcome = %+v", got)
+		}
+	}
+	finished := make(chan error, 1)
+	go func() { finished <- seen.scope.Finish() }()
+	fault := waitParentEvent(t, "independent finish", finished)
+	if (wantsFault && fault != taskscope.ErrCleanupPanicked) || (!wantsFault && fault != nil) {
+		t.Fatalf("finish fault = %v", fault)
+	}
+	if ready, recorded, retained := seen.state(); ready || !recorded || retained {
+		t.Fatalf("after finish: ready=%t recorded=%t retained=%t", ready, recorded, retained)
+	}
+	permit <- struct{}{}
 }
 
 func testParentFinish(t *testing.T) {
