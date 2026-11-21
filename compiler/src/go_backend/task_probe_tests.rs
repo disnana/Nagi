@@ -290,6 +290,14 @@ async def main() -> Result[unit, Error]:
             format!("{test_source}\nconst fixtureMode = {mode:?}\n"),
         )
         .unwrap();
+        let repeats_permit = mode.starts_with("parent_permit_");
+        if repeats_permit {
+            fs::write(
+                staging.path.join("permit_repetition_test.go"),
+                include_str!("task_permit_repetition_test.go"),
+            )
+            .unwrap();
+        }
         if let Some(root) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
             let path = PathBuf::from(root).join(mode);
             fs::create_dir_all(path.join("internal/taskscope")).unwrap();
@@ -307,6 +315,10 @@ async def main() -> Result[unit, Error]:
                 let file = "internal/taskscope/body_panic_probe.go";
                 fs::copy(staging.path.join(file), path.join(file)).unwrap();
             }
+            if repeats_permit {
+                let file = "permit_repetition_test.go";
+                fs::copy(staging.path.join(file), path.join(file)).unwrap();
+            }
         }
         let output = go_output(
             &["test", "-count=1", "-timeout=20s", "-v", "."],
@@ -320,6 +332,12 @@ async def main() -> Result[unit, Error]:
             stdout.contains("--- PASS: TestCheckedTaskLowering "),
             "{mode}: {stdout}"
         );
+        if repeats_permit {
+            assert!(
+                stdout.contains("--- PASS: TestParentPermitRepetition "),
+                "{mode}: {stdout}"
+            );
+        }
         assert_eq!(
             stdout.lines().any(|line| line == "after scope"),
             matches!(

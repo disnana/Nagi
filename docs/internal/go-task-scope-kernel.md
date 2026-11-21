@@ -230,6 +230,12 @@ cleanup callback に置いた defer が返す。親取消後でも cleanup を�
 記録は、資源が再取得できることと別に観測する。通常完了と異常終了も対照にする。
 これは試験用の資源であり、Nagi の公開資源 ABI や一般の資源捕捉を追加しない。
 
+反復試験は通常完了、親取消、子の cleanup fault の各生成 fixture で同じ容量1
+トークンを64回再利用する。各 fixture の共通10秒の期限内で、子の完了通知と
+記録済み scope の空の entry／完了キュー、permit の再取得をそれぞれ数える。
+この件数は限定したテストでの論理完了を示す。物理的な goroutine 終了、一般の
+資源解放、G3 の長時間試験は引き続き別の検証対象。
+
 barrier付きnative Go testで、並行開始、対象childだけの受取、cleanup前の受取禁止、
 discard前後、全child Finish、handle copy競合、wrong scope/forged handle、panic/cleanup
 panic/Goexit、fault観測順、兄弟cancel、cancel後panic、非協調childのdrain、

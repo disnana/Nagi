@@ -28,3 +28,10 @@ func TaskPublication(scope *Scope) <-chan struct{} {
 	defer scope.mu.Unlock()
 	return scope.notify
 }
+
+// TaskOutstanding counts retained entries and queued completion notifications.
+func TaskOutstanding(scope *Scope) (entries, queued int) {
+	scope.mu.Lock()
+	defer scope.mu.Unlock()
+	return len(scope.entries), len(scope.ready)
+}

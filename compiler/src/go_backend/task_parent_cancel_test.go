@@ -131,6 +131,34 @@ func TestCheckedTaskLowering(t *testing.T) {
 }
 
 func testParentPermit(t *testing.T) {
+	permit := make(chan struct{}, 1)
+	permit <- struct{}{}
+	runParentPermitRound(t, permit, time.Now().Add(5*time.Second), &permitRoundCounts{})
+}
+
+type permitRoundCounts struct {
+	completions, retired, reacquired int
+}
+
+func waitPermitEvent[T any](t *testing.T, deadline time.Time, name string, event <-chan T) T {
+	t.Helper()
+	remaining := time.Until(deadline)
+	if remaining > 0 {
+		timer := time.NewTimer(remaining)
+		defer timer.Stop()
+		select {
+		case got := <-event:
+			return got
+		case <-timer.C:
+		}
+	}
+	t.Fatalf("permit deadline exceeded waiting for %s", name)
+	var zero T
+	return zero
+}
+
+func runParentPermitRound(t *testing.T, permit chan struct{}, deadline time.Time, counts *permitRoundCounts) {
+	t.Helper()
 	type value = nagiResult[int64, int64]
 	type observation struct {
 		scope *taskscope.Scope
@@ -138,8 +166,6 @@ func testParentPermit(t *testing.T) {
 	}
 	parent, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	permit := make(chan struct{}, 1)
-	permit <- struct{}{}
 	acquired, interrupted := make(chan struct{}), make(chan struct{})
 	cleanupEntered, releaseCleanup, released := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	releaseFinish := make(chan struct{})
@@ -192,18 +218,18 @@ func testParentPermit(t *testing.T) {
 		value, completed := nagiTaskParent(parent)
 		result = outcome{returned: true, completed: completed, ok: value.ok}
 	}()
-	waitParentEvent(t, "permit acquisition", acquired)
-	seen := waitParentEvent(t, "first finish wait", waiting)
+	waitPermitEvent(t, deadline, "permit acquisition", acquired)
+	seen := waitPermitEvent(t, deadline, "first finish wait", waiting)
 	publication := taskscope.TaskPublication(seen.scope)
 
 	if wantsCancel {
 		close(releaseFinish)
 		cancel()
-		waitParentEvent(t, "timer observing cancellation", interrupted)
+		waitPermitEvent(t, deadline, "timer observing cancellation", interrupted)
 	}
-	waitParentEvent(t, "cleanup entry", cleanupEntered)
+	waitPermitEvent(t, deadline, "cleanup entry", cleanupEntered)
 	if wantsCancel {
-		if got := waitParentEvent(t, "parent exit before permit release", caller); !got.returned || got.completed || got.fault != nil {
+		if got := waitPermitEvent(t, deadline, "parent exit before permit release", caller); !got.returned || got.completed || got.fault != nil {
 			t.Fatalf("cancelled parent outcome = %+v", got)
 		}
 	}
@@ -216,23 +242,22 @@ func testParentPermit(t *testing.T) {
 		t.Fatalf("blocked cleanup: ready=%t recorded=%t retained=%t", ready, recorded, retained)
 	}
 	close(releaseCleanup)
-	waitParentEvent(t, "permit returned", released)
-	waitParentEvent(t, "scope publication", publication)
-	waitParentEvent(t, "readmission with returned permit", permit)
+	waitPermitEvent(t, deadline, "permit returned", released)
+	waitPermitEvent(t, deadline, "scope publication", publication)
+	waitPermitEvent(t, deadline, "readmission with returned permit", permit)
 	select {
 	case <-permit:
 		t.Fatal("second acquisition succeeded while the sole permit was held")
 	default:
 	}
-	if got := releases.Load(); got != 1 {
-		t.Fatalf("cleanup returned %d permits", got)
-	}
+	counts.reacquired++
 	if ready, recorded, retained := seen.state(); !ready || recorded || !retained {
 		t.Fatalf("before finish recording: ready=%t recorded=%t retained=%t", ready, recorded, retained)
 	}
+	counts.completions++
 	if !wantsCancel {
 		close(releaseFinish)
-		got := waitParentEvent(t, "uncancelled parent", caller)
+		got := waitPermitEvent(t, deadline, "uncancelled parent", caller)
 		if wantsFault {
 			if got.returned || got.fault != taskscope.ErrCleanupPanicked {
 				t.Fatalf("cleanup fault outcome = %+v", got)
@@ -243,14 +268,25 @@ func testParentPermit(t *testing.T) {
 	}
 	finished := make(chan error, 1)
 	go func() { finished <- seen.scope.Finish() }()
-	fault := waitParentEvent(t, "independent finish", finished)
+	fault := waitPermitEvent(t, deadline, "independent finish", finished)
 	if (wantsFault && fault != taskscope.ErrCleanupPanicked) || (!wantsFault && fault != nil) {
 		t.Fatalf("finish fault = %v", fault)
 	}
 	if ready, recorded, retained := seen.state(); ready || !recorded || retained {
 		t.Fatalf("after finish: ready=%t recorded=%t retained=%t", ready, recorded, retained)
 	}
-	permit <- struct{}{}
+	if entries, queued := taskscope.TaskOutstanding(seen.scope); entries != 0 || queued != 0 {
+		t.Fatalf("after finish: entries=%d queued=%d", entries, queued)
+	}
+	counts.retired++
+	if got := releases.Load(); got != 1 {
+		t.Fatalf("cleanup returned %d permits", got)
+	}
+	select {
+	case permit <- struct{}{}:
+	default:
+		t.Fatal("permit pool contains an extra token")
+	}
 }
 
 func testParentFinish(t *testing.T) {
