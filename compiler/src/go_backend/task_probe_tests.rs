@@ -141,6 +141,8 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
         ("panic", panic_child),
         ("body_error_before_await", panic_child),
         ("body_error_after_await", panic_child),
+        ("body_assert_true", "    return ok(17)\n"),
+        ("body_assert_false", "    return ok(17)\n"),
         ("discard_value", "    return ok(17)\n"),
         ("discard_panic", panic_child),
     ] {
@@ -151,6 +153,8 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
         let body = match mode {
             "body_error_before_await" => [body_error, receive].concat(),
             "body_error_after_await" => [receive, body_error].concat(),
+            "body_assert_true" => ["        assert_true(True)\n", receive].concat(),
+            "body_assert_false" => ["        assert_true(False)\n", receive].concat(),
             "discard_value" | "discard_panic" => "        discard(handle)\n".to_owned(),
             _ => receive.to_owned(),
         };
@@ -197,14 +201,20 @@ async def main() -> Result[unit, Error]:
         )
         .unwrap();
         fs::write(staging.path.join("main.go"), generated).unwrap();
-        fs::write(
-            staging.path.join("lowering_test.go"),
+        let test_source = if mode == "body_assert_false" {
+            fs::write(
+                kernel.join("body_panic_probe.go"),
+                include_str!("task_body_panic_probe.go"),
+            )
+            .unwrap();
+            include_str!("task_body_panic_test.go").to_owned()
+        } else {
             format!(
                 "{}\nconst fixtureMode = {mode:?}\n",
                 include_str!("task_lowering_test.go")
-            ),
-        )
-        .unwrap();
+            )
+        };
+        fs::write(staging.path.join("lowering_test.go"), test_source).unwrap();
         if let Some(root) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
             let path = PathBuf::from(root).join(mode);
             fs::create_dir_all(path.join("internal/taskscope")).unwrap();
@@ -216,6 +226,10 @@ async def main() -> Result[unit, Error]:
                 "lowering_test.go",
                 "internal/taskscope/taskscope.go",
             ] {
+                fs::copy(staging.path.join(file), path.join(file)).unwrap();
+            }
+            if mode == "body_assert_false" {
+                let file = "internal/taskscope/body_panic_probe.go";
                 fs::copy(staging.path.join(file), path.join(file)).unwrap();
             }
         }
@@ -233,7 +247,10 @@ async def main() -> Result[unit, Error]:
         );
         assert_eq!(
             stdout.lines().any(|line| line == "after scope"),
-            matches!(mode, "value" | "business_error" | "discard_value"),
+            matches!(
+                mode,
+                "value" | "business_error" | "discard_value" | "body_assert_true"
+            ),
             "{stdout}"
         );
         println!("{mode}\n{stdout}");

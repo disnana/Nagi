@@ -146,11 +146,17 @@ cleanup を別に観測できる。High・保存 Low・手書き Low の生成�
 
 たとえば、待機中の子の cleanup を止めた状態で本体が panic すると、`Cancel` や
 `FinishBodyError` を defer した Go 側は drain で止まり、呼び出し側への panic の
-伝播を遅らせる。非公開 kernel の `RequestAbnormalExit` は出力を放棄してから
-取消を要求し、cleanup や完了記録を待たずに戻る。生成 Rust と同じ順序を Go で
-扱うには、本体の unwind からこの操作を呼び、生成された `nagiFuture` に取消通知を
-処理して cleanup へ進める待機点を接続する必要がある。この経路は現在の Go lowering
-には未接続。
+伝播を遅らせる。test build 専用の単一子 Go lowering は、本体の直接の spawn と
+await の間に組み込み `assert_true` の真偽値リテラルを一つ置く形に限り、
+字句的な本体からの unwind を `RequestAbnormalExit` につなぐ。defer は未受取出力の
+放棄と取消要求までを担い、元の panic は呼び出し側へ伝わる。
+
+生成テストでは既存の観測用 hook で子を取消チャネルに待機させる。実際の kernel の
+取消関数を観測し、出力放棄後に一度だけ呼ばれたこと、cleanup のゲートを閉じたまま
+元の assertion panic が届くことを確認する。ゲートを開いた後、観測側が別途
+`Finish` を呼び、子の完了の記録と entry の退役を確認する。`assert_true(true)` は
+通常の受取と `Finish` を通る。生成された `nagiFuture` 自体への取消通知の接続と、
+公開 CLI への接続は引き続き対象外。
 
 ### 論理 join として使うための条件
 

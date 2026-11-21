@@ -183,7 +183,7 @@ func TestCheckedTaskLowering(t *testing.T) {
 		t.Fatal("result preceded child cleanup")
 	}
 	switch fixtureMode {
-	case "value":
+	case "value", "body_assert_true":
 		if !result.value.ok || !result.value.value.ok || result.value.value.value != 17 || !exit.ok {
 			t.Fatalf("value receive=%+v exit=%+v", result, exit)
 		}

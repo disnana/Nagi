@@ -16,13 +16,14 @@ pub(super) struct SingleTask<'a> {
     pub(super) invocation: &'a Expr,
     handle: &'a str,
     completion: TaskCompletion<'a>,
-    body_try: Option<BodyTry<'a>>,
+    body_step: Option<BodyStep<'a>>,
 }
 
 #[derive(Clone, Copy)]
-enum BodyTry<'a> {
-    Before(&'a Stmt),
-    After(&'a Stmt),
+enum BodyStep<'a> {
+    TryBefore(&'a Stmt),
+    TryAfter(&'a Stmt),
+    AssertBefore(&'a Stmt),
 }
 
 #[derive(Clone, Copy)]
@@ -60,13 +61,16 @@ impl<'a> SingleTask<'a> {
         let S::Scope(body) = &scope.kind else {
             return Err(unsupported());
         };
-        let (spawn, consume, body_try) = match body.as_slice() {
+        let (spawn, consume, body_step) = match body.as_slice() {
             [spawn, consume] => (spawn, consume, None),
             [spawn, first, second] if literal_body_try(first) => {
-                (spawn, second, Some(BodyTry::Before(first)))
+                (spawn, second, Some(BodyStep::TryBefore(first)))
             }
             [spawn, first, second] if literal_body_try(second) => {
-                (spawn, first, Some(BodyTry::After(second)))
+                (spawn, first, Some(BodyStep::TryAfter(second)))
+            }
+            [spawn, assertion, consume] if literal_assertion(assertion) => {
+                (spawn, consume, Some(BodyStep::AssertBefore(assertion)))
             }
             _ => return Err(unsupported()),
         };
@@ -91,7 +95,7 @@ impl<'a> SingleTask<'a> {
                 };
                 (TaskCompletion::Receive(name), value, operand.as_ref())
             }
-            S::Expr(value) if body_try.is_none() => {
+            S::Expr(value) if body_step.is_none() => {
                 let E::Call(name, types, arguments) = &value.kind else {
                     return Err(unsupported());
                 };
@@ -136,12 +140,7 @@ impl<'a> SingleTask<'a> {
         // assertion. No other calls, captures or resource-bearing paths enter.
         let child_return = match child.body.as_slice() {
             [last] => last,
-            [first, last]
-                if matches!(&first.kind, S::Expr(value)
-                if literal_builtin(value, &["assert_true"], |kind| matches!(kind, E::Bool(_)))) =>
-            {
-                last
-            }
+            [first, last] if literal_assertion(first) => last,
             _ => return Err(unsupported()),
         };
         if !matches!(&child_return.kind, S::Return(Some(value))
@@ -204,13 +203,18 @@ impl<'a> SingleTask<'a> {
             invocation,
             handle,
             completion,
-            body_try,
+            body_step,
         })
     }
 
     pub(super) fn validate(&self, emitter: &Emitter<'a>, ret: &Type) -> Result<(), String> {
         emitter.validate_expr(self.invocation, ret)?;
-        if let Some(BodyTry::Before(statement) | BodyTry::After(statement)) = self.body_try {
+        if let Some(
+            BodyStep::TryBefore(statement)
+            | BodyStep::TryAfter(statement)
+            | BodyStep::AssertBefore(statement),
+        ) = self.body_step
+        {
             emitter.validate_statement(statement, ret)?;
         }
         Ok(())
@@ -229,7 +233,12 @@ impl<'a> SingleTask<'a> {
         Emitter::line(output, indent, "{");
         let indent = indent + 1;
         Emitter::line(output, indent, format!("{scope} := taskscope.New()"));
-        let body_result = self.body_try.map(|_| emitter.temp("task_body"));
+        let body_result = matches!(
+            self.body_step,
+            Some(BodyStep::TryBefore(_) | BodyStep::TryAfter(_))
+        )
+        .then(|| emitter.temp("task_body"));
+        let body_asserts = matches!(self.body_step, Some(BodyStep::AssertBefore(_)));
         // The ordinary try lowering returns to this lexical body first.
         // Outside it, FinishBodyError retires the output and drains the child.
         if let Some(body) = &body_result {
@@ -238,8 +247,10 @@ impl<'a> SingleTask<'a> {
                 indent,
                 format!("{body} := func() nagiResult[nagiUnit, nagiError] {{"),
             );
+        } else if body_asserts {
+            Emitter::line(output, indent, format!("nagiTaskBody({scope}, func() {{"));
         }
-        let body_indent = indent + usize::from(body_result.is_some());
+        let body_indent = indent + usize::from(self.body_step.is_some());
         for line in before {
             Emitter::line(output, body_indent, line);
         }
@@ -248,13 +259,22 @@ impl<'a> SingleTask<'a> {
             body_indent,
             format!("{handle} := nagiTaskSpawn({scope}, {future}, nagiTaskCleanup)"),
         );
-        if let Some(BodyTry::Before(statement)) = self.body_try {
-            Emitter::line(
-                output,
-                body_indent,
-                "if nagiTaskBeforeBodyTry != nil { nagiTaskBeforeBodyTry() }",
-            );
-            emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
+        match self.body_step {
+            Some(BodyStep::TryBefore(statement)) => {
+                Emitter::line(
+                    output,
+                    body_indent,
+                    "if nagiTaskBeforeBodyTry != nil { nagiTaskBeforeBodyTry() }",
+                );
+                emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
+            }
+            Some(BodyStep::AssertBefore(statement)) => {
+                Emitter::line(output, body_indent, format!(
+                    "if nagiTaskBeforeBodyAssert != nil {{ nagiTaskBeforeBodyAssert({scope}, {handle}) }}"
+                ));
+                emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
+            }
+            _ => {}
         }
         match self.completion {
             TaskCompletion::Receive(name) => {
@@ -283,7 +303,7 @@ impl<'a> SingleTask<'a> {
                 );
             }
         }
-        if let Some(BodyTry::After(statement)) = self.body_try {
+        if let Some(BodyStep::TryAfter(statement)) = self.body_step {
             emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
         }
         if let Some(body) = body_result {
@@ -296,6 +316,8 @@ impl<'a> SingleTask<'a> {
             Emitter::line(output, indent, format!(
                 "if !{body}.ok {{ return nagiErr[nagiUnit](taskscope.FinishBodyError({scope}, {body}.problem)) }}"
             ));
+        } else if body_asserts {
+            Emitter::line(output, indent, "})");
         }
         Emitter::line(
             output,
@@ -305,6 +327,11 @@ impl<'a> SingleTask<'a> {
         Emitter::line(output, indent - 1, "}");
         Ok(())
     }
+}
+
+fn literal_assertion(statement: &Stmt) -> bool {
+    matches!(&statement.kind, S::Expr(value)
+        if literal_builtin(value, &["assert_true"], |kind| matches!(kind, E::Bool(_))))
 }
 
 fn literal_body_try(statement: &Stmt) -> bool {
@@ -357,7 +384,19 @@ var nagiTaskCleanup func()
 var nagiTaskObserve func(nagiResult[nagiResult[int64, int64], nagiTaskFailure])
 var nagiTaskChildDone func(<-chan struct{})
 var nagiTaskBeforeBodyTry func()
+var nagiTaskBeforeBodyAssert func(*taskscope.Scope, taskscope.Handle[nagiResult[int64, int64]])
 var nagiTaskDiscarded func()
+
+func nagiTaskBody(scope *taskscope.Scope, body func()) {
+    completed := false
+    defer func() {
+        if !completed {
+            scope.RequestAbnormalExit()
+        }
+    }()
+    body()
+    completed = true
+}
 
 func nagiTaskSpawn[T any](scope *taskscope.Scope, future *nagiFuture[T], cleanup func()) taskscope.Handle[T] {
     handle, fault := taskscope.Spawn(scope, func(ctx context.Context) T {
