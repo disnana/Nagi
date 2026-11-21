@@ -132,6 +132,22 @@ scope は成功し、子 panic は scope の `Internal` に残る。暗黙 Drop 
 cargo test --locked -p nagic --lib checked_single_task_lowers_scope_spawn_and_await_internally -- --ignored --nocapture
 ```
 
+### scope 本体の panic
+
+生成 Rust では、scope 本体の unwind が未受取 handle の出力を放棄し、外側の
+`TaskScope` の Drop が生存する子へ取消を要求する。元の panic は呼び出し側へ
+伝わる。親 Future を保持したまま同じ executor を再駆動すると、取消された子の
+cleanup を別に観測できる。High・保存 Low・手書き Low の生成テストでは、完了済みの
+出力の Drop と、待機中の子の cleanup を別々に検証する。
+
+たとえば、待機中の子の cleanup を止めた状態で本体が panic すると、`Cancel` や
+`FinishBodyError` を defer した Go 側は drain で止まり、呼び出し側への panic の
+伝播を遅らせる。`RequestOwnerTeardown` 単体では未受取出力が放棄されず、
+生成された `nagiFuture` の待機処理にも子の取消通知が渡らない。内部接続の候補は、
+本体の unwind にだけ出力放棄と取消要求を順に結ぶ境界と、取消通知を処理して
+cleanup へ進める子の待機点である。そこで同じ panic を呼び出し側へ伝え、
+cleanup は別に観測する。この経路は現在の Go lowering には未接続。
+
 ### 論理 join として使うための条件
 
 `done` は scope の完了登録より先に観測できる。テストでは scope の lock を

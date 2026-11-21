@@ -1,5 +1,7 @@
 #[path = "support/native_triple.rs"]
 mod native_triple;
+#[path = "support/task_body_panic.rs"]
+mod task_body_panic;
 #[path = "support/task_conditional_consumption.rs"]
 mod task_conditional_consumption;
 #[path = "support/task_service.rs"]
