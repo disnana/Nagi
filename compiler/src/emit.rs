@@ -641,6 +641,7 @@ fn re(e: &Expr, types: &RustTypes<'_>) -> String {
                         parameters,
                         emit_type_arguments,
                         sql,
+                        ..
                     } => (path, parameters, emit_type_arguments, sql),
                 };
                 let arguments = a

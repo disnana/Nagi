@@ -1,9 +1,10 @@
 //! Initial, deliberately bounded Go backend.
 //!
 //! The frontend and final checker remain shared with the Rust backend.  This
-//! module accepts only the G1 subset and rejects everything else before `go`
+//! module accepts a bounded experimental subset and rejects other operations before `go`
 //! is invoked, so target compiler failures cannot silently define Nagi
 //! semantics.
+mod http;
 use crate::{
     ast::{Expr, Function, MatchPattern, NameResolution, Program, Stmt, Type, E, S},
     checked::{
@@ -135,7 +136,7 @@ fn go_type(
             .expect("async function result is a checked Future");
         let arguments = arguments
             .iter()
-            .map(|argument| go_type(argument, classes, enums, line))
+            .map(|argument| go_borrow_input_type(argument, classes, enums, line))
             .collect::<Result<Vec<_>, _>>()?
             .join(", ");
         return Ok(format!(
@@ -166,6 +167,9 @@ fn go_type(
             return Err(error(line, format!("type {ty} has unexpected arguments")));
         }
         return Ok(primitive.into());
+    }
+    if let Some(native) = http::go_type(ty, classes, enums, line)? {
+        return Ok(native);
     }
     if classes.contains(&ty.0) && ty.1.is_empty() {
         return Ok(class_name(&ty.0));
@@ -205,6 +209,11 @@ fn go_borrow_input_type(
     if ty == &Type::generic("view", vec![Type::named("str")]) {
         return Ok("string".into());
     }
+    if let ("shared", [state]) = (ty.0.as_str(), ty.1.as_slice()) {
+        if classes.contains(&state.0) && state.1.is_empty() {
+            return go_type(state, classes, enums, line);
+        }
+    }
     go_type(ty, classes, enums, line)
 }
 
@@ -214,6 +223,9 @@ fn go_local_type(
     enums: &BTreeSet<String>,
     line: usize,
 ) -> Result<String, String> {
+    if let Some(view) = http::local_view(ty) {
+        return Ok(view.into());
+    }
     if ty.is_async_function() {
         let (result, arguments) =
             ty.1.split_last()
@@ -271,56 +283,66 @@ fn walk_expr_calls(expr: &Expr, calls: &mut Vec<String>) {
     }
 }
 
-fn expression_uses_builtin_sleep(expression: &Expr) -> bool {
-    let nested = match &expression.kind {
-        E::Call(_, _, arguments) | E::List(arguments) => {
-            arguments.iter().any(expression_uses_builtin_sleep)
-        }
+fn expression_matches(expression: &Expr, predicate: &impl Fn(&Expr) -> bool) -> bool {
+    if predicate(expression) {
+        return true;
+    }
+    match &expression.kind {
+        E::Call(_, _, arguments) | E::List(arguments) => arguments
+            .iter()
+            .any(|expression| expression_matches(expression, predicate)),
         E::Binary(left, _, right) | E::Index(left, right) => {
-            expression_uses_builtin_sleep(left) || expression_uses_builtin_sleep(right)
+            expression_matches(left, predicate) || expression_matches(right, predicate)
         }
         E::Unary(_, value) | E::Field(value, _) | E::Await(value) | E::Try(value) => {
-            expression_uses_builtin_sleep(value)
+            expression_matches(value, predicate)
         }
         E::Record(_, fields) => fields
             .iter()
-            .any(|(_, value)| expression_uses_builtin_sleep(value)),
+            .any(|(_, value)| expression_matches(value, predicate)),
         E::Int(_) | E::Float(_) | E::Str(_) | E::Bool(_) | E::Null | E::Name(_) => false,
-    };
-    nested
-        || matches!(
-            &expression.kind,
-            E::Call(name, _, _)
-                if name == "sleep" && expression.resolution == Some(NameResolution::Builtin)
-        )
+    }
 }
 
-fn statement_uses_builtin_sleep(statement: &Stmt) -> bool {
+fn statement_matches(statement: &Stmt, predicate: &impl Fn(&Expr) -> bool) -> bool {
     match &statement.kind {
         S::Assign { value, .. } | S::SpawnBind { value, .. } | S::Expr(value) | S::Spawn(value) => {
-            expression_uses_builtin_sleep(value)
+            expression_matches(value, predicate)
         }
-        S::Return(value) => value.as_ref().is_some_and(expression_uses_builtin_sleep),
+        S::Return(value) => value
+            .as_ref()
+            .is_some_and(|expression| expression_matches(expression, predicate)),
         S::If(condition, yes, no) => {
-            expression_uses_builtin_sleep(condition)
-                || yes.iter().any(statement_uses_builtin_sleep)
-                || no.iter().any(statement_uses_builtin_sleep)
+            expression_matches(condition, predicate)
+                || yes
+                    .iter()
+                    .any(|statement| statement_matches(statement, predicate))
+                || no
+                    .iter()
+                    .any(|statement| statement_matches(statement, predicate))
         }
         S::Match(value, arms) => {
-            expression_uses_builtin_sleep(value)
+            expression_matches(value, predicate)
                 || arms
                     .iter()
                     .flat_map(|arm| &arm.body)
-                    .any(statement_uses_builtin_sleep)
+                    .any(|statement| statement_matches(statement, predicate))
         }
         S::While(condition, body) => {
-            expression_uses_builtin_sleep(condition)
-                || body.iter().any(statement_uses_builtin_sleep)
+            expression_matches(condition, predicate)
+                || body
+                    .iter()
+                    .any(|statement| statement_matches(statement, predicate))
         }
         S::For(_, value, body) => {
-            expression_uses_builtin_sleep(value) || body.iter().any(statement_uses_builtin_sleep)
+            expression_matches(value, predicate)
+                || body
+                    .iter()
+                    .any(|statement| statement_matches(statement, predicate))
         }
-        S::Scope(body) => body.iter().any(statement_uses_builtin_sleep),
+        S::Scope(body) => body
+            .iter()
+            .any(|statement| statement_matches(statement, predicate)),
     }
 }
 
@@ -430,6 +452,7 @@ struct Emitter<'a> {
     current_function: Option<String>,
     profile: BuildProfile,
     uses_builtin_sleep: bool,
+    uses_builtin_env: bool,
     temporary: usize,
 }
 
@@ -459,9 +482,18 @@ impl<'a> Emitter<'a> {
             .collect();
         let future_facts = checked.final_check_facts();
         let reachable = reachable(program, future_facts)?;
-        let uses_builtin_sleep = reachable
-            .iter()
-            .any(|(function, _)| function.body.iter().any(statement_uses_builtin_sleep));
+        let uses_builtin = |name| {
+            reachable.iter().any(|(function, _)| {
+                function.body.iter().any(|statement| {
+                    statement_matches(statement, &|expression| {
+                        expression.resolution == Some(NameResolution::Builtin)
+                            && matches!(&expression.kind, E::Call(callee, _, _) if callee == name)
+                    })
+                })
+            })
+        };
+        let uses_builtin_sleep = uses_builtin("sleep");
+        let uses_builtin_env = uses_builtin("env");
         if program.functions.len() != checked.emission.functions.len() {
             return Err(
                 "internal compiler error: Go backend function plans do not match the checked program"
@@ -470,7 +502,7 @@ impl<'a> Emitter<'a> {
         }
         // Keep the frontend's original checked AST. The Rust emission copy may
         // contain Rust-specific names, while these operation facts are the
-        // target-neutral proof that a standard call is the canonical move.
+        // target-neutral proof of the standard operation and its argument modes.
         let operations = program
             .functions
             .iter()
@@ -500,6 +532,7 @@ impl<'a> Emitter<'a> {
             current_function: None,
             profile,
             uses_builtin_sleep,
+            uses_builtin_env,
             temporary: 0,
         };
         emitter.validate()?;
@@ -761,7 +794,7 @@ impl<'a> Emitter<'a> {
             S::Assign { value, .. } => self.validate_expr(value, ret),
             S::Return(value) => value
                 .as_ref()
-                .map(|value| self.validate_expr(value, ret))
+                .map(|value| self.validate_expr_at(value, ret, true))
                 .unwrap_or(Ok(())),
             S::Expr(value) => self.validate_expr(value, ret),
             S::If(condition, left, right) => {
@@ -865,26 +898,41 @@ impl<'a> Emitter<'a> {
     }
 
     fn validate_expr(&self, expression: &Expr, ret: &Type) -> Result<(), String> {
+        self.validate_expr_at(expression, ret, false)
+    }
+
+    fn validate_expr_at(
+        &self,
+        expression: &Expr,
+        ret: &Type,
+        direct_return: bool,
+    ) -> Result<(), String> {
         let ty = expression
             .ty
             .as_ref()
             .ok_or_else(|| error(expression.line, "checked expression has no type"))?;
-        if expression.resolution == Some(NameResolution::Standard)
-            && matches!(
-                self.operation_plan(expression)?,
-                OperationPlan::NativeCall { .. }
-            )
-        {
-            let E::Call(name, _, _) = &expression.kind else {
-                return Err(error(
-                    expression.line,
-                    "internal compiler error: sealed standard operation is not a call",
-                ));
-            };
-            return Err(error(
-                expression.line,
-                format!("operation {name} is not supported by the initial Go backend"),
-            ));
+        if expression.resolution == Some(NameResolution::Standard) {
+            if let OperationPlan::NativeCall { operation, .. } = self.operation_plan(expression)? {
+                let E::Call(name, _, arguments) = &expression.kind else {
+                    return Err(error(
+                        expression.line,
+                        "internal compiler error: sealed standard operation is not a call",
+                    ));
+                };
+                if crate::stdlib::operation(name) != Some(*operation) {
+                    return Err(error(
+                        expression.line,
+                        "internal compiler error: inconsistent sealed operation identity",
+                    ));
+                }
+                if http::operation_name(*operation).is_none() {
+                    return Err(error(
+                        expression.line,
+                        format!("operation {name} is not supported by the initial Go backend"),
+                    ));
+                }
+                http::validate_call(self, *operation, expression, arguments, direct_return)?;
+            }
         }
         go_local_type(ty, &self.classes, &self.enums, expression.line)?;
         match &expression.kind {
@@ -901,6 +949,17 @@ impl<'a> Emitter<'a> {
                 )),
             },
             E::Binary(left, operator, right) => {
+                if [left, right].iter().any(|operand| {
+                    operand.ty.as_ref().is_some_and(|ty| {
+                        *ty == Type::named("bytes")
+                            || *ty == Type::generic("view", vec![Type::named("bytes")])
+                    })
+                }) {
+                    return Err(error(
+                        expression.line,
+                        "byte slice comparisons are not supported by the Go backend",
+                    ));
+                }
                 if !matches!(
                     operator.as_str(),
                     "+" | "-"
@@ -977,10 +1036,7 @@ impl<'a> Emitter<'a> {
                             expression.line,
                             "internal compiler error: invalid sealed identity transfer shape",
                         )),
-                        OperationPlan::NativeCall { .. } => Err(error(
-                            expression.line,
-                            format!("operation {name} is not supported by the initial Go backend"),
-                        )),
+                        OperationPlan::NativeCall { .. } => Ok(()),
                     },
                     Some(NameResolution::Builtin)
                         if matches!(
@@ -998,6 +1054,7 @@ impl<'a> Emitter<'a> {
                                 | "len"
                                 | "range"
                                 | "sleep"
+                                | "env"
                                 | "append"
                                 | "view"
                         ) =>
@@ -1011,7 +1068,10 @@ impl<'a> Emitter<'a> {
                                     "internal compiler error: invalid checked view shape",
                                 ));
                             };
-                            if argument_ty != &Type::named("str") {
+                            if argument_ty != &Type::named("str")
+                                && crate::stdlib::resource(&argument_ty.0)
+                                    != Some(crate::stdlib::Resource::Request)
+                            {
                                 return Err(error(
                                     expression.line,
                                     format!(
@@ -1054,6 +1114,17 @@ impl<'a> Emitter<'a> {
             E::Field(_, _) if expression.resolution == Some(NameResolution::Enum) => {
                 self.constructor_fact(expression)?;
                 Ok(())
+            }
+            E::Field(owner, name)
+                if expression.resolution == Some(NameResolution::ResourceConstant) =>
+            {
+                http::constant(owner, name, expression.line).map(|_| ())
+            }
+            E::Field(owner, name)
+                if expression.resolution == Some(NameResolution::ResourceField) =>
+            {
+                http::field(owner, name, expression.line)?;
+                self.validate_expr(owner, ret)
             }
             E::Field(value, _) => self.validate_expr(value, ret),
             E::Try(value) => {
@@ -1254,10 +1325,19 @@ impl<'a> Emitter<'a> {
                             expression.line,
                             "internal compiler error: invalid sealed identity transfer shape",
                         )),
-                        OperationPlan::NativeCall { .. } => Err(error(
-                            expression.line,
-                            format!("operation {name} is not supported by the initial Go backend"),
-                        )),
+                        OperationPlan::NativeCall { operation, .. } => {
+                            let helper =
+                                http::operation_name(operation).expect("validated HTTP operation");
+                            let mut values = Vec::with_capacity(arguments.len());
+                            for argument in arguments {
+                                let (argument_before, value) = self.evaluated(argument, ret)?;
+                                before.extend(argument_before);
+                                values.push(value);
+                            }
+                            let generic =
+                                http::call_type_arguments(self, operation, expression, arguments)?;
+                            Ok((before, format!("{helper}{generic}({})", values.join(", "))))
+                        }
                     };
                 }
                 if expression.resolution == Some(NameResolution::Builtin) && name == "append" {
@@ -1299,6 +1379,7 @@ impl<'a> Emitter<'a> {
                         "len" => format!("int64(len({}))", values[0]),
                         "range" => format!("nagiRange{{end: {}}}", values[0]),
                         "sleep" => format!("nagiSleep({})", values[0]),
+                        "env" => format!("nagiEnv({}, {})", values[0], values[1]),
                         "view" => values[0].clone(),
                         "ok" => {
                             let ty = expression.ty.as_ref().expect("validated result");
@@ -1321,7 +1402,7 @@ impl<'a> Emitter<'a> {
                         "error" => {
                             let ty = expression.ty.as_ref().expect("validated result");
                             format!(
-                                "nagiErr[{}, nagiError](nagiError{{message: {}}})",
+                                "nagiErr[{}, nagiError](nagiError{{message: {}, kind: nagiInvalid}})",
                                 go_type(&ty.1[0], &self.classes, &self.enums, expression.line)?,
                                 values[0]
                             )
@@ -1342,6 +1423,19 @@ impl<'a> Emitter<'a> {
             }
             E::Field(_, _) if expression.resolution == Some(NameResolution::Enum) => {
                 enum_variant_name(self.constructor_fact(expression)?)
+            }
+            E::Field(owner, name)
+                if expression.resolution == Some(NameResolution::ResourceConstant) =>
+            {
+                http::constant(owner, name, expression.line)?.into()
+            }
+            E::Field(owner, name)
+                if expression.resolution == Some(NameResolution::ResourceField) =>
+            {
+                let field = http::field(owner, name, expression.line)?;
+                let (owner_before, owner) = self.evaluated(owner, ret)?;
+                before.extend(owner_before);
+                format!("({owner}).{field}")
             }
             E::Field(value, field) => {
                 let (value_before, value) = self.evaluated(value, ret)?;
@@ -1756,9 +1850,19 @@ impl<'a> Emitter<'a> {
             "\"strconv\"",
             "\"strings\"",
         ];
-        if main.ret.0 == "Result" {
+        if main.ret.0 == "Result" || self.uses_builtin_env {
             imports.push("\"os\"");
         }
+        let env_runtime = if self.uses_builtin_env {
+            imports.push("\"unicode/utf8\"");
+            "func nagiEnv(name, fallback string) string {
+    if value, ok := os.LookupEnv(name); ok && utf8.ValidString(value) { return value }
+    return fallback
+}
+"
+        } else {
+            ""
+        };
         let sleep_runtime = if self.uses_builtin_sleep {
             imports.push("\"time\"");
             "const nagiMaxSleepMilliseconds int64 = 9223372036854\n\
@@ -1775,13 +1879,14 @@ func nagiSleep(milliseconds int64) *nagiFuture[nagiUnit] {\n\
         } else {
             ""
         };
+        let http_runtime = http::runtime(self.program, &mut imports);
         let imports = format!("import (\n    {}\n)\n\n", imports.join("\n    "));
         Ok(format!(
             "// Code generated by nagic for the experimental Go backend. DO NOT EDIT.\npackage main\n\n{imports}\
 type nagiUnit struct{{}}\n\
-type nagiError struct{{ message string }}\n\
+type nagiError struct{{ message string; kind uint8 }}\n\
 func (problem nagiError) Error() string {{ return problem.message }}\n\
-type nagiRange struct{{ end int64 }}\n\
+const ( nagiInvalid uint8 = iota + 1; nagiBusy )\n\ntype nagiRange struct{{ end int64 }}\n\
 type nagiOption[T any] struct{{ some bool; value T }}\n\
 func nagiSome[T any](value T) nagiOption[T] {{ return nagiOption[T]{{some: true, value: value}} }}\n\
 func nagiNone[T any]() nagiOption[T] {{ return nagiOption[T]{{}} }}\n\
@@ -1798,7 +1903,7 @@ func (future *nagiFuture[T]) await() T {{\n\
     defer func() {{ body = nil }}()\n\
     return body()\n\
 }}\n\
-{sleep_runtime}\
+{sleep_runtime}{env_runtime}{http_runtime}\
 func nagiFixedDecimal(digits string, scale int) string {{\n\
     if scale >= 0 {{ return digits + strings.Repeat(\"0\", scale) }}\n\
     point := len(digits) + scale\n\
@@ -1865,7 +1970,7 @@ func nagiDisplay[T any](value T) string {{\n\
 func nagiPrint[T any](value T) nagiUnit {{ fmt.Println(nagiDisplay(value)); return nagiUnit{{}} }}\n\
 func nagiWrite[T any](value T) nagiUnit {{ fmt.Print(nagiDisplay(value)); return nagiUnit{{}} }}\n\
 func nagiAssertTrue(value bool) nagiUnit {{ if !value {{ panic(\"assertion failed\") }}; return nagiUnit{{}} }}\n\
-func nagiParseI64(value string) nagiResult[int64, nagiError] {{ parsed, problem := strconv.ParseInt(value, 10, 64); if problem != nil {{ return nagiErr[int64](nagiError{{message: problem.Error()}}) }}; return nagiOk[int64, nagiError](parsed) }}\n\n{body}"
+func nagiParseI64(value string) nagiResult[int64, nagiError] {{ parsed, problem := strconv.ParseInt(value, 10, 64); if problem != nil {{ return nagiErr[int64](nagiError{{message: problem.Error(), kind: nagiInvalid}}) }}; return nagiOk[int64, nagiError](parsed) }}\n\n{body}"
         ))
     }
 }

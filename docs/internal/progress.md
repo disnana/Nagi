@@ -1,5 +1,19 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-11-21: Go M21のループバックHTTP（ローカル・未公開）
+
+基点はmain `2cb7c33aff2ccc3763fa80e6d0f07240ad09570f`。共有checkerが封印した
+標準operationのidentityをGo emitterへ渡し、既存のHTTP APIの限定経路に接続した。
+通常のHigh→Low再parse/finalize、保存Lowと手書きLowの入力経路、Rust既定を維持する。
+固定長本文のbyte view、応答のコピー、本文上限と公開ルートの起動に必要な設定を
+[Go backendの対応範囲](go-backend-0.3-minimum.md#m21のループバックhttp) に記録した。
+
+Linux x86_64、Go 1.27.3、Rust 1.100.0でHigh・保存Low・手書きLowを通常CLIから
+生成し、Go/RustそれぞれでバイナリPOSTの完全一致、既定1 MiBと設定4 KiBの境界、
+超過宣言の413/close、本文なしGETの200を確認した。Goではuse-after-moveと
+`await` を含むhandlerの拒否を生成前に確認した。全workspace・race・他OS・
+独立監査・CI実行は未確認。G4の範囲は保留。
+
 ## 2026-11-01: Go private Task body-local output放棄（ローカル・未公開）
 
 main `ca848078`のprivate Task scope kernelへ、採用済み

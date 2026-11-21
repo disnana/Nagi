@@ -1,0 +1,35 @@
+import std.http.server as http;
+
+record State { greeting: str; }
+
+async fn health(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error] {
+    assert_true(len(request.body) == 0);
+    return http.text(http.response_context(view(request)), http.Status.OK, view(state.greeting));
+}
+
+async fn echo(request: http.Request, state: shared[State], authority: unit) -> Result[http.Response, Error] {
+    return http.bytes(http.response_context(view(request)), http.Status.OK, request.body);
+}
+
+async fn main() -> Result[unit, Error] {
+    let app = http.app_default[State](State(greeting="ready"));
+    app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health);
+    let health_rate = try http.rate_policy(1000, 1000);
+    app = try http.rate_route(app, http.Method.GET, "/health", health_rate);
+    app = try http.route(app, http.Method.POST, "/echo", http.public_policy[State](), echo);
+    let echo_rate = try http.rate_policy(1000, 1000);
+    app = try http.rate_route(app, http.Method.POST, "/echo", echo_rate);
+    let port = try parse_i64(env("NAGI_SAMPLE_PORT", "8096"));
+    let authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8096");
+    let response_budget = try http.response_limits(1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32);
+    let rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536);
+    let body_limit = try parse_i64(env("NAGI_HTTP_BODY_LIMIT", "0"));
+    let options = http.default_options();
+    if body_limit > 0 {
+        options = try http.options(body_limit, 5000, 2000, 1000);
+    }
+    options = try http.authority(options, "https://localhost", [authority], 1, 256);
+    options = try http.with_response_limits(options, response_budget);
+    options = try http.with_rate_limits(options, rate_budget);
+    return await http.serve(app, port, options);
+}

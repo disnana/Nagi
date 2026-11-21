@@ -359,6 +359,7 @@ pub(crate) enum CompareRead {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum OperationPlan {
     NativeCall {
+        operation: crate::stdlib::Operation,
         path: String,
         parameters: Vec<crate::stdlib::Passing>,
         emit_type_arguments: bool,
@@ -1120,6 +1121,7 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
                 crate::stdlib::OperationEmission::NativeCall => {
                     plan.symbol_path = Some(info.rust_path.into());
                     OperationPlan::NativeCall {
+                        operation: op,
                         path: info.rust_path.into(),
                         parameters: info.parameters.to_vec(),
                         emit_type_arguments: info.emit_type_arguments,

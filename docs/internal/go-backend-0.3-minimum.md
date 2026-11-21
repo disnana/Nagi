@@ -53,10 +53,10 @@ payloadなしenumは、共有checkerが封印したconstructorとmatch armのide
 次は未対応で、Go起動前にsource位置付きで失敗する。
 
 - payload付きenum、enumのconsole表示、非Copy要素のList index/反復、Listのslice・field/index代入
-- 標準operationのasync/await、task、scope、actor。ユーザー定義async関数の直接awaitは
+- M21の `serve` 以外の標準operationのasync/await、task、scope、actor。ユーザー定義async関数の直接awaitは
   [cold asyncの最小段階](go-cold-async.md)、同じasync関数を保持するローカルcallbackは
   [callback identity段階](go-async-callback-identity.md)で対応する
-- HTTP、DB、auth/session、WebSocketなどRust runtimeの標準操作
+- M21の対象外のHTTP操作、DB、auth/session、WebSocketなどの標準操作
 - Go native adapter、Rust/Go間FFI、混成backend
 - IDE管理runの`NAGI_RUN_RETENTION=latest`
 
@@ -68,6 +68,25 @@ physical memory即時回収、取消・並行Futureは保証しない。詳細�
 
 この段階をHTTP等の本番対応やRust backendとの完全同等とは呼ばない。
 対応する整数境界ではpanicするかwrapするかを揃えるが、panic本文、stack trace、process exit codeはbackend固有であり、現段階ではbyte単位の一致を保証しない。
+
+## M21のループバックHTTP
+
+既存の `std.http.server` から公開policyの完全一致GET/POSTルートを登録できる。
+`app_default` の状態にはスカラーまたは文字列のrecordを使い、handlerは名前付きasync関数で
+`await` を含まない。 `serve` は `main` からIPv4ループバックで起動する。
+`Request.body` を借りて `response_context` と `bytes` または `text` を使い、
+`Status.OK` の応答を直接returnできる。バイナリ応答は入力のbytesをコピーして所有する。
+ポートを選ぶための `env` も既存の組込みシグネチャで使える。
+
+起動にはauthority、response limits、rate limitsと各routeのrate policyが必要。
+受信本文の既定は1 MiBで、 `options` で変更できる。固定長が上限を超えるとhandlerの前で
+413と接続終了を返す。ストリーミングやchunked本文、テンプレートルート、任意の状態型、
+追加のHTTP操作や一般のhandler取消はこの範囲外。予算のメモリ計上はGoの構造に合わせており、
+Rust runtime全体の予算やエラー処理の同等性は未検証。
+
+通常CLIによるHigh、生成して保存したLow、手書きLowのネイティブ回帰は
+`cargo test --locked -p nagic --test go_backend go_http_m21_fixed_length_binary_echo_and_body_limits_in_three_forms -- --nocapture`。
+Linuxでの実行結果は [進捗](progress.md) に記録する。
 
 ## Buildと失敗時の保護
 

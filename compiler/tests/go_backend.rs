@@ -39,6 +39,9 @@ fn private_lifecycle_does_not_enable_public_actor_operations() {
 #[path = "support/backend_conformance.rs"]
 mod backend_conformance;
 
+#[path = "support/go_http.rs"]
+mod go_http;
+
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 struct Fixture(PathBuf);
