@@ -143,6 +143,19 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
         ("body_error_after_await", panic_child),
         ("body_assert_true", "    return ok(17)\n"),
         ("body_assert_false", "    return ok(17)\n"),
+        ("sleep_value", "    await sleep(0)\n    return ok(17)\n"),
+        (
+            "sleep_business_error",
+            "    await sleep(0)\n    return fail(22)\n",
+        ),
+        (
+            "sleep_body_panic",
+            "    await sleep(86400000)\n    return ok(17)\n",
+        ),
+        (
+            "sleep_body_error",
+            "    await sleep(86400000)\n    return ok(17)\n",
+        ),
         ("discard_value", "    return ok(17)\n"),
         ("discard_panic", panic_child),
     ] {
@@ -151,10 +164,12 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
             _ => "",
         };
         let body = match mode {
-            "body_error_before_await" => [body_error, receive].concat(),
+            "body_error_before_await" | "sleep_body_error" => [body_error, receive].concat(),
             "body_error_after_await" => [receive, body_error].concat(),
             "body_assert_true" => ["        assert_true(True)\n", receive].concat(),
-            "body_assert_false" => ["        assert_true(False)\n", receive].concat(),
+            "body_assert_false" | "sleep_body_panic" => {
+                ["        assert_true(False)\n", receive].concat()
+            }
             "discard_value" | "discard_panic" => "        discard(handle)\n".to_owned(),
             _ => receive.to_owned(),
         };
@@ -201,20 +216,22 @@ async def main() -> Result[unit, Error]:
         )
         .unwrap();
         fs::write(staging.path.join("main.go"), generated).unwrap();
-        let test_source = if mode == "body_assert_false" {
+        let probes_panic = matches!(mode, "body_assert_false" | "sleep_body_panic");
+        let test_source = if probes_panic {
             fs::write(
                 kernel.join("body_panic_probe.go"),
                 include_str!("task_body_panic_probe.go"),
             )
             .unwrap();
-            include_str!("task_body_panic_test.go").to_owned()
+            include_str!("task_body_panic_test.go")
         } else {
-            format!(
-                "{}\nconst fixtureMode = {mode:?}\n",
-                include_str!("task_lowering_test.go")
-            )
+            include_str!("task_lowering_test.go")
         };
-        fs::write(staging.path.join("lowering_test.go"), test_source).unwrap();
+        fs::write(
+            staging.path.join("lowering_test.go"),
+            format!("{test_source}\nconst fixtureMode = {mode:?}\n"),
+        )
+        .unwrap();
         if let Some(root) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
             let path = PathBuf::from(root).join(mode);
             fs::create_dir_all(path.join("internal/taskscope")).unwrap();
@@ -228,7 +245,7 @@ async def main() -> Result[unit, Error]:
             ] {
                 fs::copy(staging.path.join(file), path.join(file)).unwrap();
             }
-            if mode == "body_assert_false" {
+            if probes_panic {
                 let file = "internal/taskscope/body_panic_probe.go";
                 fs::copy(staging.path.join(file), path.join(file)).unwrap();
             }
@@ -249,7 +266,12 @@ async def main() -> Result[unit, Error]:
             stdout.lines().any(|line| line == "after scope"),
             matches!(
                 mode,
-                "value" | "business_error" | "discard_value" | "body_assert_true"
+                "value"
+                    | "business_error"
+                    | "discard_value"
+                    | "body_assert_true"
+                    | "sleep_value"
+                    | "sleep_business_error"
             ),
             "{stdout}"
         );

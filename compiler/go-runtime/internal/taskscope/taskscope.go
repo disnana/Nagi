@@ -9,16 +9,17 @@ import (
 )
 
 var (
-	ErrClosed          = errors.New("task scope is closed")
-	ErrInvalid         = errors.New("invalid task handle")
-	ErrWrongScope      = errors.New("task handle belongs to another scope")
-	ErrConsumed        = errors.New("task handle was already consumed")
-	ErrTaskPanicked    = errors.New("task callback panicked")
-	ErrTaskGoexit      = errors.New("task callback exited without returning")
-	ErrCleanupPanicked = errors.New("task cleanup panicked")
-	ErrCleanupGoexit   = errors.New("task cleanup exited without returning")
-	ErrMissingOutput   = errors.New("task completed without an output")
-	ErrUnconsumed      = errors.New("task scope has an unconsumed result")
+	ErrClosed                  = errors.New("task scope is closed")
+	ErrInvalid                 = errors.New("invalid task handle")
+	ErrWrongScope              = errors.New("task handle belongs to another scope")
+	ErrConsumed                = errors.New("task handle was already consumed")
+	ErrTaskPanicked            = errors.New("task callback panicked")
+	ErrTaskGoexit              = errors.New("task callback exited without returning")
+	ErrCleanupPanicked         = errors.New("task cleanup panicked")
+	ErrCleanupGoexit           = errors.New("task cleanup exited without returning")
+	ErrMissingOutput           = errors.New("task completed without an output")
+	errUnrequestedInterruption = errors.New("task interrupted without a cancellation request")
+	ErrUnconsumed              = errors.New("task scope has an unconsumed result")
 )
 
 type identity struct{ marker byte }
@@ -147,13 +148,14 @@ func classifyBoundary(recovered any, panicked, goexit error) error {
 // normal return, panic, or Goexit, and final publication still happens if the
 // cleanup itself panics or calls Goexit. Arbitrary panic payloads are discarded
 // without formatting or retaining them.
-func runChild[T any](ctx context.Context, work func(context.Context) T, cleanup func(), publish func(T, bool, []error)) {
+func runChild[T any](ctx context.Context, work func(context.Context) (T, bool), cleanup func(), publish func(T, bool, []error)) {
 	var value T
 	var faults []error
+	var hasOutput bool
 	workReturned := false
 	cleanupReturned := cleanup == nil
 	defer func() {
-		publish(value, workReturned && cleanupReturned && len(faults) == 0, faults)
+		publish(value, hasOutput && cleanupReturned && len(faults) == 0, faults)
 	}()
 	defer func() {
 		if !workReturned {
@@ -170,14 +172,29 @@ func runChild[T any](ctx context.Context, work func(context.Context) T, cleanup 
 		cleanup()
 		cleanupReturned = true
 	}()
-	value = work(ctx)
+	value, hasOutput = work(ctx)
 	workReturned = true
+	if !hasOutput && ctx.Err() == nil {
+		faults = append(faults, errUnrequestedInterruption)
+	}
 }
 
 // Spawn registers the receipt and cancellation owner before starting the child
 // goroutine. Cancellation is advisory: a normal callback return remains T even
 // when ctx is cancelled, including T values that contain context.Canceled.
 func Spawn[T any](scope *Scope, work func(context.Context) T, cleanup func()) (Handle[T], error) {
+	if work == nil {
+		return Handle[T]{}, ErrInvalid
+	}
+	return SpawnInterruptible(scope, func(ctx context.Context) (T, bool) {
+		return work(ctx), true
+	}, cleanup)
+}
+
+// SpawnInterruptible is for a generated child with an explicit cooperative
+// wait. A false result after cancellation publishes no value. The abandoned
+// output can still be drained, and failures in cleanup remain scope faults.
+func SpawnInterruptible[T any](scope *Scope, work func(context.Context) (T, bool), cleanup func()) (Handle[T], error) {
 	if scope == nil || work == nil {
 		return Handle[T]{}, ErrInvalid
 	}

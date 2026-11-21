@@ -12,6 +12,7 @@ func TestCheckedTaskLowering(t *testing.T) {
 	discarding := fixtureMode == "discard_value" || fixtureMode == "discard_panic"
 	startWork := make(chan struct{})
 	discarded := make(chan struct{})
+	sleepInterrupted := make(chan struct{})
 	if discarding {
 		nagiTaskDiscarded = func() { close(discarded) }
 	}
@@ -24,6 +25,11 @@ func TestCheckedTaskLowering(t *testing.T) {
 	}
 	if fixtureMode == "body_error_before_await" {
 		nagiTaskBeforeBodyTry = func() { <-entered }
+	} else if fixtureMode == "sleep_body_error" {
+		sleepStarted := make(chan struct{})
+		nagiTaskSleepStarted = func() { close(sleepStarted) }
+		nagiTaskSleepInterrupted = func() { close(sleepInterrupted) }
+		nagiTaskBeforeBodyTry = func() { <-sleepStarted }
 	}
 	defer func() {
 		select {
@@ -41,6 +47,9 @@ func TestCheckedTaskLowering(t *testing.T) {
 		close(entered)
 		<-release
 		close(cleaned)
+		if fixtureMode == "sleep_body_error" {
+			panic("sleep child cleanup sentinel")
+		}
 	}
 	type receipt = nagiResult[nagiResult[int64, int64], nagiTaskFailure]
 	type observation struct {
@@ -132,6 +141,18 @@ func TestCheckedTaskLowering(t *testing.T) {
 		default:
 		}
 	}
+	if fixtureMode == "sleep_body_error" {
+		select {
+		case <-sleepInterrupted:
+		default:
+			t.Fatal("child reached cleanup without observing cancellation at the generated wait")
+		}
+		select {
+		case early := <-finished:
+			t.Fatalf("body error returned while sleep child cleanup was blocked: %+v", early)
+		default:
+		}
+	}
 	close(release)
 
 	var finishedScope scopeExit
@@ -159,11 +180,11 @@ func TestCheckedTaskLowering(t *testing.T) {
 		}
 		return
 	}
-	if fixtureMode == "body_error_before_await" || fixtureMode == "body_error_after_await" {
+	if fixtureMode == "body_error_before_await" || fixtureMode == "body_error_after_await" || fixtureMode == "sleep_body_error" {
 		if exit.ok || exit.problem != (nagiError{kind: nagiInvalid, message: "body sentinel"}) {
 			t.Fatalf("body error was replaced: %+v", exit)
 		}
-		if fixtureMode == "body_error_before_await" {
+		if fixtureMode != "body_error_after_await" {
 			select {
 			case result := <-received:
 				t.Fatalf("received a task after body error: %+v", result)
@@ -183,11 +204,11 @@ func TestCheckedTaskLowering(t *testing.T) {
 		t.Fatal("result preceded child cleanup")
 	}
 	switch fixtureMode {
-	case "value", "body_assert_true":
+	case "value", "body_assert_true", "sleep_value":
 		if !result.value.ok || !result.value.value.ok || result.value.value.value != 17 || !exit.ok {
 			t.Fatalf("value receive=%+v exit=%+v", result, exit)
 		}
-	case "business_error":
+	case "business_error", "sleep_business_error":
 		if !result.value.ok || result.value.value.ok || result.value.value.problem != 22 || !exit.ok {
 			t.Fatalf("business error receive=%+v exit=%+v", result, exit)
 		}

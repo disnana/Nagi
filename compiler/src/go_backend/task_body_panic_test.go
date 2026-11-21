@@ -21,8 +21,7 @@ func expectBodyPanicEvent[T any](t *testing.T, name string, event <-chan T) T {
 
 func TestCheckedTaskLowering(t *testing.T) {
 	waiting := make(chan struct{})
-	unblockWait := make(chan struct{})
-	defer close(unblockWait)
+	interrupted := make(chan struct{})
 	cleanupEntered := make(chan struct{})
 	releaseCleanup := make(chan struct{})
 	cleaned := make(chan struct{})
@@ -33,13 +32,20 @@ func TestCheckedTaskLowering(t *testing.T) {
 			close(releaseCleanup)
 		}
 	}()
-	nagiTaskChildDone = func(done <-chan struct{}) {
-		// This test hook supplies the cooperative wait. The generated child
-		// itself still has the existing literal return body.
-		close(waiting)
-		select {
-		case <-done:
-		case <-unblockWait:
+	if fixtureMode == "sleep_body_panic" {
+		// Notifications only: the generated timer selects on the real ctx.
+		nagiTaskSleepStarted = func() { close(waiting) }
+		nagiTaskSleepInterrupted = func() { close(interrupted) }
+	} else {
+		unblockWait := make(chan struct{})
+		defer close(unblockWait)
+		nagiTaskChildDone = func(done <-chan struct{}) {
+			close(waiting)
+			select {
+			case <-done:
+				close(interrupted)
+			case <-unblockWait:
+			}
 		}
 	}
 	nagiTaskCleanup = func() {
@@ -80,6 +86,7 @@ func TestCheckedTaskLowering(t *testing.T) {
 	if !expectBodyPanicEvent(t, "cancellation request", cancelled) {
 		t.Fatal("cancellation was invoked before output abandonment")
 	}
+	expectBodyPanicEvent(t, "child observing cancellation", interrupted)
 	expectBodyPanicEvent(t, "child cleanup", cleanupEntered)
 	result := expectBodyPanicEvent(t, "caller unwind while cleanup is blocked", caller)
 	if message, ok := result.recovered.(string); result.returned || !ok || message != "assertion failed" {

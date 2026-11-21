@@ -17,6 +17,13 @@ pub(super) struct SingleTask<'a> {
     handle: &'a str,
     completion: TaskCompletion<'a>,
     body_step: Option<BodyStep<'a>>,
+    child_sleep: Option<ChildSleep<'a>>,
+}
+
+#[derive(Clone, Copy)]
+struct ChildSleep<'a> {
+    milliseconds: i32,
+    result: &'a Expr,
 }
 
 #[derive(Clone, Copy)]
@@ -136,16 +143,25 @@ impl<'a> SingleTask<'a> {
         {
             return Err(unsupported());
         }
-        // Limit the admitted child to literal outcomes and an optional builtin
-        // assertion. No other calls, captures or resource-bearing paths enter.
-        let child_return = match child.body.as_slice() {
-            [last] => last,
-            [first, last] if literal_assertion(first) => last,
+        // The timer variant has a single suspension point before its literal
+        // result. Discard and post-receive body errors keep the existing shape.
+        let (child_return, sleep) = match child.body.as_slice() {
+            [last] => (last, None),
+            [first, last] if literal_assertion(first) => (last, None),
+            [first, last]
+                if matches!(completion, TaskCompletion::Receive(_))
+                    && !matches!(body_step, Some(BodyStep::TryAfter(_))) =>
+            {
+                (last, Some(literal_sleep(first).ok_or_else(unsupported)?))
+            }
             _ => return Err(unsupported()),
         };
-        if !matches!(&child_return.kind, S::Return(Some(value))
-            if literal_builtin(value, &["ok", "fail"], |kind| matches!(kind, E::Int(_))))
-        {
+        let S::Return(Some(child_result)) = &child_return.kind else {
+            return Err(unsupported());
+        };
+        if !literal_builtin(child_result, &["ok", "fail"], |kind| {
+            matches!(kind, E::Int(_))
+        }) {
             return Err(unsupported());
         }
 
@@ -204,6 +220,10 @@ impl<'a> SingleTask<'a> {
             handle,
             completion,
             body_step,
+            child_sleep: sleep.map(|milliseconds| ChildSleep {
+                milliseconds,
+                result: child_result,
+            }),
         })
     }
 
@@ -228,7 +248,6 @@ impl<'a> SingleTask<'a> {
         output: &mut String,
     ) -> Result<(), String> {
         let scope = emitter.temp("task_scope");
-        let (before, future) = emitter.evaluated(self.invocation, ret)?;
         let handle = ident(self.handle);
         Emitter::line(output, indent, "{");
         let indent = indent + 1;
@@ -251,14 +270,19 @@ impl<'a> SingleTask<'a> {
             Emitter::line(output, indent, format!("nagiTaskBody({scope}, func() {{"));
         }
         let body_indent = indent + usize::from(self.body_step.is_some());
-        for line in before {
-            Emitter::line(output, body_indent, line);
+        if let Some(sleep) = self.child_sleep {
+            sleep.emit_spawn(emitter, &scope, &handle, body_indent, output)?;
+        } else {
+            let (before, future) = emitter.evaluated(self.invocation, ret)?;
+            for line in before {
+                Emitter::line(output, body_indent, line);
+            }
+            Emitter::line(
+                output,
+                body_indent,
+                format!("{handle} := nagiTaskSpawn({scope}, {future}, nagiTaskCleanup)"),
+            );
         }
-        Emitter::line(
-            output,
-            body_indent,
-            format!("{handle} := nagiTaskSpawn({scope}, {future}, nagiTaskCleanup)"),
-        );
         match self.body_step {
             Some(BodyStep::TryBefore(statement)) => {
                 Emitter::line(
@@ -329,6 +353,78 @@ impl<'a> SingleTask<'a> {
     }
 }
 
+impl ChildSleep<'_> {
+    fn emit_spawn(
+        self,
+        emitter: &mut Emitter<'_>,
+        scope: &str,
+        handle: &str,
+        indent: usize,
+        output: &mut String,
+    ) -> Result<(), String> {
+        let fault = emitter.temp("task_spawn_fault");
+        let result_type = Type("Result".into(), vec![scalar("i64"), scalar("i64")]);
+        let (before, result) = emitter.expression(self.result, &result_type)?;
+        Emitter::line(output, indent, format!(
+            "{handle}, {fault} := taskscope.SpawnInterruptible({scope}, func(ctx context.Context) (nagiResult[int64, int64], bool) {{"
+        ));
+        Emitter::line(
+            output,
+            indent + 1,
+            format!(
+                "timer := time.NewTimer(time.Duration({}) * time.Millisecond)",
+                self.milliseconds
+            ),
+        );
+        Emitter::line(output, indent + 1, "defer timer.Stop()");
+        Emitter::line(
+            output,
+            indent + 1,
+            "if nagiTaskSleepStarted != nil { nagiTaskSleepStarted() }",
+        );
+        Emitter::line(output, indent + 1, "select {");
+        Emitter::line(output, indent + 1, "case <-ctx.Done():");
+        Emitter::line(
+            output,
+            indent + 2,
+            "if nagiTaskSleepInterrupted != nil { nagiTaskSleepInterrupted() }",
+        );
+        Emitter::line(
+            output,
+            indent + 2,
+            "return nagiResult[int64, int64]{}, false",
+        );
+        Emitter::line(output, indent + 1, "case <-timer.C:");
+        Emitter::line(output, indent + 1, "}");
+        for line in before {
+            Emitter::line(output, indent + 1, line);
+        }
+        Emitter::line(output, indent + 1, format!("return {result}, true"));
+        Emitter::line(output, indent, "}, nagiTaskCleanup)");
+        Emitter::line(
+            output,
+            indent,
+            format!("if {fault} != nil {{ panic({fault}) }}"),
+        );
+        Ok(())
+    }
+}
+
+fn literal_sleep(statement: &Stmt) -> Option<i32> {
+    let S::Expr(Expr {
+        kind: E::Await(future),
+        ..
+    }) = &statement.kind
+    else {
+        return None;
+    };
+    let E::Int(value) = &builtin_argument(future, &["sleep"])?.kind else {
+        return None;
+    };
+    // Keep the private timer within one safe Go time.Duration.
+    value.parse::<i32>().ok().filter(|value| *value >= 0)
+}
+
 fn literal_assertion(statement: &Stmt) -> bool {
     matches!(&statement.kind, S::Expr(value)
         if literal_builtin(value, &["assert_true"], |kind| matches!(kind, E::Bool(_))))
@@ -386,6 +482,8 @@ var nagiTaskChildDone func(<-chan struct{})
 var nagiTaskBeforeBodyTry func()
 var nagiTaskBeforeBodyAssert func(*taskscope.Scope, taskscope.Handle[nagiResult[int64, int64]])
 var nagiTaskDiscarded func()
+var nagiTaskSleepStarted func()
+var nagiTaskSleepInterrupted func()
 
 func nagiTaskBody(scope *taskscope.Scope, body func()) {
     completed := false

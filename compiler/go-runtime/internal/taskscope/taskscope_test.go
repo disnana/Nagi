@@ -1260,6 +1260,53 @@ func TestTaskScopeAbnormalExitAbandonsAndRequestsWithoutRecording(t *testing.T) 
 	}
 }
 
+func TestTaskScopeInterruptibleWorkDoesNotInventValuesOrSuppressFaults(t *testing.T) {
+	unsolicited := New()
+	handle, err := SpawnInterruptible(unsolicited, func(context.Context) (int, bool) {
+		return 99, false
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Receive(unsolicited, handle); err != errUnrequestedInterruption {
+		t.Fatalf("unrequested interruption = %v", err)
+	}
+
+	wait := func(ctx context.Context) (int, bool) {
+		<-ctx.Done()
+		return 99, false
+	}
+	claimed := New()
+	handle, err = SpawnInterruptible(claimed, wait, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan error, 1)
+	go func() {
+		_, err := Receive(claimed, handle)
+		result <- err
+	}()
+	waitReceiptState(t, handle.receipt, receiptReceiving)
+	claimed.RequestAbnormalExit()
+	select {
+	case err := <-result:
+		if err != ErrMissingOutput {
+			t.Fatalf("receiving an interrupted child = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("interrupted child did not complete")
+	}
+
+	withCleanupFault := New()
+	if _, err := SpawnInterruptible(withCleanupFault, wait, func() { panic("cleanup") }); err != nil {
+		t.Fatal(err)
+	}
+	withCleanupFault.RequestAbnormalExit()
+	if err := withCleanupFault.Finish(); err != ErrCleanupPanicked {
+		t.Fatalf("interrupted child's cleanup fault = %v", err)
+	}
+}
+
 func TestTaskScopeOwnerTeardownRequestsOnlyAndSeals(t *testing.T) {
 	for iteration := 0; iteration < 64; iteration++ {
 		scope := New()
