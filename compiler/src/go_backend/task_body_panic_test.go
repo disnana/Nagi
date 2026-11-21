@@ -62,7 +62,7 @@ func TestCheckedTaskLowering(t *testing.T) {
 	cancelled := make(chan bool, 1)
 	var cancellations atomic.Int32
 	nagiTaskBeforeBodyAssert = func(scope *taskscope.Scope, handle taskscope.Handle[nagiResult[int64, int64]]) {
-		state := taskscope.ObserveBodyPanic(scope, handle, func(abandoned bool) {
+		state := taskscope.ObserveTaskExit(scope, handle, func(abandoned bool) {
 			if cancellations.Add(1) == 1 {
 				cancelled <- abandoned
 			}

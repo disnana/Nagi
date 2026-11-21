@@ -31,6 +31,7 @@ enum BodyStep<'a> {
     TryBefore(&'a Stmt),
     TryAfter(&'a Stmt),
     AssertBefore(&'a Stmt),
+    ParentWait(&'a Stmt, i32),
 }
 
 #[derive(Clone, Copy)]
@@ -79,6 +80,14 @@ impl<'a> SingleTask<'a> {
             [spawn, assertion, consume] if literal_assertion(assertion) => {
                 (spawn, consume, Some(BodyStep::AssertBefore(assertion)))
             }
+            [spawn, wait, consume] => (
+                spawn,
+                consume,
+                Some(BodyStep::ParentWait(
+                    wait,
+                    literal_sleep(wait).ok_or_else(unsupported)?,
+                )),
+            ),
             _ => return Err(unsupported()),
         };
         let S::SpawnBind {
@@ -156,6 +165,9 @@ impl<'a> SingleTask<'a> {
             }
             _ => return Err(unsupported()),
         };
+        if matches!(body_step, Some(BodyStep::ParentWait(..))) && sleep.is_none() {
+            return Err(unsupported());
+        }
         let S::Return(Some(child_result)) = &child_return.kind else {
             return Err(unsupported());
         };
@@ -232,11 +244,43 @@ impl<'a> SingleTask<'a> {
         if let Some(
             BodyStep::TryBefore(statement)
             | BodyStep::TryAfter(statement)
-            | BodyStep::AssertBefore(statement),
+            | BodyStep::AssertBefore(statement)
+            | BodyStep::ParentWait(statement, _),
         ) = self.body_step
         {
             emitter.validate_statement(statement, ret)?;
         }
+        Ok(())
+    }
+
+    pub(super) fn has_parent_wait(self) -> bool {
+        matches!(self.body_step, Some(BodyStep::ParentWait(..)))
+    }
+
+    pub(super) fn lower_parent_main(
+        self,
+        emitter: &mut Emitter<'a>,
+        ret: &Type,
+        end: &Stmt,
+        output: &mut String,
+    ) -> Result<(), String> {
+        let S::Return(Some(value)) = &end.kind else {
+            unreachable!("validated single-task main return");
+        };
+        Emitter::line(
+            output,
+            0,
+            "func nagiTaskParent(parent context.Context) (nagiResult[nagiUnit, nagiError], bool) {",
+        );
+        self.lower(emitter, ret, 1, output)?;
+        let (before, value) = emitter.expression(value, ret)?;
+        for line in before {
+            Emitter::line(output, 1, line);
+        }
+        Emitter::line(output, 1, format!("return {value}, true"));
+        Emitter::line(output, 0, "}");
+        // Keep the regular entry usable with its non-cancelling background.
+        output.push_str("func nagiMain() *nagiFuture[nagiResult[nagiUnit, nagiError]] {\n    return nagiCold(func() nagiResult[nagiUnit, nagiError] {\n        result, _ := nagiTaskParent(context.Background())\n        return result\n    })\n}\n\n");
         Ok(())
     }
 
@@ -252,6 +296,17 @@ impl<'a> SingleTask<'a> {
         Emitter::line(output, indent, "{");
         let indent = indent + 1;
         Emitter::line(output, indent, format!("{scope} := taskscope.New()"));
+        let parent_finished = self
+            .has_parent_wait()
+            .then(|| emitter.temp("parent_finished"));
+        if let Some(finished) = &parent_finished {
+            Emitter::line(output, indent, format!("{finished} := false"));
+            Emitter::line(
+                output,
+                indent,
+                format!("defer func() {{ if !{finished} {{ {scope}.RequestAbnormalExit() }} }}()"),
+            );
+        }
         let body_result = matches!(
             self.body_step,
             Some(BodyStep::TryBefore(_) | BodyStep::TryAfter(_))
@@ -269,7 +324,7 @@ impl<'a> SingleTask<'a> {
         } else if body_asserts {
             Emitter::line(output, indent, format!("nagiTaskBody({scope}, func() {{"));
         }
-        let body_indent = indent + usize::from(self.body_step.is_some());
+        let body_indent = indent + usize::from(body_result.is_some() || body_asserts);
         if let Some(sleep) = self.child_sleep {
             sleep.emit_spawn(emitter, &scope, &handle, body_indent, output)?;
         } else {
@@ -297,6 +352,19 @@ impl<'a> SingleTask<'a> {
                     "if nagiTaskBeforeBodyAssert != nil {{ nagiTaskBeforeBodyAssert({scope}, {handle}) }}"
                 ));
                 emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
+            }
+            Some(BodyStep::ParentWait(_, milliseconds)) => {
+                Emitter::line(
+                    output,
+                    body_indent,
+                    format!("if !nagiTaskWaitParent(parent, {milliseconds}, {scope}, {handle}) {{"),
+                );
+                Emitter::line(
+                    output,
+                    body_indent + 1,
+                    "return nagiResult[nagiUnit, nagiError]{}, false",
+                );
+                Emitter::line(output, body_indent, "}");
             }
             _ => {}
         }
@@ -343,11 +411,17 @@ impl<'a> SingleTask<'a> {
         } else if body_asserts {
             Emitter::line(output, indent, "})");
         }
-        Emitter::line(
-            output,
-            indent,
-            format!("if exit := nagiTaskFinish({scope}); !exit.ok {{ return exit }}"),
-        );
+        if let Some(finished) = &parent_finished {
+            Emitter::line(output, indent, format!("exit := nagiTaskFinish({scope})"));
+            Emitter::line(output, indent, format!("{finished} = true"));
+            Emitter::line(output, indent, "if !exit.ok { return exit, true }");
+        } else {
+            Emitter::line(
+                output,
+                indent,
+                format!("if exit := nagiTaskFinish({scope}); !exit.ok {{ return exit }}"),
+            );
+        }
         Emitter::line(output, indent - 1, "}");
         Ok(())
     }
@@ -465,8 +539,29 @@ pub(super) fn source(checked: &CheckedProgram) -> Result<String, String> {
     let mut emitter = Emitter::from_checked(checked, &[], BuildProfile::Dev)?;
     emitter.single_task = Some(SingleTask::from_checked(checked)?);
     emitter.validate()?;
-    emitter.generate()
+    let has_parent_wait = emitter.single_task.is_some_and(SingleTask::has_parent_wait);
+    let mut output = emitter.generate()?;
+    if has_parent_wait {
+        output.push_str(PARENT_WAIT_RUNTIME);
+    }
+    Ok(output)
 }
+
+const PARENT_WAIT_RUNTIME: &str = r#"
+var nagiTaskParentWaiting func(*taskscope.Scope, taskscope.Handle[nagiResult[int64, int64]])
+
+func nagiTaskWaitParent(parent context.Context, milliseconds int64, scope *taskscope.Scope, handle taskscope.Handle[nagiResult[int64, int64]]) bool {
+    timer := time.NewTimer(time.Duration(milliseconds) * time.Millisecond)
+    defer timer.Stop()
+    if nagiTaskParentWaiting != nil { nagiTaskParentWaiting(scope, handle) }
+    select {
+    case <-parent.Done():
+        return false
+    case <-timer.C:
+        return true
+    }
+}
+"#;
 
 // Shared by the generated scope's typed receive and exit. These kinds are
 // confined to the internal module, and unknown private faults fail closed.

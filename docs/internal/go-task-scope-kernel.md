@@ -169,6 +169,19 @@ cleanup 自体の故障は scope に残る。本体 Err は drain を待って�
 通常の cold Future と `sleep` は既存の生成経路を使う。この限定経路では
 取消済み handle の公開分類、一般の待機や I/O、公開 CLI への接続は扱わない。
 
+### 親の pre-await 取消
+
+test build 専用の生成入口では、同じ sleep 子の spawn と受取の間に、親側の
+`await sleep` を一つ置ける。親の実タイマーの select が呼び出し側 context の
+取消を選んだ場合は受取に入らず、defer が `RequestAbnormalExit` を一度呼ぶ。
+この退出の返却値は非公開の未完了表示であり、Nagi の Result を生成しない。
+親タイマーの通常満了は既存の Receive／Finish を通る。
+
+Rust の Future Drop と照合する境界は、所有者が子に取消を要求し、cleanup の完了を
+待たずに退出する点である。Go の試験側が scope を保持して行う後続の Finish では、
+子の cleanup 後の登録と完了記録を分けて観測する。この経路は親と子の明示的な
+タイマー待機に限り、受取中の親取消や一般の親 Future Drop は扱わない。
+
 ### 論理 join として使うための条件
 
 `done` は scope の完了登録より先に観測できる。テストでは scope の lock を

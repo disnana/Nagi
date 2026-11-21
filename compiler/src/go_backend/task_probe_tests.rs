@@ -156,6 +156,14 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
             "sleep_body_error",
             "    await sleep(86400000)\n    return ok(17)\n",
         ),
+        (
+            "parent_wait_normal",
+            "    await sleep(0)\n    return ok(17)\n",
+        ),
+        (
+            "parent_cancel",
+            "    await sleep(86400000)\n    return ok(17)\n",
+        ),
         ("discard_value", "    return ok(17)\n"),
         ("discard_panic", panic_child),
     ] {
@@ -171,6 +179,8 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
                 ["        assert_true(False)\n", receive].concat()
             }
             "discard_value" | "discard_panic" => "        discard(handle)\n".to_owned(),
+            "parent_wait_normal" => ["        await sleep(0)\n", receive].concat(),
+            "parent_cancel" => ["        await sleep(86400000)\n", receive].concat(),
             _ => receive.to_owned(),
         };
         let high_source = format!(
@@ -217,12 +227,17 @@ async def main() -> Result[unit, Error]:
         .unwrap();
         fs::write(staging.path.join("main.go"), generated).unwrap();
         let probes_panic = matches!(mode, "body_assert_false" | "sleep_body_panic");
-        let test_source = if probes_panic {
+        let probes_parent = matches!(mode, "parent_wait_normal" | "parent_cancel");
+        if probes_parent || probes_panic {
             fs::write(
                 kernel.join("body_panic_probe.go"),
                 include_str!("task_body_panic_probe.go"),
             )
             .unwrap();
+        }
+        let test_source = if probes_parent {
+            include_str!("task_parent_cancel_test.go")
+        } else if probes_panic {
             include_str!("task_body_panic_test.go")
         } else {
             include_str!("task_lowering_test.go")
@@ -245,7 +260,7 @@ async def main() -> Result[unit, Error]:
             ] {
                 fs::copy(staging.path.join(file), path.join(file)).unwrap();
             }
-            if probes_panic {
+            if probes_parent || probes_panic {
                 let file = "internal/taskscope/body_panic_probe.go";
                 fs::copy(staging.path.join(file), path.join(file)).unwrap();
             }
@@ -272,6 +287,7 @@ async def main() -> Result[unit, Error]:
                     | "body_assert_true"
                     | "sleep_value"
                     | "sleep_business_error"
+                    | "parent_wait_normal"
             ),
             "{stdout}"
         );

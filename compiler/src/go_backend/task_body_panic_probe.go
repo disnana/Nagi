@@ -1,9 +1,9 @@
 // Copied only into the generated body-panic test's private kernel package.
 package taskscope
 
-// ObserveBodyPanic observes cancellation invocation and the actual scope
+// ObserveTaskExit observes cancellation invocation and the actual scope
 // record. The wrapper still delegates cancellation to the original owner.
-func ObserveBodyPanic[T any](scope *Scope, handle Handle[T], onCancel func(bool)) func() (ready, recorded, retained bool) {
+func ObserveTaskExit[T any](scope *Scope, handle Handle[T], onCancel func(bool)) func() (ready, recorded, retained bool) {
 	scope.mu.Lock()
 	entry := scope.entries[handle.ticket]
 	cancel := entry.cancel
@@ -21,4 +21,10 @@ func ObserveBodyPanic[T any](scope *Scope, handle Handle[T], onCancel func(bool)
 		_, retained := scope.entries[handle.ticket]
 		return entry.ready, entry.recorded, retained
 	}
+}
+
+func TaskPublication(scope *Scope) <-chan struct{} {
+	scope.mu.Lock()
+	defer scope.mu.Unlock()
+	return scope.notify
 }
