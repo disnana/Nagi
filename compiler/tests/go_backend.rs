@@ -1429,40 +1429,60 @@ fn move_checker_rejections_happen_before_the_go_toolchain() {
 
 #[test]
 fn other_standard_operations_stay_unsupported_before_the_go_toolchain() {
-    let fixture = Fixture::new();
-    fixture.write(
-        "main.nagi",
-        "import std.http.server as http\ndef main():\n    status = http.status(200)\n",
-    );
-    let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
-        .args([
-            "build",
-            "main.nagi",
-            "--no-project",
-            "--backend",
-            "go",
-            "--profile",
-            "dev",
-            "--out",
-            "out",
-        ])
-        .current_dir(&fixture.0)
-        .env("NAGI_GO", fixture.0.join("missing-go"))
-        .env_remove("NAGI_RUN_RETENTION")
-        .output()
-        .unwrap();
-    assert!(!output.status.success());
-    let diagnostic = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        diagnostic.contains("operation stdlib:std.http.server::status is not supported"),
-        "{diagnostic}"
-    );
-    assert!(diagnostic.contains("main.nagi:3"), "{diagnostic}");
-    assert!(
-        !diagnostic.contains("Go toolchain was not found"),
-        "{diagnostic}"
-    );
-    assert!(!fixture.0.join("out/.nagi/apps").exists());
+    for (source, expected, line) in [
+        (
+            "import std.http.server as http\ndef main():\n    status = http.status(200)\n",
+            "operation stdlib:std.http.server::status is not supported",
+            3,
+        ),
+        (
+            "def main():\n    values: List[i64] = [1]\n    encoded = json_encode(values)\n",
+            "json_encode of List[i64] is not supported",
+            3,
+        ),
+        (
+            "def main():\n    float: f64 = 1.5\n    encoded = json_encode(float)\n",
+            "json_encode of f64 is not supported",
+            3,
+        ),
+        (
+            "def main():\n    decoded = json_decode[i64](\"1\")\n",
+            "operation json_decode is not supported",
+            2,
+        ),
+    ] {
+        let fixture = Fixture::new();
+        fixture.write("main.nagi", source);
+        let output = Command::new(env!("CARGO_BIN_EXE_nagic"))
+            .args([
+                "build",
+                "main.nagi",
+                "--no-project",
+                "--backend",
+                "go",
+                "--profile",
+                "dev",
+                "--out",
+                "out",
+            ])
+            .current_dir(&fixture.0)
+            .env("NAGI_GO", fixture.0.join("missing-go"))
+            .env_remove("NAGI_RUN_RETENTION")
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let diagnostic = String::from_utf8_lossy(&output.stderr);
+        assert!(diagnostic.contains(expected), "{diagnostic}");
+        assert!(
+            diagnostic.contains(&format!("main.nagi:{line}")),
+            "{diagnostic}"
+        );
+        assert!(
+            !diagnostic.contains("Go toolchain was not found"),
+            "{diagnostic}"
+        );
+        assert!(!fixture.0.join("out/.nagi/apps").exists());
+    }
 }
 
 #[test]
@@ -1892,6 +1912,8 @@ fn main() -> unit {
     )
     .unwrap_or_else(|error| panic!("{error}"));
 
+    assert_scalar_json_encode_cli();
+
     let bounds = SharedCase {
         name: "shared-index-fault",
         high: r#"def selected_index() -> i64:
@@ -1918,6 +1940,116 @@ fn main() -> unit {
     };
     backend_conformance::assert_case(&bounds, &[EntryKind::High, EntryKind::SavedLow])
         .unwrap_or_else(|error| panic!("{error}"));
+}
+
+fn assert_scalar_json_encode_cli() {
+    let separators = |source: &str| {
+        source
+            .replace("@LS@", "\u{2028}")
+            .replace("@PS@", "\u{2029}")
+    };
+    let high = separators(
+        r#"def marked_text() -> str:
+    print("once")
+    return "凪<&>\"\\u2028\\@LS@@PS@\n\t\r"
+
+def main() -> Result[unit, Error]:
+    a: i8 = -128
+    b: i16 = -32768
+    c: i32 = -2147483648
+    d: i64 = -9223372036854775808
+    e: u8 = 255
+    f: u16 = 65535
+    g: u32 = 4294967295
+    h: u64 = 18446744073709551615
+    print(try json_encode(a))
+    print(try json_encode(b))
+    print(try json_encode(c))
+    print(try json_encode(d))
+    print(try json_encode(e))
+    print(try json_encode(f))
+    print(try json_encode(g))
+    print(try json_encode(h))
+    print(try json_encode(True))
+    print(try json_encode(False))
+    print(try json_encode(marked_text()))
+    owned = "retained"
+    print(try json_encode(owned))
+    return ok(print(owned))
+"#,
+    );
+    let low = separators(
+        r#"fn marked_text() -> str {
+    print("once");
+    return "凪<&>\"\\u2028\\@LS@@PS@\n\t\r";
+}
+fn main() -> Result[unit, Error] {
+    let a: i8 = -128;
+    let b: i16 = -32768;
+    let c: i32 = -2147483648;
+    let d: i64 = -9223372036854775808;
+    let e: u8 = 255;
+    let f: u16 = 65535;
+    let g: u32 = 4294967295;
+    let h: u64 = 18446744073709551615;
+    print(try json_encode(a));
+    print(try json_encode(b));
+    print(try json_encode(c));
+    print(try json_encode(d));
+    print(try json_encode(e));
+    print(try json_encode(f));
+    print(try json_encode(g));
+    print(try json_encode(h));
+    print(try json_encode(true));
+    print(try json_encode(false));
+    print(try json_encode(marked_text()));
+    let owned = "retained";
+    print(try json_encode(owned));
+    return ok(print(owned));
+}
+"#,
+    );
+    let expected = separators(concat!(
+        "-128\n-32768\n-2147483648\n-9223372036854775808\n",
+        "255\n65535\n4294967295\n18446744073709551615\ntrue\nfalse\nonce\n",
+        r#""凪<&>\"\\u2028\\@LS@@PS@\n\t\r""#,
+        "\n\"retained\"\nretained\n",
+    ))
+    .into_bytes();
+    let fixture = Fixture::new();
+    fixture.write("main.nagi", &high);
+    fixture.write("manual.low", &low);
+    for (source, label) in [
+        ("main.nagi", "high"),
+        ("saved.low", "saved"),
+        ("manual.low", "manual"),
+    ] {
+        for backend in ["go", "rust"] {
+            let out = format!("out-{backend}-{label}");
+            let result = fixture.command(&[
+                "run",
+                source,
+                "--no-project",
+                "--backend",
+                backend,
+                "--profile",
+                "dev",
+                "--out",
+                &out,
+            ]);
+            assert!(
+                result.status.success(),
+                "{backend}/{source}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            assert_eq!(result.stdout, expected, "{backend}/{source}");
+        }
+        if label == "high" {
+            let saved = fs::read_to_string(fixture.0.join("out-go-high/generated.low")).unwrap();
+            fixture.write("saved.low", &saved);
+            fs::remove_file(fixture.0.join("main.nagi")).unwrap();
+        }
+    }
 }
 
 #[test]

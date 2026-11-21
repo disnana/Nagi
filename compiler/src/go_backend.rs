@@ -459,6 +459,7 @@ struct Emitter<'a> {
     profile: BuildProfile,
     uses_builtin_sleep: bool,
     uses_builtin_env: bool,
+    uses_builtin_json_encode: bool,
     temporary: usize,
     #[cfg(test)]
     task_scope_probe: Option<task_lowering::TaskScopeProbe<'a>>,
@@ -512,6 +513,7 @@ impl<'a> Emitter<'a> {
         };
         let uses_builtin_sleep = uses_builtin("sleep");
         let uses_builtin_env = uses_builtin("env");
+        let uses_builtin_json_encode = uses_builtin("json_encode");
         if program.functions.len() != checked.emission.functions.len() {
             return Err(
                 "internal compiler error: Go backend function plans do not match the checked program"
@@ -551,6 +553,7 @@ impl<'a> Emitter<'a> {
             profile,
             uses_builtin_sleep,
             uses_builtin_env,
+            uses_builtin_json_encode,
             temporary: 0,
             #[cfg(test)]
             task_scope_probe: None,
@@ -1063,6 +1066,26 @@ impl<'a> Emitter<'a> {
                         )),
                         OperationPlan::NativeCall { .. } => Ok(()),
                     },
+                    Some(NameResolution::Builtin) if name == "json_encode" => {
+                        let [value] = arguments.as_slice() else {
+                            return Err(error(
+                                expression.line,
+                                "invalid checked json_encode arity",
+                            ));
+                        };
+                        let ty = value.ty.as_ref().expect("checked JSON input type");
+                        if ty.1.is_empty()
+                            && (matches!(ty.0.as_str(), "str" | "bool")
+                                || integer_type(ty).is_some())
+                        {
+                            Ok(())
+                        } else {
+                            Err(error(
+                                expression.line,
+                                format!("json_encode of {ty} is not supported by the initial Go backend; supported types are str, bool and integers"),
+                            ))
+                        }
+                    }
                     Some(NameResolution::Builtin)
                         if matches!(
                             name.as_str(),
@@ -1399,6 +1422,7 @@ impl<'a> Emitter<'a> {
                         "assert_true" => format!("nagiAssertTrue({})", values[0]),
                         "some" => format!("nagiSome({})", values[0]),
                         "parse_i64" => format!("nagiParseI64({})", values[0]),
+                        "json_encode" => format!("nagiJSONEncodeScalar({})", values[0]),
                         "error_message" => format!("({}).message", values[0]),
                         "i64" => format!("int64({})", values[0]),
                         "len" => format!("int64(len({}))", values[0]),
@@ -1906,6 +1930,26 @@ impl<'a> Emitter<'a> {
         } else {
             ""
         };
+        let json_encode_runtime = if self.uses_builtin_json_encode {
+            imports.push("\"encoding/json\"");
+            r#"
+// Protect JSON-escaped backslash pairs before rewriting separators. Go
+// escapes U+2028/U+2029 even with HTML escaping off; Rust keeps them literal.
+var nagiJSONScalarEscapes = strings.NewReplacer("\\\\", "\\\\", "\\u2028", "\u2028", "\\u2029", "\u2029")
+
+func nagiJSONEncodeScalar(value any) nagiResult[string, nagiError] {
+    var output strings.Builder
+    encoder := json.NewEncoder(&output)
+    encoder.SetEscapeHTML(false)
+    if err := encoder.Encode(value); err != nil {
+        return nagiErr[string](nagiError{kind: nagiInvalid, message: err.Error()})
+    }
+    return nagiOk[string, nagiError](nagiJSONScalarEscapes.Replace(strings.TrimSuffix(output.String(), "\n")))
+}
+"#
+        } else {
+            ""
+        };
         let sleep_runtime = if self.uses_builtin_sleep {
             imports.push("\"time\"");
             "const nagiMaxSleepMilliseconds int64 = 9223372036854\n\
@@ -1958,7 +2002,7 @@ func (future *nagiFuture[T]) await() T {{\n\
     defer func() {{ body = nil }}()\n\
     return body()\n\
 }}\n\
-{sleep_runtime}{env_runtime}{http_runtime}\
+{sleep_runtime}{env_runtime}{json_encode_runtime}{http_runtime}\
 func nagiFixedDecimal(digits string, scale int) string {{\n\
     if scale >= 0 {{ return digits + strings.Repeat(\"0\", scale) }}\n\
     point := len(digits) + scale\n\

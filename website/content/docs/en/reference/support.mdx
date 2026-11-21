@@ -39,7 +39,8 @@ This section describes unreleased work toward 0.3.0. Published Nagi 0.2.3 does n
 | HTTP (M21) | Verified direct `serve` on IPv4 loopback with exact-match public `GET` and `POST` routes, bodyless GET, and fixed-length binary POST echo and body limits. |
 | HTTP state (M39) | Verified shared read-only State made of scalars and strings in named handlers with no `await`. Shared mutable State and handlers that suspend and resume are outside this scope. |
 | CORS | Verified allowed origins and `OPTIONS` preflight on routes that opt in with `cors_policy` and `cors_route`. Routes without CORS configuration add no CORS headers. |
-| Unsupported standard features | JSON, public Actor and Supervisor APIs, SQLite Pool/Tx, authentication, sessions, and CSRF are unsupported. |
+| JSON | Standalone `json_encode` supports `str`, `bool`, and integers. Float and aggregate encoding, `json_decode`, and HTTP JSON responses are unsupported. |
+| Unsupported standard features | Public Actor and Supervisor APIs, SQLite Pool/Tx, authentication, sessions, and CSRF are unsupported. |
 | Native adapters | Go native adapters are unsupported. The Go target rejects Rust assets. |
 
 The HTTP tests used the standard CLI on Linux with High, generated and saved Low, and handwritten Low. The distribution smoke check uses the explicit `--go-smoke` option and an external Go toolchain. These are Linux development checks. Other operating systems and formal distribution require separate verification.
