@@ -107,6 +107,17 @@ kernel と生成コードの共通変換入口はまだないため、この段�
 cargo test --locked -p nagic --lib generated_single_child_task_projects_panic_and_preserves_business_result -- --ignored --nocapture
 ```
 
+別の非公開 emitter 入口では、checker が封印した scope 退出、Task spawn、Task
+受取の各 plan を照合し、Nagi ソースの scope・spawn・await 自体を Go へ下げる。
+対象は main の単一 scope、引数なしの子、直接の一回受取に限る。子の本体は
+スカラー Result の定数 return と任意の真偽値 assertion のみ。通常終了の
+`Finish` は先の生成テストと同じ内部変換を使用する。Go の観測用 hook は
+cleanup を止めたり受取値を読み出したりするためだけに使う。
+
+```sh
+cargo test --locked -p nagic --lib checked_single_task_lowers_scope_spawn_and_await_internally -- --ignored --nocapture
+```
+
 ### 論理 join として使うための条件
 
 `done` は scope の完了登録より先に観測できる。テストでは scope の lock を

@@ -1,0 +1,262 @@
+//! Private proof of a single checked Task path. This module is test-build only.
+use super::{error, ident, Emitter};
+use crate::{
+    ast::{Expr, ExprUseId, NameResolution, Stmt, Type, E, S},
+    checked::{
+        CheckedProgram, ErrorDestination, ExpressionKey, ScopeBridge, ScopeNormalExit,
+        TaskSpawnMode, TaskUseMode,
+    },
+    project::BuildProfile,
+};
+
+#[derive(Clone, Copy)]
+pub(super) struct SingleTask<'a> {
+    pub(super) scope: &'a Stmt,
+    pub(super) invocation: &'a Expr,
+    handle: &'a str,
+    received: &'a str,
+}
+
+impl<'a> SingleTask<'a> {
+    fn from_checked(checked: &'a CheckedProgram) -> Result<Self, String> {
+        let program = checked.program();
+        let (index, main) = program
+            .functions
+            .iter()
+            .enumerate()
+            .find(|(_, function)| function.name == "main")
+            .ok_or("missing checked main for internal Go Task lowering")?;
+        let unsupported = || {
+            error(
+                main.line,
+                "unsupported shape for internal single-child Go Task lowering",
+            )
+        };
+        let [scope, end] = main.body.as_slice() else {
+            return Err(unsupported());
+        };
+        if !main.asynchronous
+            || main.ret != Type("Result".into(), vec![scalar("unit"), scalar("Error")])
+            || !matches!(&end.kind, S::Return(Some(value))
+                if builtin_argument(value, &["ok"]).is_some_and(|argument|
+                    literal_builtin(argument, &["print"], |kind| matches!(kind, E::Str(_)))))
+        {
+            return Err(unsupported());
+        }
+        let S::Scope(body) = &scope.kind else {
+            return Err(unsupported());
+        };
+        let [spawn, receive] = body.as_slice() else {
+            return Err(unsupported());
+        };
+        let S::SpawnBind {
+            name: handle,
+            value: invocation,
+            declare: true,
+            ..
+        } = &spawn.kind
+        else {
+            return Err(unsupported());
+        };
+        let S::Assign {
+            name: received,
+            value: awaiting,
+            declare: true,
+            ..
+        } = &receive.kind
+        else {
+            return Err(unsupported());
+        };
+        let E::Await(operand) = &awaiting.kind else {
+            return Err(unsupported());
+        };
+        if !matches!(&operand.kind, E::Name(name) if name == handle)
+            || operand.resolution != Some(NameResolution::Local)
+        {
+            return Err(unsupported());
+        }
+        let E::Call(child_name, types, arguments) = &invocation.kind else {
+            return Err(unsupported());
+        };
+        if invocation.resolution != Some(NameResolution::Function)
+            || !types.is_empty()
+            || !arguments.is_empty()
+        {
+            return Err(unsupported());
+        }
+        let result = Type("Result".into(), vec![scalar("i64"), scalar("i64")]);
+        let child = program
+            .functions
+            .iter()
+            .find(|child| &child.name == child_name)
+            .ok_or_else(unsupported)?;
+        if !child.asynchronous || child.external || !child.params.is_empty() || child.ret != result
+        {
+            return Err(unsupported());
+        }
+        // Limit the admitted child to literal outcomes and an optional builtin
+        // assertion. No other calls, captures or resource-bearing paths enter.
+        let child_return = match child.body.as_slice() {
+            [last] => last,
+            [first, last]
+                if matches!(&first.kind, S::Expr(value)
+                if literal_builtin(value, &["assert_true"], |kind| matches!(kind, E::Bool(_)))) =>
+            {
+                last
+            }
+            _ => return Err(unsupported()),
+        };
+        if !matches!(&child_return.kind, S::Return(Some(value))
+            if literal_builtin(value, &["ok", "fail"], |kind| matches!(kind, E::Int(_))))
+        {
+            return Err(unsupported());
+        }
+
+        let plan = &checked.emission.functions[index];
+        let scope_statement = plan.body.statements.first().ok_or_else(unsupported)?;
+        let exit = scope_statement
+            .scope_exit
+            .as_ref()
+            .ok_or_else(unsupported)?;
+        let [block] = scope_statement.children.as_slice() else {
+            return Err(unsupported());
+        };
+        let start = block
+            .statements
+            .first()
+            .and_then(|entry| entry.task_spawn.as_ref())
+            .ok_or_else(unsupported)?;
+        let take = plan
+            .expressions
+            .get(&ExpressionKey::of(awaiting))
+            .and_then(|entry| entry.task.as_ref())
+            .ok_or_else(unsupported)?;
+        if exit.bridge != ScopeBridge::TaskScope
+            || exit.enclosing_error_destination != ErrorDestination::Function
+            || exit.normal_exit != ScopeNormalExit::JoinAndPropagate
+            || Some(exit.scope) != scope.task.scope
+            || start.bridge != ScopeBridge::TaskScope
+            || start.scope != exit.scope
+            || take.scope != exit.scope
+            || start.invocation != ExprUseId::of(invocation)
+            || take.expression != ExprUseId::of(awaiting)
+            || take.operand != ExprUseId::of(operand)
+            || !matches!(&start.mode, TaskSpawnMode::ValueHandle { binding, output }
+                if Some(*binding) == spawn.task.spawn_binding && output == &result)
+            || take.mode != (TaskUseMode::ReceiveJoinedValue { output: result })
+        {
+            return Err(unsupported());
+        }
+        Ok(Self {
+            scope,
+            invocation,
+            handle,
+            received,
+        })
+    }
+
+    pub(super) fn lower(
+        self,
+        emitter: &mut Emitter<'a>,
+        ret: &Type,
+        indent: usize,
+        output: &mut String,
+    ) -> Result<(), String> {
+        let scope = emitter.temp("task_scope");
+        let (before, future) = emitter.evaluated(self.invocation, ret)?;
+        let handle = ident(self.handle);
+        let received = ident(self.received);
+        Emitter::line(output, indent, "{");
+        let indent = indent + 1;
+        Emitter::line(output, indent, format!("{scope} := taskscope.New()"));
+        for line in before {
+            Emitter::line(output, indent, line);
+        }
+        Emitter::line(
+            output,
+            indent,
+            format!("{handle} := nagiTaskSpawn({scope}, {future}, nagiTaskCleanup)"),
+        );
+        Emitter::line(
+            output,
+            indent,
+            format!("{received} := nagiTaskReceive({scope}, {handle})"),
+        );
+        Emitter::line(
+            output,
+            indent,
+            format!("if nagiTaskObserve != nil {{ nagiTaskObserve({received}) }}"),
+        );
+        Emitter::line(
+            output,
+            indent,
+            format!("if exit := nagiTaskFinish({scope}); !exit.ok {{ return exit }}"),
+        );
+        Emitter::line(output, indent - 1, "}");
+        Ok(())
+    }
+}
+
+fn scalar(name: &str) -> Type {
+    Type(name.into(), vec![])
+}
+
+fn literal_builtin(value: &Expr, names: &[&str], literal: impl FnOnce(&E) -> bool) -> bool {
+    builtin_argument(value, names).is_some_and(|argument| literal(&argument.kind))
+}
+
+fn builtin_argument<'a>(value: &'a Expr, names: &[&str]) -> Option<&'a Expr> {
+    let E::Call(name, types, arguments) = &value.kind else {
+        return None;
+    };
+    if value.resolution != Some(NameResolution::Builtin)
+        || !names.contains(&name.as_str())
+        || !types.is_empty()
+    {
+        return None;
+    }
+    let [argument] = arguments.as_slice() else {
+        return None;
+    };
+    Some(argument)
+}
+
+pub(super) fn source(checked: &CheckedProgram) -> Result<String, String> {
+    let mut emitter = Emitter::from_checked(checked, &[], BuildProfile::Dev)?;
+    emitter.single_task = Some(SingleTask::from_checked(checked)?);
+    emitter.validate()?;
+    emitter.generate()
+}
+
+// Shared by the generated scope's typed receive and exit. These kinds are
+// confined to the internal module, and unknown private faults fail closed.
+pub(super) const RUNTIME: &str = r#"
+type nagiTaskFailure struct { kind uint8; message string }
+const nagiTaskPanicked uint8 = 1
+const nagiTaskInternal uint8 = nagiBusy + 1
+const nagiChildPanicked = "child panicked"
+
+var nagiTaskCleanup func()
+var nagiTaskObserve func(nagiResult[nagiResult[int64, int64], nagiTaskFailure])
+
+func nagiTaskSpawn[T any](scope *taskscope.Scope, future *nagiFuture[T], cleanup func()) taskscope.Handle[T] {
+    handle, fault := taskscope.Spawn(scope, func(context.Context) T { return future.await() }, cleanup)
+    if fault != nil { panic(fault) }
+    return handle
+}
+
+func nagiTaskReceive[T any](scope *taskscope.Scope, handle taskscope.Handle[T]) nagiResult[T, nagiTaskFailure] {
+    value, fault := taskscope.Receive(scope, handle)
+    if fault == nil { return nagiOk[T, nagiTaskFailure](value) }
+    if fault != taskscope.ErrTaskPanicked { panic(fault) }
+    return nagiErr[T](nagiTaskFailure{kind: nagiTaskPanicked, message: nagiChildPanicked})
+}
+
+func nagiTaskFinish(scope *taskscope.Scope) nagiResult[nagiUnit, nagiError] {
+    if fault := scope.Finish(); fault != nil {
+        if fault != taskscope.ErrTaskPanicked { panic(fault) }
+        return nagiErr[nagiUnit](nagiError{kind: nagiTaskInternal, message: nagiChildPanicked})
+    }
+    return nagiOk[nagiUnit, nagiError](nagiUnit{})
+}
+"#;

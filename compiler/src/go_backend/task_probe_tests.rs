@@ -44,41 +44,22 @@ import (
     "nagi.internal/go-runtime/internal/taskscope"
 )
 
-type probeFailureKind uint8
-const probePanicked probeFailureKind = 1
-const probeInternal uint8 = nagiBusy + 1
-const probePanicMessage = "child panicked"
-
-type probeTaskFailure struct {{
-    kind probeFailureKind
-    message string
-}}
+{runtime}
+type probeTaskFailure = nagiTaskFailure
+const probePanicked = nagiTaskPanicked
+const probeInternal = nagiTaskInternal
 type probeReceived = nagiResult[nagiResult[int64, int64], probeTaskFailure]
 
 func taskProbeReceive(scope *taskscope.Scope, mode int64, cleanup func()) probeReceived {{
-    handle, problem := taskscope.Spawn(scope, func(context.Context) nagiResult[int64, int64] {{
-        return {child}(mode).await()
-    }}, cleanup)
-    if problem != nil {{ panic(problem) }}
-
-    value, fault := taskscope.Receive(scope, handle)
-    if fault == nil {{
-        return nagiOk[nagiResult[int64, int64], probeTaskFailure](value)
-    }}
-    if fault != taskscope.ErrTaskPanicked {{ panic(fault) }}
-    return nagiErr[nagiResult[int64, int64]](
-        probeTaskFailure{{kind: probePanicked, message: probePanicMessage}},
-    )
+    return nagiTaskReceive(scope, nagiTaskSpawn(scope, {child}(mode), cleanup))
 }}
 
 func taskProbeFinish(scope *taskscope.Scope) nagiResult[nagiUnit, nagiError] {{
-    if fault := scope.Finish(); fault != nil {{
-        if fault != taskscope.ErrTaskPanicked {{ panic(fault) }}
-        return nagiErr[nagiUnit](nagiError{{kind: probeInternal, message: probePanicMessage}})
-    }}
-    return nagiOk[nagiUnit, nagiError](nagiUnit{{}})
+    return nagiTaskFinish(scope)
 }}
-"#
+
+"#,
+        runtime = super::task_lowering::RUNTIME,
     )
 }
 
@@ -146,4 +127,94 @@ fn generated_single_child_task_projects_panic_and_preserves_business_result() {
         );
     }
     println!("{stdout}");
+}
+
+#[test]
+#[ignore = "requires the external Go toolchain used by the backend integration tests"]
+fn checked_single_task_lowers_scope_spawn_and_await_internally() {
+    for (mode, child) in [
+        ("value", "    return ok(17)\n"),
+        ("business_error", "    return fail(22)\n"),
+        ("panic", "    assert_true(False)\n    return ok(17)\n"),
+    ] {
+        let high_source = format!(
+            r#"async def child() -> Result[i64, i64]:
+{child}
+async def main() -> Result[unit, Error]:
+    async with scope:
+        handle = spawn child()
+        received = await handle
+    return ok(print("after scope"))
+"#
+        );
+        let mut high = parser::parse(&high_source, true).unwrap();
+        check::check(&mut high).unwrap();
+        let low = emit::low(&high);
+        let checked = check::finalize(
+            parser::parse(&low, false).unwrap(),
+            Default::default(),
+            SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap();
+        let rejected = source(&checked, &[], BuildProfile::Dev).unwrap_err();
+        assert!(
+            rejected.contains("async task operations are not supported"),
+            "{rejected}"
+        );
+        let generated = super::task_lowering::source(&checked).unwrap();
+        let staging = probe_directory();
+        let kernel = staging.path.join("internal/taskscope");
+        fs::create_dir_all(&kernel).unwrap();
+        fs::write(
+            staging.path.join("go.mod"),
+            include_str!("../../go-runtime/go.mod"),
+        )
+        .unwrap();
+        fs::write(
+            kernel.join("taskscope.go"),
+            include_str!("../../go-runtime/internal/taskscope/taskscope.go"),
+        )
+        .unwrap();
+        fs::write(staging.path.join("main.go"), generated).unwrap();
+        fs::write(
+            staging.path.join("lowering_test.go"),
+            format!(
+                "{}\nconst fixtureMode = {mode:?}\n",
+                include_str!("task_lowering_test.go")
+            ),
+        )
+        .unwrap();
+        if let Some(root) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
+            let path = PathBuf::from(root).join(mode);
+            fs::create_dir_all(path.join("internal/taskscope")).unwrap();
+            fs::write(path.join("program.nagi"), &high_source).unwrap();
+            fs::write(path.join("generated.low"), low).unwrap();
+            for file in [
+                "go.mod",
+                "main.go",
+                "lowering_test.go",
+                "internal/taskscope/taskscope.go",
+            ] {
+                fs::copy(staging.path.join(file), path.join(file)).unwrap();
+            }
+        }
+        let output = go_output(
+            &["test", "-count=1", "-timeout=20s", "-v", "."],
+            &staging.path,
+        )
+        .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{mode}\n{stdout}\n{stderr}");
+        assert!(
+            stdout.contains("--- PASS: TestCheckedTaskLowering "),
+            "{mode}: {stdout}"
+        );
+        assert_eq!(
+            stdout.lines().any(|line| line == "after scope"),
+            mode != "panic",
+            "{stdout}"
+        );
+        println!("{mode}\n{stdout}");
+    }
 }
