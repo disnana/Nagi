@@ -1387,6 +1387,29 @@ func TestTaskScopeInterruptedReceivePreservesStickyFault(t *testing.T) {
 	}
 }
 
+func TestTaskScopeInterruptedFinishPreservesQueuedAndRecordedFault(t *testing.T) {
+	scope := New()
+	handle, err := Spawn(scope, task(func() int { panic("child fault") }), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Discard(scope, handle); err != nil {
+		t.Fatal(err)
+	}
+	waitEntryReady(t, scope, handle.ticket)
+	done := make(chan struct{})
+	close(done)
+	if fault, completed := scope.FinishUntil(done, nil); fault != nil || completed {
+		t.Fatalf("interrupting queued fault: fault=%v completed=%t", fault, completed)
+	}
+	if fault := scope.Finish(); fault != ErrTaskPanicked {
+		t.Fatalf("resumed finish = %v", fault)
+	}
+	if fault, completed := scope.FinishUntil(done, nil); fault != ErrTaskPanicked || !completed {
+		t.Fatalf("finish after fault was recorded: fault=%v completed=%t", fault, completed)
+	}
+}
+
 func TestTaskScopeOwnerTeardownRequestsOnlyAndSeals(t *testing.T) {
 	for iteration := 0; iteration < 64; iteration++ {
 		scope := New()

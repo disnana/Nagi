@@ -1798,7 +1798,7 @@ impl<'a> Emitter<'a> {
             self.current_function = Some(function.name.clone());
             #[cfg(test)]
             if function.name == "main" {
-                if let Some(task) = self.single_task.filter(|task| task.has_parent_wait()) {
+                if let Some(task) = self.single_task.filter(|task| task.has_parent_context()) {
                     task.lower_parent_main(&mut self, &function.ret, &function.body[1], &mut body)?;
                     continue;
                 }

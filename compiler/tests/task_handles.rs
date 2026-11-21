@@ -4,6 +4,8 @@ mod native_triple;
 mod task_body_panic;
 #[path = "support/task_conditional_consumption.rs"]
 mod task_conditional_consumption;
+#[path = "support/task_finish_drop.rs"]
+mod task_finish_drop;
 #[path = "support/task_service.rs"]
 mod task_service;
 #[path = "support/task_service_s2.rs"]

@@ -353,10 +353,10 @@ func (scope *Scope) allRecordedLocked() bool {
 }
 
 func (scope *Scope) drain() {
-	scope.drainUntil(nil)
+	scope.drainUntil(nil, nil)
 }
 
-func (scope *Scope) drainUntil(done <-chan struct{}) bool {
+func (scope *Scope) drainUntil(done <-chan struct{}, waiting func()) bool {
 	for {
 		scope.mu.Lock()
 		hasReady := len(scope.ready) != 0
@@ -375,6 +375,10 @@ func (scope *Scope) drainUntil(done <-chan struct{}) bool {
 			scope.recordReady()
 			continue
 		}
+		if waiting != nil {
+			waiting()
+			waiting = nil
+		}
 		select {
 		case <-notify:
 		case <-done:
@@ -384,7 +388,7 @@ func (scope *Scope) drainUntil(done <-chan struct{}) bool {
 }
 
 func consumePrimary[T any](scope *Scope, ticket uint64, receipt *receipt[T], done <-chan struct{}) (error, bool) {
-	if !scope.drainUntil(done) {
+	if !scope.drainUntil(done, nil) {
 		return nil, false
 	}
 	scope.mu.Lock()
@@ -581,22 +585,31 @@ func FinishBodyError[E any](scope *Scope, bodyError E) E {
 // cooperative sibling cancellation at the first observed fault, and drains all
 // callback/cleanup boundaries. Sticky faults take precedence over unconsumed T.
 func (scope *Scope) Finish() error {
+	problem, _ := scope.FinishUntil(nil, nil)
+	return problem
+}
+
+// FinishUntil interrupts the wait without requesting owner cancellation.
+// The optional observer runs once, outside the lock, at the first wait.
+func (scope *Scope) FinishUntil(done <-chan struct{}, waiting func()) (error, bool) {
 	if scope == nil {
-		return ErrInvalid
+		return ErrInvalid, true
 	}
 	scope.seal()
-	scope.drain()
+	if !scope.drainUntil(done, waiting) {
+		return nil, false
+	}
 	scope.mu.Lock()
 	defer scope.mu.Unlock()
 	if scope.primary != nil {
-		return scope.primary
+		return scope.primary, true
 	}
 	for _, entry := range scope.entries {
 		if entry.receipt.isUnconsumed() {
-			return ErrUnconsumed
+			return ErrUnconsumed, true
 		}
 	}
-	return nil
+	return nil, true
 }
 
 // Cancel seals the scope, requests cooperative cancellation, and drains every

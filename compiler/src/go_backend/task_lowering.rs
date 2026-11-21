@@ -153,14 +153,11 @@ impl<'a> SingleTask<'a> {
             return Err(unsupported());
         }
         // The timer variant has a single suspension point before its literal
-        // result. Discard and post-receive body errors keep the existing shape.
+        // result. Post-receive body errors keep the existing shape.
         let (child_return, sleep) = match child.body.as_slice() {
             [last] => (last, None),
             [first, last] if literal_assertion(first) => (last, None),
-            [first, last]
-                if matches!(completion, TaskCompletion::Receive(_))
-                    && !matches!(body_step, Some(BodyStep::TryAfter(_))) =>
-            {
+            [first, last] if !matches!(body_step, Some(BodyStep::TryAfter(_))) => {
                 (last, Some(literal_sleep(first).ok_or_else(unsupported)?))
             }
             _ => return Err(unsupported()),
@@ -257,6 +254,14 @@ impl<'a> SingleTask<'a> {
         matches!(self.body_step, Some(BodyStep::ParentWait(..)))
     }
 
+    fn interrupts_finish(self) -> bool {
+        self.child_sleep.is_some() && matches!(self.completion, TaskCompletion::Discard)
+    }
+
+    pub(super) fn has_parent_context(self) -> bool {
+        self.has_parent_wait() || self.interrupts_finish()
+    }
+
     pub(super) fn lower_parent_main(
         self,
         emitter: &mut Emitter<'a>,
@@ -297,7 +302,7 @@ impl<'a> SingleTask<'a> {
         let indent = indent + 1;
         Emitter::line(output, indent, format!("{scope} := taskscope.New()"));
         let parent_finished = self
-            .has_parent_wait()
+            .has_parent_context()
             .then(|| emitter.temp("parent_finished"));
         if let Some(finished) = &parent_finished {
             Emitter::line(output, indent, format!("{finished} := false"));
@@ -426,7 +431,20 @@ impl<'a> SingleTask<'a> {
             Emitter::line(output, indent, "})");
         }
         if let Some(finished) = &parent_finished {
-            Emitter::line(output, indent, format!("exit := nagiTaskFinish({scope})"));
+            if self.interrupts_finish() {
+                Emitter::line(
+                    output,
+                    indent,
+                    format!("exit, completed := nagiTaskFinishParent(parent, {scope}, {handle})"),
+                );
+                Emitter::line(
+                    output,
+                    indent,
+                    "if !completed { return nagiResult[nagiUnit, nagiError]{}, false }",
+                );
+            } else {
+                Emitter::line(output, indent, format!("exit := nagiTaskFinish({scope})"));
+            }
             Emitter::line(output, indent, format!("{finished} = true"));
             Emitter::line(output, indent, "if !exit.ok { return exit, true }");
         } else {
@@ -553,9 +571,11 @@ pub(super) fn source(checked: &CheckedProgram) -> Result<String, String> {
     let mut emitter = Emitter::from_checked(checked, &[], BuildProfile::Dev)?;
     emitter.single_task = Some(SingleTask::from_checked(checked)?);
     emitter.validate()?;
-    let has_parent_wait = emitter.single_task.is_some_and(SingleTask::has_parent_wait);
+    let has_parent_context = emitter
+        .single_task
+        .is_some_and(SingleTask::has_parent_context);
     let mut output = emitter.generate()?;
-    if has_parent_wait {
+    if has_parent_context {
         output.push_str(PARENT_WAIT_RUNTIME);
     }
     Ok(output)
@@ -564,6 +584,15 @@ pub(super) fn source(checked: &CheckedProgram) -> Result<String, String> {
 const PARENT_WAIT_RUNTIME: &str = r#"
 var nagiTaskParentWaiting func(*taskscope.Scope, taskscope.Handle[nagiResult[int64, int64]])
 var nagiTaskReceiveClaimed func(*taskscope.Scope, taskscope.Handle[nagiResult[int64, int64]])
+var nagiTaskFinishWaiting func(*taskscope.Scope, taskscope.Handle[nagiResult[int64, int64]])
+
+func nagiTaskFinishParent(parent context.Context, scope *taskscope.Scope, handle taskscope.Handle[nagiResult[int64, int64]]) (nagiResult[nagiUnit, nagiError], bool) {
+    fault, completed := scope.FinishUntil(parent.Done(), func() {
+        if nagiTaskFinishWaiting != nil { nagiTaskFinishWaiting(scope, handle) }
+    })
+    if !completed { return nagiResult[nagiUnit, nagiError]{}, false }
+    return nagiTaskFinished(fault), true
+}
 
 func nagiTaskWaitParent(parent context.Context, milliseconds int64, scope *taskscope.Scope, handle taskscope.Handle[nagiResult[int64, int64]]) bool {
     timer := time.NewTimer(time.Duration(milliseconds) * time.Millisecond)
@@ -635,7 +664,11 @@ func nagiTaskReceived[T any](value T, fault error) nagiResult[T, nagiTaskFailure
 }
 
 func nagiTaskFinish(scope *taskscope.Scope) nagiResult[nagiUnit, nagiError] {
-    if fault := scope.Finish(); fault != nil {
+    return nagiTaskFinished(scope.Finish())
+}
+
+func nagiTaskFinished(fault error) nagiResult[nagiUnit, nagiError] {
+    if fault != nil {
         if fault != taskscope.ErrTaskPanicked { panic(fault) }
         return nagiErr[nagiUnit](nagiError{kind: nagiTaskInternal, message: nagiChildPanicked})
     }

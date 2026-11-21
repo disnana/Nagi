@@ -26,6 +26,9 @@ func TestCheckedTaskLowering(t *testing.T) {
 	observedReceive := make(chan received, 1)
 	nagiTaskObserve = func(result received) { observedReceive <- result }
 	switch fixtureMode {
+	case "parent_finish_pending", "parent_finish_ready_cancel", "parent_finish_normal":
+		testParentFinish(t)
+		return
 	case "parent_receive_pending", "parent_receive_ready_cancel", "parent_receive_value":
 		testParentReceive(t)
 		return
@@ -121,6 +124,101 @@ func TestCheckedTaskLowering(t *testing.T) {
 	}
 	if got := cancellations.Load(); got != 1 {
 		t.Fatalf("child cancellation invoked %d times, want one", got)
+	}
+}
+
+func testParentFinish(t *testing.T) {
+	type value = nagiResult[int64, int64]
+	type observation struct {
+		scope *taskscope.Scope
+		state func() (ready, recorded, retained bool)
+	}
+	parent, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	timerStarted, interrupted := make(chan struct{}), make(chan struct{})
+	cleanupEntered, releaseCleanup := make(chan struct{}), make(chan struct{})
+	releaseWait := make(chan struct{})
+	defer func() {
+		for _, gate := range []chan struct{}{releaseCleanup, releaseWait} {
+			select {
+			case <-gate:
+			default:
+				close(gate)
+			}
+		}
+	}()
+	nagiTaskSleepStarted = func() { close(timerStarted) }
+	nagiTaskSleepInterrupted = func() { close(interrupted) }
+	nagiTaskCleanup = func() { close(cleanupEntered); <-releaseCleanup }
+	waiting := make(chan observation, 1)
+	cancelled := make(chan bool, 1)
+	nagiTaskFinishWaiting = func(scope *taskscope.Scope, handle taskscope.Handle[value]) {
+		state := taskscope.ObserveTaskExit(scope, handle, func(abandoned bool) { cancelled <- abandoned })
+		waiting <- observation{scope, state}
+		<-releaseWait
+	}
+	type outcome struct{ completed, ok bool }
+	caller := make(chan outcome, 1)
+	go func() {
+		result, completed := nagiTaskParent(parent)
+		caller <- outcome{completed, result.ok}
+	}()
+	seen := waitParentEvent(t, "first actual finish wait", waiting)
+	waitParentEvent(t, "generated child timer", timerStarted)
+	select {
+	case <-cancelled:
+		t.Fatal("discard or finish requested cancellation by itself")
+	default:
+	}
+	publication := taskscope.TaskPublication(seen.scope)
+	pending := fixtureMode == "parent_finish_pending"
+	normal := fixtureMode == "parent_finish_normal"
+	if pending {
+		close(releaseWait)
+		cancel()
+		if !waitParentEvent(t, "owner cancellation of discarded child", cancelled) {
+			t.Fatal("discarded output was not abandoned")
+		}
+		waitParentEvent(t, "child timer observing cancellation", interrupted)
+		waitParentEvent(t, "blocked child cleanup", cleanupEntered)
+	} else {
+		waitParentEvent(t, "child cleanup after normal timer expiry", cleanupEntered)
+		select {
+		case <-cancelled:
+			t.Fatal("finish cancelled child before cleanup")
+		default:
+		}
+		close(releaseCleanup)
+		waitParentEvent(t, "publication before recording", publication)
+		if !normal {
+			cancel()
+		}
+		close(releaseWait)
+	}
+
+	got := waitParentEvent(t, "parent exit", caller)
+	if got.completed != normal || got.ok != normal {
+		t.Fatalf("parent exit = %+v, normally completed=%t", got, normal)
+	}
+	if pending {
+		if ready, recorded, retained := seen.state(); ready || recorded || !retained {
+			t.Fatalf("blocked cleanup: ready=%t recorded=%t retained=%t", ready, recorded, retained)
+		}
+		close(releaseCleanup)
+		waitParentEvent(t, "publication after cleanup", publication)
+	}
+	if !normal {
+		if ready, recorded, retained := seen.state(); !ready || recorded || !retained {
+			t.Fatalf("before independent finish: ready=%t recorded=%t retained=%t", ready, recorded, retained)
+		}
+		finished := make(chan error, 1)
+		go func() { finished <- seen.scope.Finish() }()
+		if err := waitParentEvent(t, "independent finish", finished); err != nil {
+			t.Fatalf("finish after parent exit: %v", err)
+		}
+	}
+	if ready, recorded, retained := seen.state(); ready || !recorded || retained {
+		t.Fatalf("after finish: ready=%t recorded=%t retained=%t", ready, recorded, retained)
 	}
 }
 

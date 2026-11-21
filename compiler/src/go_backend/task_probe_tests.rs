@@ -176,12 +176,26 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
             "parent_receive_value",
             "    await sleep(0)\n    return ok(17)\n",
         ),
+        (
+            "parent_finish_pending",
+            "    await sleep(86400000)\n    return ok(17)\n",
+        ),
+        (
+            "parent_finish_ready_cancel",
+            "    await sleep(0)\n    return ok(17)\n",
+        ),
+        (
+            "parent_finish_normal",
+            "    await sleep(0)\n    return fail(22)\n",
+        ),
         ("discard_value", "    return ok(17)\n"),
         ("discard_panic", panic_child),
     ] {
-        let task_import = match mode {
-            "discard_value" | "discard_panic" => "from std.task import discard\n\n",
-            _ => "",
+        let discards = mode.starts_with("parent_finish_") || mode.starts_with("discard_");
+        let task_import = if discards {
+            "from std.task import discard\n\n"
+        } else {
+            ""
         };
         let body = match mode {
             "body_error_before_await" | "sleep_body_error" => [body_error, receive].concat(),
@@ -190,7 +204,7 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
             "body_assert_false" | "sleep_body_panic" => {
                 ["        assert_true(False)\n", receive].concat()
             }
-            "discard_value" | "discard_panic" => "        discard(handle)\n".to_owned(),
+            _ if discards => "        discard(handle)\n".to_owned(),
             "parent_wait_normal"
             | "parent_receive_pending"
             | "parent_receive_ready_cancel"
@@ -304,6 +318,7 @@ async def main() -> Result[unit, Error]:
                     | "sleep_business_error"
                     | "parent_wait_normal"
                     | "parent_receive_value"
+                    | "parent_finish_normal"
             ),
             "{stdout}"
         );

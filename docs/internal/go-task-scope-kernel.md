@@ -190,7 +190,21 @@ Drop が handle を放棄し、scope の Drop が別に abort を要求する分
 
 生成経路は引き続き単一の timer 子に限る。通常の Receive は同じ受取処理を取消通知
 なしで使う。受取の取消で scope の未記録 entry や先行する子の故障を消さず、
-後続の Finish が記録・退役する。一般の親 Future Drop や Finish 中の親取消は未接続。
+後続の Finish が記録・退役する。一般の親 Future Drop は未接続。
+
+### 明示 discard 後の Finish 待機
+
+単一の timer 子を明示 discard した test build 専用の生成入口は、scope 本体の
+終了後に `FinishUntil` で caller context と完了通知を待つ。通常の Finish は
+同じ処理を通知なしで使い、正常に待っているだけでは子へ取消を要求しない。
+待機中断は未完了表示を返し、親の defer が子へ取消を要求する。親は cleanup を
+待たずに退出し、後続 Finish が完了を記録できる。
+
+完了がキューにあるだけで取消も観測した場合は、記録を後続 Finish に委ねる。
+全完了が記録済みと判定できた場合は、通常の成功または既存 fault を返す。
+中断で既存 fault や登録を消さない。Rust では spawn と discard だけの生成本体を
+join まで poll し、子が作業を続けること、親 Future Drop 後の別の cleanup 観測を
+確認した。
 
 ### 論理 join として使うための条件
 
