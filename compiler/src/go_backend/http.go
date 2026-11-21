@@ -65,9 +65,10 @@ func (pool *nagiHTTPResponsePool) release(bytes int64) {
 }
 
 type nagiHTTPResponseContext struct {
-	limits nagiHTTPResponseLimits
-	pool   *nagiHTTPResponsePool
-	charge int64
+	headers http.Header
+	limits  nagiHTTPResponseLimits
+	pool    *nagiHTTPResponsePool
+	charge  int64
 }
 
 func nagiHTTPContext(request nagiHTTPRequest) *nagiHTTPResponseContext {
@@ -83,7 +84,8 @@ func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, me
 	limits := context.limits
 	bodyBytes := int64(size)
 	headerBytes := int64(len("Content-Type: \r\nContent-Length: \r\nConnection: close\r\n") + len(media) + len(strconv.Itoa(size)))
-	if bodyBytes > limits.bodyBytes || headerBytes > limits.managedBytes {
+	extraBytes, extraCount := nagiHTTPExtraHeaders(context.headers)
+	if bodyBytes > limits.bodyBytes || headerBytes+extraBytes > limits.managedBytes || 3+extraCount > limits.managedCount {
 		return nagiHTTPFail[nagiHTTPResponse]("HTTP response size limit exceeded")
 	}
 	if context.charge != 0 || bodyBytes > limits.retained-responseMetadata ||
@@ -321,6 +323,7 @@ type nagiHTTPRouteKey struct {
 type nagiHTTPRouteEntry[S any] struct {
 	handler func(nagiHTTPRequest, *S, nagiUnit) *nagiFuture[nagiResult[nagiHTTPResponse, nagiError]]
 	bucket  nagiHTTPBucket
+	cors    *nagiHTTPCORSPolicy
 }
 
 type nagiHTTPApp[S any] struct {
@@ -438,28 +441,22 @@ func nagiHTTPFallback(writer http.ResponseWriter, pool *nagiHTTPResponsePool, li
 	}
 	charge := int64(metadata + len(message))
 	writer.Header().Set("Cache-Control", "no-store")
-	if closeConnection {
-		writer.Header().Set("Connection", "close")
-	}
 	const media = "text/plain; charset=utf-8"
 	headerBytes := len("Content-Type: \r\nContent-Length: \r\nConnection: close\r\n") + len(media) + len(strconv.Itoa(len(message)))
-	headerCount := 3
-	for _, name := range []string{"Cache-Control", "Allow", "Retry-After"} {
-		if value := writer.Header().Get(name); value != "" {
-			headerBytes += len(name) + len(value) + len(": \r\n")
-			headerCount++
-		}
-	}
-	if int64(headerBytes) > limits.fallbackManagedBytes || int64(headerCount) > limits.fallbackManagedCount ||
+	extraBytes, extraCount := nagiHTTPExtraHeaders(writer.Header())
+	if int64(headerBytes)+extraBytes > limits.fallbackManagedBytes || 3+extraCount > limits.fallbackManagedCount ||
 		!pool.acquire(charge, limits.fallbackLive, limits.fallbackRetained) {
-		writer.Header().Del("Allow")
-		writer.Header().Del("Retry-After")
+		clear(writer.Header())
+		writer.Header().Set("Cache-Control", "no-store")
 		writer.Header().Set("Connection", "close")
 		writer.Header().Set("Content-Length", "0")
 		writer.WriteHeader(http.StatusServiceUnavailable)
 		return
 	}
 	defer pool.release(charge)
+	if closeConnection {
+		writer.Header().Set("Connection", "close")
+	}
 	nagiHTTPWrite(writer, status, media, []byte(message))
 }
 
@@ -505,6 +502,12 @@ func nagiHTTPDispatch[S any](app nagiHTTPApp[S], options nagiHTTPOptions) http.H
 			_ = control.SetWriteDeadline(now.Add(10 * time.Second))
 			nagiHTTPFallback(writer, fallback, limits, status, closeConnection)
 		}
+		headers := writer.Header()
+		preflight := request.Method == http.MethodOptions &&
+			(len(request.Header.Values(nagiCORSRequestMethod)) != 0 || len(request.Header.Values(nagiCORSRequestHeaders)) != 0)
+		if preflight {
+			headers.Set("Vary", nagiCORSPreflightVary)
+		}
 		if status := nagiHTTPHeadStatus(request, options); status != 0 {
 			refuse(status, true)
 			return
@@ -513,7 +516,16 @@ func nagiHTTPDispatch[S any](app nagiHTTPApp[S], options nagiHTTPOptions) http.H
 		get := app.routes[nagiHTTPRouteKey{nagiHTTPGet, path}]
 		post := app.routes[nagiHTTPRouteKey{nagiHTTPPost, path}]
 		var route *nagiHTTPRouteEntry[S]
-		switch request.Method {
+		method := request.Method
+		if preflight {
+			var ok bool
+			method, ok = nagiCORSPreflightMethod(request.Header)
+			if !ok {
+				refuse(http.StatusBadRequest, true)
+				return
+			}
+		}
+		switch method {
 		case http.MethodGet, http.MethodHead:
 			route = get
 		case http.MethodPost:
@@ -528,11 +540,19 @@ func nagiHTTPDispatch[S any](app nagiHTTPApp[S], options nagiHTTPOptions) http.H
 			case post != nil:
 				writer.Header().Set("Allow", "POST")
 			default:
-				refuse(http.StatusNotFound, false)
+				refuse(http.StatusNotFound, preflight)
 				return
 			}
-			refuse(http.StatusMethodNotAllowed, false)
+			refuse(http.StatusMethodNotAllowed, preflight)
 			return
+		}
+		if route.cors != nil {
+			if !preflight {
+				headers.Set("Vary", "Origin")
+			}
+			if origin, status := nagiCORSRequestOrigin(request.Header, route.cors.originBytes); status == 0 {
+				route.cors.grant(headers, origin)
+			}
 		}
 		select {
 		case requests <- struct{}{}:
@@ -545,6 +565,26 @@ func nagiHTTPDispatch[S any](app nagiHTTPApp[S], options nagiHTTPOptions) http.H
 			refuse(http.StatusRequestEntityTooLarge, true)
 			return
 		}
+		if preflight {
+			if status := nagiCORSPreflight(request, route.cors, method, headers); status != 0 {
+				refuse(status, true)
+				return
+			}
+			bytes, count := nagiHTTPExtraHeaders(headers)
+			const metadata = 64
+			if bytes+int64(len("Connection: close\r\n")) > limits.managedBytes || count+1 > limits.managedCount ||
+				!pool.acquire(metadata, limits.live, limits.retained) {
+				clear(headers)
+				headers.Set("Vary", nagiCORSPreflightVary)
+				refuse(http.StatusServiceUnavailable, true)
+				return
+			}
+			defer pool.release(metadata)
+			_ = control.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			headers["Date"] = nil
+			writer.WriteHeader(http.StatusNoContent)
+			return
+		}
 		if retry := route.bucket.charge(); retry > 0 {
 			writer.Header().Set("Retry-After", strconv.FormatInt(int64((retry-1)/time.Second+1), 10))
 			refuse(http.StatusTooManyRequests, false)
@@ -555,7 +595,7 @@ func nagiHTTPDispatch[S any](app nagiHTTPApp[S], options nagiHTTPOptions) http.H
 			refuse(status, true)
 			return
 		}
-		responseContext := &nagiHTTPResponseContext{limits: limits, pool: pool}
+		responseContext := &nagiHTTPResponseContext{headers: headers, limits: limits, pool: pool}
 		defer func() {
 			if responseContext.charge != 0 {
 				pool.release(responseContext.charge)
@@ -617,11 +657,19 @@ func nagiHTTPServe[S any](app nagiHTTPApp[S], port int64, options nagiHTTPOption
 		if routes > options.rates.rules || routes > options.rates.retained/rateBucketBytes {
 			return nagiHTTPFail[nagiUnit]("HTTP rate catalogue exceeds configured limits")
 		}
+		responseLimits := *options.responses
 		for _, route := range app.routes {
+			if route.cors != nil {
+				if route.cors.retained > responseLimits.retained-64 {
+					return nagiHTTPFail[nagiUnit]("CORS metadata exceeds the HTTP response budget")
+				}
+				responseLimits.retained -= route.cors.retained
+			}
 			if route.bucket.policy.refill == 0 {
 				return nagiHTTPFail[nagiUnit]("every HTTP route requires an explicit rate policy")
 			}
 		}
+		options.responses = &responseLimits
 		socket, err := net.Listen("tcp4", net.JoinHostPort("127.0.0.1", strconv.FormatInt(port, 10)))
 		if err != nil {
 			return nagiHTTPFail[nagiUnit](err.Error())

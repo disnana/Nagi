@@ -306,3 +306,82 @@ fn go_http_m39_direct_serve_shares_read_only_state_in_three_forms() {
     );
     assert!(!fixture.0.join("denied-state/.nagi/apps").exists());
 }
+
+#[test]
+fn go_http_cors_is_opt_in_through_the_cli_in_three_forms() {
+    let fixture = Fixture::new();
+    prepare(
+        &fixture,
+        include_str!("../fixtures/go-http/cors.nagi"),
+        include_str!("../fixtures/go-http/cors.low"),
+    );
+
+    for (source, out) in [
+        ("main.nagi", "high"),
+        ("saved/entry.low", "saved-low"),
+        ("manual/entry.low", "manual-low"),
+    ] {
+        success(fixture.go("build", source, out));
+        let (app, receipt) = fixture.latest(out);
+        let executable = app.join(receipt["executable"].as_str().unwrap());
+        let stderr = fixture.0.join(format!("{out}.stderr"));
+        let (_server, address, socket) = start_server(&executable, &stderr, None);
+        get(socket, address, "/health", b"ready");
+
+        let request = |method, path, headers| {
+            let head = format!(
+                "{method} {path} HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n{headers}\r\n"
+            );
+            exchange(TcpStream::connect(address).unwrap(), &head, b"")
+        };
+        let origin = "Origin: https://APP.example.invalid:443\r\n";
+        let (response, body) = request("GET", "/health", origin);
+        assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
+        assert_eq!(body, b"ready");
+        assert_eq!(
+            header(&response, "Access-Control-Allow-Origin"),
+            Some("https://app.example.invalid")
+        );
+        assert_eq!(header(&response, "Vary"), Some("Origin"));
+        assert_eq!(header(&response, "Access-Control-Allow-Credentials"), None);
+
+        let preflight = format!(
+            "{origin}Access-Control-Request-Method: GET\r\nAccess-Control-Request-Headers: X-Trace, Content-Type\r\n"
+        );
+        let (response, body) = request("OPTIONS", "/health", preflight.as_str());
+        assert!(response.starts_with("HTTP/1.1 204 "), "{response}");
+        assert!(body.is_empty());
+        for (name, value) in [
+            ("Access-Control-Allow-Origin", "https://app.example.invalid"),
+            ("Access-Control-Allow-Methods", "GET"),
+            ("Access-Control-Allow-Headers", "content-type, x-trace"),
+            ("Access-Control-Max-Age", "120"),
+            ("Cache-Control", "no-store"),
+        ] {
+            assert_eq!(header(&response, name), Some(value), "{name}: {response}");
+        }
+        let vary = header(&response, "Vary").unwrap().to_ascii_lowercase();
+        for name in [
+            "origin",
+            "access-control-request-method",
+            "access-control-request-headers",
+        ] {
+            assert!(vary.split(',').any(|token| token.trim() == name), "{vary}");
+        }
+
+        let (response, body) = request("GET", "/other", origin);
+        assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
+        assert_eq!(body, b"shared state");
+        assert!(!response
+            .to_ascii_lowercase()
+            .contains("\r\naccess-control-"));
+        assert_eq!(header(&response, "Vary"), None);
+        let (response, _) = request("OPTIONS", "/other", preflight.as_str());
+        assert!(response.starts_with("HTTP/1.1 403 "), "{response}");
+        assert_eq!(header(&response, "Access-Control-Allow-Origin"), None);
+        let (response, _) = request("OPTIONS", "/health", origin);
+        assert!(response.starts_with("HTTP/1.1 405 "), "{response}");
+        assert_eq!(header(&response, "Access-Control-Allow-Origin"), None);
+        eprintln!("{out}: configured GET, preflight and default route behavior passed");
+    }
+}

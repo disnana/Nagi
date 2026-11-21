@@ -23,6 +23,8 @@ pub(super) fn operation_name(operation: Operation) -> Option<&'static str> {
         Operation::AppDefault => "nagiHTTPAppDefault",
         Operation::PublicPolicy => "nagiHTTPPublicPolicy",
         Operation::Route => "nagiHTTPRoute",
+        Operation::CorsPolicy => "nagiHTTPCORSConfig",
+        Operation::CorsRoute => "nagiHTTPCORSRoute",
         Operation::Serve => "nagiHTTPServe",
         _ => return None,
     })
@@ -39,6 +41,8 @@ pub(super) fn go_type(
         (Some(Resource::Response), []) => "nagiHTTPResponse",
         (Some(Resource::Method), []) => "nagiHTTPMethod",
         (Some(Resource::Status), []) => "nagiHTTPStatus",
+        (Some(Resource::CorsPolicy), []) => "nagiHTTPCORSPolicy",
+        (Some(Resource::CorsCredentials), []) => "nagiHTTPCORSCredentials",
         (Some(Resource::Options), []) => "nagiHTTPOptions",
         (Some(Resource::ResponseLimits), []) => "nagiHTTPResponseLimits",
         (Some(Resource::RatePolicy), []) => "nagiHTTPRatePolicy",
@@ -191,6 +195,8 @@ pub(super) fn constant(owner: &Expr, name: &str, line: usize) -> Result<&'static
     match (resource, name) {
         (Some(Resource::Method), "GET") => Ok("nagiHTTPGet"),
         (Some(Resource::Method), "POST") => Ok("nagiHTTPPost"),
+        (Some(Resource::CorsCredentials), "ALLOW") => Ok("nagiHTTPCORSCredentials(true)"),
+        (Some(Resource::CorsCredentials), "OMIT") => Ok("nagiHTTPCORSCredentials(false)"),
         (Some(Resource::Status), "OK") => Ok("nagiHTTPOK"),
         _ => Err(error(
             line,
@@ -211,16 +217,22 @@ pub(super) fn field(owner: &Expr, name: &str, line: usize) -> Result<&'static st
     }
 }
 
-pub(super) fn runtime(program: &Program, imports: &mut Vec<&'static str>) -> &'static str {
+pub(super) fn runtime(program: &Program, imports: &mut Vec<&'static str>) -> String {
     if !program
         .modules
         .definitions
         .iter()
         .any(|definition| definition.id.module.0 == stdlib::MODULE_ID)
     {
-        return "";
+        return String::new();
     }
-    let (runtime_imports, definitions) = include_str!("http.go")
+    let http = runtime_fragment(include_str!("http.go"), imports);
+    let cors = runtime_fragment(include_str!("cors.go"), imports);
+    format!("{http}\n{cors}")
+}
+
+fn runtime_fragment(source: &'static str, imports: &mut Vec<&'static str>) -> &'static str {
+    let (runtime_imports, definitions) = source
         .strip_prefix("package main\n\nimport (\n")
         .and_then(|source| source.split_once("\n)\n"))
         .expect("Go HTTP runtime source with an import block");

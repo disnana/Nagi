@@ -102,6 +102,18 @@ M21の直接 `serve` 経路で、Goの `app_default` がState本体を一度保�
 2つのhandlerが同じrecordを読み、別々の応答を返すことを実TCPで検査する。
 生成GoではAppの保持とhandler引数が参照でつながることも照合する。
 
+## 通常CLIのCORS
+
+既存の `cors_policy` と `cors_route` をGoの公開GET/POSTルートへ接続する。
+許可Originの正規化、資格情報ヘッダーの明示設定、OPTIONS preflightのmetadata応答、
+設定なしrouteの既定denyは[既存のHTTP契約](../http-server.md#明示cors-route-metadata)に従う。
+preflightはhandlerとroute課金の前に完了する。CORS応答ヘッダーは既存のGo managed header
+予算に含め、route metadataは対応する保持予算から計上する。
+既存のGoルートとhandlerの制限を適用し、認証・Session・CSRFの連携はこの統合の対象外。
+
+通常CLIによる回帰は
+`cargo test --locked -p nagic --test go_backend go_http_cors_is_opt_in_through_the_cli_in_three_forms -- --nocapture`。
+
 ## Buildと失敗時の保護
 
 Go buildはapplication IDとgeneration namespaceをRustから分離し、選択した実行ファイルが実Go toolchainであることを`go version`で先に確認してから、staging directoryで`CGO_ENABLED=0 GOWORK=off GOTOOLCHAIN=local go build -trimpath -buildvcs=false -mod=readonly`を実行する。Goによる暗黙のtoolchain downloadは許可しない。成功後にimmutable generationを公開し、最後に`latest.json`を更新する。失敗したstagingは削除し、以前の`latest.json`と実行ファイルを維持する。

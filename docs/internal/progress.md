@@ -1,5 +1,18 @@
 # コンパイラ・Rust境界の進捗
 
+## 2026-11-21: 通常CLIのGo CORS統合（ローカル）
+
+M21と検証済みM39を基点に、共有checkerが封印する既存の `cors_policy`、
+`cors_route`、`CorsCredentials` をGoへ接続した。Goの既存公開routeに明示設定した
+場合、canonical Originを返し、preflightはroute metadataだけで応答する。
+Go managed header／保持予算に新しい応答ヘッダー／設定を計上した。
+Rust runtimeと既定backend、HTTPの公開APIを維持する。
+[対応範囲とコマンド](go-backend-0.3-minimum.md#通常cliのcors)
+
+Linuxの通常CLIでHigh・保存Low・手書きLowをGoと既定Rustへ生成し、許可OriginのGET、
+空204 preflight、設定なしrouteの既定挙動を実TCPで確認した。
+他OS、CI、TLS／browser／proxy、独立監査は未検証。
+
 ## 2026-11-21: Go M39の即時handlerと共有State（ローカル・未公開）
 
 基点はM21 `293479f3345ba697f328e99d75fb989ce014f74e`。M21は既に限定Stateを読み取れたが、
