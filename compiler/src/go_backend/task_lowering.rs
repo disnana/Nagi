@@ -371,11 +371,25 @@ impl<'a> SingleTask<'a> {
         match self.completion {
             TaskCompletion::Receive(name) => {
                 let received = ident(name);
-                Emitter::line(
-                    output,
-                    body_indent,
-                    format!("{received} := nagiTaskReceive({scope}, {handle})"),
-                );
+                if self.has_parent_wait() {
+                    let completed = emitter.temp("receive_completed");
+                    Emitter::line(output, body_indent, format!(
+                        "{received}, {completed} := nagiTaskReceiveParent(parent, {scope}, {handle})"
+                    ));
+                    Emitter::line(
+                        output,
+                        body_indent,
+                        format!(
+                        "if !{completed} {{ return nagiResult[nagiUnit, nagiError]{{}}, false }}"
+                    ),
+                    );
+                } else {
+                    Emitter::line(
+                        output,
+                        body_indent,
+                        format!("{received} := nagiTaskReceive({scope}, {handle})"),
+                    );
+                }
                 Emitter::line(
                     output,
                     body_indent,
@@ -549,6 +563,7 @@ pub(super) fn source(checked: &CheckedProgram) -> Result<String, String> {
 
 const PARENT_WAIT_RUNTIME: &str = r#"
 var nagiTaskParentWaiting func(*taskscope.Scope, taskscope.Handle[nagiResult[int64, int64]])
+var nagiTaskReceiveClaimed func(*taskscope.Scope, taskscope.Handle[nagiResult[int64, int64]])
 
 func nagiTaskWaitParent(parent context.Context, milliseconds int64, scope *taskscope.Scope, handle taskscope.Handle[nagiResult[int64, int64]]) bool {
     timer := time.NewTimer(time.Duration(milliseconds) * time.Millisecond)
@@ -560,6 +575,14 @@ func nagiTaskWaitParent(parent context.Context, milliseconds int64, scope *tasks
     case <-timer.C:
         return true
     }
+}
+
+func nagiTaskReceiveParent(parent context.Context, scope *taskscope.Scope, handle taskscope.Handle[nagiResult[int64, int64]]) (nagiResult[nagiResult[int64, int64], nagiTaskFailure], bool) {
+    value, fault, completed := taskscope.ReceiveUntil(scope, handle, parent.Done(), func() {
+        if nagiTaskReceiveClaimed != nil { nagiTaskReceiveClaimed(scope, handle) }
+    })
+    if !completed { return nagiResult[nagiResult[int64, int64], nagiTaskFailure]{}, false }
+    return nagiTaskReceived(value, fault), true
 }
 "#;
 
@@ -602,6 +625,10 @@ func nagiTaskSpawn[T any](scope *taskscope.Scope, future *nagiFuture[T], cleanup
 
 func nagiTaskReceive[T any](scope *taskscope.Scope, handle taskscope.Handle[T]) nagiResult[T, nagiTaskFailure] {
     value, fault := taskscope.Receive(scope, handle)
+    return nagiTaskReceived(value, fault)
+}
+
+func nagiTaskReceived[T any](value T, fault error) nagiResult[T, nagiTaskFailure] {
     if fault == nil { return nagiOk[T, nagiTaskFailure](value) }
     if fault != taskscope.ErrTaskPanicked { panic(fault) }
     return nagiErr[T](nagiTaskFailure{kind: nagiTaskPanicked, message: nagiChildPanicked})

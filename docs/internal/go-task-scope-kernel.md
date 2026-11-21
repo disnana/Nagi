@@ -179,8 +179,18 @@ test build 専用の生成入口では、同じ sleep 子の spawn と受取の�
 
 Rust の Future Drop と照合する境界は、所有者が子に取消を要求し、cleanup の完了を
 待たずに退出する点である。Go の試験側が scope を保持して行う後続の Finish では、
-子の cleanup 後の登録と完了記録を分けて観測する。この経路は親と子の明示的な
-タイマー待機に限り、受取中の親取消や一般の親 Future Drop は扱わない。
+子の cleanup 後の登録と完了記録を分けて観測する。
+
+同じ生成入口が受取に進んだ場合、受取は自分が claim した handle を保持し、
+caller context と scope の完了通知を待つ。取消で受取が退出するときはその claim を
+放棄し、親の defer が続けて子に取消を要求する。これは、Rust の受取 Future の
+Drop が handle を放棄し、scope の Drop が別に abort を要求する分離に対応する。
+取消が受取ループの判定時点ですでに見えていれば、利用可能な値も放棄する。
+受取が先に完了した場合は、その値を一度だけ渡す。
+
+生成経路は引き続き単一の timer 子に限る。通常の Receive は同じ受取処理を取消通知
+なしで使う。受取の取消で scope の未記録 entry や先行する子の故障を消さず、
+後続の Finish が記録・退役する。一般の親 Future Drop や Finish 中の親取消は未接続。
 
 ### 論理 join として使うための条件
 

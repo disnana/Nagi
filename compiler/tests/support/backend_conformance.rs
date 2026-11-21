@@ -211,6 +211,8 @@ pub fn private_lifecycle_contracts(directory: &Path) -> Result<(), String> {
             taskscope,
             "TestTaskScopeInterruptibleWorkDoesNotInventValuesOrSuppressFaults",
         ),
+        (taskscope, "TestTaskScopeInterruptedReceiveLeavesJoinAndCancelWithScope"),
+        (taskscope, "TestTaskScopeInterruptedReceivePreservesStickyFault"),
         (
             taskscope,
             "TestTaskScopeOwnerTeardownRequestsOnlyAndSeals",

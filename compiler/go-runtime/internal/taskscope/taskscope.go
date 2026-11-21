@@ -353,25 +353,40 @@ func (scope *Scope) allRecordedLocked() bool {
 }
 
 func (scope *Scope) drain() {
+	scope.drainUntil(nil)
+}
+
+func (scope *Scope) drainUntil(done <-chan struct{}) bool {
 	for {
 		scope.mu.Lock()
 		hasReady := len(scope.ready) != 0
 		if scope.allRecordedLocked() {
 			scope.mu.Unlock()
-			return
+			return true
 		}
 		notify := scope.notify
 		scope.mu.Unlock()
 		if hasReady {
+			select {
+			case <-done:
+				return false
+			default:
+			}
 			scope.recordReady()
 			continue
 		}
-		<-notify
+		select {
+		case <-notify:
+		case <-done:
+			return false
+		}
 	}
 }
 
-func consumePrimary[T any](scope *Scope, ticket uint64, receipt *receipt[T]) error {
-	scope.drain()
+func consumePrimary[T any](scope *Scope, ticket uint64, receipt *receipt[T], done <-chan struct{}) (error, bool) {
+	if !scope.drainUntil(done) {
+		return nil, false
+	}
 	scope.mu.Lock()
 	primary := scope.primary
 	receipt.mu.Lock()
@@ -380,43 +395,84 @@ func consumePrimary[T any](scope *Scope, ticket uint64, receipt *receipt[T]) err
 	receipt.mu.Unlock()
 	scope.retireLocked(ticket, receipt)
 	scope.mu.Unlock()
-	return primary
+	return primary, true
+}
+
+// The receive owns its claim until it consumes the value or abandons it.
+// A dropped claim leaves cancellation and completion recording to the owner.
+func abandonReceive[T any](scope *Scope, ticket uint64, receipt *receipt[T]) {
+	scope.mu.Lock()
+	receipt.mu.Lock()
+	abandoned := receipt.state == receiptReceiving
+	if abandoned {
+		receipt.state = receiptDiscarded
+		receipt.value = nil
+	}
+	receipt.mu.Unlock()
+	if abandoned {
+		scope.retireLocked(ticket, receipt)
+	}
+	scope.mu.Unlock()
 }
 
 // Receive claims one handle, then records completions until its target joins or
 // a sticky scope fault is observed. A sticky fault drains every child before it
 // is returned and never flattens or inspects a business T value.
 func Receive[T any](scope *Scope, handle Handle[T]) (T, error) {
+	value, problem, _ := ReceiveUntil(scope, handle, nil, nil)
+	return value, problem
+}
+
+// ReceiveUntil releases its own claim on interruption without waiting for
+// cleanup. A false completion has no value or fault to deliver to the caller.
+// The optional claim observer runs outside the scope and receipt locks.
+func ReceiveUntil[T any](scope *Scope, handle Handle[T], done <-chan struct{}, claimed func()) (T, error, bool) {
 	var zero T
 	receipt, problem := entryFor(scope, handle)
 	if problem != nil {
-		return zero, problem
+		return zero, problem, true
 	}
 	receipt.mu.Lock()
 	if receipt.state != receiptLive {
 		receipt.mu.Unlock()
-		return zero, ErrConsumed
+		return zero, ErrConsumed, true
 	}
 	receipt.state = receiptReceiving
 	receipt.mu.Unlock()
+	if done != nil || claimed != nil {
+		defer abandonReceive(scope, handle.ticket, receipt)
+	}
+	if claimed != nil {
+		claimed()
+	}
 
 	for {
 		scope.mu.Lock()
+		// If cancellation is already visible, it takes precedence over any
+		// available result. Otherwise a recorded value can be consumed here.
+		select {
+		case <-done:
+			scope.mu.Unlock()
+			return zero, nil, false
+		default:
+		}
 		if scope.primary != nil {
 			scope.mu.Unlock()
-			return zero, consumePrimary(scope, handle.ticket, receipt)
+			problem, completed := consumePrimary(scope, handle.ticket, receipt, done)
+			return zero, problem, completed
 		}
 		entry, ok := scope.entries[handle.ticket]
 		if !ok || entry.receipt != receipt {
 			scope.mu.Unlock()
-			return zero, ErrInvalid
+			return zero, ErrInvalid, true
 		}
 		if entry.recorded {
 			receipt.mu.Lock()
 			if len(receipt.faults) != 0 {
 				receipt.mu.Unlock()
 				scope.mu.Unlock()
-				return zero, consumePrimary(scope, handle.ticket, receipt)
+				problem, completed := consumePrimary(scope, handle.ticket, receipt, done)
+				return zero, problem, completed
 			}
 			if receipt.value == nil {
 				receipt.state = receiptReceived
@@ -425,7 +481,8 @@ func Receive[T any](scope *Scope, handle Handle[T]) (T, error) {
 				cancels := scope.requestCancellationLocked()
 				scope.mu.Unlock()
 				runCancels(cancels)
-				return zero, consumePrimary(scope, handle.ticket, receipt)
+				problem, completed := consumePrimary(scope, handle.ticket, receipt, done)
+				return zero, problem, completed
 			}
 			zero = *receipt.value
 			receipt.value = nil
@@ -433,7 +490,7 @@ func Receive[T any](scope *Scope, handle Handle[T]) (T, error) {
 			receipt.mu.Unlock()
 			scope.retireLocked(handle.ticket, receipt)
 			scope.mu.Unlock()
-			return zero, nil
+			return zero, nil, true
 		}
 		hasReady := len(scope.ready) != 0
 		notify := scope.notify
@@ -442,7 +499,11 @@ func Receive[T any](scope *Scope, handle Handle[T]) (T, error) {
 			scope.recordReady()
 			continue
 		}
-		<-notify
+		select {
+		case <-notify:
+		case <-done:
+			return zero, nil, false
+		}
 	}
 }
 

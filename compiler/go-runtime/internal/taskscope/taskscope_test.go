@@ -1307,6 +1307,86 @@ func TestTaskScopeInterruptibleWorkDoesNotInventValuesOrSuppressFaults(t *testin
 	}
 }
 
+func TestTaskScopeInterruptedReceiveLeavesJoinAndCancelWithScope(t *testing.T) {
+	scope := New()
+	release := make(chan struct{})
+	cleanupScope(t, scope, release)
+	started := make(chan struct{})
+	var childDone <-chan struct{}
+	handle, err := Spawn(scope, func(ctx context.Context) int {
+		childDone = ctx.Done()
+		close(started)
+		<-release
+		return 17
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, claimed, returned := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(returned)
+		value, problem, completed := ReceiveUntil(scope, handle, done, func() { close(claimed) })
+		if value != 0 || problem != nil || completed {
+			t.Errorf("interrupted receive = (%v, %v, %t)", value, problem, completed)
+		}
+	}()
+	signal(t, claimed)
+	close(done)
+	signal(t, returned)
+	signal(t, started)
+	select {
+	case <-childDone:
+		t.Fatal("abandoning the claim cancelled the child")
+	default:
+	}
+	waitReceiptState(t, handle.receipt, receiptDiscarded)
+	close(release)
+	if err := scope.Finish(); err != nil || len(scope.entries) != 0 {
+		t.Fatalf("finish after abandoned receive: %v, entries=%d", err, len(scope.entries))
+	}
+}
+
+func TestTaskScopeInterruptedReceivePreservesStickyFault(t *testing.T) {
+	scope := New()
+	cleanupEntered, release := make(chan struct{}), make(chan struct{})
+	cleanupScope(t, scope, release)
+	held, err := Spawn(scope, func(ctx context.Context) int {
+		<-ctx.Done()
+		return 0
+	}, func() {
+		close(cleanupEntered)
+		<-release
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	faulted, err := Spawn(scope, task(func() int { panic("child fault") }), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Discard(scope, faulted); err != nil {
+		t.Fatal(err)
+	}
+	waitEntryReady(t, scope, faulted.ticket)
+	scope.recordReady()
+	signal(t, cleanupEntered)
+	done, claimed, returned := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(returned)
+		_, problem, completed := ReceiveUntil(scope, held, done, func() { close(claimed) })
+		if problem != nil || completed {
+			t.Errorf("interrupted sticky receive = (%v, %t)", problem, completed)
+		}
+	}()
+	signal(t, claimed)
+	close(done)
+	signal(t, returned)
+	close(release)
+	if err := scope.Finish(); err != ErrTaskPanicked || len(scope.entries) != 0 {
+		t.Fatalf("finish after interrupted fault drain: %v, entries=%d", err, len(scope.entries))
+	}
+}
+
 func TestTaskScopeOwnerTeardownRequestsOnlyAndSeals(t *testing.T) {
 	for iteration := 0; iteration < 64; iteration++ {
 		scope := New()

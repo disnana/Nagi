@@ -164,6 +164,18 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
             "parent_cancel",
             "    await sleep(86400000)\n    return ok(17)\n",
         ),
+        (
+            "parent_receive_pending",
+            "    await sleep(86400000)\n    return ok(17)\n",
+        ),
+        (
+            "parent_receive_ready_cancel",
+            "    await sleep(0)\n    return ok(17)\n",
+        ),
+        (
+            "parent_receive_value",
+            "    await sleep(0)\n    return ok(17)\n",
+        ),
         ("discard_value", "    return ok(17)\n"),
         ("discard_panic", panic_child),
     ] {
@@ -179,7 +191,10 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
                 ["        assert_true(False)\n", receive].concat()
             }
             "discard_value" | "discard_panic" => "        discard(handle)\n".to_owned(),
-            "parent_wait_normal" => ["        await sleep(0)\n", receive].concat(),
+            "parent_wait_normal"
+            | "parent_receive_pending"
+            | "parent_receive_ready_cancel"
+            | "parent_receive_value" => ["        await sleep(0)\n", receive].concat(),
             "parent_cancel" => ["        await sleep(86400000)\n", receive].concat(),
             _ => receive.to_owned(),
         };
@@ -227,7 +242,7 @@ async def main() -> Result[unit, Error]:
         .unwrap();
         fs::write(staging.path.join("main.go"), generated).unwrap();
         let probes_panic = matches!(mode, "body_assert_false" | "sleep_body_panic");
-        let probes_parent = matches!(mode, "parent_wait_normal" | "parent_cancel");
+        let probes_parent = mode.starts_with("parent_");
         if probes_parent || probes_panic {
             fs::write(
                 kernel.join("body_panic_probe.go"),
@@ -288,6 +303,7 @@ async def main() -> Result[unit, Error]:
                     | "sleep_value"
                     | "sleep_business_error"
                     | "parent_wait_normal"
+                    | "parent_receive_value"
             ),
             "{stdout}"
         );
