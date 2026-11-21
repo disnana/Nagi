@@ -5,6 +5,8 @@
 //! is invoked, so target compiler failures cannot silently define Nagi
 //! semantics.
 mod http;
+#[cfg(test)]
+mod task_probe_tests;
 use crate::{
     ast::{Expr, Function, MatchPattern, NameResolution, Program, Stmt, Type, E, S},
     checked::{

@@ -97,6 +97,16 @@ kernel と生成コードの共通変換入口はまだないため、この段�
 識別をテストする。`ErrTaskGoexit`、cleanup 固有の fault、protocol fault の
 公開分類はこの変換から隔離する。`Goexit` は Rust の `Cancelled` へ割り当てない。
 
+非公開の生成テストでは、High から検査済み Low を経由して子の Go コードを
+実際の emitter で生成する。Rust のテスト専用コードが受取・scope 終了の変換を
+別ファイルに生成し、非公開 kernel と実行する。Go 側の検査は cleanup を保留して
+受取の完了を観測し、正常値、内側の業務 `Err`、panic の両方の変換先を照合する。
+通常の CLI に Task を解禁する変更は含まない。実行コマンドは次のとおり。
+
+```sh
+cargo test --locked -p nagic --lib generated_single_child_task_projects_panic_and_preserves_business_result -- --ignored --nocapture
+```
+
 ### 論理 join として使うための条件
 
 `done` は scope の完了登録より先に観測できる。テストでは scope の lock を
