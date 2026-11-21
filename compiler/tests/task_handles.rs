@@ -6,6 +6,8 @@ mod task_conditional_consumption;
 mod task_service;
 #[path = "support/task_service_s2.rs"]
 mod task_service_s2;
+#[path = "support/task_single_child.rs"]
+mod task_single_child;
 use nagic::{check, emit, source};
 use native_triple::Fixture;
 
