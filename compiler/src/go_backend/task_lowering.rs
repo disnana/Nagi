@@ -3,8 +3,8 @@ use super::{error, ident, Emitter};
 use crate::{
     ast::{Expr, ExprUseId, NameResolution, Stmt, Type, E, S},
     checked::{
-        CheckedProgram, ErrorDestination, ExpressionKey, ScopeBridge, ScopeNormalExit,
-        TaskSpawnMode, TaskUseMode,
+        CheckedProgram, ErrorDestination, ExpressionKey, ScopeBodyErrorExit, ScopeBridge,
+        ScopeNormalExit, ScopeOwnerTeardown, TaskSpawnMode, TaskUseMode,
     },
     project::BuildProfile,
 };
@@ -15,6 +15,13 @@ pub(super) struct SingleTask<'a> {
     pub(super) invocation: &'a Expr,
     handle: &'a str,
     received: &'a str,
+    body_try: Option<BodyTry<'a>>,
+}
+
+#[derive(Clone, Copy)]
+enum BodyTry<'a> {
+    Before(&'a Stmt),
+    After(&'a Stmt),
 }
 
 impl<'a> SingleTask<'a> {
@@ -46,8 +53,15 @@ impl<'a> SingleTask<'a> {
         let S::Scope(body) = &scope.kind else {
             return Err(unsupported());
         };
-        let [spawn, receive] = body.as_slice() else {
-            return Err(unsupported());
+        let (spawn, receive, body_try) = match body.as_slice() {
+            [spawn, receive] => (spawn, receive, None),
+            [spawn, first, second] if literal_body_try(first) => {
+                (spawn, second, Some(BodyTry::Before(first)))
+            }
+            [spawn, first, second] if literal_body_try(second) => {
+                (spawn, first, Some(BodyTry::After(second)))
+            }
+            _ => return Err(unsupported()),
         };
         let S::SpawnBind {
             name: handle,
@@ -134,6 +148,14 @@ impl<'a> SingleTask<'a> {
         if exit.bridge != ScopeBridge::TaskScope
             || exit.enclosing_error_destination != ErrorDestination::Function
             || exit.normal_exit != ScopeNormalExit::JoinAndPropagate
+            || exit.owner_teardown != ScopeOwnerTeardown::AbortRequestOnly
+            || exit.body_error_exit
+                != ScopeBodyErrorExit::LeaveBodyThenCancelDrainAndPropagateOriginal
+            || exit.body_error_destination
+                != (ErrorDestination::Scope {
+                    id: exit.scope,
+                    nesting: 1,
+                })
             || Some(exit.scope) != scope.task.scope
             || start.bridge != ScopeBridge::TaskScope
             || start.scope != exit.scope
@@ -152,7 +174,16 @@ impl<'a> SingleTask<'a> {
             invocation,
             handle,
             received,
+            body_try,
         })
+    }
+
+    pub(super) fn validate(&self, emitter: &Emitter<'a>, ret: &Type) -> Result<(), String> {
+        emitter.validate_expr(self.invocation, ret)?;
+        if let Some(BodyTry::Before(statement) | BodyTry::After(statement)) = self.body_try {
+            emitter.validate_statement(statement, ret)?;
+        }
+        Ok(())
     }
 
     pub(super) fn lower(
@@ -169,24 +200,57 @@ impl<'a> SingleTask<'a> {
         Emitter::line(output, indent, "{");
         let indent = indent + 1;
         Emitter::line(output, indent, format!("{scope} := taskscope.New()"));
+        let body_result = self.body_try.map(|_| emitter.temp("task_body"));
+        // The ordinary try lowering returns to this lexical body first.
+        // Outside it, FinishBodyError retires the output and drains the child.
+        if let Some(body) = &body_result {
+            Emitter::line(
+                output,
+                indent,
+                format!("{body} := func() nagiResult[nagiUnit, nagiError] {{"),
+            );
+        }
+        let body_indent = indent + usize::from(body_result.is_some());
         for line in before {
-            Emitter::line(output, indent, line);
+            Emitter::line(output, body_indent, line);
         }
         Emitter::line(
             output,
-            indent,
+            body_indent,
             format!("{handle} := nagiTaskSpawn({scope}, {future}, nagiTaskCleanup)"),
         );
+        if let Some(BodyTry::Before(statement)) = self.body_try {
+            Emitter::line(
+                output,
+                body_indent,
+                "if nagiTaskBeforeBodyTry != nil { nagiTaskBeforeBodyTry() }",
+            );
+            emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
+        }
         Emitter::line(
             output,
-            indent,
+            body_indent,
             format!("{received} := nagiTaskReceive({scope}, {handle})"),
         );
         Emitter::line(
             output,
-            indent,
+            body_indent,
             format!("if nagiTaskObserve != nil {{ nagiTaskObserve({received}) }}"),
         );
+        if let Some(BodyTry::After(statement)) = self.body_try {
+            emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
+        }
+        if let Some(body) = body_result {
+            Emitter::line(
+                output,
+                body_indent,
+                "return nagiOk[nagiUnit, nagiError](nagiUnit{})",
+            );
+            Emitter::line(output, indent, "}()");
+            Emitter::line(output, indent, format!(
+                "if !{body}.ok {{ return nagiErr[nagiUnit](taskscope.FinishBodyError({scope}, {body}.problem)) }}"
+            ));
+        }
         Emitter::line(
             output,
             indent,
@@ -195,6 +259,13 @@ impl<'a> SingleTask<'a> {
         Emitter::line(output, indent - 1, "}");
         Ok(())
     }
+}
+
+fn literal_body_try(statement: &Stmt) -> bool {
+    matches!(&statement.kind, S::Assign { annotation: Some(ty), value, declare: true, .. }
+        if ty == &scalar("i64")
+        && matches!(&value.kind, E::Try(error)
+            if literal_builtin(error, &["error"], |kind| matches!(kind, E::Str(_)))))
 }
 
 fn scalar(name: &str) -> Type {
@@ -238,9 +309,14 @@ const nagiChildPanicked = "child panicked"
 
 var nagiTaskCleanup func()
 var nagiTaskObserve func(nagiResult[nagiResult[int64, int64], nagiTaskFailure])
+var nagiTaskChildDone func(<-chan struct{})
+var nagiTaskBeforeBodyTry func()
 
 func nagiTaskSpawn[T any](scope *taskscope.Scope, future *nagiFuture[T], cleanup func()) taskscope.Handle[T] {
-    handle, fault := taskscope.Spawn(scope, func(context.Context) T { return future.await() }, cleanup)
+    handle, fault := taskscope.Spawn(scope, func(ctx context.Context) T {
+        if nagiTaskChildDone != nil { nagiTaskChildDone(ctx.Done()) }
+        return future.await()
+    }, cleanup)
     if fault != nil { panic(fault) }
     return handle
 }

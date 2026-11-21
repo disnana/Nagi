@@ -114,6 +114,13 @@ cargo test --locked -p nagic --lib generated_single_child_task_projects_panic_an
 `Finish` は先の生成テストと同じ内部変換を使用する。Go の観測用 hook は
 cleanup を止めたり受取値を読み出したりするためだけに使う。
 
+scope 本体には、受取の直前または直後に、リテラルの `error("...")` を扱う
+`try` を一つだけ置ける。通常の `try` lowering は字句的な本体を退出し、
+その後で `FinishBodyError` が本体の未受取出力を退役させて子を drain する。
+Rust の `TaskScope` と同様に、子の panic を受け取った後も本体の元の Err を返す。
+受取前の試験では、子の cleanup をチャネルで保留し、取消要求を観測してから
+解放する。一般の取消や実資源の解放はこの試験の範囲外である。
+
 ```sh
 cargo test --locked -p nagic --lib checked_single_task_lowers_scope_spawn_and_await_internally -- --ignored --nocapture
 ```

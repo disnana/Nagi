@@ -132,19 +132,28 @@ fn generated_single_child_task_projects_panic_and_preserves_business_result() {
 #[test]
 #[ignore = "requires the external Go toolchain used by the backend integration tests"]
 fn checked_single_task_lowers_scope_spawn_and_await_internally() {
+    let panic_child = "    assert_true(False)\n    return ok(17)\n";
+    let receive = "        received = await handle\n";
+    let body_error = "        ignored: i64 = try error(\"body sentinel\")\n";
     for (mode, child) in [
         ("value", "    return ok(17)\n"),
         ("business_error", "    return fail(22)\n"),
-        ("panic", "    assert_true(False)\n    return ok(17)\n"),
+        ("panic", panic_child),
+        ("body_error_before_await", panic_child),
+        ("body_error_after_await", panic_child),
     ] {
+        let body = match mode {
+            "body_error_before_await" => [body_error, receive].concat(),
+            "body_error_after_await" => [receive, body_error].concat(),
+            _ => receive.to_owned(),
+        };
         let high_source = format!(
             r#"async def child() -> Result[i64, i64]:
 {child}
 async def main() -> Result[unit, Error]:
     async with scope:
         handle = spawn child()
-        received = await handle
-    return ok(print("after scope"))
+{body}    return ok(print("after scope"))
 "#
         );
         let mut high = parser::parse(&high_source, true).unwrap();
@@ -212,7 +221,7 @@ async def main() -> Result[unit, Error]:
         );
         assert_eq!(
             stdout.lines().any(|line| line == "after scope"),
-            mode != "panic",
+            matches!(mode, "value" | "business_error"),
             "{stdout}"
         );
         println!("{mode}\n{stdout}");

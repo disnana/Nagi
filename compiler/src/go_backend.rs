@@ -813,7 +813,7 @@ impl<'a> Emitter<'a> {
             .single_task
             .filter(|task| std::ptr::eq(task.scope, statement))
         {
-            return self.validate_expr(task.invocation, ret);
+            return task.validate(self, ret);
         }
         match &statement.kind {
             S::Assign { value, .. } => self.validate_expr(value, ret),

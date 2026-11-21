@@ -887,6 +887,52 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn body_error_wins_over_single_child_panic_and_waits_for_cleanup() {
+        let mut scope = TaskScope::new();
+        let gate = Arc::new(DropGate::default());
+        let _release = Release(Arc::clone(&gate));
+        let task: Task<()> = scope.spawn_with_cleanup(
+            async { panic!("child already unwinding") },
+            Cleanup(Arc::clone(&gate)),
+        );
+        // The child has panicked and its Drop is still blocked. Leave the
+        // lexical body by dropping the handle before starting cancel/join.
+        watch(gate.entered.wait()).await.unwrap();
+        drop(task);
+        let mut finished = Box::pin(scope.finish(Err(Error::invalid("body sentinel"))));
+        let stayed_pending = futures_util::poll!(&mut finished).is_pending();
+        gate.release();
+        let outcome = watch(finished).await.unwrap();
+        assert!(stayed_pending, "body Err returned before child cleanup");
+        watch(gate.completed.wait()).await.unwrap();
+        assert!(matches!(outcome, Err(Exit::Body(error))
+            if matches!(error.kind, crate::ErrorKind::Invalid) && error.message == "body sentinel"));
+        assert_eq!(
+            scope.primary.as_ref().unwrap().kind,
+            TaskFailureKind::Panicked
+        );
+        assert_eq!(scope.stats().joined, 1);
+        assert_eq!(scope.stats().entries, 0);
+
+        let mut scope = TaskScope::new();
+        let task: Task<()> = scope.spawn_value(async { panic!("child fault already observed") });
+        assert_eq!(
+            watch(scope.receive(task))
+                .await
+                .unwrap()
+                .unwrap_err()
+                .kind(),
+            TaskFailureKind::Panicked
+        );
+        let outcome = watch(scope.finish(Err(Error::invalid("body sentinel"))))
+            .await
+            .unwrap();
+        assert!(matches!(outcome, Err(Exit::Body(error))
+            if matches!(error.kind, crate::ErrorKind::Invalid) && error.message == "body sentinel"));
+        assert_eq!(scope.stats().joined, 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn parent_drop_requests_abort_but_does_not_report_child_destruction_complete() {
         let mut scope = TaskScope::new();
         let gate = Arc::new(DropGate::default());
