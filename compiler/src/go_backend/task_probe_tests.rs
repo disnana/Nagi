@@ -417,7 +417,7 @@ fn checked_task_copy_capture_snapshots_a_local_before_spawn() {
         include_str!("task_copy_capture.nagi"),
         include_str!("task_copy_capture.low"),
         "(parent)",
-        "(parent + 1)",
+        r#"(parent + len("x"))"#,
         17,
         "29",
     );
@@ -426,8 +426,18 @@ fn checked_task_copy_capture_snapshots_a_local_before_spawn() {
         include_str!("task_copy_scalars.nagi"),
         include_str!("task_copy_scalars.low"),
         "(flag, right, left)",
-        "(flag, right + 1, left)",
+        r#"(flag, right + len("x"), left)"#,
         71,
+        "11",
+    );
+
+    run_checked_copy_capture(
+        "expressions",
+        include_str!("task_copy_expressions.nagi"),
+        include_str!("task_copy_expressions.low"),
+        "right + left",
+        r#"right + left + len("x")"#,
+        83,
         "11",
     );
 
@@ -451,6 +461,51 @@ fn checked_task_copy_capture_snapshots_a_local_before_spawn() {
         if label == "high" {
             fs::remove_file(&path).unwrap();
         }
+    }
+
+    // A Copy bool result does not admit its non-Copy string operands.
+    let string_comparison = |source: &str| {
+        source
+            .replace("flag: bool = True", r#"flag: str = "ready""#)
+            .replace("flag: bool = true", r#"flag: str = "ready""#)
+            .replace("flag = False", r#"flag = "updated""#)
+            .replace("flag = false", r#"flag = "updated""#)
+            .replace(
+                "child(flag, right, left)",
+                "child(flag == flag, right, left)",
+            )
+    };
+    for (label, path, text) in copy_capture_inputs(
+        &staging.path,
+        &string_comparison(include_str!("task_copy_scalars.nagi")),
+        &string_comparison(include_str!("task_copy_scalars.low")),
+    ) {
+        let checked = seal_copy_capture(&path, &text);
+        assert_copy_capture_rejected(&checked, label);
+        if label == "high" {
+            fs::remove_file(&path).unwrap();
+        }
+    }
+
+    let borrowed = |source: &str| {
+        non_copy(source)
+            .replace("value: str", "value: view[str]")
+            .replace("child(parent)", "child(view(parent))")
+    };
+    for (name, text) in [
+        ("borrow.nagi", borrowed(non_copy_high)),
+        ("borrow.low", borrowed(non_copy_low)),
+    ] {
+        let path = staging.path.join(name);
+        fs::write(&path, text).unwrap();
+        let mut input = crate::source::load(&path, name.ends_with(".nagi"))
+            .unwrap()
+            .program;
+        let error = check::check(&mut input).unwrap_err();
+        assert!(
+            error.contains("viewを別taskへ渡せません"),
+            "{name}: {error}"
+        );
     }
 }
 
@@ -531,6 +586,9 @@ fn run_checked_copy_capture(
             "{mode}/{label}: {ordinary}"
         );
         let generated = super::task_lowering::source(&checked).unwrap();
+        if mode == "expressions" {
+            assert_copy_expression_order(&checked, &generated);
+        }
         fs::write(staging.path.join("main.go"), generated).unwrap();
         let output = go_output(
             &["test", "-count=1", "-timeout=20s", "-v", "."],
@@ -574,4 +632,56 @@ fn run_checked_copy_capture(
             fs::remove_file(&path).unwrap();
         }
     }
+}
+
+fn assert_copy_expression_order(checked: &crate::checked::CheckedProgram, go: &str) {
+    let rust = emit::rust(checked).unwrap();
+    let (_, statement) = rust.split_once("let __nagi_spawn_future = ").unwrap();
+    let (arguments, registration) = statement.split_once(';').unwrap();
+    assert!(
+        registration
+            .split_once('}')
+            .unwrap()
+            .0
+            .contains(".spawn_value("),
+        "{statement}"
+    );
+    let flag = arguments.find("flag").unwrap();
+    let right = arguments.rfind("right").unwrap();
+    let product = arguments.rfind('*').unwrap();
+    assert!(flag < right && right < product, "{arguments}");
+    assert_eq!(arguments.matches("flag").count(), 1);
+    assert_eq!(arguments.matches("right").count(), 2);
+    assert_eq!(arguments.matches("left").count(), 2);
+
+    let (before_spawn, _) = go.split_once(":= nagiTaskSpawn(").unwrap();
+    let (_, mut evaluation) = before_spawn.split_once(":= taskscope.New()").unwrap();
+    let mut slots = Vec::new();
+    // In evaluation order: boolean with a short-circuited right operand,
+    // addition of right/left, then the product using only left.
+    for (index, counts) in [[1, 1, 0], [0, 1, 1], [0, 0, 1]].into_iter().enumerate() {
+        let (expression, remaining) = evaluation.split_once("var __nagi_capture_").unwrap();
+        for (name, count) in ["flag", "right", "left"].into_iter().zip(counts) {
+            assert_eq!(
+                expression.matches(&super::ident(name)).count(),
+                count,
+                "{expression}"
+            );
+        }
+        let (declaration, remaining) = remaining.split_once('\n').unwrap();
+        let slot = declaration.split_whitespace().next().unwrap();
+        assert_eq!(
+            slot.rsplit('_').next().unwrap().parse::<usize>().unwrap(),
+            index
+        );
+        slots.push(slot);
+        evaluation = remaining;
+    }
+    assert!(!evaluation.contains("var __nagi_capture_"), "{evaluation}");
+    let call = slots
+        .iter()
+        .map(|slot| format!("__nagi_capture_{slot}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    assert!(evaluation.contains(&format!("({call})")), "{evaluation}");
 }

@@ -401,3 +401,14 @@ fn native_copy_capture_preserves_mixed_scalar_slots() {
         "#[test] fn run_contract() { let rt = tokio::runtime::Runtime::new().unwrap(); assert!(rt.block_on(__nagi_main()).is_ok()); }",
     );
 }
+
+#[test]
+fn native_copy_capture_with_computed_arguments() {
+    Fixture::new().run_three(
+        "task-copy-expressions",
+        include_str!("../src/go_backend/task_copy_expressions.nagi"),
+        include_str!("../src/go_backend/task_copy_expressions.low"),
+        "",
+        "#[test] fn run_contract() { let rt = tokio::runtime::Runtime::new().unwrap(); assert!(rt.block_on(__nagi_main()).is_ok()); }",
+    );
+}

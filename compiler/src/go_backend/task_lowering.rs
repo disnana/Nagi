@@ -653,6 +653,25 @@ fn capture_local<'a>(locals: &'a [Stmt], operand: &Expr) -> Option<&'a Stmt> {
         .find(|stmt| scalar_literal_assignment(stmt, true) == Some((name, ty)))
 }
 
+fn copy_expression_owners(locals: &[Stmt], operand: &Expr) -> Option<Vec<(ExprUseId, BindingId)>> {
+    let mut owners = Vec::new();
+    crate::checked::visit_expression(operand, &mut |expression| {
+        match &expression.kind {
+            E::Int(_) | E::Float(_) | E::Bool(_) | E::Unary(..) | E::Binary(..) => {}
+            E::Name(_) => {
+                let local = capture_local(locals, expression)
+                    .filter(|local| matches!(&local.kind, S::Assign { value, .. } if !matches!(value.kind, E::Str(_))))
+                    .ok_or("not a scalar literal local")?;
+                let span = local.binding_span.ok_or("missing capture binding span")?;
+                owners.push((ExprUseId::of(expression), BindingId { line: local.line, token: span.start }));
+            }
+            _ => return Err("not a pure scalar capture expression".into()),
+        }
+        Ok(())
+    }).ok()?;
+    Some(owners)
+}
+
 fn checked_copy_arguments(
     checked: &CheckedProgram,
     parent: &Function,
@@ -686,17 +705,10 @@ fn checked_copy_arguments(
         .zip(&child.params)
         .enumerate()
     {
-        let Some(local) = capture_local(locals, operand) else {
-            return false;
-        };
-        let (Some(span), ArgumentCaptureFacts::UserAsync(facts)) =
-            (local.binding_span, &argument.capture)
+        let (Some(owners), ArgumentCaptureFacts::UserAsync(facts)) =
+            (copy_expression_owners(locals, operand), &argument.capture)
         else {
             return false;
-        };
-        let binding = BindingId {
-            line: local.line,
-            token: span.start,
         };
         let operand_id = ExprUseId::of(operand);
         if argument.index != index
@@ -704,7 +716,7 @@ fn checked_copy_arguments(
             || operand.ty.as_ref() != Some(parameter_type)
             || &argument.ty != parameter_type
             || argument.passing != stdlib::Passing::Move
-            || argument.owners != [(operand_id, binding)]
+            || argument.owners != owners
             || facts.slot.call != call
             || facts.slot.argument != index
             || facts.storage.call != call
@@ -716,7 +728,7 @@ fn checked_copy_arguments(
         {
             return false;
         }
-        bindings.insert(binding);
+        bindings.extend(owners.into_iter().map(|(_, binding)| binding));
     }
     bindings.len() == locals.len()
 }

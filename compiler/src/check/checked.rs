@@ -1246,7 +1246,7 @@ fn expression_plan(e: &Expr, p: &Program) -> Result<ExpressionPlan, String> {
     }
     Ok(plan)
 }
-pub(super) fn visit_expression(
+pub(crate) fn visit_expression(
     e: &Expr,
     visit: &mut impl FnMut(&Expr) -> Result<(), String>,
 ) -> Result<(), String> {

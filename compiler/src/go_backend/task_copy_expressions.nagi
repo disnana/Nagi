@@ -1,0 +1,17 @@
+async def child(enabled: bool, first: i64, second: i64) -> Result[i64, i64]:
+    assert_true(enabled)
+    assert_true(first == 8)
+    assert_true(second == 3)
+    return ok(first * 10 + second)
+
+async def main() -> Result[unit, Error]:
+    left: i64 = 1
+    flag: bool = true
+    right: i64 = 7
+    async with scope:
+        handle = spawn child(not (flag == false) or (right + 9223372036854775807 > 0), right + left, left * 3)
+        left = 11
+        flag = False
+        right = 22
+        received = await handle
+    return ok(print(left))
