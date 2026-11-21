@@ -460,6 +460,7 @@ struct Emitter<'a> {
     uses_builtin_sleep: bool,
     uses_builtin_env: bool,
     uses_builtin_json_encode: bool,
+    uses_builtin_i32: bool,
     temporary: usize,
     #[cfg(test)]
     task_scope_probe: Option<task_lowering::TaskScopeProbe<'a>>,
@@ -514,6 +515,7 @@ impl<'a> Emitter<'a> {
         let uses_builtin_sleep = uses_builtin("sleep");
         let uses_builtin_env = uses_builtin("env");
         let uses_builtin_json_encode = uses_builtin("json_encode");
+        let uses_builtin_i32 = uses_builtin("i32");
         if program.functions.len() != checked.emission.functions.len() {
             return Err(
                 "internal compiler error: Go backend function plans do not match the checked program"
@@ -554,6 +556,7 @@ impl<'a> Emitter<'a> {
             uses_builtin_sleep,
             uses_builtin_env,
             uses_builtin_json_encode,
+            uses_builtin_i32,
             temporary: 0,
             #[cfg(test)]
             task_scope_probe: None,
@@ -1099,6 +1102,7 @@ impl<'a> Emitter<'a> {
                                 | "parse_i64"
                                 | "error_message"
                                 | "i64"
+                                | "i32"
                                 | "len"
                                 | "range"
                                 | "sleep"
@@ -1425,6 +1429,7 @@ impl<'a> Emitter<'a> {
                         "json_encode" => format!("nagiJSONEncodeScalar({})", values[0]),
                         "error_message" => format!("({}).message", values[0]),
                         "i64" => format!("int64({})", values[0]),
+                        "i32" => format!("nagiTryI32({})", values[0]),
                         "len" => format!("int64(len({}))", values[0]),
                         "range" => format!("nagiRange{{end: {}}}", values[0]),
                         "sleep" => format!("nagiSleep({})", values[0]),
@@ -1950,6 +1955,29 @@ func nagiJSONEncodeScalar(value any) nagiResult[string, nagiError] {
         } else {
             ""
         };
+        let i32_runtime = if self.uses_builtin_i32 {
+            // Rust's TryFromIntError text can vary by direction and toolchain.
+            let underflow =
+                serde_json::to_string(&i32::try_from(i64::MIN).unwrap_err().to_string())
+                    .map_err(|error| error.to_string())?;
+            let overflow = serde_json::to_string(&i32::try_from(i64::MAX).unwrap_err().to_string())
+                .map_err(|error| error.to_string())?;
+            format!(
+                r#"
+func nagiTryI32(value int64) nagiResult[int32, nagiError] {{
+    if value < -2147483648 {{
+        return nagiErr[int32](nagiError{{kind: nagiInvalid, message: {underflow}}})
+    }}
+    if value > 2147483647 {{
+        return nagiErr[int32](nagiError{{kind: nagiInvalid, message: {overflow}}})
+    }}
+    return nagiOk[int32, nagiError](int32(value))
+}}
+"#
+            )
+        } else {
+            String::new()
+        };
         let sleep_runtime = if self.uses_builtin_sleep {
             imports.push("\"time\"");
             "const nagiMaxSleepMilliseconds int64 = 9223372036854\n\
@@ -2002,7 +2030,7 @@ func (future *nagiFuture[T]) await() T {{\n\
     defer func() {{ body = nil }}()\n\
     return body()\n\
 }}\n\
-{sleep_runtime}{env_runtime}{json_encode_runtime}{http_runtime}\
+{sleep_runtime}{env_runtime}{i32_runtime}{json_encode_runtime}{http_runtime}\
 func nagiFixedDecimal(digits string, scale int) string {{\n\
     if scale >= 0 {{ return digits + strings.Repeat(\"0\", scale) }}\n\
     point := len(digits) + scale\n\

@@ -1450,6 +1450,11 @@ fn other_standard_operations_stay_unsupported_before_the_go_toolchain() {
             "operation json_decode is not supported",
             2,
         ),
+        (
+            "def main():\n    value = i32(\"1\")\n",
+            "expected i64, got str",
+            2,
+        ),
     ] {
         let fixture = Fixture::new();
         fixture.write("main.nagi", source);
@@ -1913,6 +1918,7 @@ fn main() -> unit {
     .unwrap_or_else(|error| panic!("{error}"));
 
     assert_scalar_json_encode_cli();
+    assert_checked_i32_cli();
 
     let bounds = SharedCase {
         name: "shared-index-fault",
@@ -2016,9 +2022,64 @@ fn main() -> Result[unit, Error] {
         "\n\"retained\"\nretained\n",
     ))
     .into_bytes();
+    assert_scalar_cli_parity(&high, &low, &expected);
+}
+
+fn assert_checked_i32_cli() {
+    const HIGH: &str = r#"def marked(value: i64) -> i64:
+    print("once")
+    return value
+
+def convert(value: i64):
+    match i32(value):
+        case Ok(number):
+            print(number)
+        case Err(problem):
+            print(error_message(problem))
+
+def main() -> Result[unit, Error]:
+    print(try i32(-2147483648))
+    print(try i32(2147483647))
+    print(try i32(0))
+    convert(marked(2147483648))
+    convert(-2147483649)
+    convert(-9223372036854775808)
+    convert(9223372036854775807)
+    return ok(print("continued"))
+"#;
+    const LOW: &str = r#"fn marked(value: i64) -> i64 {
+    print("once");
+    return value;
+}
+fn convert(value: i64) -> unit {
+    match i32(value) {
+        case Ok(number) { print(number); }
+        case Err(problem) { print(error_message(problem)); }
+    }
+}
+fn main() -> Result[unit, Error] {
+    print(try i32(-2147483648));
+    print(try i32(2147483647));
+    print(try i32(0));
+    convert(marked(2147483648));
+    convert(-2147483649);
+    convert(-9223372036854775808);
+    convert(9223372036854775807);
+    return ok(print("continued"));
+}
+"#;
+    let underflow = i32::try_from(i64::MIN).unwrap_err();
+    let overflow = i32::try_from(i64::MAX).unwrap_err();
+    let expected = format!(
+        "-2147483648\n2147483647\n0\nonce\n{overflow}\n{underflow}\n{underflow}\n{overflow}\ncontinued\n"
+    );
+    assert_scalar_cli_parity(HIGH, LOW, expected.as_bytes());
+}
+
+fn assert_scalar_cli_parity(high: &str, low: &str, expected: &[u8]) {
     let fixture = Fixture::new();
-    fixture.write("main.nagi", &high);
-    fixture.write("manual.low", &low);
+    fixture.write("main.nagi", high);
+    fixture.write("manual.low", low);
     for (source, label) in [
         ("main.nagi", "high"),
         ("saved.low", "saved"),

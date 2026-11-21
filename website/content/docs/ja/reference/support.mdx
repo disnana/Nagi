@@ -39,6 +39,7 @@ backends: [rust, go]
 | HTTP (M21) | IPv4 ループバックでの直接 `serve`、完全一致の公開 `GET` / `POST` ルート、本文なしの GET、固定長 POST のバイナリ往復と本文上限を確認。 |
 | HTTP の状態 (M39) | スカラー・文字列で構成した読み取り専用の共有 State を、`await` を含まない名前付き handler で確認。共有可変 State や中断・再開する handler は対象外。 |
 | CORS | `cors_policy` と `cors_route` で明示設定したルートの許可 Origin と `OPTIONS` プリフライトを確認。未設定ルートは CORS ヘッダーを追加しない。 |
+| 整数変換 | `i32(i64)` は範囲を検査し、範囲外は `Error` を返す。既存の損失のない `i64` 拡張も利用可能。 |
 | JSON | 単独の `json_encode` は `str`、`bool`、整数に対応。浮動小数点・集約型の符号化、`json_decode`、HTTP の JSON 応答は未対応。 |
 | 標準ライブラリの未対応機能 | 公開 Actor / Supervisor、SQLite Pool/Tx、認証、Session、CSRF は未対応。 |
 | ネイティブアダプター | Go ネイティブアダプターは未対応。Go ターゲットでは Rust 資産を拒否。 |
