@@ -74,8 +74,8 @@ impl<'a> TaskScopeProbe<'a> {
         let S::Scope(body) = &scope.kind else {
             return Err(unsupported());
         };
-        // The only two-child form is a discarded timer sibling followed by
-        // reception of a child that deterministically panics.
+        // The only two-child form discards a timer child and receives a
+        // literal panic or business error from the other child.
         let (spawn, consume, body_step, sibling_nodes) = match body.as_slice() {
             [sibling, primary, discard, await_primary] => {
                 (primary, await_primary, None, Some((sibling, discard)))
@@ -204,17 +204,25 @@ impl<'a> TaskScopeProbe<'a> {
                 return Err(unsupported());
             };
             let operand = discard_operand(discard).ok_or_else(unsupported)?;
-            let milliseconds = literal_sleep(wait)
-                .filter(|value| *value > 0)
-                .ok_or_else(unsupported)?;
+            let milliseconds = literal_sleep(wait).ok_or_else(unsupported)?;
             let S::Return(Some(sibling_result)) = &last.kind else {
                 return Err(unsupported());
             };
-            let [assertion, _] = child.body.as_slice() else {
-                return Err(unsupported());
+            let supported_pair = match child.body.as_slice() {
+                [assertion, _] => {
+                    milliseconds > 0
+                        && matches!(&assertion.kind, S::Expr(value)
+                    if literal_builtin(value, &["assert_true"], |kind| matches!(kind, E::Bool(false))))
+                }
+                [_] => {
+                    milliseconds == 0
+                        && literal_builtin(child_result, &["fail"], |kind| {
+                            matches!(kind, E::Int(_))
+                        })
+                }
+                _ => false,
             };
-            if !matches!(&assertion.kind, S::Expr(value)
-                if literal_builtin(value, &["assert_true"], |kind| matches!(kind, E::Bool(false))))
+            if !supported_pair
                 || !matches!(completion, TaskCompletion::Receive(_))
                 || sibling_handle == handle
                 || sibling_spawn.task.spawn_binding == spawn.task.spawn_binding
@@ -787,6 +795,7 @@ const nagiChildPanicked = "child panicked"
 
 var nagiTaskCleanup func()
 var nagiTaskSiblingScope func(*taskscope.Scope)
+var nagiTaskFinishPending func()
 var nagiTaskObserve func(nagiResult[nagiResult[int64, int64], nagiTaskFailure])
 var nagiTaskChildDone func(<-chan struct{})
 var nagiTaskBeforeBodyTry func()
@@ -827,7 +836,8 @@ func nagiTaskReceived[T any](value T, fault error) nagiResult[T, nagiTaskFailure
 }
 
 func nagiTaskFinish(scope *taskscope.Scope) nagiResult[nagiUnit, nagiError] {
-    return nagiTaskFinished(scope.Finish())
+    fault, _ := scope.FinishUntil(nil, nagiTaskFinishPending)
+    return nagiTaskFinished(fault)
 }
 
 func nagiTaskFinished(fault error) nagiResult[nagiUnit, nagiError] {

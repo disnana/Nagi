@@ -42,3 +42,15 @@ func TaskFaults(scope *Scope) (primary error, related []error) {
 	defer scope.mu.Unlock()
 	return scope.primary, append([]error(nil), scope.related...)
 }
+
+// TaskCancellationRequested observes the latch on any still-registered child.
+func TaskCancellationRequested(scope *Scope) bool {
+	scope.mu.Lock()
+	defer scope.mu.Unlock()
+	for _, entry := range scope.entries {
+		if entry.requestedCancel {
+			return true
+		}
+	}
+	return false
+}

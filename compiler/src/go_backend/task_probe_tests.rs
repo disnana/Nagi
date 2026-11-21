@@ -211,11 +211,12 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
         ("discard_value", "    return ok(17)\n"),
         ("discard_panic", panic_child),
         ("sibling_fault", panic_child),
+        ("sibling_business_error", "    return fail(22)\n"),
     ] {
         let discards = mode.starts_with("parent_finish_")
             || mode.starts_with("parent_permit_")
             || mode.starts_with("discard_");
-        let probes_sibling = mode == "sibling_fault";
+        let probes_sibling = mode.starts_with("sibling_");
         let task_import = if discards || probes_sibling {
             "from std.task import discard\n\n"
         } else {
@@ -238,7 +239,11 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
         };
         let (extra_child, extra_spawn, before_receive) = if probes_sibling {
             (
-                "async def timer_child() -> Result[i64, i64]:\n    await sleep(86400000)\n    return ok(31)\n\n",
+                if mode == "sibling_fault" {
+                    "async def timer_child() -> Result[i64, i64]:\n    await sleep(86400000)\n    return ok(31)\n\n"
+                } else {
+                    "async def timer_child() -> Result[i64, i64]:\n    await sleep(0)\n    return ok(31)\n\n"
+                },
                 "        timer = spawn timer_child()\n",
                 "        discard(timer)\n",
             )
@@ -396,6 +401,7 @@ async def main() -> Result[unit, Error]:
                     | "parent_receive_value"
                     | "parent_finish_normal"
                     | "parent_permit_normal"
+                    | "sibling_business_error"
             ),
             "{stdout}"
         );

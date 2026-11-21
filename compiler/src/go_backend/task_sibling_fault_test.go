@@ -21,6 +21,10 @@ func waitSiblingEvent[T any](t *testing.T, limit context.Context, name string, e
 }
 
 func TestCheckedTaskLowering(t *testing.T) {
+	if fixtureMode == "sibling_business_error" {
+		testBusinessErrorKeepsSiblingHealthy(t)
+		return
+	}
 	type result = nagiResult[nagiUnit, nagiError]
 	type receipt = nagiResult[nagiResult[int64, int64], nagiTaskFailure]
 	limit, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -100,5 +104,62 @@ func TestCheckedTaskLowering(t *testing.T) {
 	}
 	if entries, queued := taskscope.TaskOutstanding(scope); entries != 0 || queued != 0 {
 		t.Fatalf("after finish: entries=%d queued=%d", entries, queued)
+	}
+}
+
+// A healthy receive may complete without the sibling; scope Finish still owns
+// that sibling's completion. The cleanup gate makes these separate events.
+func testBusinessErrorKeepsSiblingHealthy(t *testing.T) {
+	type result = nagiResult[nagiUnit, nagiError]
+	type receipt = nagiResult[nagiResult[int64, int64], nagiTaskFailure]
+	limit, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cleanupEntered := make(chan struct{})
+	finishWaiting := make(chan struct{})
+	releaseCleanup := make(chan struct{})
+	defer func() {
+		select {
+		case <-releaseCleanup:
+		default:
+			close(releaseCleanup)
+		}
+	}()
+	scopeSeen := make(chan *taskscope.Scope, 1)
+	received := make(chan receipt, 1)
+	returned := make(chan result, 1)
+	nagiTaskSiblingScope = func(scope *taskscope.Scope) { scopeSeen <- scope }
+	nagiTaskCleanup = func() { close(cleanupEntered); <-releaseCleanup }
+	nagiTaskObserve = func(value receipt) { received <- value }
+	nagiTaskFinishPending = func() { close(finishWaiting) }
+
+	go func() { returned <- nagiMain().await() }()
+	scope := waitSiblingEvent(t, limit, "both registrations and sibling discard", scopeSeen)
+	waitSiblingEvent(t, limit, "sibling at its cleanup gate", cleanupEntered)
+	got := waitSiblingEvent(t, limit, "business Err while sibling cleanup is blocked", received)
+	if !got.ok || got.value.ok || got.value.problem != 22 {
+		t.Fatalf("receive = %+v, want Ok(Err(22))", got)
+	}
+	waitSiblingEvent(t, limit, "scope Finish waiting on sibling", finishWaiting)
+	if primary, related := taskscope.TaskFaults(scope); primary != nil || len(related) != 0 {
+		t.Fatalf("business Err became a scope fault: primary=%v related=%v", primary, related)
+	}
+	if entries, queued := taskscope.TaskOutstanding(scope); entries != 1 || queued != 0 {
+		t.Fatalf("pending sibling: entries=%d queued=%d", entries, queued)
+	}
+	if taskscope.TaskCancellationRequested(scope) {
+		t.Fatal("business Err cancelled the sibling")
+	}
+	select {
+	case exit := <-returned:
+		t.Fatalf("scope returned before sibling cleanup: %+v", exit)
+	default:
+	}
+
+	close(releaseCleanup)
+	if exit := waitSiblingEvent(t, limit, "scope Finish", returned); !exit.ok {
+		t.Fatalf("scope exit = %+v", exit)
+	}
+	if entries, queued := taskscope.TaskOutstanding(scope); entries != 0 || queued != 0 {
+		t.Fatalf("after Finish: entries=%d queued=%d", entries, queued)
 	}
 }
