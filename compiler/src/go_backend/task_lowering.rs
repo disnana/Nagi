@@ -20,6 +20,7 @@ pub(super) struct TaskScopeProbe<'a> {
     body_step: Option<BodyStep<'a>>,
     child_sleep: Option<ChildSleep<'a>>,
     sibling: Option<TimerSibling<'a>>,
+    connection_probe: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -253,6 +254,7 @@ impl<'a> TaskScopeProbe<'a> {
             completion,
             body_step,
             sibling,
+            connection_probe: false,
             child_sleep: sleep.map(|milliseconds| ChildSleep {
                 milliseconds,
                 result: child_result,
@@ -299,11 +301,14 @@ impl<'a> TaskScopeProbe<'a> {
         let S::Return(Some(value)) = &end.kind else {
             unreachable!("validated single-task main return");
         };
-        Emitter::line(
-            output,
-            0,
-            "func nagiTaskParent(parent context.Context) (nagiResult[nagiUnit, nagiError], bool) {",
-        );
+        let (param, arg) = if self.connection_probe {
+            (", owner *nagiTaskConnOwner", ", nil")
+        } else {
+            ("", "")
+        };
+        Emitter::line(output, 0, format!(
+            "func nagiTaskParent(parent context.Context{param}) (nagiResult[nagiUnit, nagiError], bool) {{"
+        ));
         self.lower(emitter, ret, 1, output)?;
         let (before, value) = emitter.expression(value, ret)?;
         for line in before {
@@ -312,7 +317,7 @@ impl<'a> TaskScopeProbe<'a> {
         Emitter::line(output, 1, format!("return {value}, true"));
         Emitter::line(output, 0, "}");
         // Keep the regular entry usable with its non-cancelling background.
-        output.push_str("func nagiMain() *nagiFuture[nagiResult[nagiUnit, nagiError]] {\n    return nagiCold(func() nagiResult[nagiUnit, nagiError] {\n        result, _ := nagiTaskParent(context.Background())\n        return result\n    })\n}\n\n");
+        output.push_str(&format!("func nagiMain() *nagiFuture[nagiResult[nagiUnit, nagiError]] {{\n    return nagiCold(func() nagiResult[nagiUnit, nagiError] {{\n        result, _ := nagiTaskParent(context.Background(){arg})\n        return result\n    }})\n}}\n\n"));
         Ok(())
     }
 
@@ -359,15 +364,25 @@ impl<'a> TaskScopeProbe<'a> {
         let body_indent = indent + usize::from(body_result.is_some() || body_asserts);
         let sibling_handle = if let Some(sibling) = self.sibling {
             let name = ident(sibling.handle);
-            sibling
-                .sleep
-                .emit_spawn(emitter, &scope, &name, body_indent, output)?;
+            sibling.sleep.emit_spawn(
+                emitter,
+                &scope,
+                &name,
+                "taskscope.SpawnInterruptible",
+                body_indent,
+                output,
+            )?;
             Some(name)
         } else {
             None
         };
         if let Some(sleep) = self.child_sleep {
-            sleep.emit_spawn(emitter, &scope, &handle, body_indent, output)?;
+            let (spawn, args) = if self.connection_probe {
+                ("nagiTaskSpawnWithConn", format!("owner, {scope}"))
+            } else {
+                ("taskscope.SpawnInterruptible", scope.clone())
+            };
+            sleep.emit_spawn(emitter, &args, &handle, spawn, body_indent, output)?;
         } else {
             let (before, future) = emitter.evaluated(self.invocation, ret)?;
             for line in before {
@@ -591,8 +606,9 @@ impl ChildSleep<'_> {
     fn emit_spawn(
         self,
         emitter: &mut Emitter<'_>,
-        scope: &str,
+        spawn_args: &str,
         handle: &str,
+        spawn: &str,
         indent: usize,
         output: &mut String,
     ) -> Result<(), String> {
@@ -600,7 +616,7 @@ impl ChildSleep<'_> {
         let result_type = Type("Result".into(), vec![scalar("i64"), scalar("i64")]);
         let (before, result) = emitter.expression(self.result, &result_type)?;
         Emitter::line(output, indent, format!(
-            "{handle}, {fault} := taskscope.SpawnInterruptible({scope}, func(ctx context.Context) (nagiResult[int64, int64], bool) {{"
+            "{handle}, {fault} := {spawn}({spawn_args}, func(ctx context.Context) (nagiResult[int64, int64], bool) {{"
         ));
         Emitter::line(
             output,
@@ -696,8 +712,26 @@ fn builtin_argument<'a>(value: &'a Expr, names: &[&str]) -> Option<&'a Expr> {
 }
 
 pub(super) fn source(checked: &CheckedProgram) -> Result<String, String> {
+    source_for_probe(checked, false)
+}
+
+pub(super) fn source_with_connection(checked: &CheckedProgram) -> Result<String, String> {
+    source_for_probe(checked, true)
+}
+
+fn source_for_probe(checked: &CheckedProgram, connection_probe: bool) -> Result<String, String> {
+    let mut task = TaskScopeProbe::from_checked(checked)?;
+    if connection_probe
+        && (!task.interrupts_finish() || task.sibling.is_some() || task.body_step.is_some())
+    {
+        return Err(error(
+            task.scope.line,
+            "connection probe requires a single discarded timer child",
+        ));
+    }
+    task.connection_probe = connection_probe;
     let mut emitter = Emitter::from_checked(checked, &[], BuildProfile::Dev)?;
-    emitter.task_scope_probe = Some(TaskScopeProbe::from_checked(checked)?);
+    emitter.task_scope_probe = Some(task);
     emitter.validate()?;
     let has_parent_context = emitter
         .task_scope_probe

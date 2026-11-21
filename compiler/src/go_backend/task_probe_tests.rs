@@ -185,6 +185,10 @@ fn checked_single_task_lowers_scope_spawn_and_await_internally() {
             "    await sleep(86400000)\n    return ok(17)\n",
         ),
         (
+            "parent_finish_connection",
+            "    await sleep(86400000)\n    return ok(17)\n",
+        ),
+        (
             "parent_finish_ready_cancel",
             "    await sleep(0)\n    return ok(17)\n",
         ),
@@ -270,7 +274,23 @@ async def main() -> Result[unit, Error]:
             rejected.contains("async task operations are not supported"),
             "{rejected}"
         );
-        let generated = super::task_lowering::source(&checked).unwrap();
+        let probes_connection = mode == "parent_finish_connection";
+        let generated = if probes_connection {
+            super::task_lowering::source_with_connection(&checked)
+        } else {
+            super::task_lowering::source(&checked)
+        }
+        .unwrap();
+        let connection_sources = [
+            ("http.go", include_str!("http.go")),
+            ("cors.go", include_str!("cors.go")),
+            ("task_conn_probe.go", include_str!("task_conn_probe.go")),
+        ];
+        if probes_connection {
+            for (name, content) in connection_sources {
+                fs::write(staging.path.join(name), content).unwrap();
+            }
+        }
         let kernel = staging.path.join("internal/taskscope");
         fs::create_dir_all(&kernel).unwrap();
         fs::write(
@@ -293,7 +313,9 @@ async def main() -> Result[unit, Error]:
             )
             .unwrap();
         }
-        let test_source = if probes_sibling {
+        let test_source = if probes_connection {
+            include_str!("task_conn_probe_test.go")
+        } else if probes_sibling {
             include_str!("task_sibling_fault_test.go")
         } else if probes_parent {
             include_str!("task_parent_cancel_test.go")
@@ -331,6 +353,11 @@ async def main() -> Result[unit, Error]:
             if probes_parent || probes_panic || probes_sibling {
                 let file = "internal/taskscope/body_panic_probe.go";
                 fs::copy(staging.path.join(file), path.join(file)).unwrap();
+            }
+            if probes_connection {
+                for (file, _) in connection_sources {
+                    fs::copy(staging.path.join(file), path.join(file)).unwrap();
+                }
             }
             if repeats_permit {
                 let file = "permit_repetition_test.go";
