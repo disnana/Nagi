@@ -1924,6 +1924,7 @@ fn main() -> unit {
 
     assert_scalar_json_encode_cli();
     assert_checked_i32_cli();
+    assert_parse_i64_cli();
 
     let bounds = SharedCase {
         name: "shared-index-fault",
@@ -2088,6 +2089,72 @@ fn main() -> Result[unit, Error] {
          invalid\n{underflow}\ninvalid\n{overflow}\ncontinued\n"
     );
     assert_scalar_cli_parity(HIGH, LOW, expected.as_bytes());
+}
+
+fn assert_parse_i64_cli() {
+    const CASES: &[&str] = &[
+        "0",
+        "+9223372036854775807",
+        "-9223372036854775808",
+        "00000000000000000000000000000042",
+        "-0",
+        "",
+        "+",
+        "-",
+        "--1",
+        " 1",
+        "42\t",
+        "1_000",
+        "１２",
+        "999999999999999999x",
+        "9223372036854775808",
+        "-9223372036854775809",
+        "9223372036854775808x",
+        "-9223372036854775809x",
+        "922337203685477580x",
+        "18446744073709551616x",
+    ];
+    let mut high = String::from(
+        r#"def show(value: view[str]):
+    match parse_i64(value):
+        case Ok(number):
+            print(number)
+        case Err(problem):
+            print(error_kind(problem))
+            print(error_message(problem))
+
+def main() -> Result[unit, Error]:
+    print(try parse_i64("+7"))
+"#,
+    );
+    let mut low = String::from(
+        r#"fn show(value: view[str]) -> unit {
+    match parse_i64(value) {
+        case Ok(number) { print(number); }
+        case Err(problem) {
+            print(error_kind(problem));
+            print(error_message(problem));
+        }
+    }
+}
+fn main() -> Result[unit, Error] {
+    print(try parse_i64("+7"));
+"#,
+    );
+    let mut expected = String::from("7\n");
+    for &input in CASES {
+        let literal = serde_json::to_string(input).unwrap();
+        high.push_str(&format!("    show(view({literal}))\n"));
+        low.push_str(&format!("    show(view({literal}));\n"));
+        match input.parse::<i64>() {
+            Ok(number) => expected.push_str(&format!("{number}\n")),
+            Err(problem) => expected.push_str(&format!("invalid\n{problem}\n")),
+        }
+    }
+    high.push_str("    return ok(print(\"continued\"))\n");
+    low.push_str("    return ok(print(\"continued\"));\n}\n");
+    expected.push_str("continued\n");
+    assert_scalar_cli_parity(&high, &low, expected.as_bytes());
 }
 
 fn assert_scalar_cli_parity(high: &str, low: &str, expected: &[u8]) {

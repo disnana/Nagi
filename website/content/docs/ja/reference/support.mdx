@@ -41,6 +41,7 @@ backends: [rust, go]
 | CORS | `cors_policy` と `cors_route` で明示設定したルートの許可 Origin と `OPTIONS` プリフライトを確認。未設定ルートは CORS ヘッダーを追加しない。 |
 | 整数変換 | `i32(i64)` は範囲を検査し、範囲外は `Error` を返す。既存の損失のない `i64` 拡張も利用可能。 |
 | エラーの確認 | `error_kind` は Go が対応するエラーの分類を、エラーを消費せずに取得する。メッセージは `error_message` で取得できる。 |
+| 整数の読み取り | `parse_i64` は文字列と読み取り専用文字列ビューに対応する。10進数の範囲、エラー分類、メッセージは Rust backend と同じ。 |
 | JSON | 単独の `json_encode` は `str`、`bool`、整数に対応。浮動小数点・集約型の符号化、`json_decode`、HTTP の JSON 応答は未対応。 |
 | 標準ライブラリの未対応機能 | 公開 Actor / Supervisor、SQLite Pool/Tx、認証、Session、CSRF は未対応。 |
 | ネイティブアダプター | Go ネイティブアダプターは未対応。Go ターゲットでは Rust 資産を拒否。 |

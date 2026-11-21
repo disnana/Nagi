@@ -461,6 +461,7 @@ struct Emitter<'a> {
     uses_builtin_env: bool,
     uses_builtin_json_encode: bool,
     uses_builtin_i32: bool,
+    uses_builtin_parse_i64: bool,
     temporary: usize,
     #[cfg(test)]
     task_scope_probe: Option<task_lowering::TaskScopeProbe<'a>>,
@@ -516,6 +517,7 @@ impl<'a> Emitter<'a> {
         let uses_builtin_env = uses_builtin("env");
         let uses_builtin_json_encode = uses_builtin("json_encode");
         let uses_builtin_i32 = uses_builtin("i32");
+        let uses_builtin_parse_i64 = uses_builtin("parse_i64");
         if program.functions.len() != checked.emission.functions.len() {
             return Err(
                 "internal compiler error: Go backend function plans do not match the checked program"
@@ -557,6 +559,7 @@ impl<'a> Emitter<'a> {
             uses_builtin_env,
             uses_builtin_json_encode,
             uses_builtin_i32,
+            uses_builtin_parse_i64,
             temporary: 0,
             #[cfg(test)]
             task_scope_probe: None,
@@ -1980,6 +1983,63 @@ func nagiTryI32(value int64) nagiResult[int32, nagiError] {{
         } else {
             String::new()
         };
+        let parse_i64_runtime = if self.uses_builtin_parse_i64 {
+            let message = |sample: &str| {
+                serde_json::to_string(&sample.parse::<i64>().unwrap_err().to_string())
+                    .map_err(|error| error.to_string())
+            };
+            let empty = message("")?;
+            let invalid_digit = message("+")?;
+            let positive_overflow = message("9223372036854775808")?;
+            let negative_overflow = message("-9223372036854775809")?;
+            format!(
+                r#"
+func nagiParseI64(value string) nagiResult[int64, nagiError] {{
+    if value == "" {{
+        return nagiErr[int64](nagiError{{kind: nagiInvalid, message: {empty}}})
+    }}
+    negative := value[0] == '-'
+    digits := value
+    if negative || value[0] == '+' {{
+        digits = value[1:]
+    }}
+    if digits == "" {{
+        return nagiErr[int64](nagiError{{kind: nagiInvalid, message: {invalid_digit}}})
+    }}
+
+    limit := uint64(1<<63 - 1)
+    overflow := {positive_overflow}
+    if negative {{
+        limit++
+        overflow = {negative_overflow}
+    }}
+    var magnitude uint64
+    for i := 0; i < len(digits); i++ {{
+        digit := digits[i] - '0'
+        if digit > 9 {{
+            return nagiErr[int64](nagiError{{kind: nagiInvalid, message: {invalid_digit}}})
+        }}
+        // Rust stops at the first digit that exceeds the signed range.
+        if magnitude > (limit - uint64(digit)) / 10 {{
+            return nagiErr[int64](nagiError{{kind: nagiInvalid, message: overflow}})
+        }}
+        magnitude = magnitude * 10 + uint64(digit)
+    }}
+
+    if negative && magnitude == 1<<63 {{
+        return nagiOk[int64, nagiError](-1 << 63)
+    }}
+    result := int64(magnitude)
+    if negative {{
+        result = -result
+    }}
+    return nagiOk[int64, nagiError](result)
+}}
+"#
+            )
+        } else {
+            String::new()
+        };
         let sleep_runtime = if self.uses_builtin_sleep {
             imports.push("\"time\"");
             "const nagiMaxSleepMilliseconds int64 = 9223372036854\n\
@@ -2040,7 +2100,7 @@ func (future *nagiFuture[T]) await() T {{\n\
     defer func() {{ body = nil }}()\n\
     return body()\n\
 }}\n\
-{sleep_runtime}{env_runtime}{i32_runtime}{json_encode_runtime}{http_runtime}\
+{sleep_runtime}{env_runtime}{i32_runtime}{parse_i64_runtime}{json_encode_runtime}{http_runtime}\
 func nagiFixedDecimal(digits string, scale int) string {{\n\
     if scale >= 0 {{ return digits + strings.Repeat(\"0\", scale) }}\n\
     point := len(digits) + scale\n\
@@ -2107,7 +2167,7 @@ func nagiDisplay[T any](value T) string {{\n\
 func nagiPrint[T any](value T) nagiUnit {{ fmt.Println(nagiDisplay(value)); return nagiUnit{{}} }}\n\
 func nagiWrite[T any](value T) nagiUnit {{ fmt.Print(nagiDisplay(value)); return nagiUnit{{}} }}\n\
 func nagiAssertTrue(value bool) nagiUnit {{ if !value {{ panic(\"assertion failed\") }}; return nagiUnit{{}} }}\n\
-func nagiParseI64(value string) nagiResult[int64, nagiError] {{ parsed, problem := strconv.ParseInt(value, 10, 64); if problem != nil {{ return nagiErr[int64](nagiError{{message: problem.Error(), kind: nagiInvalid}}) }}; return nagiOk[int64, nagiError](parsed) }}\n\n{task_runtime}{body}"
+{task_runtime}{body}"
         ))
     }
 }
