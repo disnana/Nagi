@@ -220,6 +220,102 @@ func TestTaskScopeReceiveWaitsForCleanupButNotSibling(t *testing.T) {
 	}
 }
 
+func TestTaskScopePublishesAfterWorkDeferAndResourceRelease(t *testing.T) {
+	type childResult struct{ businessError error }
+	type receivedResult struct {
+		value childResult
+		fault error
+	}
+	businessError := errors.New("business rejection")
+	for _, fixture := range []struct {
+		name  string
+		value childResult
+		fault error
+	}{
+		{"business_value", childResult{businessError}, nil},
+		{"child_panic", childResult{}, ErrTaskPanicked},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			scope := New()
+			deferEntered, allowDefer := make(chan struct{}), make(chan struct{})
+			releaseEntered, allowRelease := make(chan struct{}), make(chan struct{})
+			deferCompleted := make(chan struct{})
+			resourceReleased := make(chan struct{})
+			cleanupScope(t, scope, allowDefer, allowRelease)
+			handle, err := Spawn(scope, task(func() childResult {
+				defer func() {
+					close(deferEntered)
+					<-allowDefer
+					close(deferCompleted)
+				}()
+				if fixture.fault != nil {
+					panic("private child payload")
+				}
+				return fixture.value
+			}), func() {
+				select {
+				case <-deferCompleted:
+				default:
+					t.Error("resource cleanup started before work defer completed")
+				}
+				close(releaseEntered)
+				<-allowRelease
+				close(resourceReleased)
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			signal(t, deferEntered)
+			received := make(chan receivedResult, 1)
+			go func() {
+				value, fault := Receive(scope, handle)
+				received <- receivedResult{value, fault}
+			}()
+			waitReceiptState(t, handle.receipt, receiptReceiving)
+			assertPending := func(phase string) {
+				t.Helper()
+				scope.mu.Lock()
+				entry := scope.entries[handle.ticket]
+				pending := entry != nil && !entry.ready && !entry.recorded
+				scope.mu.Unlock()
+				if !pending {
+					t.Fatalf("%s: scope already queued or recorded completion", phase)
+				}
+				select {
+				case <-handle.receipt.done:
+					t.Fatalf("%s: receipt already published", phase)
+				case got := <-received:
+					t.Fatalf("%s: receive already returned: %+v", phase, got)
+				default:
+				}
+			}
+			assertPending("work defer")
+			close(allowDefer)
+			signal(t, releaseEntered)
+			assertPending("resource release")
+			close(allowRelease)
+
+			select {
+			case got := <-received:
+				if got.value != fixture.value || !errors.Is(got.fault, fixture.fault) {
+					t.Fatalf("receive = %+v, want value %+v and fault %v", got, fixture.value, fixture.fault)
+				}
+				select {
+				case <-resourceReleased:
+				default:
+					t.Fatal("receive returned before resource release")
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("receive deadline exceeded")
+			}
+			if err := scope.Finish(); !errors.Is(err, fixture.fault) {
+				t.Fatalf("finish = %v, want %v", err, fixture.fault)
+			}
+		})
+	}
+}
+
 func TestTaskScopeDiscardKeepsJoinAndReleasesOutput(t *testing.T) {
 	type payload struct{ bytes []byte }
 	for _, discardAfterReady := range []bool{false, true} {

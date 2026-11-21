@@ -52,6 +52,34 @@ private faultは公開`TaskFailure`ではない。legacy task faultとの統合�
 公開High/LowのScope/SpawnBind/Task、Go生成applicationへのruntime組込みは引き続き
 toolchain起動前に拒否する。
 
+## 待機側が観測する完了と故障
+
+[ADR 012](adr/012-task-result-handles.md) の actual join を、Rust は
+[`TaskScope`](../../runtime/src/task.rs) が所有する Tokio `JoinSet` の完了結果で確認する。
+子の型付き値を送信できても、child Future の解放や join の記録が残っていれば
+`receive` は待機する。join は Tokio タスクの終了を観測する。Tokio の実行を担う
+ホストスレッドは存続し得る。同期 Drop は abort を要求するだけで、join 完了を返さない。
+
+Go の非公開 kernel は、子の処理とその `defer`、明示 cleanup が戻った後に receipt の
+`done` を閉じ、続いて scope に完了を登録する。`Receive` と `Finish` が使うのは
+scope が記録した完了である。明示 cleanup が担当した資源解放はこの順序で検証できる。
+任意の資源 close、GC、子が独自に起動した goroutine の終了、wrapper 自体の物理終了は
+この通知から判定できない。
+
+| 入力 | Rust の受取と scope 出口 | 現在の非公開 Go kernel |
+|---|---|---|
+| 子の値（内側の業務 `Err` を含む） | 受取は外側 `Ok(T)`。内側の `Result` を保持し、業務 `Err` 単独では scope を故障にしない | 型付きの値をそのまま返し、`Finish` は成功 |
+| 子の panic | `TaskFailureKind.Panicked` と `child panicked`。scope は同じメッセージの `Error::internal` を返す | `ErrTaskPanicked` が `Receive` と `Finish` に残る。公開型への変換は未接続 |
+| 予期しない native 取消、内部 protocol 故障 | それぞれ `Cancelled`、`Internal`。scope は同じメッセージの `Error::internal` を返す | 協調取消の要求や `Goexit` を Rust の取消へ対応付ける判断は未採用 |
+| 旧 statement spawn の `Err` | `LegacyError`。scope は元の `Error` の kind と message を保持 | 旧 spawn の公開接続は未実装 |
+| scope 本体の `Err` | body local を退役させ、abort と drain の後に元の値を返す | `FinishBodyError` が元の値を保持して cleanup まで待つ |
+
+限定公開を検討する場合、既存契約が必要とする子の終了と資源の退役をすべて観測できる
+入力だけに絞り、完了登録をその証拠として採用できるか判断する。その場合も panic の
+公開 `TaskFailure` と sticky な scope `Error` はそれぞれ検査する。ネイティブタスク
+自体の終了イベントが必要な場合は、同等の証拠を用意できるまで Go の公開拒否を維持する。
+今回の内部テストはどちらの判断も採用せず、Rust の公開契約と ADR は維持する。
+
 ## 検証境界
 
 barrier付きnative Go testで、並行開始、対象childだけの受取、cleanup前の受取禁止、

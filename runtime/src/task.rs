@@ -1029,10 +1029,10 @@ mod tests {
         let task = original.spawn_value(async { 1_u64 });
         let rejected = watch(wrong.receive(task)).await;
         let original_joined = watch(original.join()).await;
-        assert_eq!(
-            rejected.unwrap().unwrap_err().kind(),
-            TaskFailureKind::Internal
-        );
+        let failure = rejected.unwrap().unwrap_err();
+        assert_eq!(failure.kind(), TaskFailureKind::Internal);
+        let exit = watch(wrong.join()).await.unwrap().unwrap_err();
+        assert_scope_error(&exit, &failure);
         assert!(matches!(original_joined, Ok(Ok(()))));
         assert_eq!(original.stats().joined, 1);
         assert_eq!(wrong.stats().joined, 0);
@@ -1057,14 +1057,9 @@ mod tests {
         let task = missing.spawn_missing_output::<u64>();
         let rejected = watch(missing.receive(task)).await;
         let repeated = watch(missing.join()).await;
-        assert_eq!(
-            rejected.unwrap().unwrap_err().kind(),
-            TaskFailureKind::Internal
-        );
-        assert!(matches!(
-            repeated.unwrap().unwrap_err().kind,
-            crate::ErrorKind::Internal
-        ));
+        let failure = rejected.unwrap().unwrap_err();
+        assert_eq!(failure.kind(), TaskFailureKind::Internal);
+        assert_scope_error(&repeated.unwrap().unwrap_err(), &failure);
         assert_eq!(missing.stats().entries, 0);
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1104,14 +1099,9 @@ mod tests {
             .abort();
         let fault = watch(external.receive(task)).await;
         let exit = watch(external.join()).await;
-        assert_eq!(
-            fault.unwrap().unwrap_err().kind(),
-            TaskFailureKind::Cancelled
-        );
-        assert!(matches!(
-            exit.unwrap().unwrap_err().kind,
-            crate::ErrorKind::Internal
-        ));
+        let failure = fault.unwrap().unwrap_err();
+        assert_eq!(failure.kind(), TaskFailureKind::Cancelled);
+        assert_scope_error(&exit.unwrap().unwrap_err(), &failure);
         assert_eq!(
             external.primary.as_ref().unwrap().kind,
             TaskFailureKind::Cancelled

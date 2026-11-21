@@ -87,9 +87,9 @@ func (r *receipt[T]) completionFaults() []error {
 	return append([]error(nil), r.faults...)
 }
 
-// publish is the last wrapper action after the callback and cleanup boundaries.
-// Closing done proves those boundaries returned; it does not claim that the Go
-// runtime has physically destroyed the goroutine.
+// publish closes done after the callback and cleanup boundaries have completed.
+// The wrapper still queues that completion in the scope. Closing done does
+// not prove that scope accounting or goroutine termination has completed.
 func (r *receipt[T]) publish(value T, usable bool, faults []error) {
 	r.mu.Lock()
 	if usable && r.state != receiptDiscarded {
