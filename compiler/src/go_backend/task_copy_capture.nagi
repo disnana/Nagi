@@ -1,0 +1,10 @@
+async def child(value: i64) -> Result[i64, i64]:
+    return ok(value)
+
+async def main() -> Result[unit, Error]:
+    parent: i64 = 17
+    async with scope:
+        handle = spawn child(parent)
+        parent = 29
+        received = await handle
+    return ok(print(parent))

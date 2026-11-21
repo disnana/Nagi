@@ -408,3 +408,104 @@ async def main() -> Result[unit, Error]:
         println!("{mode}\n{stdout}");
     }
 }
+
+#[test]
+#[ignore = "requires the external Go toolchain used by the backend integration tests"]
+fn checked_task_copy_capture_snapshots_a_local_before_spawn() {
+    let high = include_str!("task_copy_capture.nagi");
+    let staging = probe_directory();
+    let high_path = staging.path.join("input.nagi");
+    fs::write(&high_path, high).unwrap();
+    let mut loaded = crate::source::load(&high_path, true).unwrap();
+    check::check(&mut loaded.program).unwrap();
+    let low = emit::low(&loaded.program);
+    let fixtures = [
+        ("high", "input.nagi", high),
+        ("saved-low", "saved.low", &low),
+        (
+            "handwritten-low",
+            "input.low",
+            include_str!("task_copy_capture.low"),
+        ),
+    ];
+    let kernel = staging.path.join("internal/taskscope");
+    fs::create_dir_all(&kernel).unwrap();
+    fs::write(
+        staging.path.join("go.mod"),
+        include_str!("../../go-runtime/go.mod"),
+    )
+    .unwrap();
+    fs::write(
+        kernel.join("taskscope.go"),
+        include_str!("../../go-runtime/internal/taskscope/taskscope.go"),
+    )
+    .unwrap();
+    fs::write(
+        staging.path.join("copy_capture_test.go"),
+        include_str!("task_copy_capture_test.go"),
+    )
+    .unwrap();
+    let load = |name: &str, text: &str| {
+        let path = staging.path.join(name);
+        fs::write(&path, text).unwrap();
+        let loaded = crate::source::load(&path, name.ends_with(".nagi")).unwrap();
+        check::finalize(
+            loaded.program,
+            Default::default(),
+            SourceProvenance::user_low_unmapped(),
+        )
+        .unwrap()
+    };
+    for (label, name, text) in fixtures {
+        let checked = load(name, text);
+        let ordinary = source(&checked, &[], BuildProfile::Dev).unwrap_err();
+        assert!(
+            ordinary.contains("async task operations are not supported"),
+            "{label}: {ordinary}"
+        );
+        let generated = super::task_lowering::source(&checked).unwrap();
+        fs::write(staging.path.join("main.go"), generated).unwrap();
+        let output = go_output(
+            &["test", "-count=1", "-timeout=20s", "-v", "."],
+            &staging.path,
+        )
+        .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success(),
+            "{label}: {stdout}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(stdout.lines().any(|line| line == "29"), "{label}: {stdout}");
+        assert!(
+            stdout.contains("--- PASS: TestGeneratedTaskCopyCapture "),
+            "{label}: {stdout}"
+        );
+        println!("{label}\n{stdout}");
+
+        let computed = text.replacen("(parent)", "(parent + 1)", 1);
+        assert_ne!(computed, text);
+        let checked = load(name, &computed);
+        let rejected = super::task_lowering::source(&checked).unwrap_err();
+        assert!(
+            rejected.contains("unsupported shape for internal Go Task lowering"),
+            "{label}: {rejected}"
+        );
+        if let Some(root) = std::env::var_os("NAGI_TEST_ARTIFACT_DIR") {
+            let artifact = PathBuf::from(root).join(format!("copy-capture-{label}"));
+            fs::create_dir_all(artifact.join("internal/taskscope")).unwrap();
+            fs::write(artifact.join(name), text).unwrap();
+            for file in [
+                "main.go",
+                "copy_capture_test.go",
+                "go.mod",
+                "internal/taskscope/taskscope.go",
+            ] {
+                fs::copy(staging.path.join(file), artifact.join(file)).unwrap();
+            }
+        }
+        if label == "high" {
+            fs::remove_file(&high_path).unwrap();
+        }
+    }
+}

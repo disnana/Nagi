@@ -361,3 +361,26 @@ fn actual_task_contracts(){
     });
 }
 "#;
+
+#[test]
+fn native_copy_capture_keeps_the_child_value_after_parent_reassignment() {
+    let high = include_str!("../src/go_backend/task_copy_capture.nagi")
+        .replace(
+            "    return ok(value)",
+            "    assert_true(value == 17)\n    return ok(value)",
+        )
+        .replace("print(parent)", "assert_true(parent == 29)");
+    let low = include_str!("../src/go_backend/task_copy_capture.low")
+        .replace(
+            "    return ok(value);",
+            "    assert_true(value == 17);\n    return ok(value);",
+        )
+        .replace("print(parent)", "assert_true(parent == 29)");
+    Fixture::new().run_three(
+        "task-copy-capture",
+        &high,
+        &low,
+        "",
+        "#[test] fn run_contract() { let rt = tokio::runtime::Runtime::new().unwrap(); assert!(rt.block_on(__nagi_main()).is_ok()); }",
+    );
+}

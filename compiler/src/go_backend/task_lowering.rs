@@ -1,7 +1,11 @@
 //! Private probes of checked Task lowering. This module is test-build only.
 use super::{error, ident, Emitter};
+use crate::checked::{ArgumentCaptureFacts, ArgumentRelease};
 use crate::{
-    ast::{Expr, ExprUseId, Function, NameResolution, Program, Stmt, Type, E, S},
+    ast::{
+        BindingId, Expr, ExprUseId, ExprUseMode, Function, NameResolution, Program, Stmt, Type, E,
+        S,
+    },
     checked::{
         CheckedProgram, ErrorDestination, ExpressionKey, FunctionPlan, ScopeBodyErrorExit,
         ScopeBridge, ScopeExitPlan, ScopeNormalExit, ScopeOwnerTeardown, StatementPlan,
@@ -42,6 +46,7 @@ enum BodyStep<'a> {
     TryAfter(&'a Stmt),
     AssertBefore(&'a Stmt),
     ParentWait(&'a Stmt, i32),
+    CopyRebind(&'a Stmt),
 }
 
 #[derive(Clone, Copy)]
@@ -60,14 +65,25 @@ impl<'a> TaskScopeProbe<'a> {
             .find(|(_, function)| function.name == "main")
             .ok_or("missing checked main for internal Go Task lowering")?;
         let unsupported = || error(main.line, "unsupported shape for internal Go Task lowering");
-        let [scope, end] = main.body.as_slice() else {
-            return Err(unsupported());
+        let (scope, end, copy_local) = match main.body.as_slice() {
+            [scope, end] => (scope, end, None),
+            [local, scope, end] => {
+                let name = literal_i64_assignment(local, true).ok_or_else(unsupported)?;
+                (scope, end, Some((name, local)))
+            }
+            _ => return Err(unsupported()),
+        };
+        let printed = match &end.kind {
+            S::Return(Some(value)) => builtin_argument(value, &["ok"])
+                .and_then(|argument| builtin_argument(argument, &["print"])),
+            _ => None,
         };
         if !main.asynchronous
             || main.ret != Type("Result".into(), vec![scalar("unit"), scalar("Error")])
-            || !matches!(&end.kind, S::Return(Some(value))
-                if builtin_argument(value, &["ok"]).is_some_and(|argument|
-                    literal_builtin(argument, &["print"], |kind| matches!(kind, E::Str(_)))))
+            || !printed.is_some_and(|value| match copy_local {
+                Some((name, _)) => is_local_i64(value, name),
+                None => matches!(value.kind, E::Str(_)),
+            })
         {
             return Err(unsupported());
         }
@@ -76,24 +92,30 @@ impl<'a> TaskScopeProbe<'a> {
         };
         // The only two-child form discards a timer child and receives a
         // literal panic or business error from the other child.
-        let (spawn, consume, body_step, sibling_nodes) = match body.as_slice() {
-            [sibling, primary, discard, await_primary] => {
+        let (spawn, consume, body_step, sibling_nodes) = match (copy_local, body.as_slice()) {
+            (Some((name, _)), [spawn, rebind, consume])
+                if literal_i64_assignment(rebind, false) == Some(name) =>
+            {
+                (spawn, consume, Some(BodyStep::CopyRebind(rebind)), None)
+            }
+            (Some(_), _) => return Err(unsupported()),
+            (None, [sibling, primary, discard, await_primary]) => {
                 (primary, await_primary, None, Some((sibling, discard)))
             }
-            [spawn, consume] => (spawn, consume, None, None),
-            [spawn, first, second] if literal_body_try(first) => {
+            (None, [spawn, consume]) => (spawn, consume, None, None),
+            (None, [spawn, first, second]) if literal_body_try(first) => {
                 (spawn, second, Some(BodyStep::TryBefore(first)), None)
             }
-            [spawn, first, second] if literal_body_try(second) => {
+            (None, [spawn, first, second]) if literal_body_try(second) => {
                 (spawn, first, Some(BodyStep::TryAfter(second)), None)
             }
-            [spawn, assertion, consume] if literal_assertion(assertion) => (
+            (None, [spawn, assertion, consume]) if literal_assertion(assertion) => (
                 spawn,
                 consume,
                 Some(BodyStep::AssertBefore(assertion)),
                 None,
             ),
-            [spawn, wait, consume] => (
+            (None, [spawn, wait, consume]) => (
                 spawn,
                 consume,
                 Some(BodyStep::ParentWait(
@@ -106,7 +128,13 @@ impl<'a> TaskScopeProbe<'a> {
         };
         let result = Type("Result".into(), vec![scalar("i64"), scalar("i64")]);
         let (handle, invocation, child) =
-            spawned_child(program, spawn, &result).ok_or_else(unsupported)?;
+            spawned_child(program, spawn, &result, copy_local.map(|(name, _)| name))
+                .ok_or_else(unsupported)?;
+        if let Some((_, local)) = copy_local {
+            if !checked_copy_argument(checked, main, local, invocation) {
+                return Err(unsupported());
+            }
+        }
         let (completion, command, operand) = match &consume.kind {
             S::Assign {
                 name,
@@ -146,14 +174,28 @@ impl<'a> TaskScopeProbe<'a> {
         let S::Return(Some(child_result)) = &child_return.kind else {
             return Err(unsupported());
         };
-        if !literal_builtin(child_result, &["ok", "fail"], |kind| {
-            matches!(kind, E::Int(_))
-        }) {
+        let supported_result = if copy_local.is_some() {
+            let [(parameter, _)] = child.params.as_slice() else {
+                return Err(unsupported());
+            };
+            child.body.len() == 1
+                && builtin_argument(child_result, &["ok"])
+                    .is_some_and(|value| is_local_i64(value, parameter))
+        } else {
+            literal_builtin(child_result, &["ok", "fail"], |kind| {
+                matches!(kind, E::Int(_))
+            })
+        };
+        if !supported_result {
             return Err(unsupported());
         }
 
         let plan = &checked.emission.functions[index];
-        let scope_statement = plan.body.statements.first().ok_or_else(unsupported)?;
+        let scope_statement = plan
+            .body
+            .statements
+            .get(usize::from(copy_local.is_some()))
+            .ok_or_else(unsupported)?;
         let exit = scope_statement
             .scope_exit
             .as_ref()
@@ -198,7 +240,7 @@ impl<'a> TaskScopeProbe<'a> {
         }
         let sibling = if let Some((sibling_spawn, discard)) = sibling_nodes {
             let (sibling_handle, sibling_invocation, sibling_child) =
-                spawned_child(program, sibling_spawn, &result).ok_or_else(unsupported)?;
+                spawned_child(program, sibling_spawn, &result, None).ok_or_else(unsupported)?;
             let (S::Expr(discard), [wait, last]) = (&discard.kind, sibling_child.body.as_slice())
             else {
                 return Err(unsupported());
@@ -279,6 +321,7 @@ impl<'a> TaskScopeProbe<'a> {
             BodyStep::TryBefore(statement)
             | BodyStep::TryAfter(statement)
             | BodyStep::AssertBefore(statement)
+            | BodyStep::CopyRebind(statement)
             | BodyStep::ParentWait(statement, _),
         ) = self.body_step
         {
@@ -416,6 +459,14 @@ impl<'a> TaskScopeProbe<'a> {
             );
         }
         match self.body_step {
+            Some(BodyStep::CopyRebind(statement)) => {
+                emitter.statements(std::slice::from_ref(statement), ret, body_indent, output)?;
+                Emitter::line(
+                    output,
+                    body_indent,
+                    "if nagiTaskCopyRebound != nil { nagiTaskCopyRebound() }",
+                );
+            }
             Some(BodyStep::TryBefore(statement)) => {
                 Emitter::line(
                     output,
@@ -531,6 +582,7 @@ fn spawned_child<'a>(
     program: &'a Program,
     spawn: &'a Stmt,
     result: &Type,
+    copy_local: Option<&str>,
 ) -> Option<(&'a str, &'a Expr, &'a Function)> {
     let S::SpawnBind {
         name,
@@ -544,18 +596,101 @@ fn spawned_child<'a>(
     let E::Call(callee, types, arguments) = &invocation.kind else {
         return None;
     };
-    if invocation.resolution != Some(NameResolution::Function)
-        || !types.is_empty()
-        || !arguments.is_empty()
-    {
+    if invocation.resolution != Some(NameResolution::Function) || !types.is_empty() {
         return None;
     }
     let child = program
         .functions
         .iter()
         .find(|child| &child.name == callee)?;
-    (child.asynchronous && !child.external && child.params.is_empty() && &child.ret == result)
-        .then_some((name.as_str(), invocation, child))
+    let arguments_match = match (copy_local, arguments.as_slice(), child.params.as_slice()) {
+        (None, [], []) => true,
+        (Some(local), [argument], [(_, ty)]) => {
+            ty == &scalar("i64") && is_local_i64(argument, local)
+        }
+        _ => false,
+    };
+    (child.asynchronous && !child.external && arguments_match && &child.ret == result).then_some((
+        name.as_str(),
+        invocation,
+        child,
+    ))
+}
+
+fn literal_i64_assignment(statement: &Stmt, declaration: bool) -> Option<&str> {
+    let S::Assign {
+        name,
+        value,
+        declare,
+        ..
+    } = &statement.kind
+    else {
+        return None;
+    };
+    (*declare == declaration
+        && value.ty.as_ref() == Some(&scalar("i64"))
+        && matches!(value.kind, E::Int(_)))
+    .then_some(name)
+}
+
+fn is_local_i64(value: &Expr, name: &str) -> bool {
+    value.ty.as_ref() == Some(&scalar("i64"))
+        && value.resolution == Some(NameResolution::Local)
+        && matches!(&value.kind, E::Name(found) if found == name)
+}
+
+// This probe requires the checked source binding itself; a compatible Go
+// representation or a label alone cannot authorize the capture.
+fn checked_copy_argument(
+    checked: &CheckedProgram,
+    parent: &Function,
+    local: &Stmt,
+    invocation: &Expr,
+) -> bool {
+    let (Some(span), E::Call(callee, _, args)) = (local.binding_span, &invocation.kind) else {
+        return false;
+    };
+    let [operand] = args.as_slice() else {
+        return false;
+    };
+    let call = ExprUseId::of(invocation);
+    let Some(capture) = checked
+        .final_check_facts()
+        .functions
+        .get(&parent.name)
+        .and_then(|calls| calls.get(&call))
+    else {
+        return false;
+    };
+    let [argument] = capture.arguments.as_slice() else {
+        return false;
+    };
+    let ArgumentCaptureFacts::UserAsync(facts) = &argument.capture else {
+        return false;
+    };
+    let operand = ExprUseId::of(operand);
+    capture.callee == *callee
+        && capture.resolution == NameResolution::Function
+        && argument.index == 0
+        && argument.expression == operand
+        && argument.ty == scalar("i64")
+        && argument.passing == stdlib::Passing::Move
+        && argument.owners
+            == [(
+                operand,
+                BindingId {
+                    line: local.line,
+                    token: span.start,
+                },
+            )]
+        && facts.slot.call == call
+        && facts.slot.argument == 0
+        && facts.storage.call == call
+        && facts.storage.argument == 0
+        && facts.transfer == ExprUseMode::Copy
+        && facts.views_absent
+        && facts.depths.is_empty()
+        && facts.release == ArgumentRelease::NotRequired
 }
 
 fn discard_operand(value: &Expr) -> Option<&Expr> {
@@ -796,6 +931,7 @@ const nagiChildPanicked = "child panicked"
 var nagiTaskCleanup func()
 var nagiTaskSiblingScope func(*taskscope.Scope)
 var nagiTaskFinishPending func()
+var nagiTaskCopyRebound func()
 var nagiTaskObserve func(nagiResult[nagiResult[int64, int64], nagiTaskFailure])
 var nagiTaskChildDone func(<-chan struct{})
 var nagiTaskBeforeBodyTry func()

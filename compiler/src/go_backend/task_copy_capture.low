@@ -1,0 +1,13 @@
+async fn child(value: i64) -> Result[i64, i64] {
+    return ok(value);
+}
+
+async fn main() -> Result[unit, Error] {
+    let parent: i64 = 17;
+    scope {
+        let handle = spawn child(parent);
+        parent = 29;
+        let received = await handle;
+    }
+    return ok(print(parent));
+}
