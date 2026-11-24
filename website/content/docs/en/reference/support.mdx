@@ -28,11 +28,11 @@ Start with [write Nagi code](../../writing) if you have not run the lessons. Use
 - Actors are Tokio tasks in one process. They do not promise the same isolation as BEAM processes.
 - `elif` and named function arguments are Unreleased. Do not use them in source for published 0.2.3.
 
-## Go target under development
+## Nagi 0.3.0 candidate
 
-This section describes unreleased work toward 0.3.0. Published Nagi 0.2.3 does not include the Go target.
+Rust is the supported and default backend for the unpublished 0.3.0 candidate. Go is a preview. Use a compatible external Go toolchain and explicitly pass `--backend go` to `nagic build` or `nagic run`. The published 0.2.3 release contains the Rust backend.
 
-| Capability | Development status |
+| Capability | Go preview status |
 |---|---|
 | Native builds and basic features | Select explicitly with `--backend go`. Supports a subset of basic types, functions, classes, `Option`, `Result`, `try`, and ownership. |
 | Async | Supports a limited subset including direct `await` of user-defined async functions and `sleep`. Public `Task`, `scope`, and `spawn` are unsupported. |
