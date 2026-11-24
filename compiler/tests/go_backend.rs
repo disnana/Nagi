@@ -2028,7 +2028,64 @@ fn main() -> Result[unit, Error] {
         "\n\"retained\"\nretained\n",
     ))
     .into_bytes();
-    assert_scalar_cli_parity(&high, &low, &expected);
+    let fixture = assert_scalar_cli_parity(&high, &low, &expected);
+    assert_scalar_writer_rust_chunks(&fixture);
+}
+
+fn assert_scalar_writer_rust_chunks(fixture: &Fixture) {
+    #[derive(Default)]
+    struct Writes(Vec<String>);
+
+    impl std::io::Write for Writes {
+        fn write(&mut self, chunk: &[u8]) -> std::io::Result<usize> {
+            self.0.push(std::str::from_utf8(chunk).unwrap().to_owned());
+            Ok(chunk.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn chunks(value: impl serde::Serialize) -> Vec<String> {
+        let mut writes = Writes::default();
+        serde_json::to_writer(&mut writes, &value).unwrap();
+        writes.0
+    }
+
+    let expected = [
+        chunks("凪<&>\u{2028}\u{2029}\"\\\0\u{1f}\u{08}\u{0c}\n\r\t/end"),
+        chunks(""),
+        chunks(true),
+        chunks(i64::MIN),
+        chunks(u64::MAX),
+    ];
+    fixture.write(
+        "scalar-writer/rust-chunks.json",
+        &serde_json::to_string(&expected).unwrap(),
+    );
+    fixture.write(
+        "scalar-writer/scalar_writer_test.go",
+        include_str!("fixtures/go-json/scalar_writer_test.go"),
+    );
+    let module = fixture.0.join("scalar-writer");
+    for file in ["main.go", "go.mod"] {
+        fs::copy(fixture.0.join("out-go-high/go").join(file), module.join(file)).unwrap();
+    }
+    let go = std::env::var_os("NAGI_GO").unwrap_or_else(|| "go".into());
+    let result = Command::new(go)
+        .current_dir(module)
+        .args(["test", "-count=1", "-run", "^TestScalarWriter", "."])
+        .env("GOTOOLCHAIN", "local")
+        .env("GOWORK", "off")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
 }
 
 fn assert_checked_i32_cli() {
@@ -2157,7 +2214,7 @@ fn main() -> Result[unit, Error] {
     assert_scalar_cli_parity(&high, &low, expected.as_bytes());
 }
 
-fn assert_scalar_cli_parity(high: &str, low: &str, expected: &[u8]) {
+fn assert_scalar_cli_parity(high: &str, low: &str, expected: &[u8]) -> Fixture {
     let fixture = Fixture::new();
     fixture.write("main.nagi", high);
     fixture.write("manual.low", low);
@@ -2192,6 +2249,7 @@ fn assert_scalar_cli_parity(high: &str, low: &str, expected: &[u8]) {
             fs::remove_file(fixture.0.join("main.nagi")).unwrap();
         }
     }
+    fixture
 }
 
 #[test]

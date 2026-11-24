@@ -1941,20 +1941,87 @@ impl<'a> Emitter<'a> {
             ""
         };
         let json_encode_runtime = if self.uses_builtin_json_encode {
-            imports.push("\"encoding/json\"");
+            imports.extend(["\"encoding/json\"", "\"io\""]);
             r#"
-// Protect JSON-escaped backslash pairs before rewriting separators. Go
-// escapes U+2028/U+2029 even with HTML escaping off; Rust keeps them literal.
-var nagiJSONScalarEscapes = strings.NewReplacer("\\\\", "\\\\", "\\u2028", "\u2028", "\\u2029", "\u2029")
+func nagiJSONWriteChunk(write func(string) (int, error), chunk string) error {
+	n, err := write(chunk)
+	if err == nil && n != len(chunk) {
+		return io.ErrShortWrite
+	}
+	return err
+}
+
+func nagiJSONWriteText(write func(string) (int, error), value string) error {
+	if err := nagiJSONWriteChunk(write, "\""); err != nil {
+		return err
+	}
+	const hex = "0123456789abcdef"
+	start := 0
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		var escape string
+		switch c {
+		case '"':
+			escape = `\"`
+		case '\\':
+			escape = `\\`
+		case '\b':
+			escape = `\b`
+		case '\f':
+			escape = `\f`
+		case '\n':
+			escape = `\n`
+		case '\r':
+			escape = `\r`
+		case '\t':
+			escape = `\t`
+		default:
+			if c >= ' ' {
+				continue
+			}
+			escape = string([]byte{'\\', 'u', '0', '0', hex[c>>4], hex[c&0xf]})
+		}
+		// serde_json writes each unescaped run and each escape separately.
+		if start < i {
+			if err := nagiJSONWriteChunk(write, value[start:i]); err != nil {
+				return err
+			}
+		}
+		if err := nagiJSONWriteChunk(write, escape); err != nil {
+			return err
+		}
+		start = i + 1
+	}
+	if start < len(value) {
+		if err := nagiJSONWriteChunk(write, value[start:]); err != nil {
+			return err
+		}
+	}
+	return nagiJSONWriteChunk(write, "\"")
+}
+
+func nagiJSONWriteScalar(write func(string) (int, error), value any) error {
+	switch value := value.(type) {
+	case string:
+		return nagiJSONWriteText(write, value)
+	case bool, int8, int16, int32, int64, uint8, uint16, uint32, uint64:
+		// These standalone scalars encode to at most 20 bytes.
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return err
+		}
+		return nagiJSONWriteChunk(write, string(encoded))
+	default:
+		return fmt.Errorf("unsupported JSON scalar type %T", value)
+	}
+}
 
 func nagiJSONEncodeScalar(value any) nagiResult[string, nagiError] {
-    var output strings.Builder
-    encoder := json.NewEncoder(&output)
-    encoder.SetEscapeHTML(false)
-    if err := encoder.Encode(value); err != nil {
-        return nagiErr[string](nagiError{kind: nagiInvalid, message: err.Error()})
-    }
-    return nagiOk[string, nagiError](nagiJSONScalarEscapes.Replace(strings.TrimSuffix(output.String(), "\n")))
+	var output strings.Builder
+	if err := nagiJSONWriteScalar(output.WriteString, value); err != nil {
+		return nagiErr[string](nagiError{kind: nagiInvalid, message: err.Error()})
+	}
+	return nagiOk[string, nagiError](output.String())
 }
 "#
         } else {
