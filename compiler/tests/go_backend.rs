@@ -2070,7 +2070,11 @@ fn assert_scalar_writer_rust_chunks(fixture: &Fixture) {
     );
     let module = fixture.0.join("scalar-writer");
     for file in ["main.go", "go.mod"] {
-        fs::copy(fixture.0.join("out-go-high/go").join(file), module.join(file)).unwrap();
+        fs::copy(
+            fixture.0.join("out-go-high/go").join(file),
+            module.join(file),
+        )
+        .unwrap();
     }
     let go = std::env::var_os("NAGI_GO").unwrap_or_else(|| "go".into());
     let result = Command::new(go)
