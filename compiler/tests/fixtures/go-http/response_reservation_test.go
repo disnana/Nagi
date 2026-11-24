@@ -247,3 +247,92 @@ func TestNagiHTTPResponseReservationScalarSink(t *testing.T) {
 		})
 	}
 }
+
+// The public JSON constructor is gated. This probe supplies the managed
+// fields that Rust's JSON finalizer would add, then measures Go's existing
+// preflight and writer without claiming Go installs those fields itself.
+func TestNagiHTTPResponseReservationJSONHeaderBudget(t *testing.T) {
+	const media = "application/json"
+	const body = `"a\n"`
+	const csp = "default-src 'none'; script-src 'none'; style-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+	const managedBytes = int64(len("Content-Type: " + media + "\r\nContent-Length: 5\r\nConnection: close\r\n" +
+		"Content-Security-Policy: " + csp + "\r\nX-Content-Type-Options: nosniff\r\nVary: Origin\r\n"))
+	for _, tc := range []struct {
+		name         string
+		bytes, count int64
+		wantOK       bool
+	}{
+		{"exact", managedBytes, 6, true},
+		{"one byte short", managedBytes - 1, 6, false},
+		{"one field short", managedBytes, 5, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pool := &nagiHTTPResponsePool{}
+			recorder := httptest.NewRecorder()
+			headers := recorder.Header()
+			headers.Set("Content-Security-Policy", csp)
+			headers.Set("X-Content-Type-Options", "nosniff")
+			headers.Set("Vary", "Origin")
+			context := nagiHTTPResponseContext{
+				headers: headers, pool: pool,
+				limits: nagiHTTPResponseLimits{
+					bodyBytes: 5, serializationWrites: 4, live: 1, retained: 69,
+					managedBytes: tc.bytes, managedCount: tc.count,
+				},
+			}
+			called := false
+			produced := nagiHTTPProduce(&context, nagiHTTPOK, media, len(body), func(w *nagiHTTPFiniteWriter) error {
+				called = true
+				return nagiJSONWriteScalar(w.WriteString, "a\n")
+			})
+			if !tc.wantOK {
+				if produced.ok || produced.problem.kind != nagiInvalid || called ||
+					context.charge != 0 || pool.live != 0 || pool.retained != 0 || recorder.Body.Len() != 0 {
+					t.Fatalf("budget refusal serialized or retained a response: %+v", produced)
+				}
+				return
+			}
+			if !produced.ok || !called || context.charge != 69 {
+				t.Fatalf("exact budget refused or lost its charge: %+v", produced)
+			}
+			nagiHTTPWrite(recorder, int(produced.value.status), produced.value.media, produced.value.body)
+			response := recorder.Result()
+			defer response.Body.Close()
+			if response.StatusCode != 200 || recorder.Body.String() != body ||
+				response.Header.Get("Content-Type") != media || response.Header.Get("Content-Length") != "5" ||
+				response.Header.Get("Content-Security-Policy") != csp ||
+				response.Header.Get("X-Content-Type-Options") != "nosniff" || response.Header.Get("Vary") != "Origin" {
+				t.Fatalf("response = %d %v %q", response.StatusCode, response.Header, recorder.Body.String())
+			}
+			context.releaseResponse()
+			if pool.live != 0 || pool.retained != 0 {
+				t.Fatal("response charge survived release")
+			}
+		})
+	}
+}
+
+func TestNagiHTTPResponseReservationKnownSizeDoesNotProveMaximum(t *testing.T) {
+	pool := &nagiHTTPResponsePool{}
+	context := nagiHTTPResponseContext{
+		pool:   pool,
+		limits: nagiHTTPResponseLimits{bodyBytes: 8, serializationWrites: 4, live: 2, retained: 71, managedBytes: 128, managedCount: 4},
+	}
+	if context.reserveResponse(context.limits.bodyBytes) || context.charge != 0 || pool.live != 0 {
+		t.Fatal("full body ceiling was admitted with a one-byte short retained budget")
+	}
+	known := nagiHTTPText(&context, nagiHTTPOK, "short")
+	if !known.ok || context.charge != 69 {
+		t.Fatalf("known five-byte body should be admitted: %+v", known)
+	}
+	context.releaseResponse()
+
+	context.limits.retained++
+	if !context.reserveResponse(context.limits.bodyBytes) || context.charge != 72 || pool.retained != 72 {
+		t.Fatal("exact body ceiling was not reserved")
+	}
+	context.releaseResponse()
+	if context.charge != 0 || pool.live != 0 || pool.retained != 0 {
+		t.Fatal("ceiling reservation was not returned")
+	}
+}
