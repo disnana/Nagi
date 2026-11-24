@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -26,12 +27,13 @@ func TestNagiHTTPResponseReservationBoundaries(t *testing.T) {
 			context := nagiHTTPResponseContext{headers: http.Header{"Vary": {"Origin"}}, limits: tc.limits, pool: pool}
 			context.limits.serializationWrites = 1
 			filled := false
-			result := nagiHTTPProduce(&context, nagiHTTPOK, media, 3, func(out *nagiHTTPFiniteWriter) {
+			result := nagiHTTPProduce(&context, nagiHTTPOK, media, 3, func(out *nagiHTTPFiniteWriter) error {
 				filled = true
 				if context.charge != 67 || pool.live != 1 || pool.retained != 67 {
 					t.Fatal("body fill ran before the response was charged")
 				}
-				_, _ = out.WriteString("abc")
+				_, err := out.WriteString("abc")
+				return err
 			})
 			if tc.kind != 0 {
 				if result.ok || result.problem.kind != tc.kind || filled || context.charge != 0 || pool.live != 0 || pool.retained != 0 {
@@ -167,13 +169,17 @@ func TestNagiHTTPResponseReservationWriterFailureReleases(t *testing.T) {
 	context := nagiHTTPResponseContext{limits: limits.value, pool: pool}
 	for _, tc := range []struct {
 		name    string
-		fill    func(*nagiHTTPFiniteWriter)
+		fill    func(*nagiHTTPFiniteWriter) error
 		kind    uint8
 		message string
 	}{
-		{"body", func(w *nagiHTTPFiniteWriter) { _, _ = w.WriteString("abcd") }, nagiInvalid, "response body limit"},
-		{"work", func(w *nagiHTTPFiniteWriter) { _, _ = w.Write(nil); _, _ = w.WriteString("abc") }, nagiInvalid, "response serialization limit"},
-		{"underfill", func(w *nagiHTTPFiniteWriter) { _, _ = w.WriteString("ab") }, nagiInternal, "response body size mismatch"},
+		{"body", func(w *nagiHTTPFiniteWriter) error { _, _ = w.WriteString("abcd"); return errors.New("fixture detail") }, nagiInvalid, "response body limit"},
+		{"work", func(w *nagiHTTPFiniteWriter) error { _, _ = w.Write(nil); _, _ = w.WriteString("abc"); return nil }, nagiInvalid, "response serialization limit"},
+		{"serializer", func(w *nagiHTTPFiniteWriter) error {
+			_, _ = w.WriteString("ab")
+			return errors.New("fixture detail must not appear in the response")
+		}, nagiInternal, "response serialization failed"},
+		{"underfill", func(w *nagiHTTPFiniteWriter) error { _, _ = w.WriteString("ab"); return nil }, nagiInternal, "response body size mismatch"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			result := nagiHTTPProduce(&context, nagiHTTPOK, media, 3, tc.fill)
@@ -212,13 +218,15 @@ func TestNagiHTTPResponseReservationScalarSink(t *testing.T) {
 			}
 			pool := &nagiHTTPResponsePool{}
 			context := nagiHTTPResponseContext{limits: limits.value, pool: pool}
-			produced := nagiHTTPProduce(&context, nagiHTTPOK, "application/json", tc.size, func(writer *nagiHTTPFiniteWriter) {
+			produced := nagiHTTPProduce(&context, nagiHTTPOK, "application/json", tc.size, func(writer *nagiHTTPFiniteWriter) error {
 				if context.charge != int64(tc.size)+64 || pool.live != 1 {
 					t.Fatal("serializer ran without a reservation")
 				}
-				if err := nagiJSONWriteScalar(writer.WriteString, "a\n"); err != tc.want {
+				err := nagiJSONWriteScalar(writer.WriteString, "a\n")
+				if err != tc.want {
 					t.Fatalf("serializer error = %v, want %v", err, tc.want)
 				}
+				return err
 			})
 			if tc.want == nil {
 				if !produced.ok || produced.value.media != "application/json" || string(produced.value.body) != `"a\n"` {

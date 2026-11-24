@@ -144,7 +144,7 @@ func (writer *nagiHTTPFiniteWriter) WriteString(chunk string) (int, error) {
 	return len(chunk), nil
 }
 
-func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, media string, size int, fill func(*nagiHTTPFiniteWriter)) nagiResult[nagiHTTPResponse, nagiError] {
+func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, media string, size int, fill func(*nagiHTTPFiniteWriter) error) nagiResult[nagiHTTPResponse, nagiError] {
 	limits := context.limits
 	bodyBytes := int64(size)
 	headerBytes := int64(len("Content-Type: \r\nContent-Length: \r\nConnection: close\r\n") + len(media) + len(strconv.Itoa(size)))
@@ -156,12 +156,15 @@ func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, me
 		return nagiErr[nagiHTTPResponse, nagiError](nagiError{message: "HTTP response budget exhausted", kind: nagiBusy})
 	}
 	writer := nagiHTTPFiniteWriter{buffer: make([]byte, size), writesLeft: limits.serializationWrites}
-	fill(&writer)
-	if writer.failure != nil || writer.used != size {
+	err := fill(&writer)
+	if writer.failure != nil || err != nil || writer.used != size {
 		writer.buffer = nil
 		context.releaseResponse()
 		if writer.failure != nil {
 			return nagiHTTPFail[nagiHTTPResponse](writer.failure.Error())
+		}
+		if err != nil {
+			return nagiErr[nagiHTTPResponse](nagiError{kind: nagiInternal, message: "response serialization failed"})
 		}
 		return nagiErr[nagiHTTPResponse](nagiError{kind: nagiInternal, message: "response body size mismatch"})
 	}
@@ -169,11 +172,17 @@ func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, me
 }
 
 func nagiHTTPBytes(context *nagiHTTPResponseContext, status nagiHTTPStatus, body []byte) nagiResult[nagiHTTPResponse, nagiError] {
-	return nagiHTTPProduce(context, status, "application/octet-stream", len(body), func(out *nagiHTTPFiniteWriter) { _, _ = out.Write(body) })
+	return nagiHTTPProduce(context, status, "application/octet-stream", len(body), func(out *nagiHTTPFiniteWriter) error {
+		_, err := out.Write(body)
+		return err
+	})
 }
 
 func nagiHTTPText(context *nagiHTTPResponseContext, status nagiHTTPStatus, body string) nagiResult[nagiHTTPResponse, nagiError] {
-	return nagiHTTPProduce(context, status, "text/plain; charset=utf-8", len(body), func(out *nagiHTTPFiniteWriter) { _, _ = out.WriteString(body) })
+	return nagiHTTPProduce(context, status, "text/plain; charset=utf-8", len(body), func(out *nagiHTTPFiniteWriter) error {
+		_, err := out.WriteString(body)
+		return err
+	})
 }
 
 type nagiHTTPRateLimits struct {
