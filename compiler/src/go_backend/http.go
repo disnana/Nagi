@@ -36,7 +36,7 @@ type nagiHTTPResponse struct {
 }
 
 type nagiHTTPResponseLimits struct {
-	bodyBytes, managedBytes, managedCount                                      int64
+	bodyBytes, managedBytes, managedCount, serializationWrites                 int64
 	live, retained                                                             int64
 	fallbackLive, fallbackRetained, fallbackManagedBytes, fallbackManagedCount int64
 }
@@ -99,7 +99,52 @@ func nagiHTTPFail[T any](message string) nagiResult[T, nagiError] {
 	return nagiErr[T, nagiError](nagiError{message: message, kind: nagiInvalid})
 }
 
-func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, media string, size int, fill func([]byte)) nagiResult[nagiHTTPResponse, nagiError] {
+var (
+	errNagiHTTPBodyLimit = errors.New("response body limit")
+	errNagiHTTPWorkLimit = errors.New("response serialization limit")
+)
+
+// The buffer is allocated once, after the context reserves its full size.
+type nagiHTTPFiniteWriter struct {
+	buffer     []byte
+	used       int
+	writesLeft int64
+	failure    error
+}
+
+func (writer *nagiHTTPFiniteWriter) checkWrite(size int) error {
+	if writer.failure != nil {
+		return writer.failure
+	}
+	switch {
+	case writer.writesLeft == 0:
+		writer.failure = errNagiHTTPWorkLimit
+	default:
+		writer.writesLeft--
+		if size > len(writer.buffer)-writer.used {
+			writer.failure = errNagiHTTPBodyLimit
+		}
+	}
+	return writer.failure
+}
+
+func (writer *nagiHTTPFiniteWriter) Write(chunk []byte) (int, error) {
+	if err := writer.checkWrite(len(chunk)); err != nil {
+		return 0, err
+	}
+	writer.used += copy(writer.buffer[writer.used:], chunk)
+	return len(chunk), nil
+}
+
+func (writer *nagiHTTPFiniteWriter) WriteString(chunk string) (int, error) {
+	if err := writer.checkWrite(len(chunk)); err != nil {
+		return 0, err
+	}
+	writer.used += copy(writer.buffer[writer.used:], chunk)
+	return len(chunk), nil
+}
+
+func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, media string, size int, fill func(*nagiHTTPFiniteWriter)) nagiResult[nagiHTTPResponse, nagiError] {
 	limits := context.limits
 	bodyBytes := int64(size)
 	headerBytes := int64(len("Content-Type: \r\nContent-Length: \r\nConnection: close\r\n") + len(media) + len(strconv.Itoa(size)))
@@ -110,17 +155,25 @@ func nagiHTTPProduce(context *nagiHTTPResponseContext, status nagiHTTPStatus, me
 	if !context.reserveResponse(bodyBytes) {
 		return nagiErr[nagiHTTPResponse, nagiError](nagiError{message: "HTTP response budget exhausted", kind: nagiBusy})
 	}
-	body := make([]byte, size)
-	fill(body)
-	return nagiOk[nagiHTTPResponse, nagiError](nagiHTTPResponse{status: status, media: media, body: body})
+	writer := nagiHTTPFiniteWriter{buffer: make([]byte, size), writesLeft: limits.serializationWrites}
+	fill(&writer)
+	if writer.failure != nil || writer.used != size {
+		writer.buffer = nil
+		context.releaseResponse()
+		if writer.failure != nil {
+			return nagiHTTPFail[nagiHTTPResponse](writer.failure.Error())
+		}
+		return nagiErr[nagiHTTPResponse](nagiError{kind: nagiInternal, message: "response body size mismatch"})
+	}
+	return nagiOk[nagiHTTPResponse, nagiError](nagiHTTPResponse{status: status, media: media, body: writer.buffer})
 }
 
 func nagiHTTPBytes(context *nagiHTTPResponseContext, status nagiHTTPStatus, body []byte) nagiResult[nagiHTTPResponse, nagiError] {
-	return nagiHTTPProduce(context, status, "application/octet-stream", len(body), func(out []byte) { copy(out, body) })
+	return nagiHTTPProduce(context, status, "application/octet-stream", len(body), func(out *nagiHTTPFiniteWriter) { _, _ = out.Write(body) })
 }
 
 func nagiHTTPText(context *nagiHTTPResponseContext, status nagiHTTPStatus, body string) nagiResult[nagiHTTPResponse, nagiError] {
-	return nagiHTTPProduce(context, status, "text/plain; charset=utf-8", len(body), func(out []byte) { copy(out, body) })
+	return nagiHTTPProduce(context, status, "text/plain; charset=utf-8", len(body), func(out *nagiHTTPFiniteWriter) { _, _ = out.WriteString(body) })
 }
 
 type nagiHTTPRateLimits struct {
@@ -187,7 +240,7 @@ func nagiHTTPResponseBudget(body, userBytes, userCount, managedBytes, managedCou
 		return nagiHTTPFail[nagiHTTPResponseLimits]("invalid HTTP response limits")
 	}
 	return nagiOk[nagiHTTPResponseLimits, nagiError](nagiHTTPResponseLimits{
-		bodyBytes: body, managedBytes: managedBytes, managedCount: managedCount,
+		bodyBytes: body, managedBytes: managedBytes, managedCount: managedCount, serializationWrites: writes,
 		live: live, retained: retained, fallbackLive: fallbackLive, fallbackRetained: fallbackRetained,
 		fallbackManagedBytes: fallbackBytes, fallbackManagedCount: fallbackCount,
 	})

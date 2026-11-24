@@ -21,7 +21,7 @@ async fn main() -> Result[unit, Error] {
     app = try http.rate_route(app, http.Method.POST, "/echo", echo_rate);
     let port = try parse_i64(env("NAGI_SAMPLE_PORT", "8096"));
     let authority = env("NAGI_HTTP_AUTHORITY", "127.0.0.1:8096");
-    let response_budget = try http.response_limits(1048576, 8192, 32, 8192, 32, 65536, 64, 83886080, 1024, 285212672, 8192, 32);
+    let response_budget = try http.response_limits(1048576, 8192, 32, 8192, 32, 1, 64, 83886080, 1024, 285212672, 8192, 32);
     let rate_budget = try http.rate_limits(64, 64, 4096, 4194304, 65536);
     let body_limit = try parse_i64(env("NAGI_HTTP_BODY_LIMIT", "0"));
     let options = http.default_options();
