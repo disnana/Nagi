@@ -12,6 +12,7 @@ async fn echo(request: http.Request, state: shared[State], authority: unit) -> R
 }
 
 async fn main() -> Result[unit, Error] {
+    assert_true(len(try json_encode("x")) == 3);
     let app = http.app_default[State](State(greeting="ready"));
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health);
     let health_rate = try http.rate_policy(1000, 1000);

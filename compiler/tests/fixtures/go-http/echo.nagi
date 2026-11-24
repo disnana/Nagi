@@ -11,6 +11,7 @@ async def echo(request: http.Request, state: shared[State], authority: unit) -> 
     return http.bytes(http.response_context(view(request)), http.Status.OK, request.body)
 
 async def main() -> Result[unit, Error]:
+    assert_true(len(try json_encode("x")) == 3)
     app = http.app_default[State](State(greeting="ready"))
     app = try http.route(app, http.Method.GET, "/health", http.public_policy[State](), health)
     health_rate = try http.rate_policy(1000, 1000)

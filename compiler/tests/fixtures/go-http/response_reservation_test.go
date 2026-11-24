@@ -191,3 +191,51 @@ func TestNagiHTTPResponseReservationWriterFailureReleases(t *testing.T) {
 		})
 	}
 }
+
+// Only the internal producer is used here. The public http.json builder stays
+// gated, and the caller supplies the known size instead of measuring JSON.
+func TestNagiHTTPResponseReservationScalarSink(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		size   int
+		writes int64
+		want   error
+	}{
+		{"exact", 5, 4, nil},
+		{"body", 4, 4, errNagiHTTPBodyLimit},
+		{"writes", 5, 3, errNagiHTTPWorkLimit},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			limits := nagiHTTPResponseBudget(int64(tc.size), 128, 4, 128, 4, tc.writes, 1, 69, 1, 256, 256, 5)
+			if !limits.ok {
+				t.Fatalf("response limits: %+v", limits)
+			}
+			pool := &nagiHTTPResponsePool{}
+			context := nagiHTTPResponseContext{limits: limits.value, pool: pool}
+			produced := nagiHTTPProduce(&context, nagiHTTPOK, "application/json", tc.size, func(writer *nagiHTTPFiniteWriter) {
+				if context.charge != int64(tc.size)+64 || pool.live != 1 {
+					t.Fatal("serializer ran without a reservation")
+				}
+				if err := nagiJSONWriteScalar(writer.WriteString, "a\n"); err != tc.want {
+					t.Fatalf("serializer error = %v, want %v", err, tc.want)
+				}
+			})
+			if tc.want == nil {
+				if !produced.ok || produced.value.media != "application/json" || string(produced.value.body) != `"a\n"` {
+					t.Fatalf("unexpected scalar response: %+v", produced)
+				}
+				context.releaseResponse()
+				return
+			}
+			if produced.ok || produced.value.body != nil || produced.problem.kind != nagiInvalid ||
+				produced.problem.message != tc.want.Error() || context.charge != 0 || pool.retained != 0 || pool.live != 0 {
+				t.Fatalf("failure retained data or quota: %+v", produced)
+			}
+			retry := nagiHTTPText(&context, nagiHTTPOK, "ok")
+			if !retry.ok {
+				t.Fatalf("response slot was not reusable: %+v", retry)
+			}
+			context.releaseResponse()
+		})
+	}
+}
