@@ -11,6 +11,15 @@
 - High構文にPythonと同じ`elif condition:`を追加し、既存の入れ子`else:` + `if`と同じ検査済み`if`へloweringします。Low構文と従来の`elif`識別子は維持し、VS Code / JetBrainsの補完・色・字下げも文脈に限定します。
 - Add contextual High `elif condition:` branches, lowered through the existing checked `if` representation. Preserve Low syntax and existing `elif` identifiers, with context-aware completion, coloring and indentation in both editor plugins.
 
+## Nagi 0.3.0
+
+- Rust は正式サポート対象の既定バックエンドです。Go はプレビューです。対応する外部 Go ツールチェーンを用意し、`nagic build` または `nagic run` で `--backend go` を指定します。
+- Rust is the supported and default backend. Go is a preview. Provide a compatible external Go toolchain and pass `--backend go` to `nagic build` or `nagic run`.
+- Go プレビューには限定的な async、ループバックで検証した HTTP、読み取り共有 State、明示的な CORS、スカラー値の単独 `json_encode` が含まれます。公開 `Task`、`scope`、`spawn`、HTTP JSON 応答、Go ネイティブアダプターは未対応です。[対応表](website/content/docs/ja/reference/support.mdx)
+- The Go preview includes limited async, loopback-verified HTTP, shared read-only State, opt-in CORS, and standalone scalar `json_encode`. Public `Task`, `scope`, `spawn`, HTTP JSON responses, and Go native adapters remain unsupported. [Support matrix](website/content/docs/en/reference/support.mdx)
+- Rust ランタイムの `url` を RUSTSEC-2026-0592 に対応した 2.5.9 に更新しました。
+- Update the Rust runtime to `url` 2.5.9, which addresses RUSTSEC-2026-0592.
+
 ## Nagi 0.2.3 — 2026-10-30
 
 - WindowsのGNU Rust toolchainでproject modeを使うと、正規化済みの`\\?\`形式のCargo target pathがGNU linkerへ渡り、明示的なsource file指定では成功する同じprojectがlinkに失敗する場合がある問題を修正します。既定project targetだけを、意味が変わらない短いdrive/UNC pathの場合に限って外部tool向け表記へ変換します。明示`NAGI_NATIVE_TARGET_DIR`、長いpath、末尾のdot/space、予約device名は変更しません。
