@@ -12,8 +12,8 @@ import tarfile
 import zipfile
 
 BASE = "546b8eaa3b1d069473824d4a161a7f5421174763"
-CANDIDATE = "d8fadadd1f64b7c4d7ee20585fbd4fa287b12a81"
-TREE = "2e9837dc317828f9b73b2d27b11d64215063f25c"
+CANDIDATE = "dfd1e6786031e1cb38b1d5792553b913f1db0469"
+TREE = "46a89c9475d105ae65550989cb9f36a503e6bcbb"
 
 NATIVE = {
     "linux-x86_64": ("x86_64-unknown-linux-gnu", 37, "Linux", {"x86_64", "amd64"}),
@@ -123,9 +123,9 @@ def main(root, evidence, target_platform, rust_host, expected_go):
                 run("archive-rust-go", py, *verify)
                 if os.name == "nt":
                     for shell in ("pwsh", "powershell"):
-                        run(f"{shell}-install", shell, "-NoProfile", "-File", "scripts/releases/test_install.ps1",
+                        run(f"{shell}-install", shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "scripts/releases/test_install.ps1",
                             "-Archive", str(archive), "-Version", "0.3.0", "-TestUserPath")
-                        run(f"{shell}-uninstall", shell, "-NoProfile", "-File", "scripts/releases/test_uninstall.ps1")
+                        run(f"{shell}-uninstall", shell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "scripts/releases/test_uninstall.ps1")
                 else:
                     run("shell-installed-cli", py, str(Path(__file__).with_name("public_candidate_install.py")), str(root), str(archive))
             for test in ("tests/route_integration.py", "tests/http_stdlib_integration.py"):

@@ -12,6 +12,9 @@ from test_uninstall import ShellUninstallTests
 fixture = ShellInstallTests()
 fixture.setUp()
 try:
+    # The test's disposable profile must not change the toolchain selected by the runner.
+    fixture.environment.setdefault("CARGO_HOME", str(Path.home() / ".cargo"))
+    fixture.environment.setdefault("RUSTUP_HOME", str(Path.home() / ".rustup"))
     fixture.environment["HOME"] = str(fixture.root)
     fixture.environment["NAGI_TEST_ASSETS"] = str(archive.parent)
     fixture.environment.pop("NAGI_ROOT", None)
