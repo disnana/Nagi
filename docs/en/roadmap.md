@@ -19,6 +19,10 @@ The narrow migration requiring explicit move for assignment of an existing owned
 
 Compiler verification combines known pass/fail examples with bounded generated programs through High, saved Low, and Rust, plus mutation tests. Keep tested cases separate from unsupported combinations and preserve accepted-then-rejected cases as regressions.
 
+## Design candidates after 0.3.0
+
+- **Elixir-style pipe operator `|>`.** In `value |> f(x) |> g()`, each step would pass the value on the left as the first argument to the call on the right, so the steps read from left to right. The design must settle evaluation order and operator precedence and verify consistent semantics across the Rust and Go backends.
+
 ## Low scope
 
 Preserve existing Low code, brace syntax, inspection of generated output, and function replacement. Prioritize High and Rust integration. Plans to expand Low into an independent systems language with pointers, layout, unsafe syntax, C ABI, and SIMD are paused.
