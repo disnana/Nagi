@@ -1,0 +1,71 @@
+name: Nagi 0.3.0 Windows blocker verification
+
+on:
+  push:
+    branches: [ci/nagi-030-candidate-validation]
+    paths:
+      - .github/workflows/nagi-030-windows-blockers.yml
+      - scripts/ci/windows_candidate_shell_compare.py
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    if: github.repository == 'disnana/Nagi' && github.event_name == 'push' && github.ref == 'refs/heads/ci/nagi-030-candidate-validation' && github.event.repository.visibility == 'public'
+    runs-on: windows-2025
+    timeout-minutes: 55
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+      NAGI_GO: go
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          path: control
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ea028eb4e5f1d83f00c8694fd3c7d3935587fe60
+          persist-credentials: false
+          path: source
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Verify normal checkout and build the exact Windows archive
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = ea028eb4e5f1d83f00c8694fd3c7d3935587fe60
+          test "$(git rev-parse HEAD^{tree})" = 19148fefcbfc58c3f37fc622356c5541db44b197
+          test "$(rustc -vV | sed -n 's/^host: //p')" = x86_64-pc-windows-msvc
+          git ls-files --eol -- compiler/src/go_backend/{cors,http}.go
+          test "$(git ls-files --eol -- compiler/src/go_backend/{cors,http}.go | grep -c 'w/lf')" = 2
+          cargo fetch --locked --target x86_64-pc-windows-msvc >"$RUNNER_TEMP/fetch.log" 2>&1
+          cargo build --release --locked -p nagic >"$RUNNER_TEMP/build.log" 2>&1
+          python -B scripts/releases/package.py --binary target/release/nagic.exe --version 0.3.0 --platform windows-x86_64 >"$RUNNER_TEMP/package.log" 2>&1
+      - name: Compare installed CLI capture on Windows PowerShell 5.1 and PowerShell 7
+        shell: bash
+        run: python -B control/scripts/ci/windows_candidate_shell_compare.py source source/build/distribution/nagi-0.3.0-windows-x86_64.zip
+      - name: Go integration on the unmodified checkout
+        if: success() || failure()
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rc=0
+          cargo test --locked -p nagic --test go_backend >"$RUNNER_TEMP/go.log" 2>&1 || rc=$?
+          grep -E '^test (go_http::[A-Za-z0-9_]+ \.\.\. (ok|FAILED)|result: (ok|FAILED)\. [0-9]+ passed; [0-9]+ failed; [0-9]+ ignored;)' "$RUNNER_TEMP/go.log" || true
+          test "$rc" = 0
+          python -B scripts/ci/assert_go_backend_summary.py "$RUNNER_TEMP/go.log" --expected 36
