@@ -1,3 +1,6 @@
 /Cargo.lock text eol=lf
 **/Cargo.toml text eol=lf
 compiler/src/check/testdata/scope_exit.rust text eol=lf
+# The Go HTTP emitter splits these embedded sources on LF delimiters.
+compiler/src/go_backend/http.go text eol=lf
+compiler/src/go_backend/cors.go text eol=lf
