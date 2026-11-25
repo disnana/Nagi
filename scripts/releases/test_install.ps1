@@ -77,8 +77,15 @@ try {
     [IO.File]::WriteAllText((Join-Path $project 'nagi.toml'), "entry='main.nagi'`n")
     Remove-Item Env:NAGI_ROOT -ErrorAction SilentlyContinue
     $env:NAGI_NATIVE_TARGET_DIR = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\native-target'))
-    $result = & nagic run --project (Join-Path $project 'nagi.toml')
-    if ($LASTEXITCODE -ne 0 -or @($result)[-1] -ne '42') { throw 'Installed compiler could not run an external project' }
+    # Capture the native streams without PowerShell 5.1 treating redirected stderr as a terminating error.
+    $compiler = (Get-Command nagic -CommandType Application).Source
+    $manifest = Join-Path $project 'nagi.toml'
+    $stdout = Join-Path $temporary 'installed-run.stdout'
+    $stderr = Join-Path $temporary 'installed-run.stderr'
+    $run = Start-Process -FilePath $compiler -ArgumentList @('run', '--project', ('"{0}"' -f $manifest)) `
+        -RedirectStandardOutput $stdout -RedirectStandardError $stderr -NoNewWindow -PassThru -Wait
+    $result = [IO.File]::ReadAllLines($stdout)
+    if ($run.ExitCode -ne 0 -or @($result)[-1] -ne '42') { throw 'Installed compiler could not run an external project' }
 
     New-Fixture '0.0.1'
     New-Fixture '0.0.2'
