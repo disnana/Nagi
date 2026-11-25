@@ -34,13 +34,21 @@ jobs:
         with:
           go-version: '1.27.3'
           cache: false
-      - name: Verify source and prepare the Windows package
+      - name: Verify source, inspect line endings, and prepare the Windows package
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = d8fadadd1f64b7c4d7ee20585fbd4fa287b12a81
           test "$(git rev-parse HEAD^{tree})" = 2e9837dc317828f9b73b2d27b11d64215063f25c
           test "$(rustc -vV | sed -n 's/^host: //p')" = x86_64-pc-windows-msvc
+          go_http=compiler/src/go_backend/http.go
+          go_cors=compiler/src/go_backend/cors.go
+          git ls-files --eol -- "$go_http" "$go_cors"
+          attr=$(git rev-parse --git-path info/attributes)
+          printf '%s text eol=lf\n' "$go_http" "$go_cors" >>"$attr"
+          git checkout-index --force -- "$go_http" "$go_cors"
+          git ls-files --eol -- "$go_http" "$go_cors"
+          test -z "$(git status --porcelain)"
           cargo fetch --locked --target x86_64-pc-windows-msvc >"$RUNNER_TEMP/fetch.log" 2>&1
           cargo build --release --locked -p nagic >"$RUNNER_TEMP/build.log" 2>&1
           python scripts/releases/package.py --binary target/release/nagic.exe --version 0.3.0 --platform windows-x86_64 >"$RUNNER_TEMP/package.log" 2>&1
@@ -53,6 +61,11 @@ jobs:
           } catch {
             $category = $_.CategoryInfo.Category
             Write-Host "Windows PowerShell install category: $category"
+            $source = [IO.Path]::GetFileName($_.InvocationInfo.ScriptName)
+            if ($source -in @('test_install.ps1', 'install.ps1')) {
+              $line = $_.InvocationInfo.ScriptLineNumber
+              Write-Host "Windows PowerShell install check: ${source}:$line"
+            }
             throw 'Installer regression failed'
           }
       - name: Windows PowerShell 5.1 uninstall
