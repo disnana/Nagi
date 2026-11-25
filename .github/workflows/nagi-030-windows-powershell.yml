@@ -26,7 +26,6 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-        with:
           ref: dfd1e6786031e1cb38b1d5792553b913f1db0469
           persist-credentials: false
           path: source
