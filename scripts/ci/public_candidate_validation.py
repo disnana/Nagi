@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import platform as host_platform
+import re
 import shutil
 import subprocess
 import sys
@@ -57,8 +58,18 @@ def main(root, evidence, target_platform, rust_host, expected_go):
         rows.append({"name": name, "exit": process.returncode, "summary": summary})
         print(f"{name}: exit {process.returncode}", flush=True)
         for line in summary:
-            if line.startswith(("test result:", "Ran ")):
+            if re.fullmatch(r"test result: (?:ok|FAILED)\. \d+ passed; \d+ failed; \d+ ignored; \d+ measured; \d+ filtered out; finished in [\d.]+s", line):
                 print(line, flush=True)
+            if re.fullmatch(r"Ran \d+ tests? in [\d.]+s", line):
+                print(line, flush=True)
+        if process.returncode:
+            python_codes = {"AssertionError", "CalledProcessError", "FileNotFoundError", "NoticeError",
+                            "OSError", "RuntimeError", "TimeoutExpired", "UnicodeDecodeError", "ValueError"}
+            kinds = {line.split(":", 1)[0].rsplit(".", 1)[-1] for line in lines}
+            codes = {match.group() for line in lines for match in re.finditer(r"error\[E\d{4}\]", line)}
+            diagnostics = sorted((kinds & python_codes) | codes)
+            if diagnostics:
+                print("Diagnostic categories: " + ", ".join(diagnostics), flush=True)
         print("::endgroup::", flush=True)
         return process.returncode
 
@@ -84,22 +95,23 @@ def main(root, evidence, target_platform, rust_host, expected_go):
         result["archive_sha256"] = actual
 
     try:
-        suite("ci-policy", "scripts/ci", "test_*.py")
-        suite("release-policy", "scripts/releases", "test_*.py")
+        if target_platform == "linux-x86_64":
+            suite("ci-policy", "scripts/ci", "test_*.py")
+            suite("release-policy", "scripts/releases", "test_*.py")
         run("release-plan", py, "-B", "scripts/releases/plan.py", "--base", BASE,
             "--head", CANDIDATE, "--output", str(evidence / "release-plan.outputs"))
         plan = dict(line.split("=", 1) for line in (evidence / "release-plan.outputs").read_text().splitlines())
         assert plan["package_nagi"] == "true"
         assert all(plan[f"release_{name}"] == "false" for name in ("nagi", "vscode", "jetbrains"))
+        fetch_status = run("fetch-locked-target", "cargo", "fetch", "--locked", "--target", expected_host)
         build_status = run("build-release", "cargo", "build", "--release", "--locked", "-p", "nagic")
         if build_status == 0:
             executable = str(build / "release" / ("nagic.exe" if os.name == "nt" else "nagic"))
             distribution = evidence / "distribution"
             stem = f"nagi-0.3.0-{target_platform}"
             archive = distribution / (stem + (".zip" if os.name == "nt" else ".tar.gz"))
-            package_status = run("package", py, "-B", "scripts/releases/package.py", "--binary", executable,
-                                 "--version", "0.3.0", "--platform", target_platform, "--out", str(distribution))
-            if package_status == 0:
+            if fetch_status == 0 and run("package", py, "-B", "scripts/releases/package.py", "--binary", executable,
+                                         "--version", "0.3.0", "--platform", target_platform, "--out", str(distribution)) == 0:
                 archive_check(archive, stem)
                 verify = ("-B", "scripts/releases/verify.py", "--archive", str(archive), "--version", "0.3.0",
                           "--platform", target_platform, "--target", str(native), "--go-smoke")
