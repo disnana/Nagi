@@ -46,8 +46,17 @@ jobs:
           git ls-files --eol -- "$go_http" "$go_cors"
           attr=$(git rev-parse --git-path info/attributes)
           printf '%s text eol=lf\n' "$go_http" "$go_cors" >>"$attr"
-          git checkout-index --force -- "$go_http" "$go_cors"
+          python - "$go_http" "$go_cors" <<'PYCODE'
+          from pathlib import Path
+          import subprocess
+          import sys
+          for name in sys.argv[1:]:
+              data = subprocess.check_output(["git", "show", f"HEAD:{name}"])
+              assert b"\r" not in data
+              Path(name).write_bytes(data)
+          PYCODE
           git ls-files --eol -- "$go_http" "$go_cors"
+          test "$(git ls-files --eol -- "$go_http" "$go_cors" | grep -c 'w/lf')" = 2
           test -z "$(git status --porcelain)"
           cargo fetch --locked --target x86_64-pc-windows-msvc >"$RUNNER_TEMP/fetch.log" 2>&1
           cargo build --release --locked -p nagic >"$RUNNER_TEMP/build.log" 2>&1
@@ -61,6 +70,8 @@ jobs:
           } catch {
             $category = $_.CategoryInfo.Category
             Write-Host "Windows PowerShell install category: $category"
+            $id = $_.FullyQualifiedErrorId
+            if ($id -match '^[A-Za-z][A-Za-z0-9_.]{1,60}$') { Write-Host "Windows PowerShell install error ID: $id" }
             $source = [IO.Path]::GetFileName($_.InvocationInfo.ScriptName)
             if ($source -in @('test_install.ps1', 'install.ps1')) {
               $line = $_.InvocationInfo.ScriptLineNumber
