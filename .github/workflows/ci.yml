@@ -2519,7 +2519,7 @@ jobs:
         run: |
           set -o pipefail
           cargo test --locked -p nagi-runtime --lib task::tests:: 2>&1 | tee "$RUNNER_TEMP/task-runtime.log"
-          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"task-runtime.log").read_text(); assert re.search(r"test result: ok\. 17 passed; 0 failed; 0 ignored;",text),text'
+          python -c 'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"task-runtime.log").read_text(); assert re.search(r"test result: ok\. 20 passed; 0 failed; 0 ignored;",text),text'
           cargo test --locked -p nagi-runtime --test task_handles
           cargo test --locked -p nagi-runtime --doc
 

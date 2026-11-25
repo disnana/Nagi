@@ -342,6 +342,10 @@ class CriticalPathWiringTests(unittest.TestCase):
         mutations += [self.source.replace(projection.NEW_WORKSPACE, '', 1), self.source.replace(projection.NEW_WORKSPACE, projection.NEW_WORKSPACE * 2, 1)]
         for new, old in projection.NEEDS:
             mutations.append(self.source.replace(new, old, 1))
+        task_guard = projection.TASK_RUNTIME_GUARD
+        for replacement in ('', task_guard * 2, task_guard.replace('20 passed', '17 passed'),
+                            task_guard.replace('0 ignored', '1 ignored')):
+            mutations.append(self.source.replace(task_guard, replacement, 1))
         for source in mutations:
             with self.assertRaises(ValueError):
                 projection.inverse_workflow(source)

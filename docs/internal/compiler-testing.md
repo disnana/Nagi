@@ -130,7 +130,7 @@ Phase 3では、登録資源の独立inventory、用途別capability、4例のLo
 
 `tests/task-handles/contracts.json` のHigh/Low対は `cargo run --locked -p nagic --example task-contract-red -- --report /tmp/task-contracts.json` でchecker段階、diagnostic fragment、primary元行まで照合する。parse/import拒否、ICE、違う行の拒否をnegative成功にしない。runner自身のoracleは `cargo test --locked -p nagic --example task-contract-red`。登録検査だけで意味論の成功を保証しない。
 
-`cargo test --locked -p nagic --test task_handles` は全positiveのHigh・保存Low・手書きLowを実Cargo build/runし、barrierによる業務Err・sticky fault・body/legacy元Err・Drop/actual joinと固定seed16経路も実行する。`cargo test --locked -p nagi-runtime --lib task::tests::` は17native oracle。CIの4 OSに双方を含め、filterで0件を実行したログを成功として報告しない。費用のignored unitは明示実行だけを測定に数え、production-layoutの手書き/生成Rust比較は `compiler/examples/task-handles-cost.rs` と `benchmarks/task-handles-s1/` を使う。原ログ/hash/範囲は[接続結果](task-handles-s1-results.md)へ。
+`cargo test --locked -p nagic --test task_handles` は全positiveのHigh・保存Low・手書きLowを実Cargo build/runし、barrierによる業務Err・sticky fault・body/legacy元Err・Drop/actual joinと固定seed16経路も実行する。`cargo test --locked -p nagi-runtime --lib task::tests::` は20native oracle。CIの4 OSに双方を含め、filterで0件を実行したログを成功として報告しない。費用のignored unitは明示実行だけを測定に数え、production-layoutの手書き/生成Rust比較は `compiler/examples/task-handles-cost.rs` と `benchmarks/task-handles-s1/` を使う。原ログ/hash/範囲は[接続結果](task-handles-s1-results.md)へ。
 
 
 ### resource goldenの採用設計による更新

@@ -17,6 +17,8 @@ SAMPLES = "      - run: cargo build --release --examples --bins --locked\n      
 
 NEEDS = [('    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]\n', '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, jetbrains, release-plan, sf08-browser, vscode-package, nagi-package, nagi-regression, windows-contracts]\n'), ('    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, linux-csrf-mutants, linux-samples, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]\n', '    needs: [changes, ci-plan, critical, go-backend, linux, linux-workspace, rust-1-88, sf08-browser, release-plan, jetbrains, vscode-package, nagi-package, nagi-regression, windows-contracts, ready]\n')]
 
+TASK_RUNTIME_GUARD = '          python -c \'import pathlib,re,os; text=pathlib.Path(os.environ["RUNNER_TEMP"],"task-runtime.log").read_text(); assert re.search(r"test result: ok\\. 20 passed; 0 failed; 0 ignored;",text),text\'\n'
+
 def inverse_workflow(source):
     # Historical component callers may already have consumed this outer layer.
     if '  linux-workspace-shards:\n' not in source:
@@ -25,6 +27,11 @@ def inverse_workflow(source):
         return source
     if any(len(re.findall(r'(?m)^  ' + name + r':$', source)) != 1 for name in ('linux-workspace-shards', 'linux-workspace', 'linux-csrf-mutants', 'linux-samples')) or source.count(NEW_WORKSPACE + '  rust-1-88:\n') != 1:
         raise ValueError('Linux critical-path jobs changed, duplicated or moved')
+    # Restore the former count only for exact historical comparison.
+    previous_task_guard = TASK_RUNTIME_GUARD.replace('20 passed', '17 passed')
+    if source.count(TASK_RUNTIME_GUARD) != 1 or previous_task_guard in source:
+        raise ValueError('required Task runtime test count guard changed')
+    source = source.replace(TASK_RUNTIME_GUARD, previous_task_guard, 1)
     source = source.replace(NEW_WORKSPACE, OLD_WORKSPACE, 1)
     linux = re.search(r'(?ms)^  linux:\n.*?(?=^  linux-workspace:)', source)
     if not linux or MUTANTS in linux.group() or SAMPLES in linux.group():
