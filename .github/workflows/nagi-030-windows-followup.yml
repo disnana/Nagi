@@ -1,0 +1,105 @@
+name: Nagi 0.3.0 Windows follow-up
+
+on:
+  push:
+    branches: [ci/nagi-030-candidate-validation]
+    paths: [.github/workflows/nagi-030-windows-followup.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    if: github.repository == 'disnana/Nagi' && github.event_name == 'push' && github.ref == 'refs/heads/ci/nagi-030-candidate-validation' && github.event.repository.visibility == 'public'
+    runs-on: windows-2025
+    timeout-minutes: 40
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+      NAGI_GO: go
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d8fadadd1f64b7c4d7ee20585fbd4fa287b12a81
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.27.3'
+          cache: false
+      - name: Verify source and prepare the Windows package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = d8fadadd1f64b7c4d7ee20585fbd4fa287b12a81
+          test "$(git rev-parse HEAD^{tree})" = 2e9837dc317828f9b73b2d27b11d64215063f25c
+          test "$(rustc -vV | sed -n 's/^host: //p')" = x86_64-pc-windows-msvc
+          cargo fetch --locked --target x86_64-pc-windows-msvc >"$RUNNER_TEMP/fetch.log" 2>&1
+          cargo build --release --locked -p nagic >"$RUNNER_TEMP/build.log" 2>&1
+          python scripts/releases/package.py --binary target/release/nagic.exe --version 0.3.0 --platform windows-x86_64 >"$RUNNER_TEMP/package.log" 2>&1
+      - name: Windows PowerShell 5.1 install and upgrade
+        shell: powershell
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) { throw 'Required Windows PowerShell 5.1' }
+          try {
+            & ./scripts/releases/test_install.ps1 -Archive 'build/distribution/nagi-0.3.0-windows-x86_64.zip' -Version 0.3.0 -TestUserPath *> "$env:RUNNER_TEMP/install.log"
+          } catch {
+            $category = $_.CategoryInfo.Category
+            Write-Host "Windows PowerShell install category: $category"
+            throw 'Installer regression failed'
+          }
+      - name: Windows PowerShell 5.1 uninstall
+        if: success() || failure()
+        shell: powershell
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) { throw 'Required Windows PowerShell 5.1' }
+          try {
+            & ./scripts/releases/test_uninstall.ps1 *> "$env:RUNNER_TEMP/uninstall.log"
+          } catch {
+            $category = $_.CategoryInfo.Category
+            Write-Host "Windows PowerShell uninstall category: $category"
+            throw 'Uninstaller regression failed'
+          }
+      - name: Go integration with bounded diagnostics
+        if: success() || failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          cargo test --locked -p nagic --test go_backend >"$RUNNER_TEMP/go.log" 2>&1 || status=$?
+          python - "$RUNNER_TEMP/go.log" <<'PY'
+          import re, sys
+          from pathlib import Path
+          lines = Path(sys.argv[1]).read_text(errors="replace").splitlines()
+          reasons = (
+              "server unavailable",
+              "reading reply to",
+              "HTTP response header separator",
+              "Connection reset",
+              "actively refused",
+              "program not found",
+              "Access is denied",
+              "cannot find the file",
+          )
+          for line in lines:
+              if re.fullmatch(r"test [A-Za-z0-9_:]+ \.\.\. FAILED", line) or re.fullmatch(
+                  r"test result: (?:ok|FAILED)\. \d+ passed; \d+ failed; \d+ ignored; \d+ measured; \d+ filtered out; finished in [\d.]+s", line
+              ):
+                  print(line)
+              if location := re.search(r"panicked at (?:.*[\\/])?(compiler[\\/]tests[\\/][A-Za-z0-9_/\\.-]+:\d+:\d+)", line):
+                  print("Panic location: " + location[1])
+              for reason in reasons:
+                  if reason.lower() in line.lower():
+                      print("Diagnostic category: " + reason)
+              if error := re.search(r"os error (\d+)", line):
+                  print("OS error: " + error[1])
+          PY
+          test "$status" = 0
+          python -B scripts/ci/assert_go_backend_summary.py "$RUNNER_TEMP/go.log" --expected 36
