@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: nagi-030-candidate-validation
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   validate:
