@@ -1,0 +1,63 @@
+name: Nagi 0.3.0 Rust compatibility trial
+
+on:
+  push:
+    branches: [ci/nagi-030-candidate-validation]
+    paths: [.github/workflows/nagi-030-rust-trial.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    if: github.repository == 'disnana/Nagi' && github.event_name == 'push' && github.ref == 'refs/heads/ci/nagi-030-candidate-validation' && github.event.repository.visibility == 'public'
+    name: Rust ${{ matrix.rust }} / ${{ matrix.profile }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {rust: '1.100.0', profile: workspace}
+          - {rust: '1.88.0', profile: sf02-ed25519}
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: d8fadadd1f64b7c4d7ee20585fbd4fa287b12a81
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: ${{ matrix.rust }}
+      - name: Verify exact source and toolchain
+        shell: bash
+        env:
+          EXPECTED_RUST: ${{ matrix.rust }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = d8fadadd1f64b7c4d7ee20585fbd4fa287b12a81
+          test "$(git rev-parse HEAD^{tree})" = 2e9837dc317828f9b73b2d27b11d64215063f25c
+          test "$(rustc -vV | sed -n 's/^release: //p')" = "$EXPECTED_RUST"
+          test "$(rustc -vV | sed -n 's/^host: //p')" = x86_64-unknown-linux-gnu
+          rustc --version
+      - name: Check the locked workspace on Rust 1.100.0
+        if: matrix.profile == 'workspace'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check --locked --workspace --all-targets >"$RUNNER_TEMP/workspace-check.log" 2>&1
+          echo 'Locked workspace and all targets checked successfully.'
+      - name: Check the existing Rust 1.88 Ed25519 profile
+        if: matrix.profile == 'sf02-ed25519'
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset ICU4X_DATA_DIR
+          cargo test --locked -p nagi-runtime --lib auth::ed25519:: >"$RUNNER_TEMP/ed25519-core.log" 2>&1
+          cargo test --locked -p nagi-runtime --test ed25519_public_api >"$RUNNER_TEMP/ed25519-public.log" 2>&1
+          grep -E '^test result: ok\. 14 passed; 0 failed; 0 ignored;' "$RUNNER_TEMP/ed25519-core.log"
+          grep -E '^test result: ok\. 1 passed; 0 failed; 0 ignored;' "$RUNNER_TEMP/ed25519-public.log"
