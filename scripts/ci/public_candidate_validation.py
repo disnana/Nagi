@@ -70,6 +70,11 @@ def main(root, evidence, target_platform, rust_host, expected_go):
             diagnostics = sorted((kinds & python_codes) | codes)
             if diagnostics:
                 print("Diagnostic categories: " + ", ".join(diagnostics), flush=True)
+            if name in {"workspace", "go", "scoped-tasks"}:
+                failures = {match.group(1) for line in lines
+                            if (match := re.fullmatch(r"test ([A-Za-z_][A-Za-z_0-9:]*) \.\.\. FAILED", line))}
+                for failure in sorted(failures):
+                    print(f"Failed test: {failure}", flush=True)
         print("::endgroup::", flush=True)
         return process.returncode
 
